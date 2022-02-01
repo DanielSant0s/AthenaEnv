@@ -1,7 +1,7 @@
 <br />
 <p align="center">
   <a href="https://github.com/DanielSant0s/AthenaEnv/">
-    <img src="https://user-images.githubusercontent.com/47725160/128257833-e5dba4f3-2c90-4b92-b512-6245e51580f2.png" alt="Logo" width="100%" height="auto">
+    <img src="https://user-images.githubusercontent.com/47725160/151896523-5062975b-861d-434c-92df-3ead8fc85be2.png" alt="Logo" width="100%" height="auto">
   </a>
 
   <p align="center">
