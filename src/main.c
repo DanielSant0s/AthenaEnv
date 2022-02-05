@@ -65,27 +65,6 @@ extern unsigned int size_ds34bt_irx;
 
 char boot_path[255];
 
-void initMC(void)
-{
-   int ret;
-   // mc variables
-   int mc_Type, mc_Free, mc_Format;
-
-   
-   printf("Initializing Memory Card\n");
-
-   ret = mcInit(MC_TYPE_MC);
-   
-   if( ret < 0 ) {
-	printf("MC_Init : failed to initialize memcard server.\n");
-   }
-   
-   // Since this is the first call, -1 should be returned.
-   // makes me sure that next ones will work !
-   mcGetInfo(0, 0, &mc_Type, &mc_Free, &mc_Format); 
-   mcSync(MC_WAIT, NULL, &ret);
-}
-
 void setBootPath(int argc, char ** argv, int idx)
 {
     if (argc>=(idx+1))
@@ -136,16 +115,17 @@ int main(int argc, char **argv) {
     sbv_patch_fileio(); 
 
     SifExecModuleBuffer(&sio2man_irx, size_sio2man_irx, 0, NULL, NULL);
-    SifExecModuleBuffer(&mcman_irx, size_mcman_irx, 0, NULL, NULL);
-    SifExecModuleBuffer(&mcserv_irx, size_mcserv_irx, 0, NULL, NULL);
-    SifExecModuleBuffer(&padman_irx, size_padman_irx, 0, NULL, NULL);
-    SifExecModuleBuffer(&libsd_irx, size_libsd_irx, 0, NULL, NULL);
 
     // load pad & mc modules 
     printf("Installing Pad & MC modules...\n");
 
+    SifExecModuleBuffer(&mcman_irx, size_mcman_irx, 0, NULL, NULL);
+    SifExecModuleBuffer(&mcserv_irx, size_mcserv_irx, 0, NULL, NULL);
+
     // load USB modules    
     SifExecModuleBuffer(&usbd_irx, size_usbd_irx, 0, NULL, NULL);
+
+    SifExecModuleBuffer(&padman_irx, size_padman_irx, 0, NULL, NULL);
 
     int ds3pads = 1;
     SifExecModuleBuffer(&ds34usb_irx, size_ds34usb_irx, 4, (char *)&ds3pads, NULL);
@@ -157,9 +137,9 @@ int main(int argc, char **argv) {
     SifExecModuleBuffer(&bdmfs_vfat_irx, size_bdmfs_vfat_irx, 0, NULL, NULL);
     SifExecModuleBuffer(&usbmass_bd_irx, size_usbmass_bd_irx, 0, NULL, NULL);
     SifExecModuleBuffer(&cdfs_irx, size_cdfs_irx, 0, NULL, NULL);
-    SifExecModuleBuffer(&audsrv_irx, size_audsrv_irx, 0, NULL, NULL);
 
-    initMC();
+    SifExecModuleBuffer(&libsd_irx, size_libsd_irx, 0, NULL, NULL);
+    SifExecModuleBuffer(&audsrv_irx, size_audsrv_irx, 0, NULL, NULL);
 
     //waitUntilDeviceIsReady by fjtrujy
 
