@@ -76,9 +76,7 @@ void initMC(void)
 
    ret = mcInit(MC_TYPE_MC);
    
-   if( ret < 0 ) {
-	printf("MC_Init : failed to initialize memcard server.\n");
-   }
+   ret < 0 ? printf("initMC: failed to initialize memcard server.\n") : printf("initMC: memcard server started sucessfully");
    
    // Since this is the first call, -1 should be returned.
    // makes me sure that next ones will work !
@@ -146,7 +144,7 @@ int main(int argc, char **argv) {
     SifExecModuleBuffer(&usbd_irx, size_usbd_irx, 0, NULL, NULL);
 
     SifExecModuleBuffer(&padman_irx, size_padman_irx, 0, NULL, NULL);
-    
+
     int ds3pads = 1;
     SifExecModuleBuffer(&ds34usb_irx, size_ds34usb_irx, 4, (char *)&ds3pads, NULL);
     SifExecModuleBuffer(&ds34bt_irx, size_ds34bt_irx, 4, (char *)&ds3pads, NULL);
