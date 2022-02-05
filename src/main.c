@@ -65,25 +65,6 @@ extern unsigned int size_ds34bt_irx;
 
 char boot_path[255];
 
-void initMC(void)
-{
-   int ret;
-   // mc variables
-   int mc_Type, mc_Free, mc_Format;
-
-   
-   printf("Initializing Memory Card\n");
-
-   ret = mcInit(MC_TYPE_MC);
-   
-   ret < 0 ? printf("initMC: failed to initialize memcard server.\n") : printf("initMC: memcard server started sucessfully");
-   
-   // Since this is the first call, -1 should be returned.
-   // makes me sure that next ones will work !
-   mcGetInfo(0, 0, &mc_Type, &mc_Free, &mc_Format); 
-   mcSync(MC_WAIT, NULL, &ret);
-}
-
 void setBootPath(int argc, char ** argv, int idx)
 {
     if (argc>=(idx+1))
@@ -134,11 +115,12 @@ int main(int argc, char **argv) {
     sbv_patch_fileio(); 
 
     SifExecModuleBuffer(&sio2man_irx, size_sio2man_irx, 0, NULL, NULL);
-    SifExecModuleBuffer(&mcman_irx, size_mcman_irx, 0, NULL, NULL);
-    SifExecModuleBuffer(&mcserv_irx, size_mcserv_irx, 0, NULL, NULL);
 
     // load pad & mc modules 
     printf("Installing Pad & MC modules...\n");
+
+    SifExecModuleBuffer(&mcman_irx, size_mcman_irx, 0, NULL, NULL);
+    SifExecModuleBuffer(&mcserv_irx, size_mcserv_irx, 0, NULL, NULL);
 
     // load USB modules    
     SifExecModuleBuffer(&usbd_irx, size_usbd_irx, 0, NULL, NULL);
@@ -158,8 +140,6 @@ int main(int argc, char **argv) {
 
     SifExecModuleBuffer(&libsd_irx, size_libsd_irx, 0, NULL, NULL);
     SifExecModuleBuffer(&audsrv_irx, size_audsrv_irx, 0, NULL, NULL);
-
-    initMC();
 
     //waitUntilDeviceIsReady by fjtrujy
 
