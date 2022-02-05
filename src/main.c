@@ -74,11 +74,11 @@ void initMC(void)
    
    printf("Initializing Memory Card\n");
 
-   ret = mcInit(MC_TYPE_MC);
+   /*ret = mcInit(MC_TYPE_MC);
    
    if( ret < 0 ) {
 	printf("MC_Init : failed to initialize memcard server.\n");
-   }
+   }*/
    
    // Since this is the first call, -1 should be returned.
    // makes me sure that next ones will work !

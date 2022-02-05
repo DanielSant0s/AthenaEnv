@@ -59,6 +59,8 @@ var prev = 0;
 var cur = 0;
 var fps = 0;
 
+System.removeFile("mc0:testdir/copy.pdf");
+
 while(true){
     oldpad = pad;
     pad = Pads.get();
