@@ -74,16 +74,9 @@ GSTEXTURE* loadpng(const char *path, bool delayed)
 
 	png_get_IHDR(png_ptr, info_ptr, &width, &height, &bit_depth, &color_type,&interlace_type, NULL, NULL);
 
-	png_set_strip_16(png_ptr);
-
-	if (color_type == PNG_COLOR_TYPE_PALETTE)
-		png_set_expand(png_ptr);
-
-	if (color_type == PNG_COLOR_TYPE_GRAY && bit_depth < 8)
-		png_set_expand(png_ptr);
-
-	if (png_get_valid(png_ptr, info_ptr, PNG_INFO_tRNS))
-		png_set_tRNS_to_alpha(png_ptr);
+	if (bit_depth == 16) png_set_strip_16(png_ptr);
+	if (color_type == PNG_COLOR_TYPE_GRAY || bit_depth < 4) png_set_expand(png_ptr);
+	if (png_get_valid(png_ptr, info_ptr, PNG_INFO_tRNS)) png_set_tRNS_to_alpha(png_ptr);
 
 	png_set_filler(png_ptr, 0xff, PNG_FILLER_AFTER);
 
@@ -92,8 +85,8 @@ GSTEXTURE* loadpng(const char *path, bool delayed)
 	tex->Width = width;
 	tex->Height = height;
 
-        tex->VramClut = 0;
-        tex->Clut = NULL;
+    tex->VramClut = 0;
+    tex->Clut = NULL;
 
 	if(png_get_color_type(png_ptr, info_ptr) == PNG_COLOR_TYPE_RGB_ALPHA)
 	{
@@ -145,6 +138,121 @@ GSTEXTURE* loadpng(const char *path, bool delayed)
 		for(row = 0; row < height; row++) free(row_pointers[row]);
 
 		free(row_pointers);
+	}
+	else if(png_get_color_type(png_ptr, info_ptr) == PNG_COLOR_TYPE_PALETTE){
+
+		struct png_clut { u8 r, g, b, a; };
+
+		png_colorp palette = NULL;
+		int num_pallete = 0;
+		png_bytep trans = NULL;
+		int num_trans = 0;
+
+        png_get_PLTE(png_ptr, info_ptr, &palette, &num_pallete);
+        png_get_tRNS(png_ptr, info_ptr, &trans, &num_trans, NULL);
+        tex->ClutPSM = GS_PSM_CT32;
+
+		if (bit_depth == 4) {
+
+			int row_bytes = png_get_rowbytes(png_ptr, info_ptr);
+			tex->PSM = GS_PSM_T4;
+			tex->Mem = (u32*)memalign(128, gsKit_texture_size_ee(tex->Width, tex->Height, tex->PSM));
+
+			row_pointers = (png_byte**)calloc(height, sizeof(png_bytep));
+
+			for(row = 0; row < height; row++) row_pointers[row] = (png_bytep)malloc(row_bytes);
+
+			png_read_image(png_ptr, row_pointers);
+
+            tex->Clut = memalign(128, gsKit_texture_size_ee(8, 2, GS_PSM_CT32));
+            memset(tex->Clut, 0, gsKit_texture_size_ee(8, 2, GS_PSM_CT32));
+
+            unsigned char *pixel = (unsigned char *)tex->Mem;
+    		struct png_clut *clut = (struct png_clut *)tex->Clut;
+
+    		int i, j, k = 0;
+
+    		for (i = num_pallete; i < 16; i++) {
+    		    memset(&clut[i], 0, sizeof(clut[i]));
+    		}
+
+    		for (i = 0; i < num_pallete; i++) {
+    		    clut[i].r = palette[i].red;
+    		    clut[i].g = palette[i].green;
+    		    clut[i].b = palette[i].blue;
+    		    clut[i].a = 0x80;
+    		}
+
+    		for (i = 0; i < num_trans; i++)
+    		    clut[i].a = trans[i] >> 1;
+
+    		for (i = 0; i < tex->Height; i++) {
+    		    for (j = 0; j < tex->Width / 2; j++)
+    		        memcpy(&pixel[k++], &row_pointers[i][1 * j], 1);
+    		}
+
+    		int byte;
+    		unsigned char *tmpdst = (unsigned char *)tex->Mem;
+    		unsigned char *tmpsrc = (unsigned char *)pixel;
+
+    		for (byte = 0; byte < gsKit_texture_size_ee(tex->Width, tex->Height, tex->PSM); byte++) tmpdst[byte] = (tmpsrc[byte] << 4) | (tmpsrc[byte] >> 4);
+
+			for(row = 0; row < height; row++) free(row_pointers[row]);
+
+			free(row_pointers);
+
+        } else if (bit_depth == 8) {
+			int row_bytes = png_get_rowbytes(png_ptr, info_ptr);
+			tex->PSM = GS_PSM_T8;
+			tex->Mem = (u32*)memalign(128, gsKit_texture_size_ee(tex->Width, tex->Height, tex->PSM));
+
+			row_pointers = (png_byte**)calloc(height, sizeof(png_bytep));
+
+			for(row = 0; row < height; row++) row_pointers[row] = (png_bytep)malloc(row_bytes);
+
+			png_read_image(png_ptr, row_pointers);
+
+            tex->Clut = memalign(128, gsKit_texture_size_ee(16, 16, GS_PSM_CT32));
+            memset(tex->Clut, 0, gsKit_texture_size_ee(16, 16, GS_PSM_CT32));
+
+            unsigned char *pixel = (unsigned char *)tex->Mem;
+    		struct png_clut *clut = (struct png_clut *)tex->Clut;
+
+    		int i, j, k = 0;
+
+    		for (i = num_pallete; i < 256; i++) {
+    		    memset(&clut[i], 0, sizeof(clut[i]));
+    		}
+
+    		for (i = 0; i < num_pallete; i++) {
+    		    clut[i].r = palette[i].red;
+    		    clut[i].g = palette[i].green;
+    		    clut[i].b = palette[i].blue;
+    		    clut[i].a = 0x80;
+    		}
+
+    		for (i = 0; i < num_trans; i++)
+    		    clut[i].a = trans[i] >> 1;
+
+    		// rotate clut
+    		for (i = 0; i < num_pallete; i++) {
+    		    if ((i & 0x18) == 8) {
+    		        struct png_clut tmp = clut[i];
+    		        clut[i] = clut[i + 8];
+    		        clut[i + 8] = tmp;
+    		    }
+    		}
+
+    		for (i = 0; i < tex->Height; i++) {
+    		    for (j = 0; j < tex->Width; j++) {
+    		        memcpy(&pixel[k++], &row_pointers[i][1 * j], 1);
+    		    }
+    		}
+
+			for(row = 0; row < height; row++) free(row_pointers[row]);
+
+			free(row_pointers);
+        }
 	}
 	else
 	{

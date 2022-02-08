@@ -2,35 +2,18 @@
 var char_scale = 0.6;
 var char_speed = [1.5, 6.0];
 
-var idle_frame_num = 30;
-var walk_frame_num = 30;
-var run_frame_num = 24;
+function loadAnimGroup(name) {
+    var framelist = System.listDirectory("Anim/" + name);
+    var slot = new Array(framelist.length);
 
-var idle = new Array(idle_frame_num);
-var walk = new Array(walk_frame_num);
-var run =  new Array(run_frame_num);
+    for (var i = 0; i < framelist.length; i++) {
+        slot[i] = Graphics.loadImage("Anim/" + name + "/" + name + "-" + i + ".png");
+    };
+    console.log("dummy_game: Free Memory after loading " + name + " framelist: " + Math.ceil(System.getFreeMemory()/1024) + " KB\n");
+    return {sprite:slot, width:Graphics.getImageWidth(slot[0]), height:Graphics.getImageHeight(slot[0]), count:framelist.length};
+}
 
-for (var i = 0; i < idle_frame_num; i++) {
-    idle[i] = Graphics.loadImage("Idle/Idle-" + i + ".png");
-};
-
-for (var i = 0; i < walk_frame_num; i++) {
-    walk[i] = Graphics.loadImage("Walk/Walk-" + i + ".png");
-};
-
-
-for (var i = 0; i < run_frame_num; i++) {
-    run[i]  = Graphics.loadImage("Run/Run-"   + i + ".png");
-};
-
-var idle_obj = {sprite:idle, width:Graphics.getImageWidth(idle[0]), height:Graphics.getImageHeight(idle[0]), count:idle_frame_num};
-var walk_obj = {sprite:walk, width:Graphics.getImageWidth(walk[0]), height:Graphics.getImageHeight(walk[0]), count:walk_frame_num};
-var run_obj = {sprite:run, width:Graphics.getImageWidth(run[0]), height:Graphics.getImageHeight(run[0]), count:run_frame_num};
-
-var move_set = new Array(3);
-move_set[0] = idle_obj;
-move_set[1] = walk_obj;
-move_set[2] = run_obj;
+console.log("dummy_game: Free Memory during boot: " + Math.ceil(System.getFreeMemory()/1024) + " KB\n");
 
 Font.ftInit();
 var kghappy = Font.ftLoad("Font/KGHAPPY.ttf");
@@ -40,6 +23,14 @@ Font.ftSetPixelSize(kghappy,        10.0, 10.0);
 Font.ftSetPixelSize(kghappy,        25.0, 25.0);
 Font.ftSetPixelSize(kghappyshadows, 25.0, 25.0);
 Font.ftSetPixelSize(kghappysolid,   25.0, 25.0);
+
+console.log("dummy_game: Free Memory after loading fntsys: " + Math.ceil(System.getFreeMemory()/1024) + " KB\n");
+
+var move_set = new Array(4);
+move_set[0] = loadAnimGroup("Idle");
+move_set[1] = loadAnimGroup("Walk");
+move_set[2] = loadAnimGroup("Run");
+move_set[3] = loadAnimGroup("Jump_Start");
 
 var x = 50.0;
 var oldpad = Pads.get();
@@ -52,12 +43,12 @@ var move_state = 0;
 //0 = RIGHT, 1 = LEFT
 var char_side = 0;
 
-var ram = System.getFreeMemory();
-
 var time = Timer.new();
 var prev = 0;
 var cur = 0;
 var fps = 0;
+
+var ram = System.getFreeMemory();
 
 while(true){
     oldpad = pad;
@@ -95,6 +86,10 @@ while(true){
         } else if(move_state == 2){
             move_state = 1
         }
+    }
+
+    if(Pads.check(pad, PAD_SQUARE) && !Pads.check(oldpad, PAD_SQUARE)){
+        move_state = 3
     }
 
     fr_mult++;

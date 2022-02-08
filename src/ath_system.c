@@ -82,7 +82,7 @@ duk_ret_t athena_dir(duk_context *ctx)
 	int argc = duk_get_top(ctx);
 	if (argc != 0 && argc != 1) return duk_generic_error(ctx, "Argument error: System.listDirectory([path]) takes zero or one argument.");
 	
-	duk_idx_t obj_idx = duk_push_object(ctx);
+	duk_idx_t arr_idx = duk_push_array(ctx);
 
     const char *temp_path = "";
 	char path[255];
@@ -143,21 +143,22 @@ duk_ret_t athena_dir(duk_context *ctx)
 		mcGetDir( nPort, 0, mcPath, 0, MAX_DIR_FILES, mcEntries);
    		while (!mcSync( MC_WAIT, NULL, &numRead ));
    		                	    
-	    int cpt = 1;
+	    int cpt = 0;
 
 		for( int i = 0; i < numRead; i++ )
-		{
-            duk_push_number(ctx, cpt++);  // push key for file entry
-			duk_put_prop_index(ctx, obj_idx, i);
+		{	
+			duk_idx_t obj_idx = duk_push_object(ctx);
 
             duk_push_string(ctx, (const char *)mcEntries[i].EntryName);
-			duk_put_prop_string(ctx, obj_idx+1, "name");
+			duk_put_prop_string(ctx, obj_idx, "name");
         
             duk_push_number(ctx, mcEntries[i].FileSizeByte);
-			duk_put_prop_string(ctx, obj_idx+1, "size");
+			duk_put_prop_string(ctx, obj_idx, "size");
 
             duk_push_boolean(ctx, ( mcEntries[i].AttrFile & MC_ATTR_SUBDIR ));
-			duk_put_prop_string(ctx, obj_idx+1, "directory");
+			duk_put_prop_string(ctx, obj_idx, "dir");
+
+			duk_put_prop_index(ctx, arr_idx, cpt++);
 
 		}
 		return 1;  // table is already on top
@@ -166,7 +167,7 @@ duk_ret_t athena_dir(duk_context *ctx)
         
         // else regular one using Dopen/Dread
 
-	int i = 1;
+	int i = 0;
 
 	DIR *d;
 	struct dirent *dir;
@@ -174,19 +175,20 @@ duk_ret_t athena_dir(duk_context *ctx)
 
 	if (d) {
 		while ((dir = readdir(d)) != NULL) {
-			duk_push_number(ctx, i++);  // push key for file entry
-			duk_put_prop_index(ctx, obj_idx, i);
+
+			duk_idx_t obj_idx = duk_push_object(ctx);
 
 	    	printf("%s\n", dir->d_name);
 			duk_push_string(ctx, dir->d_name);
-			duk_put_prop_string(ctx, obj_idx+1, "name");
-        		
+			duk_put_prop_string(ctx, obj_idx, "name");
+	
         	duk_push_number(ctx, dir->d_stat.st_size);
-			duk_put_prop_string(ctx, obj_idx+1, "size");
-        	        
+			duk_put_prop_string(ctx, obj_idx, "size");
+        
 			duk_push_boolean(ctx,  S_ISDIR(dir->d_stat.st_mode));
-        	duk_put_prop_string(ctx, obj_idx+1, "directory");
+        	duk_put_prop_string(ctx, obj_idx, "dir");
 
+			duk_put_prop_index(ctx, arr_idx, i++);
 	    }
 	    closedir(d);
 	}
