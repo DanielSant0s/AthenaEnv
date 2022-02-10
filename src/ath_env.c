@@ -1,8 +1,10 @@
 #include "ath_env.h"
 
+#include <assert.h>
 #include <sys/fcntl.h>
 #include <malloc.h>
 #include <string.h>
+#include <errno.h>
 
 duk_context *ctx;
 
@@ -240,36 +242,86 @@ static duk_ret_t cb_resolve_module(duk_context *ctx) {
 	return 1;
 }
 
-static duk_ret_t cb_load_module(duk_context *ctx) {
-	const char *filename;
-	const char *module_id;
+int module_read(const char* path, char** data) {
+    FILE* f;
+    int fd;
+    struct stat st;
+    size_t fsize;
 
-	module_id = duk_require_string(ctx, 0);
-	duk_get_prop_string(ctx, 2, "filename");
-	filename = duk_require_string(ctx, -1);
+    *data = NULL;
 
-	printf("load_cb: id:'%s', filename:'%s'\n", module_id, filename);
+    f = fopen(path, "rb");
+    if (!f) {
+        return -errno;
+    }
 
-	if (strcmp(module_id, "pig.js") == 0) {
-		duk_push_sprintf(ctx, "module.exports = 'you\\'re about to get eaten by %s';",
-			module_id);
-	} else if (strcmp(module_id, "cow.js") == 0) {
-		duk_push_string(ctx, "module.exports = require('pig');");
-	} else if (strcmp(module_id, "ape.js") == 0) {
-		duk_push_string(ctx, "module.exports = { module: module, __filename: __filename, wasLoaded: module.loaded };");
-	} else if (strcmp(module_id, "badger.js") == 0) {
-		duk_push_string(ctx, "exports.foo = 123; exports.bar = 234;");
-	} else if (strcmp(module_id, "comment.js") == 0) {
-		duk_push_string(ctx, "exports.foo = 123; exports.bar = 234; // comment");
-	} else if (strcmp(module_id, "shebang.js") == 0) {
-		duk_push_string(ctx, "#!ignored\nexports.foo = 123; exports.bar = 234;");
-	} else {
-		(void) duk_type_error(ctx, "cannot find module: %s", module_id);
-	}
+    fd = fileno(f);
+    assert(fd != -1);
 
-	return 1;
+    if (fstat(fd, &st) < 0) {
+        fclose(f);
+        return -errno;
+    }
+
+    if (S_ISDIR(st.st_mode)) {
+        fclose(f);
+        return -EISDIR;
+    }
+
+    fsize = st.st_size;
+
+    *data = malloc(fsize);
+    if (!*data) {
+        fclose(f);
+        return -ENOMEM;
+    }
+
+    fread(*data, 1, fsize, f);
+    if (ferror(f)) {
+        fclose(f);
+        free(*data);
+        return -EIO;
+    }
+
+    if (strncmp(*data, "#!", 2) == 0) {
+        memcpy((void*) *data, "//", 2);
+    }
+
+    fclose(f);
+	return 0;
 }
 
+int EndsWith(const char *str, const char *suffix)
+{
+    if (!str || !suffix)
+        return 0;
+    size_t lenstr = strlen(str);
+    size_t lensuffix = strlen(suffix);
+    if (lensuffix >  lenstr)
+        return 0;
+    return strncmp(str + lenstr - lensuffix, suffix, lensuffix) == 0;
+}
+
+static duk_ret_t cb_load_module(duk_context *ctx) {
+    const char* resolved_id = duk_require_string(ctx, 0);
+
+    if (EndsWith(resolved_id, ".js")) {
+        char* data;
+        int len;
+        module_read(resolved_id, &data);
+        if (len < 0) {
+            return duk_generic_error(ctx, "Module could not be loaded: %s", resolved_id);
+        }
+        if (strncmp(data, "#!", 2) == 0) {
+            memcpy((void*) data, "//", 2);
+        }
+        duk_push_string(ctx, data);
+        free(data);
+        return 1;
+    }
+
+	return 0;
+}
 
 static duk_ret_t athena_dofile(duk_context *ctx) {
 
