@@ -7,12 +7,6 @@ function Vector2(x_pos, y_pos) {
     this.y = y_pos;
 };
 
-function MapTile(texture, worldpos, scale) {
-    this.tex = texture;
-    this.pos = worldpos;
-    this.size = scale;
-};
-
 var camera = new Vector2(70.0, 50.0);
 
 function loadAnimGroup(name) {
@@ -69,28 +63,6 @@ var time = Timer.new();
 var prev = 0;
 var cur = 0;
 var fps = 0;
-
-var tile02 = Graphics.loadImage("Map/Tiles/Tile_02.png");
-var tile14 = Graphics.loadImage("Map/Tiles/Tile_14.png");
-
-var map = new Array(16);
-map[0] =  new MapTile(tile02, new Vector2(112.0, 380.0), 1.0);
-map[1] =  new MapTile(tile02, new Vector2(176.0, 380.0), 1.0);
-map[2] =  new MapTile(tile02, new Vector2(240.0, 380.0), 1.0);
-map[3] =  new MapTile(tile02, new Vector2(304.0, 380.0), 1.0);
-map[4] =  new MapTile(tile02, new Vector2(368.0, 380.0), 1.0);
-map[5] =  new MapTile(tile02, new Vector2(432.0, 380.0), 1.0);
-map[6] =  new MapTile(tile02, new Vector2(496.0, 380.0), 1.0);
-map[7] =  new MapTile(tile02, new Vector2(560.0, 380.0), 1.0);
-
-map[8] =  new MapTile(tile14, new Vector2(112.0, 444.0), 1.0);
-map[9] =  new MapTile(tile14, new Vector2(176.0, 444.0), 1.0);
-map[10] = new MapTile(tile14, new Vector2(240.0, 444.0), 1.0);
-map[11] = new MapTile(tile14, new Vector2(304.0, 444.0), 1.0);
-map[12] = new MapTile(tile14, new Vector2(368.0, 444.0), 1.0);
-map[13] = new MapTile(tile14, new Vector2(432.0, 444.0), 1.0);
-map[14] = new MapTile(tile14, new Vector2(496.0, 444.0), 1.0);
-map[15] = new MapTile(tile14, new Vector2(560.0, 444.0), 1.0);
 
 var ram = System.getFreeMemory();
 
@@ -170,10 +142,6 @@ while(true){
             -move_set[move_state].width*char_scale, 
             move_set[move_state].height*char_scale);
     }
-
-    for (var i = 0; i < map.length; i++) {
-        Graphics.drawScaleImage(map[i].tex, World2Screen(map[i].pos).x, World2Screen(map[i].pos).y, 64.0*map[i].size, 64.0*map[i].size);
-    };
 
     prev = cur;
     cur = Timer.getTime(time);
