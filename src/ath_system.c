@@ -379,16 +379,24 @@ void recursive_mkdir(char *dir) {
 duk_ret_t athena_getmcinfo(duk_context *ctx){
 	int argc = duk_get_top(ctx);
 	int mcslot, type, freespace, format, result;
-	mcslot = 1;
+	mcslot = 0;
 	if(argc == 1) mcslot = duk_get_int(ctx, 0);
 
 	mcGetInfo(mcslot, 0, &type, &freespace, &format);
 	mcSync(0, NULL, &result);
 
-	duk_push_int(ctx, type);
-	duk_push_int(ctx, freespace);
-	duk_push_int(ctx, format);
-	return 3;
+	duk_idx_t obj_idx = duk_push_object(ctx);
+
+    duk_push_uint(ctx, type);
+	duk_put_prop_string(ctx, obj_idx, "type");
+    
+    duk_push_uint(ctx, freespace);
+	duk_put_prop_string(ctx, obj_idx, "freemem");
+
+    duk_push_uint(ctx, format);
+	duk_put_prop_string(ctx, obj_idx, "format");
+
+	return 1;
 }
 
 duk_ret_t athena_openfile(duk_context *ctx){

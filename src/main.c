@@ -99,6 +99,30 @@ void setBootPath(int argc, char ** argv, int idx)
     
 }
 
+
+void initMC(void)
+{
+   int ret;
+   // mc variables
+   int mc_Type, mc_Free, mc_Format;
+
+   
+   printf("initMC: Initializing Memory Card\n");
+
+   ret = mcInit(MC_TYPE_XMC);
+   
+   if( ret < 0 ) {
+	printf("initMC: failed to initialize memcard server.\n");
+   } else {
+       printf("initMC: memcard server started successfully.\n");
+   }
+   
+   // Since this is the first call, -1 should be returned.
+   // makes me sure that next ones will work !
+   mcGetInfo(0, 0, &mc_Type, &mc_Free, &mc_Format); 
+   mcSync(MC_WAIT, NULL, &ret);
+}
+
 int main(int argc, char **argv) {
   
     #ifdef RESET_IOP  
@@ -121,6 +145,7 @@ int main(int argc, char **argv) {
 
     SifExecModuleBuffer(&mcman_irx, size_mcman_irx, 0, NULL, NULL);
     SifExecModuleBuffer(&mcserv_irx, size_mcserv_irx, 0, NULL, NULL);
+    initMC();
 
     // load USB modules    
     SifExecModuleBuffer(&usbd_irx, size_usbd_irx, 0, NULL, NULL);

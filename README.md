@@ -208,7 +208,10 @@ ROM font functions:
 * freevram = System.getFreeVRAM()
 * fps = System.getFPS(prev, cur)
 * System.exitToBrowser()
-* type, freespace, format = System.getMCInfo(slot)
+* info = System.getMCInfo(slot)
+  • info.type 
+  • info.freespace  
+  • info.format  
 
 **Timer functions:**
 
