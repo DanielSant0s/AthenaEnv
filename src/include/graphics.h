@@ -62,6 +62,8 @@ extern void flipScreen();
 
 extern void graphicWaitVblankStart();
 
+extern void setVSync(bool vsync_flag);
+
 extern void gsKit_clear_screens();
 
 extern GSGLOBAL *getGSGLOBAL();
@@ -70,7 +72,7 @@ extern int GetInterlacedFrameMode();
 
 extern int getFreeVRAM();
 
-extern int FPSCounter(clock_t prevtime, clock_t curtime);
+extern float FPSCounter(uint32_t interval);
 
 extern void setVideoMode(s16 mode, int width, int height, int psm, s16 interlace, s16 field, bool zbuffering, int psmz);
 

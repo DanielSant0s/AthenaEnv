@@ -59,9 +59,6 @@ var move_state = 0;
 //0 = RIGHT, 1 = LEFT
 var char_side = 0;
 
-var time = Timer.new();
-var prev = 0;
-var cur = 0;
 var fps = 0;
 
 var ram = System.getFreeMemory();
@@ -126,8 +123,9 @@ while(true){
 
     if(frame > move_set[move_state].count-1) {
         frame = 0;
-        fps = System.getFPS(prev, cur);
     }
+
+    fps = Display.getFPS(240);
 
     if(char_side == 0){
         Graphics.drawScaleImage(move_set[move_state].sprite[frame], 
@@ -141,10 +139,7 @@ while(true){
             World2Screen(char).y, 
             -move_set[move_state].width*char_scale, 
             move_set[move_state].height*char_scale);
-    }
-
-    prev = cur;
-    cur = Timer.getTime(time);
+    });
 
     Display.flip();
 }

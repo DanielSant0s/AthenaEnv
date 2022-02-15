@@ -18,6 +18,14 @@ static const u64 BLACK_RGBAQ   = GS_SETREG_RGBAQ(0x00,0x00,0x00,0x80,0x00);
 GSGLOBAL *gsGlobal = NULL;
 GSFONTM *gsFontM = NULL;
 
+static bool vsync = true;
+static int vsync_sema_id = 0;
+static clock_t curtime = 0;
+static float fps = 0.0f;
+
+static int frames = 0;
+static int frame_interval = -1;
+
 //2D drawing functions
 GSTEXTURE* loadpng(const char *path, bool delayed)
 {
@@ -806,19 +814,9 @@ void unloadFontM()
 	gsKit_free_fontm(gsGlobal, gsFontM);
 }
 
-int FPSCounter(clock_t prevtime, clock_t curtime)
+float FPSCounter(uint32_t interval)
 {
-	float fps = 0.0f;
-
-	if (prevtime != 0) {
-	        clock_t diff = curtime - prevtime;
-	        float rawfps = ((100 * CLOCKS_PER_SEC) / diff) / 100.0f;
-
-	        if (fps == 0.0f)
-	            fps = rawfps;
-	        else
-	            fps = fps * 0.9f + rawfps / 10.0f;
-	    }
+	frame_interval = interval;
 	return fps;
 }
 
@@ -1009,7 +1007,6 @@ int GetInterlacedFrameMode()
 
     return 0;
 }
-
 GSGLOBAL *getGSGLOBAL(){return gsGlobal;}
 
 void setVideoMode(s16 mode, int width, int height, int psm, s16 interlace, s16 field, bool zbuffering, int psmz) {
@@ -1056,8 +1053,51 @@ void fntDrawQuad(rm_quad_t *q)
                               q->br.u, q->br.v, 1, q->color);
 }
 
+/* PRIVATE METHODS */
+static int vsync_handler()
+{
+   iSignalSema(vsync_sema_id);
+
+   ExitHandler();
+   return 0;
+}
+
+void setVSync(bool vsync_flag){ vsync = vsync_flag;}
+
+/* Copy of gsKit_sync_flip, but without the 'flip' */
+static void gsKit_sync(GSGLOBAL *gsGlobal)
+{
+   if (!gsGlobal->FirstFrame) WaitSema(vsync_sema_id);
+   while (PollSema(vsync_sema_id) >= 0)
+   	;
+}
+
+/* Copy of gsKit_sync_flip, but without the 'sync' */
+static void gsKit_flip(GSGLOBAL *gsGlobal)
+{
+   if (!gsGlobal->FirstFrame)
+   {
+      if (gsGlobal->DoubleBuffering == GS_SETTING_ON)
+      {
+         GS_SET_DISPFB2( gsGlobal->ScreenBuffer[
+               gsGlobal->ActiveBuffer & 1] / 8192,
+               gsGlobal->Width / 64, gsGlobal->PSM, 0, 0 );
+
+         gsGlobal->ActiveBuffer ^= 1;
+      }
+
+   }
+
+   gsKit_setactive(gsGlobal);
+}
+
 void initGraphics()
 {
+	ee_sema_t sema;
+    sema.init_count = 0;
+    sema.max_count = 1;
+    sema.option = 0;
+    vsync_sema_id = CreateSema(&sema);
 
 	gsGlobal = gsKit_init_global();
 
@@ -1089,7 +1129,9 @@ void initGraphics()
 
 	gsKit_init_screen(gsGlobal);
 
-	//gsKit_TexManager_init(gsGlobal);
+	gsKit_TexManager_init(gsGlobal);
+
+	gsKit_add_vsync_handler(vsync_handler);
 
 	gsKit_mode_switch(gsGlobal, GS_ONESHOT);
 
@@ -1105,10 +1147,28 @@ void initGraphics()
 void flipScreen()
 {	
 	//gsKit_set_finish(gsGlobal);
-	gsKit_queue_exec(gsGlobal);
-	gsKit_finish();
-	gsKit_sync_flip(gsGlobal);
+	if (gsGlobal->DoubleBuffering == GS_SETTING_OFF) {
+        if(vsync) 
+			gsKit_sync(gsGlobal);
+		gsKit_queue_exec(gsGlobal);
+    } else {
+		gsKit_queue_exec(gsGlobal);
+		gsKit_finish();
+		if(vsync) 
+			gsKit_sync(gsGlobal);
+		gsKit_flip(gsGlobal);
+	}
 	gsKit_TexManager_nextFrame(gsGlobal);
+
+	if (frames > frame_interval) {
+		clock_t prevtime = curtime;
+		curtime = clock();
+
+		fps = 1.0f / (((float)(curtime - prevtime)) / ((float)CLOCKS_PER_SEC)) * (float)(frame_interval);
+
+		frames = 0;
+	}
+	frames++;
 }
 
 void graphicWaitVblankStart(){

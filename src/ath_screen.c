@@ -27,6 +27,32 @@ duk_ret_t athena_vblank(duk_context *ctx){
 	return 0;
 }
 
+duk_ret_t athena_vsync(duk_context *ctx){
+	setVSync(duk_get_boolean(ctx, 0));
+	return 0;
+}
+
+duk_ret_t athena_getFreeVRAM(duk_context *ctx)
+{
+	if (duk_get_top(ctx) != 0) return duk_generic_error(ctx, "no arguments expected.");
+	
+	int result = getFreeVRAM();
+
+	duk_push_int(ctx, (uint32_t)(result));
+	return 1;
+}
+
+
+duk_ret_t athena_getFPS(duk_context *ctx)
+{
+	if (duk_get_top(ctx) != 1) return duk_generic_error(ctx, "no arguments expected.");
+	float result = FPSCounter(duk_get_uint(ctx, 0));
+
+	duk_push_number(ctx, (uint32_t)(result));
+	return 1;
+}
+
+
 duk_ret_t athena_setvmode(duk_context *ctx){
 	int argc = duk_get_top(ctx);
 	s16 mode = (s16)duk_get_int(ctx, 0);
@@ -48,10 +74,13 @@ duk_ret_t athena_setvmode(duk_context *ctx){
 
 DUK_EXTERNAL duk_ret_t dukopen_screen(duk_context *ctx) {
   const duk_function_list_entry module_funcs[] = {
-    { "flip",             athena_flip,               0 },
-    { "clear",            athena_clear,    DUK_VARARGS },
-    { "waitVblankStart",  athena_vblank,             0 },
-    { "setMode",          athena_setvmode, DUK_VARARGS },
+    { "flip",             athena_flip,         		      0 },
+    { "clear",            athena_clear,    		DUK_VARARGS },
+	{ "getFreeVRAM",      athena_getFreeVRAM,			  0 },
+	{ "getFPS",           athena_getFPS,				  1 },
+    { "waitVblankStart",  athena_vblank,             	  0 },
+	{ "setVSync",  		  athena_vsync,              	  1 },
+    { "setMode",          athena_setvmode, 		DUK_VARARGS },
     { NULL, NULL, 0 }
   };
 

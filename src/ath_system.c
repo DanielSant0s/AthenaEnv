@@ -328,28 +328,6 @@ duk_ret_t athena_getFreeMemory(duk_context *ctx)
 	return 1;
 }
 
-duk_ret_t athena_getFreeVRAM(duk_context *ctx)
-{
-	if (duk_get_top(ctx) != 0) return duk_generic_error(ctx, "no arguments expected.");
-	
-	int result = getFreeVRAM();
-
-	duk_push_int(ctx, (uint32_t)(result));
-	return 1;
-}
-
-
-duk_ret_t athena_getFPS(duk_context *ctx)
-{
-	if (duk_get_top(ctx) != 2) return duk_generic_error(ctx, "2 arguments expected.");
-	clock_t prev = duk_get_int(ctx, 0);
-	clock_t cur = duk_get_int(ctx, 1);
-	int result = FPSCounter(prev, cur);
-
-	duk_push_int(ctx, (uint32_t)(result));
-	return 1;
-}
-
 duk_ret_t athena_exit(duk_context *ctx)
 {
 	int argc = duk_get_top(ctx);
@@ -674,8 +652,6 @@ DUK_EXTERNAL duk_ret_t dukopen_system(duk_context *ctx) {
 		{ "rename",                     athena_rename,				DUK_VARARGS },
 		{ "sleep",                      athena_sleep,				DUK_VARARGS },
 		{ "getFreeMemory",         		athena_getFreeMemory,		DUK_VARARGS },
-		{ "getFreeVRAM",          		athena_getFreeVRAM,			DUK_VARARGS },
-		{ "getFPS",                 	athena_getFPS,				DUK_VARARGS },
 		{ "exitToBrowser",              athena_exit,						  0 },
 		{ "getMCInfo",                 	athena_getmcinfo,			DUK_VARARGS },
 		{ "loadELF",                 	athena_loadELF,				DUK_VARARGS },
