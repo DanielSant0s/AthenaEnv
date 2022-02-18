@@ -24,7 +24,7 @@ static clock_t curtime = 0;
 static float fps = 0.0f;
 
 static int frames = 0;
-static int frame_interval = -1;
+static uint32_t frame_interval = -1;
 
 //2D drawing functions
 GSTEXTURE* loadpng(const char *path, bool delayed)
