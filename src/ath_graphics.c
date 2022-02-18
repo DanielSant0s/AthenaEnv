@@ -106,7 +106,7 @@ duk_ret_t athena_loadimg(duk_context *ctx){
 	else if (magic == 0x5089) image = loadpng(text, delayed);
 	else return duk_generic_error(ctx, "loadImage %s (invalid magic).", text);
 
-	duk_push_pointer(ctx, (void*)(image));
+	duk_push_uint(ctx, (void*)(image));
 	return 1;
 }
 
@@ -114,7 +114,7 @@ duk_ret_t athena_imgfree(duk_context *ctx){
 	int argc = duk_get_top(ctx);
 	if (argc != 1) return duk_generic_error(ctx, "freeImage takes 1 argument");
 	
-	GSTEXTURE* source = (GSTEXTURE*)(duk_get_pointer(ctx, 0));
+	GSTEXTURE* source = (GSTEXTURE*)(duk_get_uint(ctx, 0));
 
 	UnloadTexture(source);
 
@@ -138,7 +138,7 @@ duk_ret_t athena_imgfree(duk_context *ctx){
 duk_ret_t athena_drawimg(duk_context *ctx){
   	int argc = duk_get_top(ctx);
 	if (argc != 3 && argc != 4) return duk_generic_error(ctx, "drawImage takes 3 or 4 arguments");
-  	GSTEXTURE* source = (GSTEXTURE*)(duk_get_pointer(ctx, 0));
+  	GSTEXTURE* source = (GSTEXTURE*)(duk_get_uint(ctx, 0));
 	float x = duk_get_number(ctx, 1);
 	float y = duk_get_number(ctx, 2);
 	Color color = 0x80808080;
@@ -152,7 +152,7 @@ duk_ret_t athena_drawimg(duk_context *ctx){
 duk_ret_t athena_drawimg_rotate(duk_context *ctx){
 	int argc = duk_get_top(ctx);
 	if (argc != 4 && argc != 5) return duk_generic_error(ctx, "drawRotateImage takes 4 or 5 arguments");
-    GSTEXTURE* source = (GSTEXTURE*)(duk_get_pointer(ctx, 0));
+    GSTEXTURE* source = (GSTEXTURE*)(duk_get_uint(ctx, 0));
 	float x = duk_get_number(ctx, 1);
 	float y = duk_get_number(ctx, 2);
 	float radius = duk_get_number(ctx, 3);
@@ -168,7 +168,7 @@ duk_ret_t athena_drawimg_rotate(duk_context *ctx){
 duk_ret_t athena_drawimg_scale(duk_context *ctx){
 	int argc = duk_get_top(ctx);
 	if (argc != 5 && argc != 6) return duk_generic_error(ctx, "drawScaleImage takes 5 or 6 arguments");
-    GSTEXTURE* source = (GSTEXTURE*)(duk_get_pointer(ctx, 0));
+    GSTEXTURE* source = (GSTEXTURE*)(duk_get_uint(ctx, 0));
 	float x = duk_get_number(ctx, 1);
 	float y = duk_get_number(ctx, 2);
 	float width = duk_get_number(ctx, 3);
@@ -184,7 +184,7 @@ duk_ret_t athena_drawimg_scale(duk_context *ctx){
 duk_ret_t athena_drawimg_part(duk_context *ctx){
 	int argc = duk_get_top(ctx);
 	if (argc != 7 && argc != 8) return duk_generic_error(ctx, "drawPartialImage takes 7 or 8 arguments");
-    GSTEXTURE* source = (GSTEXTURE*)(duk_get_pointer(ctx, 0));
+    GSTEXTURE* source = (GSTEXTURE*)(duk_get_uint(ctx, 0));
 	float x = duk_get_number(ctx, 1);
 	float y = duk_get_number(ctx, 2);
 	float startx = duk_get_number(ctx, 3);
@@ -202,7 +202,7 @@ duk_ret_t athena_drawimg_part(duk_context *ctx){
 duk_ret_t athena_drawimg_full(duk_context *ctx){
 	int argc = duk_get_top(ctx);
 	if (argc != 10 && argc != 11) return duk_generic_error(ctx, "drawPartialImage takes 10 or 11 arguments");
-    GSTEXTURE* source = (GSTEXTURE*)(duk_get_pointer(ctx, 0));
+    GSTEXTURE* source = (GSTEXTURE*)(duk_get_uint(ctx, 0));
 	float x = duk_get_number(ctx, 1);
 	float y = duk_get_number(ctx, 2);
 	float startx = duk_get_number(ctx, 3);
@@ -224,7 +224,7 @@ duk_ret_t athena_drawimg_full(duk_context *ctx){
 duk_ret_t athena_width(duk_context *ctx){
 	int argc = duk_get_top(ctx);
 	if (argc != 1) return duk_generic_error(ctx, "getImageWidth takes a single argument");
-    GSTEXTURE* source = (GSTEXTURE*)(duk_get_pointer(ctx, 0));
+    GSTEXTURE* source = (GSTEXTURE*)(duk_get_uint(ctx, 0));
 	duk_push_number(ctx, source->Width);
 	return 1;
 }
@@ -233,7 +233,7 @@ duk_ret_t athena_width(duk_context *ctx){
 duk_ret_t athena_height(duk_context *ctx){
 	int argc = duk_get_top(ctx);
 	if (argc != 1) return duk_generic_error(ctx, "getImageHeight takes a single argument");
-    GSTEXTURE* source = (GSTEXTURE*)(duk_get_pointer(ctx, 0));
+    GSTEXTURE* source = (GSTEXTURE*)(duk_get_uint(ctx, 0));
 	duk_push_number(ctx, source->Height);
 	return 1;
 }
@@ -241,7 +241,7 @@ duk_ret_t athena_height(duk_context *ctx){
 duk_ret_t athena_filters(duk_context *ctx){
 	int argc = duk_get_top(ctx);
 	if (argc != 2) return duk_generic_error(ctx, "setImageFilters takes 2 arguments");
-    GSTEXTURE* source = (GSTEXTURE*)(duk_get_pointer(ctx, 0));
+    GSTEXTURE* source = (GSTEXTURE*)(duk_get_uint(ctx, 0));
 	source->Filter = duk_get_number(ctx, 1);
 	return 0;
 }
@@ -388,14 +388,14 @@ duk_ret_t athena_fontload(duk_context *ctx){
 	const char* path = duk_get_string(ctx, 0);
 	GSFONT* font = loadFont(path);
 	if (font == NULL) return duk_generic_error(ctx, "Error loading font (invalid magic).");
-	duk_push_pointer(ctx, (void*)(font));
+	duk_push_uint(ctx, (void*)(font));
 	return 1;
 }
 
 duk_ret_t athena_print(duk_context *ctx) {
 	int argc = duk_get_top(ctx);
 	if (argc != 5 && argc != 6) return duk_generic_error(ctx, "wrong number of arguments");
-	GSFONT* font = (GSFONT*)duk_get_pointer(ctx, 0);
+	GSFONT* font = (GSFONT*)duk_get_uint(ctx, 0);
     float x = duk_get_number(ctx, 1);
 	float y = duk_get_number(ctx, 2);
     float scale =  duk_get_number(ctx, 3);
@@ -409,7 +409,7 @@ duk_ret_t athena_print(duk_context *ctx) {
 duk_ret_t athena_fontunload(duk_context *ctx){
 	int argc = duk_get_top(ctx); 
 	if (argc != 1) return duk_generic_error(ctx, "wrong number of arguments"); 
-	GSFONT* font = (GSFONT*)duk_get_pointer(ctx, 0);
+	GSFONT* font = (GSFONT*)duk_get_uint(ctx, 0);
 	unloadFont(font);
 	return 0;
 }

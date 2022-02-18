@@ -22,14 +22,14 @@ duk_ret_t athena_newT(duk_context *ctx) {
 	Timer* new_timer = (Timer*)malloc(sizeof(Timer));
 	new_timer->tick = clock();
 	new_timer->isPlaying = true;
-	duk_push_pointer(ctx, (void*)new_timer);
+	duk_push_uint(ctx, (void*)new_timer);
 	return 1;
 }
 
 duk_ret_t athena_time(duk_context *ctx) {
 	int argc = duk_get_top(ctx);
 	if (argc != 1) return duk_generic_error(ctx, "wrong number of arguments");
-	Timer* src = (Timer*)duk_get_pointer(ctx, 0);
+	Timer* src = (Timer*)duk_get_uint(ctx, 0);
 	if (src->isPlaying){
 		duk_push_int(ctx, (clock() - src->tick));
 	}else{
@@ -41,7 +41,7 @@ duk_ret_t athena_time(duk_context *ctx) {
 duk_ret_t athena_pause(duk_context *ctx){
 	int argc = duk_get_top(ctx);
 	if (argc != 1) return duk_generic_error(ctx, "wrong number of arguments");
-	Timer* src = (Timer*)duk_get_pointer(ctx, 0);
+	Timer* src = (Timer*)duk_get_uint(ctx, 0);
 	if (src->isPlaying){
 		src->isPlaying = false;
 		src->tick = (clock()-src->tick);
@@ -52,7 +52,7 @@ duk_ret_t athena_pause(duk_context *ctx){
 duk_ret_t athena_resume(duk_context *ctx){
 	int argc = duk_get_top(ctx);
 	if (argc != 1) return duk_generic_error(ctx, "wrong number of arguments");
-	Timer* src = (Timer*)duk_get_pointer(ctx, 0);
+	Timer* src = (Timer*)duk_get_uint(ctx, 0);
 	if (!src->isPlaying){
 		src->isPlaying = true;
 		src->tick = (clock()-src->tick);
@@ -63,7 +63,7 @@ duk_ret_t athena_resume(duk_context *ctx){
 duk_ret_t athena_reset(duk_context *ctx){
 	int argc = duk_get_top(ctx);
 	if (argc != 1) return duk_generic_error(ctx, "wrong number of arguments");
-	Timer* src = (Timer*)duk_get_pointer(ctx, 0);
+	Timer* src = (Timer*)duk_get_uint(ctx, 0);
 	if (src->isPlaying) src->tick = clock();
 	else src->tick = 0;
 	return 0;
@@ -72,7 +72,7 @@ duk_ret_t athena_reset(duk_context *ctx){
 duk_ret_t athena_set(duk_context *ctx){
 	int argc = duk_get_top(ctx);
 	if (argc != 2) return duk_generic_error(ctx, "wrong number of arguments");
-	Timer* src = (Timer*)duk_get_pointer(ctx, 0);
+	Timer* src = (Timer*)duk_get_uint(ctx, 0);
 	uint32_t val = (uint32_t)duk_get_int(ctx, 1);
 	if (src->isPlaying) src->tick = clock() + val;
 	else src->tick = val;
@@ -82,7 +82,7 @@ duk_ret_t athena_set(duk_context *ctx){
 duk_ret_t athena_wisPlaying(duk_context *ctx){
 	int argc = duk_get_top(ctx);
 	if (argc != 1) return duk_generic_error(ctx, "wrong number of arguments");
-	Timer* src = (Timer*)duk_get_pointer(ctx, 0);
+	Timer* src = (Timer*)duk_get_uint(ctx, 0);
 	duk_push_boolean(ctx, src->isPlaying);
 	return 1;
 }
@@ -90,7 +90,7 @@ duk_ret_t athena_wisPlaying(duk_context *ctx){
 duk_ret_t athena_destroy(duk_context *ctx) {
 	int argc = duk_get_top(ctx);
 	if (argc != 1) return duk_generic_error(ctx, "wrong number of arguments");
-	Timer* timer = (Timer*)duk_get_pointer(ctx, 0);
+	Timer* timer = (Timer*)duk_get_uint(ctx, 0);
 	free(timer);
 	return 1;
 }
