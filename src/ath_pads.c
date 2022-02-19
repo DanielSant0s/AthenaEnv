@@ -54,53 +54,26 @@ duk_ret_t athena_getpad(duk_context *ctx){
         }
     }
 
+	duk_idx_t obj_idx = duk_push_object(ctx);
+
 	duk_push_uint(ctx, paddata);
-	return 1;
-}
-
-duk_ret_t athena_getleft(duk_context *ctx){
-	int argc = duk_get_top(ctx);
-	if (argc != 0 && argc != 1) return duk_generic_error(ctx, "wrong number of arguments.");
-	int port = 0;
-	if (argc == 1){
-		port = duk_get_int(ctx, 0);
-		if (port > 1) return duk_generic_error(ctx, "wrong port number.");
-	}
-
-	struct padButtonStatus buttons;
-
-	int state = padGetState(port, 0);
-
-	if ((state == PAD_STATE_STABLE) || (state == PAD_STATE_FINDCTP1)) padRead(port, 0, &buttons);
-	if (ds34bt_get_status(port) & DS34BT_STATE_RUNNING) ds34bt_get_data(port, (u8 *)&buttons.btns);
-	if (ds34usb_get_status(port) & DS34USB_STATE_RUNNING) ds34usb_get_data(port, (u8 *)&buttons.btns);
+	duk_put_prop_string(ctx, obj_idx, "btns");
 
 	duk_push_int(ctx, buttons.ljoy_h-127);
+	duk_put_prop_string(ctx, obj_idx, "lx");
+
 	duk_push_int(ctx, buttons.ljoy_v-127);
-	return 2;
-	}
-
-duk_ret_t athena_getright(duk_context *ctx){
-	int argc = duk_get_top(ctx);
-	if (argc != 0 && argc != 1) return duk_generic_error(ctx, "wrong number of arguments.");
-	int port = 0;
-	if (argc == 1){
-		port = duk_get_int(ctx, 0);
-		if (port > 1) return duk_generic_error(ctx, "wrong port number.");
-	}
-
-	struct padButtonStatus buttons;
-
-	int state = padGetState(port, 0);
-
-	if ((state == PAD_STATE_STABLE) || (state == PAD_STATE_FINDCTP1)) padRead(port, 0, &buttons);
-	if (ds34bt_get_status(port) & DS34BT_STATE_RUNNING) ds34bt_get_data(port, (u8 *)&buttons.btns);
-	if (ds34usb_get_status(port) & DS34USB_STATE_RUNNING) ds34usb_get_data(port, (u8 *)&buttons.btns);
+	duk_put_prop_string(ctx, obj_idx, "ly");
 
 	duk_push_int(ctx, buttons.rjoy_h-127);
+	duk_put_prop_string(ctx, obj_idx, "rx");
+
 	duk_push_int(ctx, buttons.rjoy_v-127);
-	return 2;
-	}
+	duk_put_prop_string(ctx, obj_idx, "ry");
+
+
+	return 1;
+}
 
 duk_ret_t athena_getpressure(duk_context *ctx){
 	int argc = duk_get_top(ctx);
@@ -195,9 +168,14 @@ duk_ret_t athena_rumble(duk_context *ctx){
 duk_ret_t athena_check(duk_context *ctx){
 	int argc = duk_get_top(ctx);
 	if (argc != 2) return duk_generic_error(ctx, "wrong number of arguments.");
-	int pad = duk_get_uint(ctx, 0);
+
+	duk_get_prop_string(ctx, 0, "btns");
+	int pad = duk_get_uint(ctx, -1);
+	duk_pop(ctx);
+
 	int button = duk_get_uint(ctx, 1);
 	duk_push_boolean(ctx, (pad & button));
+
 	return 1;
 }
 
@@ -229,8 +207,6 @@ duk_ret_t athena_set_led(duk_context *ctx){
 DUK_EXTERNAL duk_ret_t dukopen_pads(duk_context *ctx) {
     const duk_function_list_entry module_funcs[] = {
         { "get",                athena_getpad,       DUK_VARARGS },
-        { "getLeftStick",       athena_getleft,      DUK_VARARGS },
-        { "getRightStick",      athena_getright,     DUK_VARARGS },
         { "getType",            athena_gettype,      DUK_VARARGS },
         { "getPressure",        athena_getpressure,  DUK_VARARGS },
         { "rumble",             athena_rumble,       DUK_VARARGS },

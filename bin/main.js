@@ -71,24 +71,24 @@ while(true){
     Font.ftPrint(kghappyshadows, 15.0, 15.0, 0, 640.0, 448.0, "Free RAM:" + Math.ceil(ram/1024) + "KB - " + fps + " FPS\n", Color.new(0,0,0));
     Font.ftPrint(kghappysolid, 15.0, 15.0, 0, 640.0, 448.0, "Free RAM:" + Math.ceil(ram/1024) + "KB - " + fps + "FPS \n", Color.new(128,128,128));
     
-    if(pad == 0 && oldpad != 0){
+    if(pad.btns == 0 && oldpad.btns != 0 || pad.lx == 0 && oldpad.lx != 0){
         move_state = 0;
     }
 
-    if((Pads.check(pad, PAD_RIGHT) && !Pads.check(oldpad, PAD_RIGHT)) || (Pads.check(pad, PAD_LEFT) && !Pads.check(oldpad, PAD_LEFT))){
+    if((Pads.check(pad, PAD_RIGHT) && !Pads.check(oldpad, PAD_RIGHT)) || (Pads.check(pad, PAD_LEFT) && !Pads.check(oldpad, PAD_LEFT)) || (pad.lx != 0  && oldpad.lx == 0)){
         move_state = 1;
     }
-
-    if(Pads.check(pad, PAD_RIGHT)){
-        if(!Pads.check(oldpad, PAD_RIGHT)){
+    
+    if(Pads.check(pad, PAD_RIGHT) || pad.lx > 100){
+        if(!Pads.check(oldpad, PAD_RIGHT) || oldpad.lx < -100){
             char_side = 0;
         };
         char.x += char_speed[move_state-1];
         camera.x += char_speed[move_state-1];
     }
 
-    if(Pads.check(pad, PAD_LEFT)){
-        if(!Pads.check(oldpad, PAD_LEFT)){
+    if(Pads.check(pad, PAD_LEFT) || pad.lx < -100){
+        if(!Pads.check(oldpad, PAD_LEFT) || oldpad.lx > 100){
             char_side = 1;
         };
         char.x -= char_speed[move_state-1];
@@ -139,7 +139,7 @@ while(true){
             World2Screen(char).y, 
             -move_set[move_state].width*char_scale, 
             move_set[move_state].height*char_scale);
-    });
+    };
 
     Display.flip();
 }
