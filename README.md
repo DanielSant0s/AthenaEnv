@@ -169,6 +169,9 @@ ROM font functions:
   • pad.ly - Left analog vertical position (up = -127, default = 0, down = 128)  
   • pad.rx - Right analog horizontal position (left = -127, default = 0, right = 128)  
   • pad.ry - Right analog vertical position (up = -127, default = 0, down = 128)  
+    
+  ![analog_graph](https://user-images.githubusercontent.com/47725160/154816009-99d7e5da-badf-409b-9a3b-3618fd372f09.png)
+
 * var type = Pads.getType(port) *port isn't mandatory  
   • PAD_DIGITAL  
   • PAD_ANALOG  
