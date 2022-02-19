@@ -87,24 +87,29 @@ Primitive shapes:
 * Graphics.drawQuad(x, y, x2, y2, x3, y3, x4, y4 color, color2, color3, color4) *color2, color3 and color4 are not mandatory
 
 Image functions:
-* image = Graphics.loadImage(path) *Supports BMP, JPG and PNG
+* var image = Graphics.loadImage(path) *Supports BMP, JPG and PNG
 * Graphics.drawImage(image, x, y, color)
 * Graphics.drawRotateImage(image, x, y, angle, color)
 * Graphics.drawScaleImage(image, x, y, scale_x, scale_y, color)
 * Graphics.drawPartialImage(image, x, y, start_x, start_y, width, height, color)
 * Graphics.drawImageExtended(image, x, y, start_x, start_y, width, height, scale_x, scale_y, angle, color)
 * Graphics.setImageFilters(image, filter) *Choose between NEAREST and LINEAR filters
-* width = Graphics.getImageWidth(image)
-* height = Graphics.getImageHeight(image)
-* Graphics.freeImage(image)
-
+* var width = Graphics.getImageWidth(image)
+* var height = Graphics.getImageHeight(image)
+* Graphics.freeImage(image)  
+  
+Asynchronous functions:  
+* Graphics.threadLoadImage(path) *Supports BMP, JPG and PNG
+* var state = Graphics.getLoadState()
+* var image = Graphics.getLoadData()  
+   
 **Render functions:**
 
 • Remember to enable zbuffering on screen mode, put the line of code below  
 • Default NTSC mode(3D enabled): Display.setMode(NTSC, 640, 448, CT24, INTERLACED, FIELD, true, Z16S)  
 
 * Render.init(aspect) *default aspect is 4/3, widescreen is 16/9
-* model = Render.loadOBJ(path, texture) *texture isn't mandatory
+* var model = Render.loadOBJ(path, texture) *texture isn't mandatory
 * Render.drawOBJ(model, pos_x, pos_y, pos_z, rot_x, rot_y, rot_z)
 * Render.freeOBJ(model)  
 
@@ -121,8 +126,8 @@ Lights functions:
 
 * Display.clear(color) *color isn't mandatory
 * Display.flip()
-* freevram = Display.getFreeVRAM()
-* fps = Display.getFPS(frame_interval)
+* var freevram = Display.getFreeVRAM()
+* var fps = Display.getFPS(frame_interval)
 * Display.setVSync(bool)
 * Display.waitVblankStart()
 * Display.setMode(mode, width, height, colormode, interlace, field, zbuffering, zbuf_colormode)  
@@ -140,14 +145,14 @@ Lights functions:
 
 Freetype functions(TTF, OTF):
 * Font.ftInit()
-* font = Font.ftLoad("font.ttf")
+* var font = Font.ftLoad("font.ttf")
 * Font.ftPrint(font, x, y, align, width, height, text, color)
 * Font.ftSetPixelSize()
 * Font.ftUnload(font)
 * Font.ftEnd()
 
 Image functions(FNT, PNG, BMP):
-* font = Font.load("font.fnt/png/bmp")
+* var font = Font.load("font.fnt/png/bmp")
 * Font.print(font, x, y, scale, text, color)
 * Font.unload(font)
 
@@ -158,16 +163,16 @@ ROM font functions:
 
 **Pads functions:**
 
-* pad = Pads.get(port) *port isn't mandatory
+* var pad = Pads.get(port) *port isn't mandatory
 * Pads.getLeftStick(port) *port isn't mandatory
 * Pads.getRightStick(port) *port isn't mandatory
-* type = Pads.getType(port) *port isn't mandatory  
+* var type = Pads.getType(port) *port isn't mandatory  
   • PAD_DIGITAL  
   • PAD_ANALOG  
   • PAD_DUALSHOCK  
-* press = Pads.getPressure(port, button) *port isn't mandatory
+* var press = Pads.getPressure(port, button) *port isn't mandatory
 * Pads.rumble(port, big, small) *port isn't mandatory
-* Pads.check(pad, button)
+* var ret = Pads.check(pad, button)
 * Buttons list:  
   • PAD_SELECT  
   • PAD_START  
@@ -188,15 +193,24 @@ ROM font functions:
 
 **System functions:**
 
-* fd = System.openFile(path, type)
-* buffer = System.readFile(file, size)
+* var fd = System.openFile(path, type)
+* Types list:  
+  • FREAD   
+  • FWRITE  
+  • FCREATE  
+  • FRDWR  
+* var buffer = System.readFile(file, size)
 * System.writeFile(fd, data, size)
 * System.closeFile(fd)
 * System.seekFile(fd, pos, type)
-* size = System.sizeFile(fd)
+* Types list:  
+  • SET  
+  • CUR  
+  • END  
+* var size = System.sizeFile(fd)
 * System.doesFileExist(path)
 * System.CurrentDirectory(path) *if path given, it sets the current dir, else it gets the current dir
-* listdir = System.listDirectory(path) *path isn't mandatory  
+* var listdir = System.listDirectory(path) *path isn't mandatory  
   • listdir[index].name - return file name on indicated index(string)  
   • listdir[index].size - return file size on indicated index(integer)  
   • listdir[index].directory - return if indicated index is a file or a directory(bool)  
@@ -207,16 +221,22 @@ ROM font functions:
 * System.moveFile(source, dest)
 * System.rename(source, dest)
 * System.sleep(sec)
-* freemem = System.getFreeMemory()
+* var freemem = System.getFreeMemory()
 * System.exitToBrowser()
-* info = System.getMCInfo(slot)
+* var info = System.getMCInfo(slot)
   • info.type 
-  • info.freespace  
+  • info.freemem  
   • info.format  
+  
+Asynchronous functions:  
+* System.threadCopyFile(source, dest)
+* var progress = System.getFileProgress()  
+  • progress.current  
+  • progress.final  
 
 **Timer functions:**
 
-* timer = Timer.new()
+* var timer = Timer.new()
 * Timer.getTime(timer)
 * Timer.setTime(src, value)
 * Timer.destroy(timer)
@@ -230,7 +250,7 @@ ROM font functions:
 * Sound.setFormat(bitrate, freq, channels)
 * Sound.setVolume(volume)
 * Sound.setADPCMVolume(channel, volume)
-* audio = Sound.loadADPCM(path)
+* var audio = Sound.loadADPCM(path)
 * Sound.playADPCM(channel, audio)
 
 ## Contributing

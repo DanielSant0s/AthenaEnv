@@ -622,7 +622,7 @@ duk_ret_t athena_getfileprogress(duk_context *ctx) {
 	duk_idx_t obj_idx = duk_push_object(ctx);
 
 	duk_push_int(ctx, (int)progress);
-    duk_put_prop_string(ctx, obj_idx, "progress");
+    duk_put_prop_string(ctx, obj_idx, "current");
 
 	duk_push_int(ctx, (int)max_progress);
     duk_put_prop_string(ctx, obj_idx, "final");
@@ -633,32 +633,32 @@ duk_ret_t athena_getfileprogress(duk_context *ctx) {
 DUK_EXTERNAL duk_ret_t dukopen_system(duk_context *ctx) {
 	setModulePath();
 	const duk_function_list_entry module_funcs[] = {
-		{ "openFile",                   athena_openfile,			DUK_VARARGS },
-		{ "readFile",                   athena_readfile,			DUK_VARARGS },
-		{ "writeFile",                 	athena_writefile,			DUK_VARARGS },
-		{ "closeFile",                 	athena_closefile,			DUK_VARARGS },  
-		{ "seekFile",                   athena_seekfile,			DUK_VARARGS },  
-		{ "sizeFile",                   athena_sizefile,			DUK_VARARGS },
-		{ "doesFileExist",            	athena_checkexist,			DUK_VARARGS },
+		{ "openFile",                   athena_openfile,					  2 },
+		{ "readFile",                   athena_readfile,					  2 },
+		{ "writeFile",                 	athena_writefile,					  3 },
+		{ "closeFile",                 	athena_closefile,					  1 },  
+		{ "seekFile",                   athena_seekfile,					  3 },  
+		{ "sizeFile",                   athena_sizefile,					  1 },
+		{ "doesFileExist",            	athena_checkexist,					  1 },
 		{ "currentDirectory",           athena_curdir,				DUK_VARARGS },
 		{ "listDirectory",           	athena_dir,					DUK_VARARGS },
-		{ "createDirectory",           	athena_createDir,			DUK_VARARGS },
-		{ "removeDirectory",           	athena_removeDir,			DUK_VARARGS },
-		{ "moveFile",	               	athena_movefile,			DUK_VARARGS },
-		{ "copyFile",	               	athena_copyfile,			DUK_VARARGS },
-		{ "threadCopyFile",	          	athena_copyasync,			DUK_VARARGS },
+		{ "createDirectory",           	athena_createDir,					  1 },
+		{ "removeDirectory",           	athena_removeDir,					  1 },
+		{ "moveFile",	               	athena_movefile,					  2 },
+		{ "copyFile",	               	athena_copyfile,					  2 },
+		{ "threadCopyFile",	          	athena_copyasync,					  2 },
 		{ "getFileProgress",	    	athena_getfileprogress,				  0 },
-		{ "removeFile",               	athena_removeFile,			DUK_VARARGS },
-		{ "rename",                     athena_rename,				DUK_VARARGS },
-		{ "sleep",                      athena_sleep,				DUK_VARARGS },
-		{ "getFreeMemory",         		athena_getFreeMemory,		DUK_VARARGS },
+		{ "removeFile",               	athena_removeFile,					  2 },
+		{ "rename",                     athena_rename,						  2 },
+		{ "sleep",                      athena_sleep,						  1 },
+		{ "getFreeMemory",         		athena_getFreeMemory,				  0 },
 		{ "exitToBrowser",              athena_exit,						  0 },
 		{ "getMCInfo",                 	athena_getmcinfo,			DUK_VARARGS },
-		{ "loadELF",                 	athena_loadELF,				DUK_VARARGS },
-		{ "checkValidDisc",       		athena_checkValidDisc,		DUK_VARARGS },
-		{ "getDiscType",             	athena_getDiscType,			DUK_VARARGS },
-		{ "checkDiscTray",         		athena_checkDiscTray,		DUK_VARARGS },
-		{NULL, NULL, 0}
+		{ "loadELF",                 	athena_loadELF,						  1 },
+		{ "checkValidDisc",       		athena_checkValidDisc,				  0 },
+		{ "getDiscType",             	athena_getDiscType,					  0 },
+		{ "checkDiscTray",         		athena_checkDiscTray,				  0 },
+		{ NULL, NULL, 0 }
 	};
 
     duk_push_object(ctx);  /* module result */
