@@ -72,7 +72,7 @@ extern int GetInterlacedFrameMode();
 
 extern int getFreeVRAM();
 
-extern float FPSCounter(uint32_t interval);
+extern float FPSCounter(int interval);
 
 extern void setVideoMode(s16 mode, int width, int height, int psm, s16 interlace, s16 field, bool zbuffering, int psmz);
 

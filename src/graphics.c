@@ -24,7 +24,7 @@ static clock_t curtime = 0;
 static float fps = 0.0f;
 
 static int frames = 0;
-static uint32_t frame_interval = -1;
+static int frame_interval = -1;
 
 //2D drawing functions
 GSTEXTURE* loadpng(const char *path, bool delayed)
@@ -814,7 +814,7 @@ void unloadFontM()
 	gsKit_free_fontm(gsGlobal, gsFontM);
 }
 
-float FPSCounter(uint32_t interval)
+float FPSCounter(int interval)
 {
 	frame_interval = interval;
 	return fps;
@@ -1160,11 +1160,11 @@ void flipScreen()
 	}
 	gsKit_TexManager_nextFrame(gsGlobal);
 
-	if (frames > frame_interval) {
+	if (frames > frame_interval && frame_interval != -1) {
 		clock_t prevtime = curtime;
 		curtime = clock();
 
-		fps = 1.0f / (((float)(curtime - prevtime)) / ((float)CLOCKS_PER_SEC)) * (float)(frame_interval);
+		fps = ((float)(frame_interval)) / (((float)(curtime - prevtime)) / ((float)CLOCKS_PER_SEC));
 
 		frames = 0;
 	}
