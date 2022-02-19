@@ -164,9 +164,9 @@ ROM font functions:
 **Pads functions:**
 
 * var pad = Pads.get(port) *port isn't mandatory  
-  • pad.btns - Buttons
-  • pad.lx - Left analog horizontal position (left = -127, default = 0, right = 128)
-  • pad.ly - Left analog vertical position (up = -127, default = 0, down = 128)
+  • pad.btns - Buttons  
+  • pad.lx - Left analog horizontal position (left = -127, default = 0, right = 128)  
+  • pad.ly - Left analog vertical position (up = -127, default = 0, down = 128)  
   • pad.rx - Right analog horizontal position (left = -127, default = 0, right = 128)  
   • pad.ry - Right analog vertical position (up = -127, default = 0, down = 128)  
 * var type = Pads.getType(port) *port isn't mandatory  
@@ -226,8 +226,8 @@ ROM font functions:
 * System.sleep(sec)
 * var freemem = System.getFreeMemory()
 * System.exitToBrowser()
-* var info = System.getMCInfo(slot)
-  • info.type 
+* var info = System.getMCInfo(slot)  
+  • info.type  
   • info.freemem  
   • info.format  
   
