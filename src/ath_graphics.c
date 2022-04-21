@@ -24,14 +24,8 @@ static int imgThread(void* data)
 	char* text = (char*)data;
 	int file = open(text, O_RDONLY, 0777);
 	bool delayed = asyncDelayed;
-	uint16_t magic;
-	read(file, &magic, 2);
-	close(file);
-	GSTEXTURE* image = NULL;
-	if (magic == 0x4D42) image =      loadbmp(text, delayed);
-	else if (magic == 0xD8FF) image = loadjpeg(text, false, delayed);
-	else if (magic == 0x5089) image = loadpng(text, delayed);
-	else 
+	GSTEXTURE* image = load_image(text, delayed);
+	if (image == NULL) 
 	{
 		imgThreadResult = 1;
 		ExitDeleteThread();
@@ -94,17 +88,10 @@ duk_ret_t athena_getloaddata(duk_context *ctx){
 duk_ret_t athena_loadimg(duk_context *ctx){
 	int argc = duk_get_top(ctx);
 	const char* text = duk_get_string(ctx, 0);
-	int file = open(text, O_RDONLY, 0777);
 	bool delayed = true;
 	if (argc == 2) delayed = duk_get_boolean(ctx, 1);
-	uint16_t magic;
-	read(file, &magic, 2);
-	close(file);
-	GSTEXTURE* image = NULL;
-	if (magic == 0x4D42) image =      loadbmp(text, delayed);
-	else if (magic == 0xD8FF) image = loadjpeg(text, false, delayed);
-	else if (magic == 0x5089) image = loadpng(text, delayed);
-	else return duk_generic_error(ctx, "loadImage %s (invalid magic).", text);
+	GSTEXTURE* image = load_image(text, delayed);
+	if (image == NULL) duk_generic_error(ctx, "Failed to load image %s.", text);
 
 	duk_push_uint(ctx, (void*)(image));
 	return 1;

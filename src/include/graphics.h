@@ -76,9 +76,7 @@ extern float FPSCounter(int interval);
 
 extern void setVideoMode(s16 mode, int width, int height, int psm, s16 interlace, s16 field, bool zbuffering, int psmz);
 
-extern GSTEXTURE* loadpng(const char *Path, bool delayed);
-extern GSTEXTURE* loadbmp(const char *Path, bool delayed);
-extern GSTEXTURE* loadjpeg(const char *Path, bool scale_down, bool delayed);
+extern GSTEXTURE* load_image(const char* path, bool delayed);
 
 extern void drawImage(GSTEXTURE* source, float x, float y, float width, float height, float startx, float starty, float endx, float endy, Color color);
 extern void drawImageRotate(GSTEXTURE* source, float x, float y, float width, float height, float startx, float starty, float endx, float endy, float angle, Color color);

@@ -27,15 +27,14 @@ static int frames = 0;
 static int frame_interval = -1;
 
 //2D drawing functions
-GSTEXTURE* loadpng(const char *path, bool delayed)
+GSTEXTURE* loadpng(FILE* File, bool delayed)
 {
 	GSTEXTURE* tex = (GSTEXTURE*)malloc(sizeof(GSTEXTURE));
 	tex->Delayed = delayed;
 
-	FILE* File = fopen(path, "rb");
 	if (File == NULL)
 	{
-		printf("Failed to load PNG file: %s\n", path);
+		printf("Failed to load PNG file\n");
 		return NULL;
 	}
 
@@ -318,7 +317,7 @@ GSTEXTURE* loadpng(const char *path, bool delayed)
 }
 
 
-GSTEXTURE* loadbmp(const char *Path, bool delayed)
+GSTEXTURE* loadbmp(FILE* File, bool delayed)
 {
 	GSBITMAP Bitmap;
 	int x, y;
@@ -330,22 +329,21 @@ GSTEXTURE* loadbmp(const char *Path, bool delayed)
     GSTEXTURE* tex = (GSTEXTURE*)malloc(sizeof(GSTEXTURE));
 	tex->Delayed = delayed;
 
-	FILE* File = fopen(Path, "rb");
 	if (File == NULL)
 	{
-		printf("BMP: Failed to load bitmap: %s\n", Path);
+		printf("BMP: Failed to load bitmap\n");
 		return NULL;
 	}
 	if (fread(&Bitmap.FileHeader, sizeof(Bitmap.FileHeader), 1, File) <= 0)
 	{
-		printf("BMP: Could not load bitmap: %s\n", Path);
+		printf("BMP: Could not load bitmap\n");
 		fclose(File);
 		return NULL;
 	}
 
 	if (fread(&Bitmap.InfoHeader, sizeof(Bitmap.InfoHeader), 1, File) <= 0)
 	{
-		printf("BMP: Could not load bitmap: %s\n", Path);
+		printf("BMP: Could not load bitmap\n");
 		fclose(File);
 		return NULL;
 	}
@@ -368,7 +366,7 @@ GSTEXTURE* loadbmp(const char *Path, bool delayed)
 				free(tex->Clut);
 				tex->Clut = NULL;
 			}
-			printf("BMP: Could not load bitmap: %s\n", Path);
+			printf("BMP: Could not load bitmap\n");
 			fclose(File);
 			return NULL;
 		}
@@ -403,7 +401,7 @@ GSTEXTURE* loadbmp(const char *Path, bool delayed)
 				free(tex->Clut);
 				tex->Clut = NULL;
 			}
-			printf("BMP: Could not load bitmap: %s\n", Path);
+			printf("BMP: Could not load bitmap\n");
 			fclose(File);
 			return NULL;
 		}
@@ -685,14 +683,13 @@ static void  _ps2_load_JPEG_generic(GSTEXTURE *Texture, struct jpeg_decompress_s
 	jpeg_finish_decompress(cinfo);
 }
 
-GSTEXTURE* loadjpeg(const char *Path, bool scale_down, bool delayed)
+GSTEXTURE* loadjpeg(FILE* fp, bool scale_down, bool delayed)
 {
 
 	
     GSTEXTURE* tex = (GSTEXTURE*)malloc(sizeof(GSTEXTURE));
 	tex->Delayed = delayed;
 
-	FILE *fp;
 	struct jpeg_decompress_struct cinfo;
 	struct my_error_mgr jerr;
 
@@ -701,10 +698,9 @@ GSTEXTURE* loadjpeg(const char *Path, bool scale_down, bool delayed)
 		return NULL;
 	}
 
-	fp = fopen(Path, "rb");
 	if (fp == NULL)
 	{
-		printf("jpeg: Failed to load file: %s\n", Path);
+		printf("jpeg: Failed to load file\n");
 		return NULL;
 	}
 
@@ -775,6 +771,20 @@ GSTEXTURE* loadjpeg(const char *Path, bool scale_down, bool delayed)
 
 	return tex;
 
+}
+
+
+GSTEXTURE* load_image(const char* path, bool delayed){
+	FILE* file = fopen(path, "rb");
+	uint16_t magic;
+	fread(&magic, 1, 2, file);
+	fseek(file, 0, SEEK_SET);
+	GSTEXTURE* image = NULL;
+	if (magic == 0x4D42) image =      loadbmp(file, delayed);
+	else if (magic == 0xD8FF) image = loadjpeg(file, false, delayed);
+	else if (magic == 0x5089) image = loadpng(file, delayed);
+
+	return image;
 }
 
 
