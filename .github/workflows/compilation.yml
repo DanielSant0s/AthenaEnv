@@ -19,6 +19,10 @@ jobs:
     - name: Install dependencies
       run: |
         apk add build-base git bash
+        
+    - name: Workaround permission issue
+      run: |
+        git config --global --add safe.directory /__w/AthenaEnv/AthenaEnv
 
     - uses: actions/checkout@v2
     - run: |
