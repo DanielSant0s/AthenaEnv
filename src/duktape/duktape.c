@@ -33590,18 +33590,30 @@ DUK_INTERNAL duk_double_t duk_bi_date_get_now_gettimeofday(void) {
 #endif  /* DUK_USE_DATE_NOW_GETTIMEOFDAY */
 
 #if defined(DUK_USE_DATE_NOW_TIME)
-/* Not a very good provider: only full seconds are available. */
-DUK_INTERNAL duk_double_t duk_bi_date_get_now_time(void) {
-	time_t t;
 
-	t = time(NULL);
+static clock_t current_time = 0;
+static time_t last_time = 0;
+
+DUK_INTERNAL duk_double_t duk_bi_date_get_now_time(void) {
+	clock_t ms;
+	time_t t = time(NULL);
+
 	if (t == (time_t) -1) {
 		DUK_D(DUK_DPRINT("time() failed"));
 		return 0.0;
 	}
-	return ((duk_double_t) t) * 1000.0;
+
+	if (last_time == t) {
+		ms = (((clock() - current_time)/2) - 1)%CLOCKS_PER_SEC;
+	}
+	else {
+		last_time = t;
+		current_time = clock();
+	}
+
+	return ((duk_double_t) t) * 1000.0 + ms;
 }
-#endif  /* DUK_USE_DATE_NOW_TIME */
+#endif /* DUK_USE_DATE_NOW_TIME */
 
 #if defined(DUK_USE_DATE_TZO_GMTIME) || defined(DUK_USE_DATE_TZO_GMTIME_R) || defined(DUK_USE_DATE_TZO_GMTIME_S)
 /* Get local time offset (in seconds) for a certain (UTC) instant 'd'. */
