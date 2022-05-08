@@ -33590,12 +33590,11 @@ DUK_INTERNAL duk_double_t duk_bi_date_get_now_gettimeofday(void) {
 #endif  /* DUK_USE_DATE_NOW_GETTIMEOFDAY */
 
 #if defined(DUK_USE_DATE_NOW_TIME)
-
-static clock_t current_time = 0;
-static time_t last_time = 0;
+static clock_t start_ms = 0;
+static time_t prev_minute = 0;
 
 DUK_INTERNAL duk_double_t duk_bi_date_get_now_time(void) {
-	clock_t ms;
+	clock_t ms = 0;
 	time_t t = time(NULL);
 
 	if (t == (time_t) -1) {
@@ -33603,12 +33602,12 @@ DUK_INTERNAL duk_double_t duk_bi_date_get_now_time(void) {
 		return 0.0;
 	}
 
-	if (last_time == t) {
-		ms = (((clock() - current_time)/2) - 1)%CLOCKS_PER_SEC;
+	if (prev_minute == t) {
+		ms = (clock() - start_ms)/(TICKS_PER_SEC/1000) - 1;
 	}
 	else {
-		last_time = t;
-		current_time = clock();
+		prev_minute = t;
+		start_ms = clock();
 	}
 
 	return ((duk_double_t) t) * 1000.0 + ms;

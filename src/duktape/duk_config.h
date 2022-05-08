@@ -851,6 +851,7 @@
  * one second resolution.
  */
 #define DUK_USE_DATE_NOW_TIME
+#define TICKS_PER_SEC 2000
 
 /* The most portable way to figure out local time offset is gmtime(),
  * but it's not thread safe so use with caution.
