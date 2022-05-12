@@ -81,19 +81,25 @@ void kill_task(int id){
     DeleteThread(task_list[id]->internal_id);
 }
 
+void exitkill_task(){
+    for(int i = 0; i < running_tasks; i++){
+        if (task_list[i]->internal_id == GetThreadId()){
+            Task** aux = malloc((running_tasks-1)*sizeof(Task*));
+            memcpy(aux, task_list, i*sizeof(Task*));
+            memcpy(aux+(4*i), task_list+(4*i), (running_tasks-i)*sizeof(Task*));
+            printf("Slice %d:%d\n", i*sizeof(Task*), (running_tasks-i)*sizeof(Task*));
+            free(task_list);
+            task_list = aux;
+        }
+    }
+
+    running_tasks--;
+    ExitDeleteThread();
+}
+
 void list_tasks(){
     for(int i = 0; i < running_tasks; i++){
-        printf("%d %s\n", task_list[i]->internal_id, task_list[i]->title);
+        printf("%d %s\n", task_list[i]->id, task_list[i]->title);
     }
-    ee_thread_status_t info;
-    info.stack_size = -1;
-
-    int j = -1;
-    while(info.stack_size != 0) {
-        j++;
-        ReferThreadStatus(j, &info);
-        if (info.stack_size != 0)
-            printf("Thread %d stack size: %d | status: %d\n", j, info.stack_size, info.status);
-    } //A way to list already created threads
    
 }

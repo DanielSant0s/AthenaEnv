@@ -20,11 +20,11 @@ int imgThread(void* data)
 	if (imgThreadData == NULL) 
 	{
 		imgThreadResult = 1;
-		ExitDeleteThread();
+		exitkill_task();
 		return 0;
 	}
 	imgThreadResult = 1;
-	ExitDeleteThread();
+	exitkill_task();
 	return 0;
 }
 
@@ -47,7 +47,6 @@ duk_ret_t athena_loadimgasync(duk_context *ctx){
 duk_ret_t athena_getloadstate(duk_context *ctx){
 	int argc = duk_get_top(ctx);
 	if(argc != 0) return duk_generic_error(ctx, "getLoadState takes no arguments");
-	list_tasks();
 	duk_push_int(ctx, (uint32_t)imgThreadResult);
 	return 1;
 }
@@ -60,7 +59,6 @@ duk_ret_t athena_getloaddata(duk_context *ctx){
 		memcpy(image, imgThreadData, sizeof(GSTEXTURE));
 		free(imgThreadData);
 		imgThreadData = NULL;
-		list_tasks();
 		duk_push_uint(ctx, image);
 		return 1;
 	}

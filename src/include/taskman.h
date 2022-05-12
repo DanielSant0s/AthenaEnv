@@ -12,4 +12,6 @@ extern void init_task(int id, void* args);
 
 extern void kill_task(int id);
 
+extern void exitkill_task();
+
 extern void list_tasks();
