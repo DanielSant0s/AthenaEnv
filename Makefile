@@ -58,7 +58,7 @@ APP_CORE = src/main.o src/taskman.o src/pad.o src/graphics.o src/atlas.o src/fnt
 
 ATHENA_MODULES = src/duktape/duktape.o src/duktape/duk_console.o src/duktape/duk_module_node.o \
 				 src/ath_env.o src/ath_screen.o src/ath_graphics.o src/ath_pads.o src/ath_sound.o \
-				 src/ath_system.o src/ath_timer.o src/ath_render.o
+				 src/ath_system.o src/ath_timer.o src/ath_render.o src/ath_task.o
 
 IOP_MODULES = src/sio2man.o src/mcman.o src/mcserv.o src/padman.o src/libsd.o src/usbd.o src/audsrv.o \
 			  src/bdm.o src/bdmfs_vfat.o src/usbmass_bd.o src/cdfs.o src/ds34bt.o src/ds34usb.o

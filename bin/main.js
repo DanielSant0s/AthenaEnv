@@ -68,27 +68,43 @@ function thdloadimg(image) {
     var id = Graphics.threadLoadImage(image);
 
     while (Graphics.getLoadState() != 1){
-        console.log("Waiting image load, status " + Graphics.getLoadState() + "\n");
+        console.log("a\n")
     };
 
     return Graphics.getLoadData(id);
 };
 
-var testimg1 = thdloadimg("cross.png");
-var testimg2 = thdloadimg("circle.png");
-var testimg3 = thdloadimg("triangle.png");
-var testimg4 = thdloadimg("square.png");
+//var testimg1 = thdloadimg("cross.png");
+//System.threadCopyFile("athena.elf", "copytest.bin");
+//var testimg2 = thdloadimg("circle.png");
+//var testimg3 = thdloadimg("triangle.png");
+//var testimg4 = thdloadimg("square.png");
+
+var wallpaper = Graphics.loadImage("owl.png");
+
+var tasklist = Tasks.get();
+
+Font.fmLoad();
 
 while(true){
     /*oldpad = pad;
     pad = Pads.get();*/
-    Display.clear(Color.new(192, 192, 192));
+    Display.clear(Color.new(0, 0, 0));
 
-    Graphics.drawImage(testimg1, 100.0, 100.0);
+    Graphics.drawImage(wallpaper, 0.0, 0.0, Color.new(128, 128, 128, 64));
+
+    Font.fmPrint(400.0, 400.0, 0.6, "AthenaOS proto");
+
+    Font.fmPrint(50.0, 25.0, 0.6, "Running tasks:");
+    /*for (var i = 0; i < tasklist.length; i++) {
+        Font.fmPrint(50.0, 50.0+(25.0*(i+1)), 0.6, tasklist[i].name);
+    };*/
+
+    /*Graphics.drawImage(testimg1, 100.0, 100.0);
     Graphics.drawImage(testimg2, 132.0, 100.0);
     Graphics.drawImage(testimg3, 164.0, 100.0);
     Graphics.drawImage(testimg4, 196.0, 100.0);
-
+*/
     /*Font.ftPrint(kghappyshadows, 15.0, 15.0, 0, 640.0, 448.0, "Free RAM:" + Math.ceil(ram/1024) + "KB - " + fps + " FPS\n", Color.new(0,0,0));
     Font.ftPrint(kghappysolid, 15.0, 15.0, 0, 640.0, 448.0, "Free RAM:" + Math.ceil(ram/1024) + "KB - " + fps + "FPS \n", Color.new(128,128,128));
     

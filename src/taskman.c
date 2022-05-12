@@ -7,31 +7,48 @@
 #include <stdbool.h>
 #include "include/taskman.h"
 
-static int running_tasks = -1;
-
-Task** task_list;
+Tasklist tasks;
 
 extern void *_gp;
 
 void new_task(int id, int internal_id, const char* title){
-    task_list[id] = malloc(sizeof(Task));
-    task_list[id]->id = id;
-    task_list[id]->internal_id = internal_id;
-    task_list[id]->title = title;
+    tasks.list[id] = malloc(sizeof(Task));
+    tasks.list[id]->id = id;
+    tasks.list[id]->internal_id = internal_id;
+    tasks.list[id]->title = title;
+}
+
+void del_task(int id){
+    for(int i = 0; i < tasks.size; i++){
+        if (tasks.list[i]->internal_id == id){
+            Task** aux = malloc((tasks.size-1)*sizeof(Task*));
+            memcpy(aux, tasks.list, i*sizeof(Task*));
+            memcpy(aux+(4*i), tasks.list+(4*i), (tasks.size-i)*sizeof(Task*));
+            free(tasks.list);
+            tasks.list = aux;
+        }
+    }
+
+    tasks.size--;
+
+    for(int i = 0; i < tasks.size; i++){ //BAAAD, I'll rewrite it later
+        tasks.list[i]->id = i;
+    }
 }
 
 void init_taskman()
 {
     ee_thread_status_t info;
     info.stack_size = -1;
+    tasks.size = -1;
 
     while(info.stack_size != 0) {
-        running_tasks++;
-        ReferThreadStatus(running_tasks, &info);
+        tasks.size++;
+        ReferThreadStatus(tasks.size, &info);
     } //A way to list already created threads
     
-    printf("Threads running during boot: %d\n", running_tasks);
-    task_list = malloc(sizeof(Task*)*running_tasks);
+    printf("Threads running during boot: %d\n", tasks.size);
+    tasks.list = malloc(sizeof(Task*)*tasks.size);
 
     new_task(0, 0, "Kernel: Splash");
     new_task(1, 1, "Main: AthenaVM");
@@ -43,10 +60,10 @@ void init_taskman()
 
 int create_task(const char* title, void* func, int stack_size, int priority)
 {
-    Task** aux = malloc((running_tasks+1)*sizeof(Task*));
-    memcpy(aux, task_list, running_tasks*sizeof(Task*));
-    free(task_list);
-    task_list = aux;
+    Task** aux = malloc((tasks.size+1)*sizeof(Task*));
+    memcpy(aux, tasks.list, tasks.size*sizeof(Task*));
+    free(tasks.list);
+    tasks.list = aux;
 
     ee_thread_t thread_param;
 	
@@ -62,44 +79,31 @@ int create_task(const char* title, void* func, int stack_size, int priority)
         free(thread_param.stack);
     }
 
-    new_task(running_tasks, thread, title);
+    new_task(tasks.size, thread, title);
 
-    printf("%s task created.\n",task_list[running_tasks]->title);
+    printf("%s task created.\n",tasks.list[tasks.size]->title);
 
-    running_tasks++;
+    tasks.size++;
     
-    return task_list[running_tasks-1]->id;
+    return tasks.list[tasks.size-1]->id;
 
 }
 
 void init_task(int id, void* args){
-    StartThread(task_list[id]->internal_id, args);
+    StartThread(tasks.list[id]->internal_id, args);
 }
 
 void kill_task(int id){
-    TerminateThread(task_list[id]->internal_id);
-    DeleteThread(task_list[id]->internal_id);
+    del_task(tasks.list[id]->internal_id);
+    TerminateThread(tasks.list[id]->internal_id);
+    DeleteThread(tasks.list[id]->internal_id);
 }
 
 void exitkill_task(){
-    for(int i = 0; i < running_tasks; i++){
-        if (task_list[i]->internal_id == GetThreadId()){
-            Task** aux = malloc((running_tasks-1)*sizeof(Task*));
-            memcpy(aux, task_list, i*sizeof(Task*));
-            memcpy(aux+(4*i), task_list+(4*i), (running_tasks-i)*sizeof(Task*));
-            printf("Slice %d:%d\n", i*sizeof(Task*), (running_tasks-i)*sizeof(Task*));
-            free(task_list);
-            task_list = aux;
-        }
-    }
-
-    running_tasks--;
+    del_task(GetThreadId());
     ExitDeleteThread();
 }
 
-void list_tasks(){
-    for(int i = 0; i < running_tasks; i++){
-        printf("%d %s\n", task_list[i]->id, task_list[i]->title);
-    }
-   
+Tasklist* get_tasklist(){
+    return &tasks;
 }

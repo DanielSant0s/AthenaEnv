@@ -22,3 +22,4 @@ extern void athena_graphics_init(duk_context* ctx);
 extern void athena_pads_init(duk_context* ctx);
 extern void athena_sound_init(duk_context* ctx);
 extern void athena_timer_init(duk_context* ctx);
+extern void athena_task_init(duk_context* ctx);

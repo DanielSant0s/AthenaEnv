@@ -461,7 +461,7 @@ duk_ret_t athena_fmprint(duk_context *ctx) {
     float scale =  duk_get_number(ctx, 2);
     const char* text = duk_get_string(ctx, 3);
 	Color color = 0x80808080;
-	if (argc == 5) color =  duk_get_int(ctx, 4);
+	if (argc == 5) color =  duk_get_uint(ctx, 4);
 	printFontMText(text, x, y, scale, color);
 	return 0;
 }

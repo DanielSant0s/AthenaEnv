@@ -598,19 +598,9 @@ duk_ret_t athena_copyasync(duk_context *ctx){
 
 	copypaths->in = duk_get_string(ctx, 0);
 	copypaths->out = duk_get_string(ctx, 1);
-	
-	static u8 copyThreadStack[65*1024] __attribute__((aligned(16)));
-	
-	ee_thread_t thread_param;
-	
-	thread_param.gp_reg = &_gp;
-    thread_param.func = (void*)copyThread;
-    thread_param.stack = (void *)copyThreadStack;
-    thread_param.stack_size = sizeof(copyThreadStack);
-    thread_param.initial_priority = 0x12;
-	int thread = CreateThread(&thread_param);
-	
-	StartThread(thread, (void*)copypaths);
+
+	int task = create_task("FileSystem: Copy", (void*)copyThread, 65*1024, 18);
+	init_task(task, (void*)copypaths);
 	return 0;
 }
 
