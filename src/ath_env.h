@@ -8,6 +8,7 @@
 #include "duktape/duktape.h"
 #include "duktape/duk_console.h"
 #include "duktape/duk_module_node.h"
+#include "include/taskman.h"
 
 extern char boot_path[255];
 

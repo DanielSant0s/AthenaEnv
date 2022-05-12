@@ -31,6 +31,8 @@ export HEADER
 EE_BIN = athena.elf
 EE_BIN_PKD = athena_pkd.elf
 
+RESET_IOP = 1
+
 EE_LIBS = -L$(PS2SDK)/ports/lib -L$(PS2DEV)/gsKit/lib/ -Lmodules/ds34bt/ee/ -Lmodules/ds34usb/ee/ -lpatches -lfileXio -lcdvd -lpad -ldebug -lmath3d -ljpeg -lfreetype -lgskit_toolkit -lgskit -ldmakit -lpng -lz -lmc -laudsrv -lelf-loader -lds34bt -lds34usb
 
 EE_INCS += -I$(PS2DEV)/gsKit/include -I$(PS2SDK)/ports/include -I$(PS2SDK)/ports/include/freetype2 -I$(PS2SDK)/ports/include/zlib
@@ -51,8 +53,8 @@ BIN2S = $(PS2SDK)/bin/bin2s
 
 EXT_LIBS = modules/ds34usb/ee/libds34usb.a modules/ds34bt/ee/libds34bt.a
 
-APP_CORE = src/main.o src/pad.o src/graphics.o src/atlas.o src/fntsys.o src/sound.o src/system.o \
-		   src/render.o src/calc_3d.o src/gsKit3d_sup.o
+APP_CORE = src/main.o src/taskman.o src/pad.o src/graphics.o src/atlas.o src/fntsys.o src/sound.o \
+		   src/system.o src/render.o src/calc_3d.o src/gsKit3d_sup.o
 
 ATHENA_MODULES = src/duktape/duktape.o src/duktape/duk_console.o src/duktape/duk_module_node.o \
 				 src/ath_env.o src/ath_screen.o src/ath_graphics.o src/ath_pads.o src/ath_sound.o \

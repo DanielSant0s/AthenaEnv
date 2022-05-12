@@ -1,7 +1,7 @@
 //User settings
 var char_scale = 0.35;
 var char_speed = [1.5, 6.0];
-
+/*
 function Vector2(x_pos, y_pos) {
     this.x = x_pos;
     this.y = y_pos;
@@ -62,13 +62,34 @@ var char_side = 0;
 var fps = 0;
 
 var ram = System.getFreeMemory();
+*/
+
+function thdloadimg(image) {
+    var id = Graphics.threadLoadImage(image);
+
+    while (Graphics.getLoadState() != 1){
+        console.log("Waiting image load, status " + Graphics.getLoadState() + "\n");
+    };
+
+    return Graphics.getLoadData(id);
+};
+
+var testimg1 = thdloadimg("cross.png");
+var testimg2 = thdloadimg("circle.png");
+var testimg3 = thdloadimg("triangle.png");
+var testimg4 = thdloadimg("square.png");
 
 while(true){
-    oldpad = pad;
-    pad = Pads.get();
+    /*oldpad = pad;
+    pad = Pads.get();*/
     Display.clear(Color.new(192, 192, 192));
 
-    Font.ftPrint(kghappyshadows, 15.0, 15.0, 0, 640.0, 448.0, "Free RAM:" + Math.ceil(ram/1024) + "KB - " + fps + " FPS\n", Color.new(0,0,0));
+    Graphics.drawImage(testimg1, 100.0, 100.0);
+    Graphics.drawImage(testimg2, 132.0, 100.0);
+    Graphics.drawImage(testimg3, 164.0, 100.0);
+    Graphics.drawImage(testimg4, 196.0, 100.0);
+
+    /*Font.ftPrint(kghappyshadows, 15.0, 15.0, 0, 640.0, 448.0, "Free RAM:" + Math.ceil(ram/1024) + "KB - " + fps + " FPS\n", Color.new(0,0,0));
     Font.ftPrint(kghappysolid, 15.0, 15.0, 0, 640.0, 448.0, "Free RAM:" + Math.ceil(ram/1024) + "KB - " + fps + "FPS \n", Color.new(128,128,128));
     
     if(pad.btns == 0 && oldpad.btns != 0 || pad.lx == 0 && oldpad.lx != 0){
@@ -139,7 +160,7 @@ while(true){
             World2Screen(char).y, 
             -move_set[move_state].width*char_scale, 
             move_set[move_state].height*char_scale);
-    };
+    };*/
 
     Display.flip();
-}
+};

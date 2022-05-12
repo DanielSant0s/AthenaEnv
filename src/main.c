@@ -183,8 +183,8 @@ int main(int argc, char **argv) {
 
 	setBootPath(argc, argv, 0);  
 
+    init_taskman();
 	initGraphics();
-
 	pad_init();
 
 	const char* errMsg;
@@ -200,6 +200,7 @@ int main(int argc, char **argv) {
 
         if (errMsg != NULL)
         {
+            printf("AthenaEnv ERROR!\n%s", errMsg);
         	while (!isButtonPressed(PAD_START)) {
 				clearScreen(GS_SETREG_RGBAQ(0x20,0x60,0xB0,0x80,0x00));
 				printFontMText("AthenaEnv ERROR!", 15.0f, 15.0f, 0.9f, 0x80808080);
