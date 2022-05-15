@@ -21,13 +21,34 @@ function printCentered(x, y, scale, string){
     Font.fmPrint(x-(getStringSize(string, scale)/2), y, scale, string);
 };
 
-dofile("app_system.js");
+function rotate_app_list(){
+    act_app++;
+    apps.push(apps.shift());
+    apps_idx.push(apps_idx.shift());
+    if(act_app >= apps.length){
+        act_app = 0;
+    }
+    apps[apps_idx[act_app]].minimized = false;
+    return act_app;
+}
 
-dofile("keyboard.js");
+function minimize_app(){
+    apps[apps_idx[act_app]].minimized = true;
+    act_app++;
+    apps.push(apps.shift());
+    apps_idx.push(apps_idx.shift());
+    if(act_app >= apps.length){
+        act_app = 0;
+    }
+    return act_app;
+}
+
+dofile("app_system.js");
 dofile("file_manager.js");
 dofile("task_manager.js");
+dofile("keyboard.js");
 
-var apps = [keyboard, file_manager, task_manager];
+var apps = [file_manager, task_manager, keyboard];
 var apps_idx = range(apps.length);
 
 while(true){
@@ -36,23 +57,11 @@ while(true){
     Display.clear(Color.new(0, 0, 0));
 
     if (Pads.check(pad, PAD_R3) && !Pads.check(oldpad, PAD_R3)){
-        act_app++;
-        apps.push(apps.shift());
-        apps_idx.push(apps_idx.shift());
-        if(act_app >= apps.length){
-            act_app = 0;
-        }
-        apps[apps_idx[act_app]].minimized = false;
+        rotate_app_list();
     };
 
     if (Pads.check(pad, PAD_L3) && !Pads.check(oldpad, PAD_L3)){
-        apps[apps_idx[act_app]].minimized = true;
-        act_app++;
-        apps.push(apps.shift());
-        apps_idx.push(apps_idx.shift());
-        if(act_app >= apps.length){
-            act_app = 0;
-        }
+        minimize_app();
     };
 
     Graphics.drawImage(wallpaper, 0.0, 0.0);

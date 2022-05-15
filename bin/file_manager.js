@@ -13,9 +13,17 @@ var dst = "";
 var fileop = 0;
 
 file_manager.process = function() {
-    if (Pads.check(pad, PAD_CROSS) && !Pads.check(oldpad, PAD_CROSS)){
+    if(file_manager.data[2] == 1){
+        file_manager.data[1] = process_list_commands(file_manager.data[1], range(5));
+    }
+    if(file_manager.data[3] == 1){
+        file_manager.data[0] = process_list_commands(file_manager.data[0], file);
+    }
+    if ((Pads.check(pad, PAD_CROSS) && !Pads.check(oldpad, PAD_CROSS)) || keyboard.hole){
         if(file_manager.data[3] == 1){
-            path = path + "/" + file[file_manager.data[0]].name + "/";
+            if(!keyboard.hole){
+                path = path + "/" + file[file_manager.data[0]].name + "/";
+            }
             file = System.listDir(path);
         }
         if(file_manager.data[2] == 1){
@@ -26,6 +34,7 @@ file_manager.process = function() {
                     srcfile = file[file_manager.data[0]].name;
                     file_manager.data[2] ^= 1;
                     file_manager.data[3] ^= 1;
+                    file = System.listDir(path);
                     break;
                 case 1:
                     fileop = 1;
@@ -33,6 +42,7 @@ file_manager.process = function() {
                     srcfile = file[file_manager.data[0]].name;
                     file_manager.data[2] ^= 1;
                     file_manager.data[3] ^= 1;
+                    file = System.listDir(path);
                     break;
                 case 2:
                     dst = path + srcfile;
@@ -46,30 +56,34 @@ file_manager.process = function() {
                     };
                     file_manager.data[2] ^= 1;
                     file_manager.data[3] ^= 1;
+                    file = System.listDir(path);
                     break;
                 case 3:
-                    System.rename(path+file[file_manager.data[0]].name, path+keyboard.getinput());
+                    console.log("Hole " + keyboard.hole +"\n");
+                    if(keyboard.hole){
+                        System.rename(path+file[file_manager.data[0]].name, path+keyboard.getinput());
+                        keyboard.hole = false;
+                        file_manager.data[2] ^= 1;
+                        file_manager.data[3] ^= 1;
+                        file = System.listDir(path);
+                    } else {
+                        console.log(path+keyboard.getinput()+"\n");
+                        keyboard.invoke(file_manager.id);
+                    }
                     break;
                 case 4:
                     System.removeFile(path + file[file_manager.data[0]].name);
                     file_manager.data[2] ^= 1;
                     file_manager.data[3] ^= 1;
+                    file = System.listDir(path);
                     break;
             }
-            file = System.listDir(path);
         }
     };
     if (Pads.check(pad, PAD_R1) && !Pads.check(oldpad, PAD_R1)){
         file_manager.data[2] ^= 1;
         file_manager.data[3] ^= 1;
     };
-    if(file_manager.data[2] == 1){
-        file_manager.data[1] = process_list_commands(file_manager.data[1], range(5));
-    }
-    if(file_manager.data[3] == 1){
-        file_manager.data[0] = process_list_commands(file_manager.data[0], file);
-    }
-
 };
 
 file_manager.graphics = new Window();

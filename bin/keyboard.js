@@ -3,6 +3,9 @@ keyboard.data = {};
 keyboard.data.x_pointer = 0;
 keyboard.data.y_pointer = 0;
 keyboard.data.charset = "'1234567890-=qwertyuiop[]+asdfghjkl~?!#\\zxcvbnm,.:;/";
+keyboard.invoke_app = -1;
+keyboard.minimized = true;
+keyboard.hole = false;
 var kbd_arr = [0, 0];
 
 var text_buffer = "";
@@ -12,12 +15,28 @@ keyboard.getinput = function() {
 
 }
 
+keyboard.invoke = function(app_id) {
+    keyboard.invoke_app = app_id;
+    while(keyboard.id != act_app){
+        act_app = rotate_app_list();
+    };
+    keyboard.minimized = false;
+
+}
+
 keyboard.process = function() {
     kbd_arr = process_matrix_commands(keyboard.data.x_pointer, keyboard.data.y_pointer, 13, 4);
     keyboard.data.x_pointer = kbd_arr[0];
     keyboard.data.y_pointer = kbd_arr[1];
     if (Pads.check(pad, PAD_CROSS) && !Pads.check(oldpad, PAD_CROSS)){
         text_buffer += keyboard.data.charset[kbd_arr[0]+(kbd_arr[1]*13)];
+    }
+    if (Pads.check(pad, PAD_START) && !Pads.check(oldpad, PAD_START)){
+        keyboard.minimized = true;
+        while(keyboard.invoke_app != act_app){
+            act_app = rotate_app_list();
+        };
+        keyboard.hole = true;
     }
 }
 
