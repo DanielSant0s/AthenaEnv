@@ -46,17 +46,17 @@ file_manager.process = function() {
                     };
                     file_manager.data[2] ^= 1;
                     file_manager.data[3] ^= 1;
-                    file = System.listDir(path);
                     break;
                 case 3:
+                    System.rename(path+file[file_manager.data[0]].name, path+keyboard.getinput());
                     break;
                 case 4:
                     System.removeFile(path + file[file_manager.data[0]].name);
                     file_manager.data[2] ^= 1;
                     file_manager.data[3] ^= 1;
-                    file = System.listDir(path);
                     break;
             }
+            file = System.listDir(path);
         }
     };
     if (Pads.check(pad, PAD_R1) && !Pads.check(oldpad, PAD_R1)){
@@ -74,6 +74,7 @@ file_manager.process = function() {
 
 file_manager.graphics = new Window();
 file_manager.graphics.t = "File Manager"
+file_manager.graphics.y = 50
 file_manager.graphics.w = 350
 file_manager.graphics.h = 200
 

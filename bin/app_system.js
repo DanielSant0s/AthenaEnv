@@ -15,6 +15,44 @@ function process_list_commands(control_var, list){
     return control_var;
 };
 
+function process_matrix_commands(x_var, y_var, x_limit, y_limit){
+    if ((x_var*y_var) >= (x_limit*y_limit)){
+        x_var = 0;
+        y_var = 0;
+    };
+    if (x_var >= x_limit){
+        x_var = 0;
+        y_var++;
+    };
+    if (y_var >= y_limit){
+        y_var = 0;
+    };
+    if (x_var < 0){
+        x_var = x_limit-1;
+        y_var--;
+    }
+    if (y_var < 0){
+        y_var = y_limit-1;
+    }
+    if ((x_var*y_var) < 0){
+        x_var = x_limit-1;
+        y_var = y_limit-1;
+    }
+    if (Pads.check(pad, PAD_RIGHT) && !Pads.check(oldpad, PAD_RIGHT)){
+        x_var++;
+    }
+    if (Pads.check(pad, PAD_LEFT) && !Pads.check(oldpad, PAD_LEFT)){
+        x_var--;
+    }
+    if (Pads.check(pad, PAD_DOWN) && !Pads.check(oldpad, PAD_DOWN)){
+        y_var++;
+    }
+    if (Pads.check(pad, PAD_UP) && !Pads.check(oldpad, PAD_UP)){
+        y_var--;
+    }
+    return [x_var, y_var];
+};
+
 var registered_apps = 0;
 var act_app = 0;
 
@@ -46,11 +84,12 @@ function Window(x, y, w, h, t) {
     };
 };
 
-function App(process, graphics, data){
-    this.process = process;
-    this.graphics = graphics;
+function App(){
+    this.process = function() { return; };
+    this.graphics =  function() { return; };
+    this.graphics.draw = function() { return; };
     this.minimized = false;
-    this.data = data;
+    this.data = 0;
 
     this.id = registered_apps;
     registered_apps++;

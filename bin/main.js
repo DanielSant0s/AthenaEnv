@@ -23,16 +23,18 @@ function printCentered(x, y, scale, string){
 
 dofile("app_system.js");
 
+dofile("keyboard.js");
 dofile("file_manager.js");
 dofile("task_manager.js");
 
-var apps = [file_manager, task_manager];
-var apps_idx = range(2);
+var apps = [keyboard, file_manager, task_manager];
+var apps_idx = range(apps.length);
 
 while(true){
     oldpad = pad;
     pad = Pads.get();
     Display.clear(Color.new(0, 0, 0));
+
     if (Pads.check(pad, PAD_R3) && !Pads.check(oldpad, PAD_R3)){
         act_app++;
         apps.push(apps.shift());
