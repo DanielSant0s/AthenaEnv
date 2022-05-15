@@ -1,0 +1,66 @@
+
+function process_list_commands(control_var, list){
+    if (control_var >= list.length){
+        control_var = 0;
+    }
+    if (control_var < 0){
+        control_var = list.length-1;
+    }
+    if (Pads.check(pad, PAD_DOWN) && !Pads.check(oldpad, PAD_DOWN)){
+        control_var++;
+    }
+    if (Pads.check(pad, PAD_UP) && !Pads.check(oldpad, PAD_UP)){
+        control_var--;
+    }
+    return control_var;
+};
+
+var registered_apps = 0;
+var act_app = 0;
+
+function Window(x, y, w, h, t) {
+    x === undefined? this.x = 200 : this.x = x;
+    y === undefined? this.y = 200 : this.y = y;
+    w === undefined? this.w = 300 : this.w = w;
+    h === undefined? this.h = 150 : this.h = h;
+    t === undefined? this.t = "Title" : this.t = t;
+
+    this.elm_list = [];
+
+    this.add = function(func) { this.elm_list.push(func) };
+
+    this.del = function(func) { 
+        idx = this.elm_list.indexOf(func);
+        if (idx > -1) {
+            this.elm_list = this.elm_list.splice(idx, 1);
+          }
+    };
+
+    this.draw = function() {
+        Graphics.drawRect(this.x, this.y, this.w, 20, Color.new(64, 0, 128, 100));
+        Graphics.drawRect(this.x, this.y+20.0, this.w, this.h, Color.new(0, 0, 0, 100));
+        printCentered(this.x+(this.w/2), this.y+5.0, 0.5, this.t);
+        for (var i = 0; i < this.elm_list.length; i++){
+            this.elm_list[i]();
+        }
+    };
+};
+
+function App(process, graphics, data){
+    this.process = process;
+    this.graphics = graphics;
+    this.minimized = false;
+    this.data = data;
+
+    this.id = registered_apps;
+    registered_apps++;
+
+    this.run = function() {
+        if(this.id == act_app){
+            this.process();
+        }
+        if(!this.minimized){
+            this.graphics.draw();
+        }
+    };
+}

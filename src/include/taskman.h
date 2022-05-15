@@ -1,6 +1,8 @@
 typedef struct Task {
     int id;
     int internal_id;
+    int cancel_sema;
+    int status;
     const char* title;
 } Task;
 

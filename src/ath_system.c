@@ -550,8 +550,6 @@ duk_ret_t athena_getDiscType(duk_context *ctx)
 
 extern void *_gp;
 
-#define BUFSIZE (64*1024)
-
 static volatile off_t progress, max_progress;
 
 struct pathMap {
@@ -563,7 +561,7 @@ static int copyThread(void* data)
 {
 	struct pathMap* paths = (struct pathMap*)data;
 
-    char buffer[BUFSIZE];
+    char buffer[BUFSIZ];
     int in = open(paths->in, O_RDONLY, 0);
     int out = open(paths->out, O_WRONLY | O_CREAT | O_TRUNC, 644);
 
@@ -575,7 +573,7 @@ static int copyThread(void* data)
     max_progress = size;
 
     ssize_t bytes_read;
-    while((bytes_read = read(in, buffer, BUFSIZE)) > 0)
+    while((bytes_read = read(in, buffer, BUFSIZ)) > 0)
     {
         write(out, buffer, bytes_read);
         progress += bytes_read;
@@ -585,7 +583,7 @@ static int copyThread(void* data)
     close(in);
     close(out);
 	free(paths);
-	ExitDeleteThread();
+	exitkill_task();
     return 0;
 }
 
@@ -598,8 +596,7 @@ duk_ret_t athena_copyasync(duk_context *ctx){
 
 	copypaths->in = duk_get_string(ctx, 0);
 	copypaths->out = duk_get_string(ctx, 1);
-
-	int task = create_task("FileSystem: Copy", (void*)copyThread, 65*1024, 18);
+	int task = create_task("FileSystem: Copy", (void*)copyThread, 8192+1024, 100);
 	init_task(task, (void*)copypaths);
 	return 0;
 }
@@ -630,8 +627,8 @@ DUK_EXTERNAL duk_ret_t dukopen_system(duk_context *ctx) {
 		{ "seekFile",                   athena_seekfile,					  3 },  
 		{ "sizeFile",                   athena_sizefile,					  1 },
 		{ "doesFileExist",            	athena_checkexist,					  1 },
-		{ "currentDirectory",           athena_curdir,				DUK_VARARGS },
-		{ "listDirectory",           	athena_dir,					DUK_VARARGS },
+		{ "currentDir",           		athena_curdir,				DUK_VARARGS },
+		{ "listDir",           			athena_dir,					DUK_VARARGS },
 		{ "createDirectory",           	athena_createDir,					  1 },
 		{ "removeDirectory",           	athena_removeDir,					  1 },
 		{ "moveFile",	               	athena_movefile,					  2 },

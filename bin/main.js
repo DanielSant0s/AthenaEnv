@@ -1,182 +1,67 @@
-//User settings
-var char_scale = 0.35;
-var char_speed = [1.5, 6.0];
-/*
-function Vector2(x_pos, y_pos) {
-    this.x = x_pos;
-    this.y = y_pos;
-};
-
-var camera = new Vector2(70.0, 50.0);
-
-function loadAnimGroup(name) {
-    var framelist = System.listDirectory("Anim/" + name);
-    var slot = new Array(framelist.length);
-
-    for (var i = 0; i < framelist.length; i++) {
-        slot[i] = Graphics.loadImage("Anim/" + name + "/" + name + "-" + i + ".png");
-    };
-    console.log("dummy_game: Free Memory after loading " + name + " framelist: " + Math.ceil(System.getFreeMemory()/1024) + " KB\n");
-    return {sprite:slot, width:Graphics.getImageWidth(slot[0]), height:Graphics.getImageHeight(slot[0]), count:framelist.length};
-};
-
-function World2Screen(worldcoords) {
-    return new Vector2(worldcoords.x-camera.x, worldcoords.y-camera.y);
-};
-
-function Screen2World(worldcoords) {
-    return new Vector2(worldcoords.x+camera.x, worldcoords.y+camera.y);
-};
-
-console.log("dummy_game: Free Memory during boot: " + Math.ceil(System.getFreeMemory()/1024) + " KB\n");
-
-Font.ftInit();
-var kghappy = Font.ftLoad("Font/KGHAPPY.ttf");
-var kghappyshadows = Font.ftLoad("Font/KGHAPPYShadows.ttf");
-var kghappysolid = Font.ftLoad("Font/KGHAPPYSolid.ttf");
-Font.ftSetPixelSize(kghappy,        10.0, 10.0);
-Font.ftSetPixelSize(kghappy,        25.0, 25.0);
-Font.ftSetPixelSize(kghappyshadows, 25.0, 25.0);
-Font.ftSetPixelSize(kghappysolid,   25.0, 25.0);
-
-console.log("dummy_game: Free Memory after loading fntsys: " + Math.ceil(System.getFreeMemory()/1024) + " KB\n");
-
-var move_set = new Array(4);
-move_set[0] = loadAnimGroup("Idle");
-move_set[1] = loadAnimGroup("Walk");
-move_set[2] = loadAnimGroup("Run");
-move_set[3] = loadAnimGroup("Jump_Start");
-
-var char = new Vector2(224.0, 250.0);
+Font.fmLoad();
 
 var oldpad = Pads.get();
 var pad = Pads.get();
-var frame = 0;
-var fr_mult = 0;
-
-var move_state = 0; 
-
-//0 = RIGHT, 1 = LEFT
-var char_side = 0;
-
-var fps = 0;
-
-var ram = System.getFreeMemory();
-*/
-
-function thdloadimg(image) {
-    var id = Graphics.threadLoadImage(image);
-
-    while (Graphics.getLoadState() != 1){
-        console.log("a\n")
-    };
-
-    return Graphics.getLoadData(id);
-};
-
-//var testimg1 = thdloadimg("cross.png");
-//System.threadCopyFile("athena.elf", "copytest.bin");
-//var testimg2 = thdloadimg("circle.png");
-//var testimg3 = thdloadimg("triangle.png");
-//var testimg4 = thdloadimg("square.png");
 
 var wallpaper = Graphics.loadImage("owl.png");
 
-var tasklist = Tasks.get();
+function getStringSize(string, scale){
+    return string.length * (scale*15);
+};
 
-Font.fmLoad();
+function range(end) {
+    var arr = [];
+    for (var i = 0; i < end; i++) {
+      arr.push(i);
+    }
+    return arr;
+};
+
+function printCentered(x, y, scale, string){
+    Font.fmPrint(x-(getStringSize(string, scale)/2), y, scale, string);
+};
+
+dofile("app_system.js");
+
+dofile("file_manager.js");
+dofile("task_manager.js");
+
+var apps = [file_manager, task_manager];
+var apps_idx = range(2);
 
 while(true){
-    /*oldpad = pad;
-    pad = Pads.get();*/
+    oldpad = pad;
+    pad = Pads.get();
     Display.clear(Color.new(0, 0, 0));
-
-    Graphics.drawImage(wallpaper, 0.0, 0.0, Color.new(128, 128, 128, 64));
-
-    Font.fmPrint(400.0, 400.0, 0.6, "AthenaOS proto");
-
-    Font.fmPrint(50.0, 25.0, 0.6, "Running tasks:");
-    /*for (var i = 0; i < tasklist.length; i++) {
-        Font.fmPrint(50.0, 50.0+(25.0*(i+1)), 0.6, tasklist[i].name);
-    };*/
-
-    /*Graphics.drawImage(testimg1, 100.0, 100.0);
-    Graphics.drawImage(testimg2, 132.0, 100.0);
-    Graphics.drawImage(testimg3, 164.0, 100.0);
-    Graphics.drawImage(testimg4, 196.0, 100.0);
-*/
-    /*Font.ftPrint(kghappyshadows, 15.0, 15.0, 0, 640.0, 448.0, "Free RAM:" + Math.ceil(ram/1024) + "KB - " + fps + " FPS\n", Color.new(0,0,0));
-    Font.ftPrint(kghappysolid, 15.0, 15.0, 0, 640.0, 448.0, "Free RAM:" + Math.ceil(ram/1024) + "KB - " + fps + "FPS \n", Color.new(128,128,128));
-    
-    if(pad.btns == 0 && oldpad.btns != 0 || pad.lx == 0 && oldpad.lx != 0){
-        move_state = 0;
-    }
-
-    if((Pads.check(pad, PAD_RIGHT) && !Pads.check(oldpad, PAD_RIGHT)) || (Pads.check(pad, PAD_LEFT) && !Pads.check(oldpad, PAD_LEFT)) || (pad.lx != 0  && oldpad.lx == 0)){
-        move_state = 1;
-    }
-    
-    if(Pads.check(pad, PAD_RIGHT) || pad.lx > 100){
-        if(!Pads.check(oldpad, PAD_RIGHT) || oldpad.lx < -100){
-            char_side = 0;
-        };
-        char.x += char_speed[move_state-1];
-        camera.x += char_speed[move_state-1];
-    }
-
-    if(Pads.check(pad, PAD_LEFT) || pad.lx < -100){
-        if(!Pads.check(oldpad, PAD_LEFT) || oldpad.lx > 100){
-            char_side = 1;
-        };
-        char.x -= char_speed[move_state-1];
-        camera.x -= char_speed[move_state-1];
-    }
-
-    if(Pads.check(pad, PAD_CROSS) && !Pads.check(oldpad, PAD_CROSS)){
-        if(move_state == 1) {
-            move_state = 2
-        } else if(move_state == 2){
-            move_state = 1
+    if (Pads.check(pad, PAD_R3) && !Pads.check(oldpad, PAD_R3)){
+        act_app++;
+        apps.push(apps.shift());
+        apps_idx.push(apps_idx.shift());
+        if(act_app >= apps.length){
+            act_app = 0;
         }
-    }
-
-    if(Pads.check(pad, PAD_SQUARE) && !Pads.check(oldpad, PAD_SQUARE)){
-        move_state = 3
-    }
-
-    if(Pads.check(pad, PAD_L1)){
-        camera.x += 2.0;
+        apps[apps_idx[act_app]].minimized = false;
     };
 
-    if(Pads.check(pad, PAD_R1)){
-        camera.x -= 2.0;
+    if (Pads.check(pad, PAD_L3) && !Pads.check(oldpad, PAD_L3)){
+        apps[apps_idx[act_app]].minimized = true;
+        act_app++;
+        apps.push(apps.shift());
+        apps_idx.push(apps_idx.shift());
+        if(act_app >= apps.length){
+            act_app = 0;
+        }
     };
 
-    fr_mult++;
-    if(fr_mult > 1) {
-        frame++;
-        fr_mult = 0;
+    Graphics.drawImage(wallpaper, 0.0, 0.0);
+
+    Font.fmPrint(520.0, 430.0, 0.45, "AthenaOS proto");
+
+    //prog = System.getFileProgress();
+
+    for(var i = (apps.length-1); i >= 0; i--){
+        apps[i].run();
     }
-
-    if(frame > move_set[move_state].count-1) {
-        frame = 0;
-    }
-
-    fps = Display.getFPS(240);
-
-    if(char_side == 0){
-        Graphics.drawScaleImage(move_set[move_state].sprite[frame], 
-            World2Screen(char).x-move_set[move_state].width/2, 
-            World2Screen(char).y, 
-            move_set[move_state].width*char_scale, 
-            move_set[move_state].height*char_scale);
-    } else {
-        Graphics.drawScaleImage(move_set[move_state].sprite[frame], 
-            World2Screen(char).x+move_set[move_state].width-move_set[move_state].width/2, 
-            World2Screen(char).y, 
-            -move_set[move_state].width*char_scale, 
-            move_set[move_state].height*char_scale);
-    };*/
-
+    
     Display.flip();
 };
