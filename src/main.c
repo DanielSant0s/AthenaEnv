@@ -21,46 +21,59 @@
 #include "include/graphics.h"
 #include "include/pad.h"
 
+#define NEWLIB_PORT_AWARE
+#include <fileXio_rpc.h>
+#include <fileio.h>
+
 #include <libds34bt.h>
 #include <libds34usb.h>
 
-extern unsigned char sio2man_irx;
+extern unsigned char iomanX_irx[] __attribute__((aligned(16)));
+extern unsigned int size_iomanX_irx;
+
+extern unsigned char fileXio_irx[] __attribute__((aligned(16)));
+extern unsigned int size_fileXio_irx;
+
+extern unsigned char sio2man_irx[] __attribute__((aligned(16)));
 extern unsigned int size_sio2man_irx;
 
-extern unsigned char mcman_irx;
+extern unsigned char mcman_irx[] __attribute__((aligned(16)));
 extern unsigned int size_mcman_irx;
 
-extern unsigned char mcserv_irx;
+extern unsigned char mcserv_irx[] __attribute__((aligned(16)));
 extern unsigned int size_mcserv_irx;
 
-extern unsigned char padman_irx;
+extern unsigned char padman_irx[] __attribute__((aligned(16)));
 extern unsigned int size_padman_irx;
 
-extern unsigned char libsd_irx;
+extern unsigned char libsd_irx[] __attribute__((aligned(16)));
 extern unsigned int size_libsd_irx;
 
-extern unsigned char cdfs_irx;
+extern unsigned char cdfs_irx[] __attribute__((aligned(16)));
 extern unsigned int size_cdfs_irx;
 
-extern unsigned char usbd_irx;
+extern unsigned char usbd_irx[] __attribute__((aligned(16)));
 extern unsigned int size_usbd_irx;
 
-extern unsigned char bdm_irx;
+extern unsigned char usbhdfsd_irx[] __attribute__((aligned(16)));
+extern unsigned int size_usbhdfsd_irx;
+
+extern unsigned char bdm_irx[] __attribute__((aligned(16)));
 extern unsigned int size_bdm_irx;
 
-extern unsigned char bdmfs_vfat_irx;
+extern unsigned char bdmfs_vfat_irx[] __attribute__((aligned(16)));
 extern unsigned int size_bdmfs_vfat_irx;
 
-extern unsigned char usbmass_bd_irx;
+extern unsigned char usbmass_bd_irx[] __attribute__((aligned(16)));
 extern unsigned int size_usbmass_bd_irx;
 
-extern unsigned char audsrv_irx;
+extern unsigned char audsrv_irx[] __attribute__((aligned(16)));
 extern unsigned int size_audsrv_irx;
 
-extern unsigned char ds34usb_irx;
+extern unsigned char ds34usb_irx[] __attribute__((aligned(16)));
 extern unsigned int size_ds34usb_irx;
 
-extern unsigned char ds34bt_irx;
+extern unsigned char ds34bt_irx[] __attribute__((aligned(16)));
 extern unsigned int size_ds34bt_irx;
 
 char boot_path[255];
@@ -95,10 +108,8 @@ void setBootPath(int argc, char ** argv, int idx)
     {
         strcpy((char *)&boot_path[5],(const char *)&boot_path[6]);
     }
-      
-    
+         
 }
-
 
 void initMC(void)
 {
@@ -126,22 +137,27 @@ void initMC(void)
 int main(int argc, char **argv) {
   
     #ifdef RESET_IOP  
+    printf("AthenaEnv: Starting IOP Reset...\n");
     SifInitRpc(0);
     while (!SifIopReset("", 0)){};
     while (!SifIopSync()){};
     SifInitRpc(0);
+    printf("AthenaEnv: IOP reset done.\n");
     #endif
     
     // install sbv patch fix
-    printf("Installing SBV Patches...\n");
+    printf("AthenaEnv: Installing SBV Patches...\n");
     sbv_patch_enable_lmb();
     sbv_patch_disable_prefix_check(); 
     sbv_patch_fileio(); 
 
+    SifExecModuleBuffer(&iomanX_irx, size_iomanX_irx, 0, NULL, NULL);
+    SifExecModuleBuffer(&fileXio_irx, size_fileXio_irx, 0, NULL, NULL);
     SifExecModuleBuffer(&sio2man_irx, size_sio2man_irx, 0, NULL, NULL);
+    fileXioInitSkipOverride();
 
     // load pad & mc modules 
-    printf("Installing Pad & MC modules...\n");
+    printf("AthenaEnv: Installing Pad & MC modules...\n");
 
     SifExecModuleBuffer(&mcman_irx, size_mcman_irx, 0, NULL, NULL);
     SifExecModuleBuffer(&mcserv_irx, size_mcserv_irx, 0, NULL, NULL);
@@ -149,6 +165,11 @@ int main(int argc, char **argv) {
 
     // load USB modules    
     SifExecModuleBuffer(&usbd_irx, size_usbd_irx, 0, NULL, NULL);
+    SifExecModuleBuffer(&usbhdfsd_irx, size_usbhdfsd_irx, 0, NULL, NULL);
+    /*SifExecModuleBuffer(&bdm_irx, size_bdm_irx, 0, NULL, NULL);
+    SifExecModuleBuffer(&bdmfs_vfat_irx, size_bdmfs_vfat_irx, 0, NULL, NULL);
+    SifExecModuleBuffer(&usbmass_bd_irx, size_usbmass_bd_irx, 0, NULL, NULL);*/
+    SifExecModuleBuffer(&cdfs_irx, size_cdfs_irx, 0, NULL, NULL);
 
     SifExecModuleBuffer(&padman_irx, size_padman_irx, 0, NULL, NULL);
 
@@ -158,16 +179,12 @@ int main(int argc, char **argv) {
     ds34usb_init();
     ds34bt_init();
 
-    SifExecModuleBuffer(&bdm_irx, size_bdm_irx, 0, NULL, NULL);
-    SifExecModuleBuffer(&bdmfs_vfat_irx, size_bdmfs_vfat_irx, 0, NULL, NULL);
-    SifExecModuleBuffer(&usbmass_bd_irx, size_usbmass_bd_irx, 0, NULL, NULL);
-    SifExecModuleBuffer(&cdfs_irx, size_cdfs_irx, 0, NULL, NULL);
-
+    /*
     SifExecModuleBuffer(&libsd_irx, size_libsd_irx, 0, NULL, NULL);
     SifExecModuleBuffer(&audsrv_irx, size_audsrv_irx, 0, NULL, NULL);
 
     //waitUntilDeviceIsReady by fjtrujy
-
+    
     struct stat buffer;
     int ret = -1;
     int retries = 50;
@@ -175,7 +192,7 @@ int main(int argc, char **argv) {
     while(ret != 0 && retries > 0)
     {
         ret = stat("mass:/", &buffer);
-        /* Wait until the device is ready */
+        // Wait until the device is ready
         nopdelay();
 
         retries--;
@@ -183,20 +200,24 @@ int main(int argc, char **argv) {
 
 	setBootPath(argc, argv, 0);  
 
+    */
+
     init_taskman();
 	initGraphics();
 	pad_init();
+    
 
 	const char* errMsg;
+    
 
     while(true)
     {
-    
+        
         errMsg = runScript("main.js", false);
 
-        gsKit_clear_screens();
+        loadFontM();
 
-		loadFontM();
+        gsKit_clear_screens();
 
         if (errMsg != NULL)
         {
