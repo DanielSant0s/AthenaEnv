@@ -5,8 +5,15 @@ file_manager = new App();
 file_manager.data = [0, 0, 0, 1];
 file_manager.comp = 0;
 
-var path = "host:"
-var file = System.listDir(path);
+var root = [{name:"cdfs:", size:0, dir:true}, 
+{name:"host:", size:0, dir:true}, 
+{name:"mass:", size:0, dir:true}, 
+{name:"mc0:", size:0, dir:true},
+{name:"mc1:", size:0, dir:true},
+];
+
+var path = "";
+var file = root;
 
 var src = "";
 var srcfile = "";
@@ -26,16 +33,31 @@ file_manager.process = function() {
         }
     }
     if ((Pads.check(pad, PAD_TRIANGLE) && !Pads.check(oldpad, PAD_TRIANGLE))){
-        path = path.slice(0, path.lastIndexOf("/"));
-        file = System.listDir(path);
+        var idxof = path.lastIndexOf("/");
+        if(idxof != -1){
+            path = path.slice(0, idxof);
+            file = System.listDir(path);
+        } else {
+            path = "";
+            file = root;
+        };
     };
     if ((Pads.check(pad, PAD_CROSS) && !Pads.check(oldpad, PAD_CROSS)) || keyboard.hole){
         if(file_manager.data[3] == 1){
             if(file[file_manager.data[0]].dir){
                 if(!keyboard.hole){
-                    path = path + "/" + file[file_manager.data[0]].name;
+                    if(path == ""){
+                        console.log("test\n");
+                        path = file[file_manager.data[0]].name;
+                    } else {
+                        path = path + "/" + file[file_manager.data[0]].name;
+                    }
+                    
                 }
                 file = System.listDir(path);
+            } else if(file[file_manager.data[0]].name.endsWith(".js")){
+                System.currentDir(path + "/");
+                dofile(file[file_manager.data[0]].name);
             }
         }
         if(file_manager.data[2] == 1){

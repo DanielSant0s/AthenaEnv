@@ -80,7 +80,7 @@ duk_ret_t athena_dir(duk_context *ctx)
 {
 	
 	int argc = duk_get_top(ctx);
-	if (argc != 0 && argc != 1) return duk_generic_error(ctx, "Argument error: System.listDirectory([path]) takes zero or one argument.");
+	if (argc != 0 && argc != 1) return duk_generic_error(ctx, "Argument error: System.listDir([path]) takes zero or one argument.");
 	
 	duk_idx_t arr_idx = duk_push_array(ctx);
 
