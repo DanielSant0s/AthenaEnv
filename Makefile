@@ -32,6 +32,7 @@ EE_BIN = athena.elf
 EE_BIN_PKD = athena_pkd.elf
 
 RESET_IOP = 1
+BDM = 0
 
 EE_LIBS = -L$(PS2SDK)/ports/lib -L$(PS2DEV)/gsKit/lib/ -Lmodules/ds34bt/ee/ -Lmodules/ds34usb/ee/ -lpatches -lfileXio -lcdvd -lpad -ldebug -lmath3d -ljpeg -lfreetype -lgskit_toolkit -lgskit -ldmakit -lpng -lz -lmc -laudsrv -lelf-loader -lds34bt -lds34usb
 
@@ -43,6 +44,10 @@ EE_CFLAGS += -Wno-sign-compare -fno-strict-aliasing -fno-exceptions -D_R5900
 
 ifeq ($(RESET_IOP),1)
 EE_CFLAGS += -DRESET_IOP
+endif
+
+ifeq ($(BDM),1)
+EE_CFLAGS += -DBDM
 endif
 
 ifeq ($(DEBUG),1)
@@ -161,7 +166,7 @@ all: $(EXT_LIBS) $(EE_BIN)
 	mv $(EE_BIN) bin/
 	mv $(EE_BIN_PKD) bin/
 
-debug: $(EE_BIN)
+debug: $(EXT_LIBS) $(EE_BIN)
 	echo "Building $(EE_BIN) with debug symbols..."
 
 clean:
@@ -204,13 +209,13 @@ clean:
 	echo "Cleaning USB Driver..."
 	rm -f src/usbd.s
 	
-	echo "Embedding AUDSRV Driver..."
+	echo "Cleaning AUDSRV Driver..."
 	rm -f src/audsrv.s
 	
 	echo "Cleaning BDM VFAT Driver..."
 	rm -f src/bdmfs_vfat.s
 	
-	echo "Embedding BD USB Mass Driver..."
+	echo "Cleaning BD USB Mass Driver..."
 	rm -f src/usbmass_bd.s
 	
 	echo "Cleaning CDFS Driver..."

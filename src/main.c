@@ -55,9 +55,7 @@ extern unsigned int size_cdfs_irx;
 extern unsigned char usbd_irx[] __attribute__((aligned(16)));
 extern unsigned int size_usbd_irx;
 
-extern unsigned char usbhdfsd_irx[] __attribute__((aligned(16)));
-extern unsigned int size_usbhdfsd_irx;
-
+#ifdef BDM
 extern unsigned char bdm_irx[] __attribute__((aligned(16)));
 extern unsigned int size_bdm_irx;
 
@@ -66,6 +64,13 @@ extern unsigned int size_bdmfs_vfat_irx;
 
 extern unsigned char usbmass_bd_irx[] __attribute__((aligned(16)));
 extern unsigned int size_usbmass_bd_irx;
+
+#else
+
+extern unsigned char usbhdfsd_irx[] __attribute__((aligned(16)));
+extern unsigned int size_usbhdfsd_irx;
+
+#endif
 
 extern unsigned char audsrv_irx[] __attribute__((aligned(16)));
 extern unsigned int size_audsrv_irx;
@@ -157,18 +162,22 @@ int main(int argc, char **argv) {
     fileXioInitSkipOverride();
 
     // load pad & mc modules 
-    printf("AthenaEnv: Installing Pad & MC modules...\n");
+    printf("AthenaEnv: Installing Pad & Memory Card modules...\n");
 
     SifExecModuleBuffer(&mcman_irx, size_mcman_irx, 0, NULL, NULL);
     SifExecModuleBuffer(&mcserv_irx, size_mcserv_irx, 0, NULL, NULL);
     initMC();
 
-    // load USB modules    
+    // load USB modules  
     SifExecModuleBuffer(&usbd_irx, size_usbd_irx, 0, NULL, NULL);
-    SifExecModuleBuffer(&usbhdfsd_irx, size_usbhdfsd_irx, 0, NULL, NULL);
-    /*SifExecModuleBuffer(&bdm_irx, size_bdm_irx, 0, NULL, NULL);
+
+    #ifdef BDM  
+    SifExecModuleBuffer(&bdm_irx, size_bdm_irx, 0, NULL, NULL);
     SifExecModuleBuffer(&bdmfs_vfat_irx, size_bdmfs_vfat_irx, 0, NULL, NULL);
-    SifExecModuleBuffer(&usbmass_bd_irx, size_usbmass_bd_irx, 0, NULL, NULL);*/
+    SifExecModuleBuffer(&usbmass_bd_irx, size_usbmass_bd_irx, 0, NULL, NULL);
+    #else
+    SifExecModuleBuffer(&usbhdfsd_irx, size_usbhdfsd_irx, 0, NULL, NULL);
+    #endif
     SifExecModuleBuffer(&cdfs_irx, size_cdfs_irx, 0, NULL, NULL);
 
     SifExecModuleBuffer(&padman_irx, size_padman_irx, 0, NULL, NULL);
@@ -179,7 +188,6 @@ int main(int argc, char **argv) {
     ds34usb_init();
     ds34bt_init();
 
-    /*
     SifExecModuleBuffer(&libsd_irx, size_libsd_irx, 0, NULL, NULL);
     SifExecModuleBuffer(&audsrv_irx, size_audsrv_irx, 0, NULL, NULL);
 
@@ -199,8 +207,6 @@ int main(int argc, char **argv) {
     }
 
 	setBootPath(argc, argv, 0);  
-
-    */
 
     init_taskman();
 	initGraphics();
