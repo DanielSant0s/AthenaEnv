@@ -55,7 +55,7 @@ extern unsigned int size_cdfs_irx;
 extern unsigned char usbd_irx[] __attribute__((aligned(16)));
 extern unsigned int size_usbd_irx;
 
-#ifdef BDM
+#if defined(BDM)
 extern unsigned char bdm_irx[] __attribute__((aligned(16)));
 extern unsigned int size_bdm_irx;
 
@@ -122,7 +122,6 @@ void initMC(void)
    // mc variables
    int mc_Type, mc_Free, mc_Format;
 
-   
    printf("initMC: Initializing Memory Card\n");
 
    ret = mcInit(MC_TYPE_XMC);
@@ -141,14 +140,14 @@ void initMC(void)
 
 int main(int argc, char **argv) {
   
-    #ifdef RESET_IOP  
     printf("AthenaEnv: Starting IOP Reset...\n");
     SifInitRpc(0);
+    #if defined(RESET_IOP)  
     while (!SifIopReset("", 0)){};
+    #endif
     while (!SifIopSync()){};
     SifInitRpc(0);
     printf("AthenaEnv: IOP reset done.\n");
-    #endif
     
     // install sbv patch fix
     printf("AthenaEnv: Installing SBV Patches...\n");
@@ -171,7 +170,7 @@ int main(int argc, char **argv) {
     // load USB modules  
     SifExecModuleBuffer(&usbd_irx, size_usbd_irx, 0, NULL, NULL);
 
-    #ifdef BDM  
+    #if defined(BDM)  
     SifExecModuleBuffer(&bdm_irx, size_bdm_irx, 0, NULL, NULL);
     SifExecModuleBuffer(&bdmfs_vfat_irx, size_bdmfs_vfat_irx, 0, NULL, NULL);
     SifExecModuleBuffer(&usbmass_bd_irx, size_usbmass_bd_irx, 0, NULL, NULL);
@@ -209,12 +208,12 @@ int main(int argc, char **argv) {
 	setBootPath(argc, argv, 0);  
 
     init_taskman();
-	initGraphics();
+	init_graphics();
 	pad_init();
-    
+
+    chdir(boot_path); 
 
 	const char* errMsg;
-    
 
     while(true)
     {

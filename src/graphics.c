@@ -1101,7 +1101,7 @@ static void gsKit_flip(GSGLOBAL *gsGlobal)
    gsKit_setactive(gsGlobal);
 }
 
-void initGraphics()
+void init_graphics()
 {
 	ee_sema_t sema;
     sema.init_count = 0;
