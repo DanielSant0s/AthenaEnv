@@ -216,7 +216,7 @@ ROM font functions:
 * var size = System.sizeFile(fd)
 * System.doesFileExist(path)
 * System.CurrentDirectory(path) *if path given, it sets the current dir, else it gets the current dir
-* var listdir = System.listDirectory(path) *path isn't mandatory  
+* var listdir = System.listDir(path) *path isn't mandatory  
   • listdir[index].name - return file name on indicated index(string)  
   • listdir[index].size - return file size on indicated index(integer)  
   • listdir[index].directory - return if indicated index is a file or a directory(bool)  

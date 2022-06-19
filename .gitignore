@@ -19,3 +19,6 @@ src/audsrv.s
 src/main.js.c
 .vscode/settings.json
 .vscode/settings.json
+src/filexio.s
+src/iomanx.s
+src/usbhdfsd.s

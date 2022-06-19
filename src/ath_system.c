@@ -80,7 +80,7 @@ duk_ret_t athena_dir(duk_context *ctx)
 {
 	
 	int argc = duk_get_top(ctx);
-	if (argc != 0 && argc != 1) return duk_generic_error(ctx, "Argument error: System.listDirectory([path]) takes zero or one argument.");
+	if (argc != 0 && argc != 1) return duk_generic_error(ctx, "Argument error: System.listDir([path]) takes zero or one argument.");
 	
 	duk_idx_t arr_idx = duk_push_array(ctx);
 
@@ -110,15 +110,14 @@ duk_ret_t athena_dir(duk_context *ctx)
 		
 
         
-        //-----------------------------------------------------------------------------------------
+    //-----------------------------------------------------------------------------------------
 	
 	// read from MC ?
         
-        if( !strcmp( path, "mc0:" ) || !strcmp( path, "mc1:" ) )
-        {       
-                int	nPort;
-                int	numRead;
-                char    mcPath[256];
+    if( !strcmp( path, "mc0:" ) || !strcmp( path, "mc1:" ) )
+    {       
+        int	nPort, numRead;
+        char mcPath[256];
 		sceMcTblGetDir mcEntries[MAX_DIR_FILES] __attribute__((aligned(64)));
 		
 		if( !strcmp( path, "mc0:" ) )
@@ -131,8 +130,8 @@ duk_ret_t athena_dir(duk_context *ctx)
 		strcpy(mcPath,(char *)&path[4]);
 				
 		// it temp_path is empty put a "/" inside
-                if (strlen(mcPath)==0)
-                   strcpy((char *)mcPath,(char *)"/");
+        if (strlen(mcPath)==0)
+           strcpy((char *)mcPath,(char *)"/");
 		
 
 		if (mcPath[strlen(mcPath)-1] != '/')
@@ -162,10 +161,10 @@ duk_ret_t athena_dir(duk_context *ctx)
 
 		}
 		return 1;  // table is already on top
-        }
-        //-----------------------------------------------------------------------------------------
-        
-        // else regular one using Dopen/Dread
+    }
+    //-----------------------------------------------------------------------------------------
+    
+    // else regular one using Dopen/Dread
 
 	int i = 0;
 
@@ -461,7 +460,7 @@ duk_ret_t athena_checkexist(duk_context *ctx){
 duk_ret_t athena_loadELF(duk_context *ctx)
 {
 	size_t size;
-	const char *elftoload = duk_get_lstring(ctx, 1, &size);
+	const char *elftoload = duk_get_lstring(ctx, 0, &size);
 	if (!elftoload) return duk_generic_error(ctx, "Argument error: System.loadELF() takes a string as argument.");
 	load_elf_NoIOPReset(elftoload);
 	return 1;
@@ -550,8 +549,6 @@ duk_ret_t athena_getDiscType(duk_context *ctx)
 
 extern void *_gp;
 
-#define BUFSIZE (64*1024)
-
 static volatile off_t progress, max_progress;
 
 struct pathMap {
@@ -563,7 +560,7 @@ static int copyThread(void* data)
 {
 	struct pathMap* paths = (struct pathMap*)data;
 
-    char buffer[BUFSIZE];
+    char buffer[BUFSIZ];
     int in = open(paths->in, O_RDONLY, 0);
     int out = open(paths->out, O_WRONLY | O_CREAT | O_TRUNC, 644);
 
@@ -575,7 +572,7 @@ static int copyThread(void* data)
     max_progress = size;
 
     ssize_t bytes_read;
-    while((bytes_read = read(in, buffer, BUFSIZE)) > 0)
+    while((bytes_read = read(in, buffer, BUFSIZ)) > 0)
     {
         write(out, buffer, bytes_read);
         progress += bytes_read;
@@ -585,7 +582,7 @@ static int copyThread(void* data)
     close(in);
     close(out);
 	free(paths);
-	ExitDeleteThread();
+	exitkill_task();
     return 0;
 }
 
@@ -598,19 +595,8 @@ duk_ret_t athena_copyasync(duk_context *ctx){
 
 	copypaths->in = duk_get_string(ctx, 0);
 	copypaths->out = duk_get_string(ctx, 1);
-	
-	static u8 copyThreadStack[65*1024] __attribute__((aligned(16)));
-	
-	ee_thread_t thread_param;
-	
-	thread_param.gp_reg = &_gp;
-    thread_param.func = (void*)copyThread;
-    thread_param.stack = (void *)copyThreadStack;
-    thread_param.stack_size = sizeof(copyThreadStack);
-    thread_param.initial_priority = 0x12;
-	int thread = CreateThread(&thread_param);
-	
-	StartThread(thread, (void*)copypaths);
+	int task = create_task("FileSystem: Copy", (void*)copyThread, 8192+1024, 100);
+	init_task(task, (void*)copypaths);
 	return 0;
 }
 
@@ -640,8 +626,8 @@ DUK_EXTERNAL duk_ret_t dukopen_system(duk_context *ctx) {
 		{ "seekFile",                   athena_seekfile,					  3 },  
 		{ "sizeFile",                   athena_sizefile,					  1 },
 		{ "doesFileExist",            	athena_checkexist,					  1 },
-		{ "currentDirectory",           athena_curdir,				DUK_VARARGS },
-		{ "listDirectory",           	athena_dir,					DUK_VARARGS },
+		{ "currentDir",           		athena_curdir,				DUK_VARARGS },
+		{ "listDir",           			athena_dir,					DUK_VARARGS },
 		{ "createDirectory",           	athena_createDir,					  1 },
 		{ "removeDirectory",           	athena_removeDir,					  1 },
 		{ "moveFile",	               	athena_movefile,					  2 },

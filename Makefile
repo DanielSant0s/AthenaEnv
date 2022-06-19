@@ -31,6 +31,9 @@ export HEADER
 EE_BIN = athena.elf
 EE_BIN_PKD = athena_pkd.elf
 
+RESET_IOP = 1
+BDM = 0
+
 EE_LIBS = -L$(PS2SDK)/ports/lib -L$(PS2DEV)/gsKit/lib/ -Lmodules/ds34bt/ee/ -Lmodules/ds34usb/ee/ -lpatches -lfileXio -lcdvd -lpad -ldebug -lmath3d -ljpeg -lfreetype -lgskit_toolkit -lgskit -ldmakit -lpng -lz -lmc -laudsrv -lelf-loader -lds34bt -lds34usb
 
 EE_INCS += -I$(PS2DEV)/gsKit/include -I$(PS2SDK)/ports/include -I$(PS2SDK)/ports/include/freetype2 -I$(PS2SDK)/ports/include/zlib
@@ -43,6 +46,10 @@ ifeq ($(RESET_IOP),1)
 EE_CFLAGS += -DRESET_IOP
 endif
 
+ifeq ($(BDM),1)
+EE_CFLAGS += -DBDM
+endif
+
 ifeq ($(DEBUG),1)
 EE_CFLAGS += -DDEBUG
 endif
@@ -51,19 +58,28 @@ BIN2S = $(PS2SDK)/bin/bin2s
 
 EXT_LIBS = modules/ds34usb/ee/libds34usb.a modules/ds34bt/ee/libds34bt.a
 
-APP_CORE = src/main.o src/pad.o src/graphics.o src/atlas.o src/fntsys.o src/sound.o src/system.o \
-		   src/render.o src/calc_3d.o src/gsKit3d_sup.o
+APP_CORE = src/main.o src/taskman.o src/pad.o src/graphics.o src/atlas.o src/fntsys.o src/sound.o \
+		   src/system.o src/render.o src/calc_3d.o src/gsKit3d_sup.o
 
 ATHENA_MODULES = src/duktape/duktape.o src/duktape/duk_console.o src/duktape/duk_module_node.o \
 				 src/ath_env.o src/ath_screen.o src/ath_graphics.o src/ath_pads.o src/ath_sound.o \
-				 src/ath_system.o src/ath_timer.o src/ath_render.o
+				 src/ath_system.o src/ath_timer.o src/ath_render.o src/ath_task.o
 
-IOP_MODULES = src/sio2man.o src/mcman.o src/mcserv.o src/padman.o src/libsd.o src/usbd.o src/audsrv.o \
-			  src/bdm.o src/bdmfs_vfat.o src/usbmass_bd.o src/cdfs.o src/ds34bt.o src/ds34usb.o
+IOP_MODULES = src/iomanx.o src/filexio.o src/sio2man.o src/mcman.o src/mcserv.o src/padman.o src/libsd.o  \
+			  src/usbd.o src/audsrv.o src/bdm.o src/bdmfs_vfat.o src/usbmass_bd.o src/cdfs.o src/ds34bt.o \
+			  src/ds34usb.o src/usbhdfsd.o
 
 EE_OBJS = $(IOP_MODULES) $(APP_CORE) $(ATHENA_MODULES)
 
 #-------------------- Embedded IOP Modules ------------------------#
+src/iomanx.s: $(PS2SDK)/iop/irx/iomanX.irx
+	echo "Embedding iomanX Driver..."
+	$(BIN2S) $< $@ iomanX_irx
+
+src/filexio.s: $(PS2SDK)/iop/irx/fileXio.irx
+	echo "Embedding fileXio Driver..."
+	$(BIN2S) $< $@ fileXio_irx
+
 src/sio2man.s: $(PS2SDK)/iop/irx/sio2man.irx
 	echo "Embedding SIO2MAN Driver..."
 	$(BIN2S) $< $@ sio2man_irx
@@ -103,6 +119,10 @@ src/bdmfs_vfat.s: $(PS2SDK)/iop/irx/bdmfs_vfat.irx
 src/usbmass_bd.s: $(PS2SDK)/iop/irx/usbmass_bd.irx
 	echo "Embedding BD USB Mass Driver..."
 	$(BIN2S) $< $@ usbmass_bd_irx
+
+src/usbhdfsd.s: $(PS2SDK)/iop/irx/usbhdfsd.irx
+	echo "Embedding USBHDFSD Driver..."
+	$(BIN2S) $< $@ usbhdfsd_irx
 
 src/cdfs.s: $(PS2SDK)/iop/irx/cdfs.irx
 	echo "Embedding CDFS Driver..."
@@ -146,7 +166,7 @@ all: $(EXT_LIBS) $(EE_BIN)
 	mv $(EE_BIN) bin/
 	mv $(EE_BIN_PKD) bin/
 
-debug: $(EE_BIN)
+debug: $(EXT_LIBS) $(EE_BIN)
 	echo "Building $(EE_BIN) with debug symbols..."
 
 clean:
@@ -158,6 +178,15 @@ clean:
 
 	echo "\nCleaning objects..."
 	rm -f $(EE_OBJS)
+
+	echo "Cleaning iomanX Driver..."
+	rm -f src/iomanx.s
+
+	echo "Cleaning fileXio Driver..."
+	rm -f src/filexio.s
+
+	echo "Cleaning USBHDFSD Driver..."
+	rm -f src/usbhdfsd.s
 		
 	echo "Cleaning SIO2MAN Driver..."
 	rm -f src/sio2man.s
@@ -180,13 +209,13 @@ clean:
 	echo "Cleaning USB Driver..."
 	rm -f src/usbd.s
 	
-	echo "Embedding AUDSRV Driver..."
+	echo "Cleaning AUDSRV Driver..."
 	rm -f src/audsrv.s
 	
 	echo "Cleaning BDM VFAT Driver..."
 	rm -f src/bdmfs_vfat.s
 	
-	echo "Embedding BD USB Mass Driver..."
+	echo "Cleaning BD USB Mass Driver..."
 	rm -f src/usbmass_bd.s
 	
 	echo "Cleaning CDFS Driver..."
