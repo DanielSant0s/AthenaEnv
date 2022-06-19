@@ -11,33 +11,20 @@
 static bool asyncDelayed = true;
 
 volatile int imgThreadResult = 1;
-unsigned char* imgThreadData = NULL;
-uint32_t imgThreadSize = 0;
+static GSTEXTURE* imgThreadData = NULL;
 
-static u8 imgThreadStack[4096] __attribute__((aligned(16)));
-
-// Extern symbol 
-extern void *_gp;
-
-static int imgThread(void* data)
+int imgThread(void* data)
 {
 	char* text = (char*)data;
-	int file = open(text, O_RDONLY, 0777);
-	bool delayed = asyncDelayed;
-	GSTEXTURE* image = load_image(text, delayed);
-	if (image == NULL) 
+	imgThreadData = load_image(text, asyncDelayed);
+	if (imgThreadData == NULL) 
 	{
 		imgThreadResult = 1;
-		ExitDeleteThread();
+		exitkill_task();
 		return 0;
 	}
-	char* buffer = (char*)malloc(16);
-	memset(buffer, 0, 16);
-	sprintf(buffer, "%i", (int)image);
-	imgThreadData = (unsigned char*)buffer;
-	imgThreadSize = strlen(buffer);
 	imgThreadResult = 1;
-	ExitDeleteThread();
+	exitkill_task();
 	return 0;
 }
 
@@ -46,25 +33,15 @@ duk_ret_t athena_loadimgasync(duk_context *ctx){
 	int argc = duk_get_top(ctx);
 	if (argc != 1 && argc != 2) return duk_generic_error(ctx, "threadLoadImage takes 1 or 2 arguments");
 	char* text = (char*)(duk_get_string(ctx, 0));
+	asyncDelayed = true;
 	if (argc == 2) asyncDelayed = duk_get_boolean(ctx, 1);
-	
-	ee_thread_t thread_param;
-	
-	thread_param.gp_reg = &_gp;
-    thread_param.func = (void*)imgThread;
-    thread_param.stack = (void *)imgThreadStack;
-    thread_param.stack_size = sizeof(imgThreadStack);
-    thread_param.initial_priority = 16;
-	int thread = CreateThread(&thread_param);
-	if (thread < 0)
-	{
-		imgThreadResult = -1;
-		return 0;
-	}
+
+	int task = create_task("Graphics: Loading image", (void*)imgThread, 4096, 16);
 	
 	imgThreadResult = 0;
-	StartThread(thread, (void*)text);
-	return 0;
+	init_task(task, (void*)text);
+	duk_push_int(ctx, task);
+	return 1;
 }
 
 duk_ret_t athena_getloadstate(duk_context *ctx){
@@ -76,13 +53,16 @@ duk_ret_t athena_getloadstate(duk_context *ctx){
 
 duk_ret_t athena_getloaddata(duk_context *ctx){
 	int argc = duk_get_top(ctx);
-	if(argc != 0) return duk_generic_error(ctx, "getLoadData takes no arguments");
+	if(argc != 1) return duk_generic_error(ctx, "getLoadData takes no arguments");
 	if (imgThreadData != NULL){
-		duk_push_lstring(ctx, (const char*)imgThreadData, imgThreadSize);
+		GSTEXTURE* image = malloc(sizeof(GSTEXTURE));
+		memcpy(image, imgThreadData, sizeof(GSTEXTURE));
 		free(imgThreadData);
 		imgThreadData = NULL;
+		duk_push_uint(ctx, image);
 		return 1;
-	} else return 0;
+	}
+	return 0;
 }
 
 duk_ret_t athena_loadimg(duk_context *ctx){
@@ -343,7 +323,7 @@ DUK_EXTERNAL duk_ret_t dukopen_graphics(duk_context *ctx) {
   const duk_function_list_entry module_funcs[] = {
 	{ "threadLoadImage",    athena_loadimgasync,	DUK_VARARGS },
 	{ "getLoadState",       athena_getloadstate,			  0 },
-  	{ "getLoadData",     	athena_getloaddata,			      0 },
+  	{ "getLoadData",     	athena_getloaddata,			      1 },
     { "loadImage",       	athena_loadimg,		 	DUK_VARARGS },
 	{ "freeImage", 	     	athena_imgfree,		 			  1 },
     { "drawImage", 	     	athena_drawimg,		 	DUK_VARARGS },
@@ -481,7 +461,7 @@ duk_ret_t athena_fmprint(duk_context *ctx) {
     float scale =  duk_get_number(ctx, 2);
     const char* text = duk_get_string(ctx, 3);
 	Color color = 0x80808080;
-	if (argc == 5) color =  duk_get_int(ctx, 4);
+	if (argc == 5) color =  duk_get_uint(ctx, 4);
 	printFontMText(text, x, y, scale, color);
 	return 0;
 }

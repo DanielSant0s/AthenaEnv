@@ -15,8 +15,8 @@
 
 static const u64 BLACK_RGBAQ   = GS_SETREG_RGBAQ(0x00,0x00,0x00,0x80,0x00);
 
-GSGLOBAL *gsGlobal = NULL;
-GSFONTM *gsFontM = NULL;
+static GSGLOBAL *gsGlobal = NULL;
+static GSFONTM *gsFontM = NULL;
 
 static bool vsync = true;
 static int vsync_sema_id = 0;
@@ -1101,7 +1101,7 @@ static void gsKit_flip(GSGLOBAL *gsGlobal)
    gsKit_setactive(gsGlobal);
 }
 
-void initGraphics()
+void init_graphics()
 {
 	ee_sema_t sema;
     sema.init_count = 0;

@@ -387,6 +387,7 @@ const char* runScript(const char* script, bool isBuffer)
 	athena_pads_init(ctx);
 	athena_sound_init(ctx);
 	athena_timer_init(ctx);
+	athena_task_init(ctx);
 
     printf("AthenaEnv: top after init - %ld\n\n", (long) duk_get_top(ctx));
 

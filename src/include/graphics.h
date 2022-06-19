@@ -54,7 +54,7 @@ typedef u32 Color;
 #define G(color) ((u8)(color >> 8 & 0xFF))
 #define R(color) ((u8)(color & 0xFF))
 
-extern void initGraphics();
+extern void init_graphics();
 
 extern void clearScreen(Color color);
 
