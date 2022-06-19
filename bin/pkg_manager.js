@@ -43,7 +43,7 @@ pkg_man.process = function() {
             System.currentDir(apps_list[pkg_man.data.ptr].path + "/");
             dofile(apps_list[pkg_man.data.ptr].name);
         } else if(apps_list[pkg_man.data.ptr].name.endsWith(".elf")){
-            System.loadELF(apps_list[pkg_man.data.ptr].path + "/" + apps_list[pkg_man.data.ptr].name);
+            System.loadELF(apps_list[pkg_man.data.ptr].path + apps_list[pkg_man.data.ptr].name);
         }
     };
 };
