@@ -50,10 +50,6 @@ pkg_man.process = function() {
 
 pkg_man.gfx = new Window();
 pkg_man.gfx.t = "App Manager"
-pkg_man.gfx.x = 0;
-pkg_man.gfx.y = 0;
-pkg_man.gfx.w = 640;
-pkg_man.gfx.h = 448;
 
 render_ui = function() {
     if(pkg_man.data.ptr > 20){

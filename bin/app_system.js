@@ -87,8 +87,7 @@ function Window(x, y, w, h, t) {
 function App(){
     this.init = function() { return; };
     this.process = function() { return; };
-    this.gfx = function() { return; };
-    this.gfx.draw = function() { return; };
+    this.gfx = new Window();
     this.minimized = false;
     this.started = false;
     this.data = null;

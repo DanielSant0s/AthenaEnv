@@ -123,10 +123,6 @@ file_manager.process = function() {
 
 file_manager.gfx = new Window();
 file_manager.gfx.t = "File Manager"
-file_manager.gfx.x = 0;
-file_manager.gfx.y = 0;
-file_manager.gfx.w = 640;
-file_manager.gfx.h = 448;
 
 render_filelist = function() {
     Graphics.drawRect(file_manager.gfx.x, file_manager.gfx.y+(20*(file_manager.data[0]+2+file_manager.comp)), file_manager.gfx.w, 20, Color.new(64, 0, 128, 64));
