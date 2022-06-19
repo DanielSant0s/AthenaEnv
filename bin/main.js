@@ -1,3 +1,5 @@
+dofile("filesystem.js")
+
 Font.fmLoad();
 
 var oldpad = Pads.get();
@@ -45,10 +47,10 @@ function minimize_app(){
 
 dofile("app_system.js");
 dofile("file_manager.js");
-dofile("task_manager.js");
+dofile("pkg_manager.js");
 dofile("keyboard.js");
 
-var apps = [file_manager, task_manager, keyboard];
+var apps = [file_manager, pkg_man, keyboard];
 var apps_idx = range(apps.length);
 
 while(true){
@@ -67,8 +69,6 @@ while(true){
     Graphics.drawImage(wallpaper, 0.0, 0.0);
 
     Font.fmPrint(520.0, 430.0, 0.45, "AthenaOS proto");
-
-    //prog = System.getFileProgress();
 
     for(var i = (apps.length-1); i >= 0; i--){
         apps[i].run();

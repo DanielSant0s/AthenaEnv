@@ -40,7 +40,7 @@ keyboard.process = function() {
     }
 }
 
-keyboard.graphics.draw = function() {
+keyboard.gfx.draw = function() {
     Graphics.drawRect(0, 350, 640, 98, Color.new(0, 0, 0, 100));
     Graphics.drawRect(215+(19.2*keyboard.data.x_pointer), 
     352+(20*keyboard.data.y_pointer), 

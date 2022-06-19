@@ -110,15 +110,14 @@ duk_ret_t athena_dir(duk_context *ctx)
 		
 
         
-        //-----------------------------------------------------------------------------------------
+    //-----------------------------------------------------------------------------------------
 	
 	// read from MC ?
         
-        if( !strcmp( path, "mc0:" ) || !strcmp( path, "mc1:" ) )
-        {       
-                int	nPort;
-                int	numRead;
-                char    mcPath[256];
+    if( !strcmp( path, "mc0:" ) || !strcmp( path, "mc1:" ) )
+    {       
+        int	nPort, numRead;
+        char mcPath[256];
 		sceMcTblGetDir mcEntries[MAX_DIR_FILES] __attribute__((aligned(64)));
 		
 		if( !strcmp( path, "mc0:" ) )
@@ -131,8 +130,8 @@ duk_ret_t athena_dir(duk_context *ctx)
 		strcpy(mcPath,(char *)&path[4]);
 				
 		// it temp_path is empty put a "/" inside
-                if (strlen(mcPath)==0)
-                   strcpy((char *)mcPath,(char *)"/");
+        if (strlen(mcPath)==0)
+           strcpy((char *)mcPath,(char *)"/");
 		
 
 		if (mcPath[strlen(mcPath)-1] != '/')
@@ -162,10 +161,10 @@ duk_ret_t athena_dir(duk_context *ctx)
 
 		}
 		return 1;  // table is already on top
-        }
-        //-----------------------------------------------------------------------------------------
-        
-        // else regular one using Dopen/Dread
+    }
+    //-----------------------------------------------------------------------------------------
+    
+    // else regular one using Dopen/Dread
 
 	int i = 0;
 
@@ -461,7 +460,7 @@ duk_ret_t athena_checkexist(duk_context *ctx){
 duk_ret_t athena_loadELF(duk_context *ctx)
 {
 	size_t size;
-	const char *elftoload = duk_get_lstring(ctx, 1, &size);
+	const char *elftoload = duk_get_lstring(ctx, 0, &size);
 	if (!elftoload) return duk_generic_error(ctx, "Argument error: System.loadELF() takes a string as argument.");
 	load_elf_NoIOPReset(elftoload);
 	return 1;

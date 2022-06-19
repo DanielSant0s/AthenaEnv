@@ -57,10 +57,10 @@ var registered_apps = 0;
 var act_app = 0;
 
 function Window(x, y, w, h, t) {
-    x === undefined? this.x = 200 : this.x = x;
-    y === undefined? this.y = 200 : this.y = y;
-    w === undefined? this.w = 300 : this.w = w;
-    h === undefined? this.h = 150 : this.h = h;
+    x === undefined? this.x = 0 : this.x = x;
+    y === undefined? this.y = 0 : this.y = y;
+    w === undefined? this.w = 640 : this.w = w;
+    h === undefined? this.h = 448 : this.h = h;
     t === undefined? this.t = "Title" : this.t = t;
 
     this.elm_list = [];
@@ -75,8 +75,8 @@ function Window(x, y, w, h, t) {
     };
 
     this.draw = function() {
-        Graphics.drawRect(this.x, this.y, this.w, 20, Color.new(64, 0, 128, 100));
-        Graphics.drawRect(this.x, this.y+20.0, this.w, this.h, Color.new(0, 0, 0, 100));
+        Graphics.drawRect(this.x, this.y, this.w, 20, Color.new(64, 0, 128, 128));
+        Graphics.drawRect(this.x, this.y+20.0, this.w, this.h, Color.new(40, 40, 40, 128));
         printCentered(this.x+(this.w/2), this.y+5.0, 0.5, this.t);
         for (var i = 0; i < this.elm_list.length; i++){
             this.elm_list[i]();
@@ -85,21 +85,29 @@ function Window(x, y, w, h, t) {
 };
 
 function App(){
+    this.init = function() { return; };
     this.process = function() { return; };
-    this.graphics =  function() { return; };
-    this.graphics.draw = function() { return; };
+    this.gfx = function() { return; };
+    this.gfx.draw = function() { return; };
     this.minimized = false;
-    this.data = 0;
+    this.started = false;
+    this.data = null;
 
     this.id = registered_apps;
     registered_apps++;
 
     this.run = function() {
+        if (!this.started){
+            this.init();
+            this.started = true;
+        };
+
         if(this.id == act_app){
             this.process();
-        }
+        };
+
         if(!this.minimized){
-            this.graphics.draw();
-        }
+            this.gfx.draw();
+        };
     };
 }
