@@ -143,7 +143,6 @@ DUK_EXTERNAL duk_ret_t dukopen_color(duk_context *ctx) {
 void athena_screen_init(duk_context* ctx){
 	push_athena_module(dukopen_screen, 	    "Display");
 	push_athena_module(dukopen_color, 	      "Color");
-
 	
 	duk_push_uint(ctx, GS_MODE_NTSC);
 	duk_put_global_string(ctx, "NTSC");
