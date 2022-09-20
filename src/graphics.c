@@ -27,7 +27,7 @@ static int frames = 0;
 static int frame_interval = -1;
 
 //2D drawing functions
-GSTEXTURE* loadpng(FILE* File, bool delayed)
+GSTEXTURE* athena_load_png(FILE* File, bool delayed)
 {
 	GSTEXTURE* tex = (GSTEXTURE*)malloc(sizeof(GSTEXTURE));
 	tex->Delayed = delayed;
@@ -317,7 +317,7 @@ GSTEXTURE* loadpng(FILE* File, bool delayed)
 }
 
 
-GSTEXTURE* loadbmp(FILE* File, bool delayed)
+GSTEXTURE* athena_load_bmp(FILE* File, bool delayed)
 {
 	GSBITMAP Bitmap;
 	int x, y;
@@ -683,7 +683,7 @@ static void  _ps2_load_JPEG_generic(GSTEXTURE *Texture, struct jpeg_decompress_s
 	jpeg_finish_decompress(cinfo);
 }
 
-GSTEXTURE* loadjpeg(FILE* fp, bool scale_down, bool delayed)
+GSTEXTURE* athena_load_jpeg(FILE* fp, bool scale_down, bool delayed)
 {
 
 	
@@ -780,9 +780,9 @@ GSTEXTURE* load_image(const char* path, bool delayed){
 	fread(&magic, 1, 2, file);
 	fseek(file, 0, SEEK_SET);
 	GSTEXTURE* image = NULL;
-	if (magic == 0x4D42) image =      loadbmp(file, delayed);
-	else if (magic == 0xD8FF) image = loadjpeg(file, false, delayed);
-	else if (magic == 0x5089) image = loadpng(file, delayed);
+	if (magic == 0x4D42) image =      athena_load_bmp(file, delayed);
+	else if (magic == 0xD8FF) image = athena_load_jpeg(file, false, delayed);
+	else if (magic == 0x5089) image = athena_load_png(file, delayed);
 
 	return image;
 }

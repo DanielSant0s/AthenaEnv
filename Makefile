@@ -168,6 +168,7 @@ all: $(EXT_LIBS) $(EE_BIN)
 
 debug: $(EXT_LIBS) $(EE_BIN)
 	echo "Building $(EE_BIN) with debug symbols..."
+	mv $(EE_BIN) bin/athena_debug.elf
 
 clean:
 	echo "\nCleaning $(EE_BIN)..."
