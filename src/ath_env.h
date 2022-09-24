@@ -26,3 +26,4 @@ void athena_task_init(duk_context* ctx);
 
 float get_obj_float(duk_context* ctx, duk_idx_t idx, const char* key);
 uint32_t get_obj_uint(duk_context* ctx, duk_idx_t idx, const char* key);
+bool get_obj_boolean(duk_context* ctx, duk_idx_t idx, const char* key);

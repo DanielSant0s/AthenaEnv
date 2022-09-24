@@ -20,6 +20,12 @@ uint32_t get_obj_uint(duk_context* ctx, duk_idx_t idx, const char* key){
 	return duk_to_uint(ctx, idx);
 }
 
+bool get_obj_boolean(duk_context* ctx, duk_idx_t idx, const char* key){
+	duk_push_this(ctx);
+    duk_get_prop_string(ctx, idx, key);
+	return duk_to_boolean(ctx, idx);
+}
+
 void push_athena_module(duk_c_function func, const char *key){
 	printf("AthenaEnv: Pushing %s module...\n", key);
 	duk_push_c_function(ctx, func, 0);

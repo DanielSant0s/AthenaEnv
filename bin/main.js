@@ -7,12 +7,10 @@ wallpaper.filter = LINEAR;
 
 for(var i = 0; i < 1000; i++){
     Display.clear();
-/*
-    while(!wallpaper.isLoaded()) {
-        continue;
+
+    if(wallpaper.isLoaded()) {
+        wallpaper.draw(0.0, 0.0);
     }
-    
-    wallpaper.draw(0.0, 0.0);*/
 
     console.log("Counter: " + i + "\n");
 
@@ -23,6 +21,6 @@ wallpaper = null;
 Duktape.gc();
 
 while(true){
-    continue;
+    console.log("Finished!\n");
 }
 

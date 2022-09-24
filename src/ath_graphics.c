@@ -8,28 +8,28 @@
 #include "include/fntsys.h"
 #include "ath_env.h"
 
-static uint32_t asyncDelayed = 2;
+static bool asyncDelayed = true;
 
 static int imgThreadResult = 1;
 static GSTEXTURE* imgThreadData = NULL;
+
+typedef struct AsyncImage{
+	const char* path;
+	GSTEXTURE* image;
+};
 
 static int imgThread(void* data)
 {
 	char* text = (char*)data;
 	imgThreadData = load_image(text, asyncDelayed);
-	if (imgThreadData == NULL) 
-	{
-		imgThreadResult = 1;
-		exitkill_task();
-		return 0;
-	}
+
 	imgThreadResult = 1;
 	exitkill_task();
 	return 0;
 }
 
 static int load_img_async(const char* text, uint32_t delayed) {
-	asyncDelayed = delayed-2;
+	asyncDelayed = delayed == 2? false : true;
 
 	int task = create_task("Graphics: Loading image", (void*)imgThread, 4096, 16);
 
@@ -53,24 +53,50 @@ static duk_ret_t athena_image_isloaded(duk_context *ctx){
 	int argc = duk_get_top(ctx);
 	if(argc != 0) return duk_generic_error(ctx, "isLoaded takes no arguments");
 
-	duk_push_this(ctx);
+	bool loaded = get_obj_boolean(ctx, -1, "\xff""\xff""loaded");
 
-	if (imgThreadData != NULL){
+	printf("Loaded? %s\n", loaded? "true" : "false");
 
-		printf("Image Address: 0x%x\n", imgThreadData);
-
-		GSTEXTURE* image = malloc(sizeof(GSTEXTURE));
-		memcpy(image, imgThreadData, sizeof(GSTEXTURE));
-		free(imgThreadData);
-		imgThreadData = NULL;
-
-		duk_push_uint(ctx, (void*)(image));
-    	duk_put_prop_string(ctx, -2, "\xff""\xff""data");
-
+	if(loaded){
 		duk_push_boolean(ctx, true);
+		return 1;
+	} else {
+		if (imgThreadData != NULL && !loaded){
+
+			printf("Image Address: 0x%x\n", imgThreadData);
+
+			GSTEXTURE* image = malloc(sizeof(GSTEXTURE));
+			memcpy(image, imgThreadData, sizeof(GSTEXTURE));
+			free(imgThreadData);
+			imgThreadData = NULL;
+
+			duk_push_this(ctx);
+
+			duk_push_uint(ctx, image);
+    		duk_put_prop_string(ctx, -2, "\xff""\xff""data");
+
+			duk_push_number(ctx, (float)(image->Width));
+    		duk_put_prop_string(ctx, -2, "width");
+
+			duk_push_number(ctx, (float)(image->Height));
+    		duk_put_prop_string(ctx, -2, "height");
+
+			duk_push_number(ctx, (float)(image->Width));
+    		duk_put_prop_string(ctx, -2, "endx");
+
+			duk_push_number(ctx, (float)(image->Height));
+    		duk_put_prop_string(ctx, -2, "endy");
+
+		    duk_push_boolean(ctx, true);
+    		duk_put_prop_string(ctx, -2, "\xff""\xff""loaded");
+
+			duk_push_boolean(ctx, true);
+			return 1;
+		}
+		duk_push_boolean(ctx, false);
+		return 1;
 	}
-	duk_push_boolean(ctx, false);
-	return 1;
+	
 }
 
 static duk_ret_t athena_image_dtor(duk_context *ctx){
@@ -111,7 +137,6 @@ static duk_ret_t athena_image_dtor(duk_context *ctx){
 
 static duk_ret_t athena_image_ctor(duk_context *ctx) {
 	uint32_t delayed = 1;
-	GSTEXTURE* image;
 	
 	int argc = duk_get_top(ctx);
 	if (argc != 1 && argc != 2) return duk_generic_error(ctx, "Image takes 1 or 2 arguments");
@@ -124,37 +149,43 @@ static duk_ret_t athena_image_ctor(duk_context *ctx) {
 	if (argc == 2) delayed = duk_get_uint(ctx, 1);
 
 	if(delayed == 2 || delayed == 3){
-		duk_push_int(ctx, load_img_async(text, delayed));
-    	duk_put_prop_string(ctx, -2, "task_id");
+		load_img_async(text, delayed);
+
+		//duk_push_int(ctx, 0);
+    	//duk_put_prop_string(ctx, -2, "task_id");
+
+		duk_push_boolean(ctx, false);
+    	duk_put_prop_string(ctx, -2, "\xff""\xff""loaded");
+
 	} else if(delayed == 0 || delayed == 1){
-		image = load_image(text, delayed);
-		if (image == NULL){
-			duk_generic_error(ctx, "Failed to load image %s.", text);
-		}
+		GSTEXTURE* image = load_image(text, delayed);
+
+		if (image == NULL) duk_generic_error(ctx, "Failed to load image %s.", text);
+
+		duk_push_uint(ctx, image);
+    	duk_put_prop_string(ctx, -2, "\xff""\xff""data");
+
+		duk_push_number(ctx, (float)(image->Width));
+    	duk_put_prop_string(ctx, -2, "width");
+
+		duk_push_number(ctx, (float)(image->Height));
+    	duk_put_prop_string(ctx, -2, "height");
+
+		duk_push_number(ctx, (float)(image->Width));
+    	duk_put_prop_string(ctx, -2, "endx");
+
+		duk_push_number(ctx, (float)(image->Height));
+    	duk_put_prop_string(ctx, -2, "endy");
+		
 	} else {
 		duk_generic_error(ctx, "Image mode not supported!");
 	}
-
-	duk_push_uint(ctx, image);
-    duk_put_prop_string(ctx, -2, "\xff""\xff""data");
-
-	duk_push_number(ctx, (float)(image->Width));
-    duk_put_prop_string(ctx, -2, "width");
-
-	duk_push_number(ctx, (float)(image->Height));
-    duk_put_prop_string(ctx, -2, "height");
 
 	duk_push_number(ctx, (float)(0.0f));
     duk_put_prop_string(ctx, -2, "startx");
 
 	duk_push_number(ctx, (float)(0.0f));
     duk_put_prop_string(ctx, -2, "starty");
-
-	duk_push_number(ctx, (float)(image->Width));
-    duk_put_prop_string(ctx, -2, "endx");
-
-	duk_push_number(ctx, (float)(image->Height));
-    duk_put_prop_string(ctx, -2, "endy");
 
 	duk_push_number(ctx, (float)(0.0f));
     duk_put_prop_string(ctx, -2, "angle");
