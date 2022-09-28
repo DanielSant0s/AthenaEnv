@@ -27,9 +27,8 @@ static int frames = 0;
 static int frame_interval = -1;
 
 //2D drawing functions
-GSTEXTURE* athena_load_png(FILE* File, bool delayed)
+int athena_load_png(GSTEXTURE* tex, FILE* File, bool delayed)
 {
-	GSTEXTURE* tex = (GSTEXTURE*)malloc(sizeof(GSTEXTURE));
 	tex->Delayed = delayed;
 
 	if (File == NULL)
@@ -312,12 +311,11 @@ GSTEXTURE* athena_load_png(FILE* File, bool delayed)
 		gsKit_setup_tbw(tex);
 	}
 
-	return tex;
+	return 0;
 
 }
 
-
-GSTEXTURE* athena_load_bmp(FILE* File, bool delayed)
+int athena_load_bmp(GSTEXTURE* tex, FILE* File, bool delayed)
 {
 	GSBITMAP Bitmap;
 	int x, y;
@@ -326,7 +324,6 @@ GSTEXTURE* athena_load_bmp(FILE* File, bool delayed)
 	u8  *image;
 	u8  *p;
 
-    GSTEXTURE* tex = (GSTEXTURE*)malloc(sizeof(GSTEXTURE));
 	tex->Delayed = delayed;
 
 	if (File == NULL)
@@ -619,7 +616,7 @@ GSTEXTURE* athena_load_bmp(FILE* File, bool delayed)
 		gsKit_setup_tbw(tex);
 	}
 
-	return tex;
+	return 0;
 
 }
 
@@ -683,11 +680,8 @@ static void  _ps2_load_JPEG_generic(GSTEXTURE *Texture, struct jpeg_decompress_s
 	jpeg_finish_decompress(cinfo);
 }
 
-GSTEXTURE* athena_load_jpeg(FILE* fp, bool scale_down, bool delayed)
+int athena_load_jpeg(GSTEXTURE* tex, FILE* fp, bool scale_down, bool delayed)
 {
-
-	
-    GSTEXTURE* tex = (GSTEXTURE*)malloc(sizeof(GSTEXTURE));
 	tex->Delayed = delayed;
 
 	struct jpeg_decompress_struct cinfo;
@@ -769,22 +763,21 @@ GSTEXTURE* athena_load_jpeg(FILE* fp, bool scale_down, bool delayed)
 		gsKit_setup_tbw(tex);
 	}
 
-	return tex;
+	return 0;
 
 }
 
 
-GSTEXTURE* load_image(const char* path, bool delayed){
+int load_image(GSTEXTURE* image, const char* path, bool delayed){
 	FILE* file = fopen(path, "rb");
 	uint16_t magic;
 	fread(&magic, 1, 2, file);
 	fseek(file, 0, SEEK_SET);
-	GSTEXTURE* image = NULL;
-	if (magic == 0x4D42) image =      athena_load_bmp(file, delayed);
-	else if (magic == 0xD8FF) image = athena_load_jpeg(file, false, delayed);
-	else if (magic == 0x5089) image = athena_load_png(file, delayed);
+	if (magic == 0x4D42) athena_load_bmp(image, file, delayed);
+	else if (magic == 0xD8FF) athena_load_jpeg(image, file, false, delayed);
+	else if (magic == 0x5089) athena_load_png(image, file, delayed);
 
-	return image;
+	return 0;
 }
 
 

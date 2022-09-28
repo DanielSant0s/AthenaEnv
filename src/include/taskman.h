@@ -7,8 +7,8 @@ typedef struct Task {
 } Task;
 
 typedef struct Tasklist {
-    int size;
     Task** list;
+    int size;
 } Tasklist;
 
 extern void init_taskman();
