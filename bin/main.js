@@ -22,6 +22,7 @@ for(var i = 0; i < 500; i++){
 }
 
 wallpaper = null;
+img_list = null;
 Duktape.gc();
 
 console.log("Finished!\n");

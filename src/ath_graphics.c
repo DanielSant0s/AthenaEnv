@@ -67,6 +67,28 @@ static int load_img_async(GSTEXTURE* image, const char* path, uint32_t delayed, 
 	return 0;
 }
 
+static duk_ret_t athena_asyncimage_dtor(duk_context *ctx){
+
+    duk_get_prop_string(ctx, 0, "\xff""\xff""deleted");
+    bool deleted = duk_to_boolean(ctx, -1);
+    duk_pop(ctx);
+
+    duk_get_prop_string(ctx, 0, "\xff""\xff""handle");
+    ImgList* list = duk_to_uint(ctx, -1);
+    duk_pop(ctx);
+
+	if(!deleted){
+		kill_task(list->thread_id);
+		DeleteSema(list->sema_id);
+		if(list->size > 0) free(list->list);
+		free(list);
+
+        duk_push_boolean(ctx, true);
+        duk_put_prop_string(ctx, 0, "\xff""\xff""deleted");
+	}
+
+	return 0;
+}
 
 static duk_ret_t athena_asyncimage_ctor(duk_context *ctx){
 	int argc = duk_get_top(ctx);
@@ -88,6 +110,13 @@ static duk_ret_t athena_asyncimage_ctor(duk_context *ctx){
 
 	duk_push_uint(ctx, list);
     duk_put_prop_string(ctx, -2, "\xff""\xff""handle");
+
+
+    duk_push_boolean(ctx, false);
+    duk_put_prop_string(ctx, -2, "\xff""\xff""deleted");
+
+    duk_push_c_function(ctx, athena_asyncimage_dtor, 1);
+    duk_set_finalizer(ctx, -2);
 
 	return 0;
 }
