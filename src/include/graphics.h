@@ -48,73 +48,86 @@ typedef struct {
     GSTEXTURE* texture;
 } model;
 
+typedef struct AsyncImage {
+	const char* path;
+	GSTEXTURE* handle;
+	bool delayed;
+} AsyncImage;
+
+typedef struct ImgList {
+    AsyncImage** list;
+	int size;
+	int sema_id;
+	int thread_id;
+} ImgList;
+
 typedef u32 Color;
 #define A(color) ((u8)(color >> 24 & 0xFF))
 #define B(color) ((u8)(color >> 16 & 0xFF))
 #define G(color) ((u8)(color >> 8 & 0xFF))
 #define R(color) ((u8)(color & 0xFF))
 
-extern void init_graphics();
+void init_graphics();
 
-extern void clearScreen(Color color);
+void clearScreen(Color color);
 
-extern void flipScreen();
+void flipScreen();
 
-extern void graphicWaitVblankStart();
+void graphicWaitVblankStart();
 
-extern void setVSync(bool vsync_flag);
+void setVSync(bool vsync_flag);
 
-extern void gsKit_clear_screens();
+void gsKit_clear_screens();
 
-extern GSGLOBAL *getGSGLOBAL();
+GSGLOBAL *getGSGLOBAL();
 
-extern int GetInterlacedFrameMode();
+int GetInterlacedFrameMode();
 
-extern int getFreeVRAM();
+int getFreeVRAM();
 
-extern float FPSCounter(int interval);
+float FPSCounter(int interval);
 
-extern void setVideoMode(s16 mode, int width, int height, int psm, s16 interlace, s16 field, bool zbuffering, int psmz);
+void setVideoMode(s16 mode, int width, int height, int psm, s16 interlace, s16 field, bool zbuffering, int psmz);
 
-extern int load_image(GSTEXTURE* image, const char* path, bool delayed);
+int load_image(GSTEXTURE* image, const char* path, bool delayed);
 
-extern void drawImage(GSTEXTURE* source, float x, float y, float width, float height, float startx, float starty, float endx, float endy, Color color);
-extern void drawImageRotate(GSTEXTURE* source, float x, float y, float width, float height, float startx, float starty, float endx, float endy, float angle, Color color);
+void drawImage(GSTEXTURE* source, float x, float y, float width, float height, float startx, float starty, float endx, float endy, Color color);
+void drawImageRotate(GSTEXTURE* source, float x, float y, float width, float height, float startx, float starty, float endx, float endy, float angle, Color color);
 
-extern void drawPixel(float x, float y, Color color);
-extern void drawLine(float x, float y, float x2, float y2, Color color);
-extern void drawRect(float x, float y, int width, int height, Color color);
-extern void drawCircle(float x, float y, float radius, u64 color, u8 filled);
-extern void drawTriangle(float x, float y, float x2, float y2, float x3, float y3, Color color);
-extern void drawTriangle_gouraud(float x, float y, float x2, float y2, float x3, float y3, Color color, Color color2, Color color3);
-extern void drawQuad(float x, float y, float x2, float y2, float x3, float y3, float x4, float y4, Color color);
-extern void drawQuad_gouraud(float x, float y, float x2, float y2, float x3, float y3, float x4, float y4, Color color, Color color2, Color color3, Color color4);
+void drawPixel(float x, float y, Color color);
+void drawLine(float x, float y, float x2, float y2, Color color);
+void drawRect(float x, float y, int width, int height, Color color);
+void drawCircle(float x, float y, float radius, u64 color, u8 filled);
+void drawTriangle(float x, float y, float x2, float y2, float x3, float y3, Color color);
+void drawTriangle_gouraud(float x, float y, float x2, float y2, float x3, float y3, Color color, Color color2, Color color3);
+void drawQuad(float x, float y, float x2, float y2, float x3, float y3, float x4, float y4, Color color);
+void drawQuad_gouraud(float x, float y, float x2, float y2, float x3, float y3, float x4, float y4, Color color, Color color2, Color color3, Color color4);
 
-extern void InvalidateTexture(GSTEXTURE *txt);
-extern void UnloadTexture(GSTEXTURE *txt);
+void InvalidateTexture(GSTEXTURE *txt);
+void UnloadTexture(GSTEXTURE *txt);
 
-extern void fntDrawQuad(rm_quad_t *q);
+void fntDrawQuad(rm_quad_t *q);
 
-extern GSFONT* loadFont(const char* path);
-extern void printFontText(GSFONT* font, const char* text, float x, float y, float scale, Color color);
-extern void unloadFont(GSFONT* font);
+GSFONT* loadFont(const char* path);
+void printFontText(GSFONT* font, const char* text, float x, float y, float scale, Color color);
+void unloadFont(GSFONT* font);
 
-extern void loadFontM();
-extern void printFontMText(const char* text, float x, float y, float scale, Color color);
-extern void unloadFontM();
+void loadFontM();
+void printFontMText(const char* text, float x, float y, float scale, Color color);
+void unloadFontM();
 
 
-extern void init3D(float aspect);
+void init3D(float aspect);
 
-extern void setCameraPosition(float x, float y, float z);
-extern void setCameraRotation(float x, float y, float z);
+void setCameraPosition(float x, float y, float z);
+void setCameraRotation(float x, float y, float z);
 
-extern void setLightQuantity(int quantity);
-extern void createLight(int lightid, float dir_x, float dir_y, float dir_z, int type, float r, float g, float b);
+void setLightQuantity(int quantity);
+void createLight(int lightid, float dir_x, float dir_y, float dir_z, int type, float r, float g, float b);
 
-extern model* loadOBJ(const char* path, GSTEXTURE* text);
-extern void drawOBJ(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z);
-extern void draw_bbox(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z, Color color);
+model* loadOBJ(const char* path, GSTEXTURE* text);
+void drawOBJ(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z);
+void draw_bbox(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z, Color color);
 
 
 #endif

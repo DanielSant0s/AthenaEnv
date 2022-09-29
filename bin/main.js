@@ -5,9 +5,9 @@ var wallpaper = new Image("owl.png", VRAM, img_list);
 
 img_list.process();
 
-wallpaper.width = 512.0;
-wallpaper.height = 256.0;
-wallpaper.filter = LINEAR;
+//wallpaper.width = 512.0;
+//wallpaper.height = 256.0;
+//wallpaper.filter = LINEAR;
 
 for(var i = 0; i < 500; i++){
     Display.clear();
@@ -16,7 +16,7 @@ for(var i = 0; i < 500; i++){
         wallpaper.draw(0.0, 0.0);
     }
 
-    console.log("Counter: " + i + "\n");
+    console.log("Width: " + wallpaper.width + "\n");
 
     Display.flip();
 }
