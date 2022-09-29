@@ -43,16 +43,13 @@ int append_img(AsyncImage* img, ImgList* list)
 {
     AsyncImage** aux = malloc((list->size+1)*sizeof(AsyncImage*));
 
-
 	if(list->size > 0){
 		memcpy(aux, list->list, list->size*sizeof(AsyncImage*));
 		free(list->list);
 	}
     
     list->list = aux;
-
 	list->list[list->size] = img;
-
     list->size++;
     
     return 0;
@@ -90,7 +87,7 @@ static duk_ret_t athena_asyncimage_ctor(duk_context *ctx){
     duk_push_this(ctx);
 
 	duk_push_uint(ctx, list);
-    duk_put_prop_string(ctx, -2, "handle");
+    duk_put_prop_string(ctx, -2, "\xff""\xff""handle");
 
 	return 0;
 }
@@ -99,7 +96,7 @@ static duk_ret_t athena_asyncimage_process(duk_context *ctx){
 	int argc = duk_get_top(ctx);
 	if(argc != 0) return duk_generic_error(ctx, "AsyncImg.process() takes no arguments");
 
-	ImgList* handle = get_obj_uint(ctx, -1, "handle");
+	ImgList* handle = get_obj_uint(ctx, -1, "\xff""\xff""handle");
 	SignalSema(handle->sema_id);
 
 	return 0;
@@ -168,7 +165,6 @@ static duk_ret_t athena_image_dtor(duk_context *ctx){
 }
 
 static duk_ret_t athena_image_ctor(duk_context *ctx) {
-	uint32_t delayed = 1;
 	
 	int argc = duk_get_top(ctx);
 	if (argc != 1 && argc != 2 && argc != 3) return duk_generic_error(ctx, "Image takes 1, 2 or 3 arguments");
@@ -180,10 +176,13 @@ static duk_ret_t athena_image_ctor(duk_context *ctx) {
 
 	const char* text = duk_get_string(ctx, 0);
 
-	if (argc > 1) delayed = duk_get_uint(ctx, 1);
+	bool delayed = true;
+	if (argc > 1) delayed = duk_get_boolean(ctx, 1);
 
 	if(argc > 2) {
-		ImgList* list = duk_get_uint(ctx, 2);
+		duk_get_prop_string(ctx, 2, "\xff""\xff""handle");
+		ImgList* list = duk_get_uint(ctx, -1);
+		duk_pop(ctx);
 
 		load_img_async(image, text, delayed, list);
 
@@ -276,7 +275,7 @@ void image_init(duk_context *ctx) {
     duk_put_prop_string(ctx, -2, "draw");
 
     duk_push_c_function(ctx, athena_image_isloaded, DUK_VARARGS);
-    duk_put_prop_string(ctx, -2, "isLoaded");
+    duk_put_prop_string(ctx, -2, "ready");
 
     duk_put_prop_string(ctx, -2, "prototype");
 
@@ -306,7 +305,7 @@ void asyncimage_init(duk_context *ctx) {
 
     duk_put_prop_string(ctx, -2, "prototype");
 
-    duk_put_global_string(ctx, "AsyncImage");
+    duk_put_global_string(ctx, "ImageList");
 
 }
 
