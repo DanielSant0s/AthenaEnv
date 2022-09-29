@@ -1,9 +1,10 @@
 
-var wallpaper = new Image("owl.png", ASYNC_VRAM);
+var img_list = new AsyncImage();
 
-AsyncImg.process();
+var wallpaper = new Image("owl.png", VRAM, img_list.handle);
 
-/*
+img_list.process();
+
 wallpaper.width = 512.0;
 wallpaper.height = 256.0;
 wallpaper.filter = LINEAR;
@@ -22,8 +23,10 @@ for(var i = 0; i < 1000; i++){
 
 wallpaper = null;
 Duktape.gc();
-*/
+
+console.log("Finished!\n");
+
 while(true){
-    console.log("Finished!\n");
+    continue;
 }
 

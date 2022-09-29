@@ -65,13 +65,7 @@ int create_task(const char* title, void* func, int stack_size, int priority)
     memcpy(aux, tasks.list, tasks.size*sizeof(Task*));
     free(tasks.list);
     tasks.list = aux;
-
-    /*ee_sema_t sema;
-    sema.init_count = 0;
-    sema.max_count = 255;
-    sema.option = 0;
-    int cancel_sema_id = CreateSema(&sema);
-*/
+    
     ee_thread_t thread_param;
 	
 	thread_param.gp_reg = &_gp;

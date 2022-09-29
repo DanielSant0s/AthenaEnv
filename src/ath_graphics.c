@@ -17,67 +17,92 @@ typedef struct AsyncImage {
 typedef struct ImgList {
     AsyncImage** list;
 	int size;
+	int sema_id;
+	int thread_id;
 } ImgList;
-
-static ImgList img_list;
-static int async_img_sema = -1;
 
 static int imgThread(void* data)
 {
-	while(true){
-		WaitSema(async_img_sema);
+	ImgList* list = data;
 
-		for(int i = 0; i < img_list.size; i++){
-			load_image(img_list.list[i]->handle, img_list.list[i]->path, img_list.list[i]->delayed);
+	while(true){
+		WaitSema(list->sema_id);
+
+		for(int i = 0; i < list->size; i++){
+			load_image(list->list[i]->handle, list->list[i]->path, list->list[i]->delayed);
 		}
 
-		free(img_list.list);
-		img_list.size = 0;
+		free(list->list);
+		list->size = 0;
 		
 	}
 	return 0;
 }
 
-int append_img(AsyncImage* img)
+int append_img(AsyncImage* img, ImgList* list)
 {
+    AsyncImage** aux = malloc((list->size+1)*sizeof(AsyncImage*));
 
-    AsyncImage** aux = malloc((img_list.size+1)*sizeof(AsyncImage*));
 
-	if(img_list.size > 0){
-		memcpy(aux, img_list.list, img_list.size*sizeof(AsyncImage*));
-		free(img_list.list);
+	if(list->size > 0){
+		memcpy(aux, list->list, list->size*sizeof(AsyncImage*));
+		free(list->list);
 	}
     
-    img_list.list = aux;
+    list->list = aux;
 
-	img_list.list[img_list.size] = img;
+	list->list[list->size] = img;
 
-    img_list.size++;
+    list->size++;
     
     return 0;
 }
 
-static int load_img_async(GSTEXTURE* image, const char* path, uint32_t delayed) {
+static int load_img_async(GSTEXTURE* image, const char* path, uint32_t delayed, ImgList* list) {
 	AsyncImage* async_img = malloc(sizeof(AsyncImage));
 
 	async_img->path = path;
 	async_img->handle = image;
-	async_img->delayed = (delayed == 2? false : true);
+	async_img->delayed = delayed;
 
-	append_img(async_img);
+	append_img(async_img, list);
 
 	return 0;
 }
 
-static duk_ret_t athena_image_processlist(duk_context *ctx){
+
+static duk_ret_t athena_asyncimage_ctor(duk_context *ctx){
+	int argc = duk_get_top(ctx);
+	if(argc != 0) return duk_generic_error(ctx, "new ImageAsync() takes no arguments");
+
+    ee_sema_t sema; sema.init_count = 0; sema.max_count = 1; sema.option = 0;
+    int sema_id = CreateSema(&sema);
+
+	ImgList* list = malloc(sizeof(ImgList));
+	list->size = 0;
+	list->sema_id = sema_id;
+
+	int task = create_task("AsyncImage: Loading Thread", (void*)imgThread, 4096, 16);
+	init_task(task, list);
+
+	list->thread_id = task;
+
+    duk_push_this(ctx);
+
+	duk_push_uint(ctx, list);
+    duk_put_prop_string(ctx, -2, "handle");
+
+	return 0;
+}
+
+static duk_ret_t athena_asyncimage_process(duk_context *ctx){
 	int argc = duk_get_top(ctx);
 	if(argc != 0) return duk_generic_error(ctx, "AsyncImg.process() takes no arguments");
 
-	printf("AsyncImg.process() was called successfully!\n");
-	SignalSema(async_img_sema);
+	ImgList* handle = get_obj_uint(ctx, -1, "handle");
+	SignalSema(handle->sema_id);
 
 	return 0;
-
 }
 
 static duk_ret_t athena_image_isloaded(duk_context *ctx){
@@ -146,7 +171,7 @@ static duk_ret_t athena_image_ctor(duk_context *ctx) {
 	uint32_t delayed = 1;
 	
 	int argc = duk_get_top(ctx);
-	if (argc != 1 && argc != 2) return duk_generic_error(ctx, "Image takes 1 or 2 arguments");
+	if (argc != 1 && argc != 2 && argc != 3) return duk_generic_error(ctx, "Image takes 1, 2 or 3 arguments");
     if (!duk_is_constructor_call(ctx)) return DUK_RET_TYPE_ERROR;
 
 	GSTEXTURE* image = malloc(sizeof(GSTEXTURE));
@@ -155,20 +180,20 @@ static duk_ret_t athena_image_ctor(duk_context *ctx) {
 
 	const char* text = duk_get_string(ctx, 0);
 
-	if (argc == 2) delayed = duk_get_uint(ctx, 1);
+	if (argc > 1) delayed = duk_get_uint(ctx, 1);
 
-	if(delayed == 2 || delayed == 3){
-		load_img_async(image, text, delayed);
+	if(argc > 2) {
+		ImgList* list = duk_get_uint(ctx, 2);
+
+		load_img_async(image, text, delayed, list);
 
 		duk_push_boolean(ctx, false);
     	duk_put_prop_string(ctx, -2, "\xff""\xff""loaded");
 
-	} else if(delayed == 0 || delayed == 1){
+	} else {
 		load_image(image, text, delayed);
 		if (image == NULL) duk_generic_error(ctx, "Failed to load image %s.", text);
 		
-	} else {
-		duk_generic_error(ctx, "Image mode not supported!");
 	}
 
 	duk_push_uint(ctx, image);
@@ -242,19 +267,6 @@ static duk_ret_t athena_image_draw(duk_context *ctx){
 	return 0;
 }
 
-DUK_EXTERNAL duk_ret_t dukopen_image(duk_context *ctx) {
-	const duk_function_list_entry module_funcs[] = {
-	  { "process",  	athena_image_processlist,		0 },
-	  { NULL, NULL, 0 }
-	};
-
-  duk_push_object(ctx);  /* module result */
-  duk_put_function_list(ctx, -1, module_funcs);
-
-  return 1;  /* return module value */
-}
-
-
 void image_init(duk_context *ctx) {
     duk_push_c_function(ctx, athena_image_ctor, DUK_VARARGS);
 
@@ -276,34 +288,30 @@ void image_init(duk_context *ctx) {
 	duk_push_uint(ctx, GS_FILTER_LINEAR);
 	duk_put_global_string(ctx, "LINEAR");
 
-	duk_push_uint(ctx, 0);
+	duk_push_boolean(ctx, false);
 	duk_put_global_string(ctx, "VRAM");
 
-	duk_push_uint(ctx, 1);
+	duk_push_boolean(ctx, true);
 	duk_put_global_string(ctx, "RAM");
+}
 
-	duk_push_uint(ctx, 2);
-	duk_put_global_string(ctx, "ASYNC_VRAM");
 
-	duk_push_uint(ctx, 3);
-	duk_put_global_string(ctx, "ASYNC_RAM");
+void asyncimage_init(duk_context *ctx) {
+    duk_push_c_function(ctx, athena_asyncimage_ctor, DUK_VARARGS);
 
-    ee_sema_t sema;
-    sema.init_count = 0;
-    sema.max_count = 1;
-    sema.option = 0;
-    async_img_sema = CreateSema(&sema);
+    duk_push_object(ctx);
 
-	int task = create_task("Image: Async loading", (void*)imgThread, 4096, 16);
-	init_task(task, NULL);
+    duk_push_c_function(ctx, athena_asyncimage_process, 0);
+    duk_put_prop_string(ctx, -2, "process");
 
-	duk_push_int(ctx, task);
-    duk_put_global_string(ctx, "ASYNC_IMG_TASKID");
+    duk_put_prop_string(ctx, -2, "prototype");
 
-	push_athena_module(dukopen_image, "AsyncImg");
+    duk_put_global_string(ctx, "AsyncImage");
 
 }
 
+
 void athena_graphics_init(duk_context* ctx){
 	image_init(ctx);
+	asyncimage_init(ctx);
 }
