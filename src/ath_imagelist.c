@@ -14,15 +14,11 @@ static int imgThread(void* data)
 
 	while(true){
 		WaitSema(list->sema_id);
-
-		for(int i = 0; i < list->size; i++){
-			load_image(list->list[i]->handle, list->list[i]->path, list->list[i]->delayed);
-		}
-
+		for(int i = 0; i < list->size; i++) load_image(list->list[i]->handle, list->list[i]->path, list->list[i]->delayed);
 		free(list->list);
 		list->size = 0;
-		
 	}
+
 	return 0;
 }
 

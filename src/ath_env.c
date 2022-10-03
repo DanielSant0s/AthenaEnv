@@ -6,6 +6,7 @@
 #include <string.h>
 #include <errno.h>
 
+//ctx stands for duk JavaScript virtual machine stack and values.
 duk_context *ctx;
 
 float get_obj_float(duk_context* ctx, duk_idx_t idx, const char* key){
