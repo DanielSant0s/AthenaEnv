@@ -176,8 +176,7 @@ duk_ret_t athena_dir(duk_context *ctx)
 		while ((dir = readdir(d)) != NULL) {
 
 			duk_idx_t obj_idx = duk_push_object(ctx);
-
-	    	printf("%s\n", dir->d_name);
+			
 			duk_push_string(ctx, dir->d_name);
 			duk_put_prop_string(ctx, obj_idx, "name");
 	

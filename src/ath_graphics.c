@@ -89,8 +89,6 @@ static duk_ret_t athena_image_dtor(duk_context *ctx){
 		GSTEXTURE* source = (GSTEXTURE*)duk_to_uint(ctx, -1);
 		duk_pop(ctx);
 
-		printf("Freeing Image! Handle: 0x%x\n", (unsigned int)source);
-
 		UnloadTexture(source);
 
 		free(source->Mem);
