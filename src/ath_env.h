@@ -18,7 +18,7 @@ void push_athena_module(duk_c_function func, const char *key);
 void athena_system_init(duk_context* ctx);
 void athena_render_init(duk_context* ctx);
 void athena_screen_init(duk_context* ctx);
-void athena_graphics_init(duk_context* ctx);
+void athena_image_init(duk_context* ctx);
 void athena_imagelist_init(duk_context* ctx);
 void athena_pads_init(duk_context* ctx);
 void athena_sound_init(duk_context* ctx);

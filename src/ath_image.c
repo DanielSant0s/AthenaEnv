@@ -242,6 +242,6 @@ void image_init(duk_context *ctx) {
 	duk_put_global_string(ctx, "RAM");
 }
 
-void athena_graphics_init(duk_context* ctx){
+void athena_image_init(duk_context* ctx){
 	image_init(ctx);
 }

@@ -78,7 +78,7 @@ static duk_ret_t athena_imagelist_ctor(duk_context *ctx){
 
 static duk_ret_t athena_imagelist_process(duk_context *ctx){
 	int argc = duk_get_top(ctx);
-	if(argc != 0) return duk_generic_error(ctx, "AsyncImg.process() takes no arguments");
+	if(argc != 0) return duk_generic_error(ctx, "ImageList.process() takes no arguments");
 
 	ImgList* handle = get_obj_uint(ctx, -1, "\xff""\xff""handle");
 	SignalSema(handle->sema_id);
