@@ -76,6 +76,42 @@ Oh, and I also have to mention that an essential prerequisite for using AthenaEn
 
 AthenaEnv uses the Duktape 2.6.0 for JavaScript language, which means that it brings all ES5 JS features so far. Below is the list of usable functions of AthenaEnv project currently, this list is constantly being updated. Some custom modules are embedded, such as console, Node.js module loading and dofile/dostring from Lua.
 
+P.S.: *Italic* parameters refer to optional parameters
+
+### Image Module  
+
+Construction:  
+
+var image = new Image(path, *mode*, *async_list*);
+* path - Path to the file, E.g.: "images/test.png".
+* *mode* - Choose between storing the image between **RAM** or **VRAM**, default value is RAM.
+* *async_list* - Gets a ImageList object, which is a asynchronous image loading list, if you want to load images in the background.
+* Example: var test = new Image("owl.png", VRAM);  
+
+Properties:
+* width, height - Image drawing size, default value is the original image size.
+* startx, starty - Beginning of the area that will be drawn from the image, the default value is 0.0.
+* endx, endy - End of the area that will be drawn from the image, the default value is the original image size.
+* angle - Define image rotation angle, default value is 0.0.
+* color - Define image tinting, default value is Color(255, 255, 255, 255).
+* filter - Choose between **LINEAR** or **NEAREST**, default value is NEAREST.  
+
+Methods:
+* draw(x, y) - Draw loaded image onscreen(call it every frame). Example: image.draw(15.0, 100.0);
+* ready() - Returns true if an asynchronous image was successfully loaded in memory. Example: var loaded = image.ready();  
+
+### ImageList Module
+
+Construction:
+
+var async_list = new ImageList();
+* This constructor creates a new thread and a queue to load images in background, avoid building multiple ImageList objects.
+
+Methods:
+
+* process() - This method starts the thread and loads added images on the queue. Example: async_list.process();
+
+
 **Graphics functions:**
 
 Primitive shapes:
