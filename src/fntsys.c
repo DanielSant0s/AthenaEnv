@@ -19,15 +19,6 @@
 
 #include FT_FREETYPE_H
 
-/// Maximal count of atlases per font
-#define ATLAS_MAX    4
-/// Atlas width in pixels
-#define ATLAS_WIDTH  256
-/// Atlas height in pixels
-#define ATLAS_HEIGHT 256
-
-#define FNTSYS_CHAR_SIZE 17
-
 // freetype vars
 static FT_Library font_library;
 
