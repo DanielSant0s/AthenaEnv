@@ -44,6 +44,7 @@ duk_ret_t athena_font_ctor(duk_context *ctx){
 
     if (argc == 1) {
         const char* path = duk_get_string(ctx, 0);
+
         int handle = fntLoadFile(path);
 
         if (handle != -1){
@@ -104,15 +105,6 @@ duk_ret_t athena_font_print(duk_context *ctx) {
 
 	return 0;
 }
-
-/*
-duk_ret_t athena_ftend(duk_context *ctx) {
-	int argc = duk_get_top(ctx);
-	if (argc != 0) return duk_generic_error(ctx, "wrong number of arguments");
-	fntEnd();
-	return 0;
-}
-*/
 
 void font_init(duk_context *ctx) {
     duk_push_c_function(ctx, athena_font_ctor, DUK_VARARGS);
