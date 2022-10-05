@@ -62,7 +62,8 @@ APP_CORE = src/main.o src/taskman.o src/pad.o src/graphics.o src/atlas.o src/fnt
 		   src/system.o src/render.o src/calc_3d.o src/gsKit3d_sup.o
 
 ATHENA_MODULES = src/duktape/duktape.o src/duktape/duk_console.o src/duktape/duk_module_node.o \
-				 src/ath_env.o src/ath_screen.o src/ath_image.o src/ath_imagelist.o src/ath_pads.o src/ath_sound.o \
+				 src/ath_env.o src/ath_screen.o src/ath_image.o src/ath_imagelist.o src/ath_shape.o \
+				 src/ath_font.o src/ath_pads.o src/ath_sound.o \
 				 src/ath_system.o src/ath_timer.o src/ath_render.o src/ath_task.o
 
 IOP_MODULES = src/iomanx.o src/filexio.o src/sio2man.o src/mcman.o src/mcserv.o src/padman.o src/libsd.o  \

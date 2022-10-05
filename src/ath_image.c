@@ -5,7 +5,6 @@
 #include <fcntl.h>
 
 #include "include/graphics.h"
-#include "include/fntsys.h"
 #include "ath_env.h"
 
 

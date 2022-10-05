@@ -21,6 +21,12 @@ uint32_t get_obj_uint(duk_context* ctx, duk_idx_t idx, const char* key){
 	return duk_to_uint(ctx, idx);
 }
 
+int get_obj_int(duk_context* ctx, duk_idx_t idx, const char* key){
+	duk_push_this(ctx);
+    duk_get_prop_string(ctx, idx, key);
+	return duk_to_int(ctx, idx);
+}
+
 bool get_obj_boolean(duk_context* ctx, duk_idx_t idx, const char* key){
 	duk_push_this(ctx);
     duk_get_prop_string(ctx, idx, key);
@@ -402,6 +408,7 @@ const char* runScript(const char* script, bool isBuffer)
 	athena_system_init(ctx);
 	athena_render_init(ctx);
 	athena_screen_init(ctx);
+	athena_font_init(ctx);
 	athena_image_init(ctx);
 	athena_imagelist_init(ctx);
 	athena_pads_init(ctx);
