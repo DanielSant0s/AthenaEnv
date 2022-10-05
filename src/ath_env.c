@@ -408,6 +408,7 @@ const char* runScript(const char* script, bool isBuffer)
 	athena_system_init(ctx);
 	athena_render_init(ctx);
 	athena_screen_init(ctx);
+	athena_shape_init(ctx);
 	athena_font_init(ctx);
 	athena_image_init(ctx);
 	athena_imagelist_init(ctx);

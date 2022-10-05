@@ -15,6 +15,10 @@
 
 static const u64 BLACK_RGBAQ   = GS_SETREG_RGBAQ(0x00,0x00,0x00,0x80,0x00);
 
+#define RENDER_QUEUE_PER_POOLSIZE 1024 * 256 // 256K of persistent renderqueue
+/* Size of Oneshot drawbuffer (Double Buffered, so it uses this size * 2) */
+#define RENDER_QUEUE_OS_POOLSIZE 1024 * 1024 * 2 // 2048K of oneshot renderqueue
+
 static GSGLOBAL *gsGlobal = NULL;
 static GSFONTM *gsFontM = NULL;
 
@@ -1102,7 +1106,7 @@ void init_graphics()
     sema.option = 0;
     vsync_sema_id = CreateSema(&sema);
 
-	gsGlobal = gsKit_init_global();
+	gsGlobal = gsKit_init_global_custom(RENDER_QUEUE_OS_POOLSIZE, RENDER_QUEUE_PER_POOLSIZE);
 
 	gsGlobal->Mode = gsKit_check_rom();
 	if (gsGlobal->Mode == GS_MODE_PAL){
