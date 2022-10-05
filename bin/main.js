@@ -15,7 +15,7 @@ var p1 = new Point(0.0, 400.0, Color.new(255, 0, 0));
 
 var img_list = new ImageList();
 
-var wallpaper = new Image("owl.png", RAM);
+var wallpaper = new Image("owl.png", RAM); //TODO: ASYNC LOADING IS COMPLETELY FUCKED
 
 //img_list.process();
 
