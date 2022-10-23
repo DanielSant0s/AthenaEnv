@@ -627,15 +627,11 @@ void athena_register_shape(duk_context *ctx, duk_c_function ctor, duk_c_function
     duk_put_global_string(ctx, name);
 }
 
-void shape_init(duk_context *ctx) {
-    athena_register_shape(ctx, athena_point_ctor, athena_point_draw, "Point");
+void athena_shape_init(duk_context* ctx){
+	athena_register_shape(ctx, athena_point_ctor, athena_point_draw, "Point");
     athena_register_shape(ctx, athena_line_ctor, athena_line_draw, "Line");
     athena_register_shape(ctx, athena_triangle_ctor, athena_triangle_draw, "Triangle");
     athena_register_shape(ctx, athena_quad_ctor, athena_quad_draw, "Quad");
     athena_register_shape(ctx, athena_rect_ctor, athena_rect_draw, "Rect");
     athena_register_shape(ctx, athena_circle_ctor, athena_circle_draw, "Circle");
-}
-
-void athena_shape_init(duk_context* ctx){
-	shape_init(ctx);
 }
