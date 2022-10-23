@@ -7,14 +7,13 @@
 #include "include/graphics.h"
 #include "ath_env.h"
 
-duk_ret_t athena_point_dtor(duk_context *ctx){
+duk_ret_t athena_shape_dtor(duk_context *ctx){
 	return 0;
 }
 
 duk_ret_t athena_point_ctor(duk_context *ctx){
     int argc = duk_get_top(ctx);
 	if (argc != 0 && argc != 1 && argc != 2 && argc != 3) return duk_generic_error(ctx, "wrong number of arguments"); 
-    if (!duk_is_constructor_call(ctx)) return DUK_RET_TYPE_ERROR;
 
     Color color = (Color)0x80808080;
     float x = 0.0f;
@@ -42,7 +41,7 @@ duk_ret_t athena_point_ctor(duk_context *ctx){
 	duk_push_uint(ctx, (uint32_t)(color));
     duk_put_prop_string(ctx, -2, "color");
 
-    duk_push_c_function(ctx, athena_point_dtor, 1);
+    duk_push_c_function(ctx, athena_shape_dtor, 1);
     duk_set_finalizer(ctx, -2);
 
 	return 0;
@@ -71,21 +70,84 @@ duk_ret_t athena_point_draw(duk_context *ctx){
 	return 0;
 }
 
-/*
+duk_ret_t athena_line_ctor(duk_context *ctx){
+    int argc = duk_get_top(ctx);
+	if (argc != 0 && argc != 1 && argc != 4 && argc != 5) return duk_generic_error(ctx, "wrong number of arguments"); 
 
-duk_ret_t athena_line(duk_context *ctx){
-	int argc = duk_get_top(ctx);
-	if (argc != 5) return duk_generic_error(ctx, "drawLine takes 5 arguments");
-	float x = duk_get_number(ctx, 0);
-	float y = duk_get_number(ctx, 1);
-    float x2 = duk_get_number(ctx, 2);
-    float y2 = duk_get_number(ctx, 3);
-    Color color = duk_get_uint(ctx, 4);
+    Color color = (Color)0x80808080;
+    float x1 = 0.0f;
+    float y1 = 0.0f;
+    float x2 = 0.0f;
+    float y2 = 0.0f;
 
-	drawLine(x, y, x2, y2, color);
+    if (argc == 1){
+        color = duk_get_uint(ctx, 0);
+    } else if (argc == 4) {
+        x1 = duk_get_number(ctx, 0);
+        y1 = duk_get_number(ctx, 1);
+        x2 = duk_get_number(ctx, 2);
+        y2 = duk_get_number(ctx, 3);
+    } else {
+        x1 = duk_get_number(ctx, 0);
+        y1 = duk_get_number(ctx, 1);
+        x2 = duk_get_number(ctx, 2);
+        y2 = duk_get_number(ctx, 3);
+        color = duk_get_uint(ctx, 4);
+    }
+
+    duk_push_this(ctx);
+
+	duk_push_number(ctx, (float)(x1));
+    duk_put_prop_string(ctx, -2, "x1");
+
+	duk_push_number(ctx, (float)(y1));
+    duk_put_prop_string(ctx, -2, "y1");
+
+	duk_push_number(ctx, (float)(x2));
+    duk_put_prop_string(ctx, -2, "x2");
+
+	duk_push_number(ctx, (float)(y2));
+    duk_put_prop_string(ctx, -2, "y2");
+
+	duk_push_uint(ctx, (uint32_t)(color));
+    duk_put_prop_string(ctx, -2, "color");
+
+    duk_push_c_function(ctx, athena_shape_dtor, 1);
+    duk_set_finalizer(ctx, -2);
 
 	return 0;
 }
+
+duk_ret_t athena_line_draw(duk_context *ctx){
+	int argc = duk_get_top(ctx);
+	if (argc != 0 && argc != 1 && argc != 4 && argc != 5) return duk_generic_error(ctx, "wrong number of arguments"); 
+
+    float x1 = get_obj_float(ctx, -1, "x1");
+    float y1 = get_obj_float(ctx, -1, "y1");
+    float x2 = get_obj_float(ctx, -1, "x2");
+    float y2 = get_obj_float(ctx, -1, "y2");
+    Color color = get_obj_uint(ctx, -1, "color");
+
+    if (argc == 1){
+        color = duk_get_uint(ctx, 0);
+    } else if (argc == 2) {
+        x1 = duk_get_number(ctx, 0);
+        y1 = duk_get_number(ctx, 1);
+        x2 = duk_get_number(ctx, 2);
+        y2 = duk_get_number(ctx, 3);
+    } else if (argc == 3) {
+        x1 = duk_get_number(ctx, 0);
+        y1 = duk_get_number(ctx, 1);
+        x2 = duk_get_number(ctx, 2);
+        y2 = duk_get_number(ctx, 3);
+        color = duk_get_uint(ctx, 4);
+    }
+
+	drawLine(x1, y1, x2, y2, color);
+	return 0;
+}
+
+/*
 
 duk_ret_t athena_triangle(duk_context *ctx){
 	int argc = duk_get_top(ctx);
@@ -169,19 +231,20 @@ duk_ret_t athena_circle(duk_context *ctx){
 }
 */
 
-void point_init(duk_context *ctx) {
-    duk_push_c_function(ctx, athena_point_ctor, DUK_VARARGS);
-
+void athena_register_shape(duk_context *ctx, duk_c_function ctor, duk_c_function draw, const char* name){
+    duk_push_c_function(ctx, ctor, DUK_VARARGS);
     duk_push_object(ctx);
-
-    duk_push_c_function(ctx, athena_point_draw, DUK_VARARGS);
+    duk_push_c_function(ctx, draw, DUK_VARARGS);
     duk_put_prop_string(ctx, -2, "draw");
-
     duk_put_prop_string(ctx, -2, "prototype");
+    duk_put_global_string(ctx, name);
+}
 
-    duk_put_global_string(ctx, "Point");
+void shape_init(duk_context *ctx) {
+    athena_register_shape(ctx, athena_point_ctor, athena_point_draw, "Point");
+    athena_register_shape(ctx, athena_line_ctor, athena_line_draw, "Line");
 }
 
 void athena_shape_init(duk_context* ctx){
-	point_init(ctx);
+	shape_init(ctx);
 }
