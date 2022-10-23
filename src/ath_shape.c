@@ -130,12 +130,12 @@ duk_ret_t athena_line_draw(duk_context *ctx){
 
     if (argc == 1){
         color = duk_get_uint(ctx, 0);
-    } else if (argc == 2) {
+    } else if (argc == 4) {
         x1 = duk_get_number(ctx, 0);
         y1 = duk_get_number(ctx, 1);
         x2 = duk_get_number(ctx, 2);
         y2 = duk_get_number(ctx, 3);
-    } else if (argc == 3) {
+    } else if (argc == 5) {
         x1 = duk_get_number(ctx, 0);
         y1 = duk_get_number(ctx, 1);
         x2 = duk_get_number(ctx, 2);
@@ -144,6 +144,146 @@ duk_ret_t athena_line_draw(duk_context *ctx){
     }
 
 	drawLine(x1, y1, x2, y2, color);
+	return 0;
+}
+
+
+
+duk_ret_t athena_triangle_ctor(duk_context *ctx){
+    int argc = duk_get_top(ctx);
+	if (argc != 0 && argc != 1 && argc != 3 && argc != 6 && argc != 7 && argc != 9) return duk_generic_error(ctx, "wrong number of arguments"); 
+
+    Color color1 = (Color)0x80808080;
+    Color color2 = (Color)0;
+    Color color3 = (Color)0;
+    float x1 = 0.0f;
+    float y1 = 0.0f;
+    float x2 = 0.0f;
+    float y2 = 0.0f;
+    float x3 = 0.0f;
+    float y3 = 0.0f;
+
+    if (argc == 1){
+        color1 = duk_get_uint(ctx, 0);
+    } else if (argc == 3) {
+        color1 = duk_get_uint(ctx, 0);
+        color2 = duk_get_uint(ctx, 1);
+        color3 = duk_get_uint(ctx, 2);
+    } else if (argc == 6) {
+        x1 = duk_get_number(ctx, 0);
+        y1 = duk_get_number(ctx, 1);
+        x2 = duk_get_number(ctx, 2);
+        y2 = duk_get_number(ctx, 3);
+        x3 = duk_get_number(ctx, 4);
+        y3 = duk_get_number(ctx, 5);
+    } else if (argc == 7) {
+        x1 = duk_get_number(ctx, 0);
+        y1 = duk_get_number(ctx, 1);
+        x2 = duk_get_number(ctx, 2);
+        y2 = duk_get_number(ctx, 3);
+        x3 = duk_get_number(ctx, 4);
+        y3 = duk_get_number(ctx, 5);
+        color1 = duk_get_uint(ctx, 6);
+    } else {
+        x1 = duk_get_number(ctx, 0);
+        y1 = duk_get_number(ctx, 1);
+        x2 = duk_get_number(ctx, 2);
+        y2 = duk_get_number(ctx, 3);
+        x3 = duk_get_number(ctx, 4);
+        y3 = duk_get_number(ctx, 5);
+        color1 = duk_get_uint(ctx, 6);
+        color2 = duk_get_uint(ctx, 7);
+        color3 = duk_get_uint(ctx, 8);
+    }
+
+    duk_push_this(ctx);
+
+	duk_push_number(ctx, (float)(x1));
+    duk_put_prop_string(ctx, -2, "x1");
+
+	duk_push_number(ctx, (float)(y1));
+    duk_put_prop_string(ctx, -2, "y1");
+
+	duk_push_number(ctx, (float)(x2));
+    duk_put_prop_string(ctx, -2, "x2");
+
+	duk_push_number(ctx, (float)(y2));
+    duk_put_prop_string(ctx, -2, "y2");
+
+	duk_push_number(ctx, (float)(x3));
+    duk_put_prop_string(ctx, -2, "x3");
+
+	duk_push_number(ctx, (float)(y3));
+    duk_put_prop_string(ctx, -2, "y3");
+
+	duk_push_uint(ctx, (uint32_t)(color1));
+    duk_put_prop_string(ctx, -2, "color1");
+
+	duk_push_uint(ctx, (uint32_t)(color2));
+    duk_put_prop_string(ctx, -2, "color2");
+
+	duk_push_uint(ctx, (uint32_t)(color3));
+    duk_put_prop_string(ctx, -2, "color3");
+
+    duk_push_c_function(ctx, athena_shape_dtor, 1);
+    duk_set_finalizer(ctx, -2);
+
+	return 0;
+}
+
+duk_ret_t athena_triangle_draw(duk_context *ctx){
+	int argc = duk_get_top(ctx);
+	if (argc != 0 && argc != 1 && argc != 3 && argc != 6 && argc != 7 && argc != 9) return duk_generic_error(ctx, "wrong number of arguments"); 
+
+    float x1 = get_obj_float(ctx, -1, "x1");
+    float y1 = get_obj_float(ctx, -1, "y1");
+    float x2 = get_obj_float(ctx, -1, "x2");
+    float y2 = get_obj_float(ctx, -1, "y2");
+    float x3 = get_obj_float(ctx, -1, "x3");
+    float y3 = get_obj_float(ctx, -1, "y3");
+    Color color1 = get_obj_uint(ctx, -1, "color1");
+    Color color2 = get_obj_uint(ctx, -1, "color2");
+    Color color3 = get_obj_uint(ctx, -1, "color3");
+
+    if (argc == 1){
+        color1 = duk_get_uint(ctx, 0);
+    } else if (argc == 3) {
+        color1 = duk_get_uint(ctx, 0);
+        color2 = duk_get_uint(ctx, 1);
+        color3 = duk_get_uint(ctx, 2);
+    } else if (argc == 6) {
+        x1 = duk_get_number(ctx, 0);
+        y1 = duk_get_number(ctx, 1);
+        x2 = duk_get_number(ctx, 2);
+        y2 = duk_get_number(ctx, 3);
+        x3 = duk_get_number(ctx, 4);
+        y3 = duk_get_number(ctx, 5);
+    } else if (argc == 7) {
+        x1 = duk_get_number(ctx, 0);
+        y1 = duk_get_number(ctx, 1);
+        x2 = duk_get_number(ctx, 2);
+        y2 = duk_get_number(ctx, 3);
+        x3 = duk_get_number(ctx, 4);
+        y3 = duk_get_number(ctx, 5);
+        color1 = duk_get_uint(ctx, 6);
+    } else if (argc == 9) {
+        x1 = duk_get_number(ctx, 0);
+        y1 = duk_get_number(ctx, 1);
+        x2 = duk_get_number(ctx, 2);
+        y2 = duk_get_number(ctx, 3);
+        x3 = duk_get_number(ctx, 4);
+        y3 = duk_get_number(ctx, 5);
+        color1 = duk_get_uint(ctx, 6);
+        color2 = duk_get_uint(ctx, 7);
+        color3 = duk_get_uint(ctx, 8);
+    }
+
+    if(color2 == 0 || color3 == 0){
+        drawTriangle(x1, y1, x2, y2, x3, y3, color1);
+    } else {
+        drawTriangle_gouraud(x1, y1, x2, y2, x3, y3, color1, color2, color3);
+    }
+	
 	return 0;
 }
 
@@ -243,6 +383,7 @@ void athena_register_shape(duk_context *ctx, duk_c_function ctor, duk_c_function
 void shape_init(duk_context *ctx) {
     athena_register_shape(ctx, athena_point_ctor, athena_point_draw, "Point");
     athena_register_shape(ctx, athena_line_ctor, athena_line_draw, "Line");
+    athena_register_shape(ctx, athena_triangle_ctor, athena_triangle_draw, "Triangle");
 }
 
 void athena_shape_init(duk_context* ctx){
