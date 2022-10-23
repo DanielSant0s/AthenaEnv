@@ -16,6 +16,8 @@ var l1 = new Line(20.0, 20.0, 150.0, 448.0, Color.new(64, 0, 128));
 var t1 = new Triangle(29.0, 96.0, 120.0, 10.0, 170, 150.0, Color.new(0, 128, 0));
 var t2 = new Triangle(150.0, 20.0, 150.0, 100.0, 250.0, 150.0, Color.new(0, 128, 0), Color.new(128, 0, 0), Color.new(0, 0, 128));
 var q1 = new Quad(550.0, 100.0, 350.0, 100.0, 420.0, 350.0, 220.0, 420.0, Color.new(0, 128, 0), Color.new(128, 0, 0), Color.new(0, 0, 128), Color.new(64, 0, 128));
+var r1 = new Rect(200.0, 200.0, 50, 50, Color.new(255, 150, 0));
+var c1 = new Circle(300.0, 300.0, 50, Color.new(128, 0, 255));
 
 console.log(System.getFreeMemory() + "\n");
 
@@ -54,6 +56,8 @@ for(var i = 0; i < 10000; i++){
     t1.draw();
     t2.draw();
     q1.draw();
+    r1.draw();
+    c1.draw();
     
     Display.flip();
 }
