@@ -20,14 +20,18 @@ duk_ret_t athena_point_ctor(duk_context *ctx){
     float y = 0.0f;
 
     if (argc == 1){
-        color = duk_get_uint(ctx, 0);
+        duk_get_prop_string(ctx, 0, "\xff""\xff""rgba");
+		color = duk_get_uint(ctx, -1);
+		duk_pop(ctx);
     } else if (argc == 2) {
         x = duk_get_number(ctx, 0);
         y = duk_get_number(ctx, 1);
     } else {
         x = duk_get_number(ctx, 0);
         y = duk_get_number(ctx, 1);
-        color = duk_get_uint(ctx, 2);
+        duk_get_prop_string(ctx, 2, "\xff""\xff""rgba");
+		color = duk_get_uint(ctx, -1);
+		duk_pop(ctx);
     }
 
     duk_push_this(ctx);
@@ -56,14 +60,18 @@ duk_ret_t athena_point_draw(duk_context *ctx){
     Color color = get_obj_uint(ctx, -1, "color");
 
     if (argc == 1){
-        color = duk_get_uint(ctx, 0);
+        duk_get_prop_string(ctx, 0, "\xff""\xff""rgba");
+		color = duk_get_uint(ctx, -1);
+		duk_pop(ctx);
     } else if (argc == 2) {
         x = duk_get_number(ctx, 0);
         y = duk_get_number(ctx, 1);
     } else if (argc == 3) {
         x = duk_get_number(ctx, 0);
         y = duk_get_number(ctx, 1);
-        color = duk_get_uint(ctx, 2);
+        duk_get_prop_string(ctx, 2, "\xff""\xff""rgba");
+		color = duk_get_uint(ctx, -1);
+		duk_pop(ctx);
     }
 
 	drawPixel(x, y, color);
@@ -81,7 +89,9 @@ duk_ret_t athena_line_ctor(duk_context *ctx){
     float y2 = 0.0f;
 
     if (argc == 1){
-        color = duk_get_uint(ctx, 0);
+        duk_get_prop_string(ctx, 0, "\xff""\xff""rgba");
+		color = duk_get_uint(ctx, -1);
+		duk_pop(ctx);
     } else if (argc == 4) {
         x1 = duk_get_number(ctx, 0);
         y1 = duk_get_number(ctx, 1);
@@ -92,7 +102,9 @@ duk_ret_t athena_line_ctor(duk_context *ctx){
         y1 = duk_get_number(ctx, 1);
         x2 = duk_get_number(ctx, 2);
         y2 = duk_get_number(ctx, 3);
-        color = duk_get_uint(ctx, 4);
+        duk_get_prop_string(ctx, 4, "\xff""\xff""rgba");
+		color = duk_get_uint(ctx, -1);
+		duk_pop(ctx);
     }
 
     duk_push_this(ctx);
@@ -129,7 +141,9 @@ duk_ret_t athena_line_draw(duk_context *ctx){
     Color color = get_obj_uint(ctx, -1, "color");
 
     if (argc == 1){
-        color = duk_get_uint(ctx, 0);
+        duk_get_prop_string(ctx, 0, "\xff""\xff""rgba");
+		color = duk_get_uint(ctx, -1);
+		duk_pop(ctx);
     } else if (argc == 4) {
         x1 = duk_get_number(ctx, 0);
         y1 = duk_get_number(ctx, 1);
@@ -140,7 +154,9 @@ duk_ret_t athena_line_draw(duk_context *ctx){
         y1 = duk_get_number(ctx, 1);
         x2 = duk_get_number(ctx, 2);
         y2 = duk_get_number(ctx, 3);
-        color = duk_get_uint(ctx, 4);
+        duk_get_prop_string(ctx, 4, "\xff""\xff""rgba");
+		color = duk_get_uint(ctx, -1);
+		duk_pop(ctx);
     }
 
 	drawLine(x1, y1, x2, y2, color);
@@ -166,9 +182,15 @@ duk_ret_t athena_triangle_ctor(duk_context *ctx){
     if (argc == 1){
         color1 = duk_get_uint(ctx, 0);
     } else if (argc == 3) {
-        color1 = duk_get_uint(ctx, 0);
-        color2 = duk_get_uint(ctx, 1);
-        color3 = duk_get_uint(ctx, 2);
+        duk_get_prop_string(ctx, 0, "\xff""\xff""rgba");
+		color1 = duk_get_uint(ctx, -1);
+		duk_pop(ctx);
+        duk_get_prop_string(ctx, 1, "\xff""\xff""rgba");
+		color2 = duk_get_uint(ctx, -1);
+		duk_pop(ctx);
+        duk_get_prop_string(ctx, 2, "\xff""\xff""rgba");
+		color3 = duk_get_uint(ctx, -1);
+		duk_pop(ctx);
     } else if (argc == 6) {
         x1 = duk_get_number(ctx, 0);
         y1 = duk_get_number(ctx, 1);
@@ -183,17 +205,25 @@ duk_ret_t athena_triangle_ctor(duk_context *ctx){
         y2 = duk_get_number(ctx, 3);
         x3 = duk_get_number(ctx, 4);
         y3 = duk_get_number(ctx, 5);
-        color1 = duk_get_uint(ctx, 6);
-    } else {
+        duk_get_prop_string(ctx, 6, "\xff""\xff""rgba");
+		color1 = duk_get_uint(ctx, -1);
+		duk_pop(ctx);
+    } else if (argc == 9) {
         x1 = duk_get_number(ctx, 0);
         y1 = duk_get_number(ctx, 1);
         x2 = duk_get_number(ctx, 2);
         y2 = duk_get_number(ctx, 3);
         x3 = duk_get_number(ctx, 4);
         y3 = duk_get_number(ctx, 5);
-        color1 = duk_get_uint(ctx, 6);
-        color2 = duk_get_uint(ctx, 7);
-        color3 = duk_get_uint(ctx, 8);
+        duk_get_prop_string(ctx, 6, "\xff""\xff""rgba");
+		color1 = duk_get_uint(ctx, -1);
+		duk_pop(ctx);
+        duk_get_prop_string(ctx, 7, "\xff""\xff""rgba");
+		color2 = duk_get_uint(ctx, -1);
+		duk_pop(ctx);
+        duk_get_prop_string(ctx, 8, "\xff""\xff""rgba");
+		color3 = duk_get_uint(ctx, -1);
+		duk_pop(ctx);
     }
 
     duk_push_this(ctx);
@@ -248,9 +278,15 @@ duk_ret_t athena_triangle_draw(duk_context *ctx){
     if (argc == 1){
         color1 = duk_get_uint(ctx, 0);
     } else if (argc == 3) {
-        color1 = duk_get_uint(ctx, 0);
-        color2 = duk_get_uint(ctx, 1);
-        color3 = duk_get_uint(ctx, 2);
+        duk_get_prop_string(ctx, 0, "\xff""\xff""rgba");
+		color1 = duk_get_uint(ctx, -1);
+		duk_pop(ctx);
+        duk_get_prop_string(ctx, 1, "\xff""\xff""rgba");
+		color2 = duk_get_uint(ctx, -1);
+		duk_pop(ctx);
+        duk_get_prop_string(ctx, 2, "\xff""\xff""rgba");
+		color3 = duk_get_uint(ctx, -1);
+		duk_pop(ctx);
     } else if (argc == 6) {
         x1 = duk_get_number(ctx, 0);
         y1 = duk_get_number(ctx, 1);
@@ -265,7 +301,9 @@ duk_ret_t athena_triangle_draw(duk_context *ctx){
         y2 = duk_get_number(ctx, 3);
         x3 = duk_get_number(ctx, 4);
         y3 = duk_get_number(ctx, 5);
-        color1 = duk_get_uint(ctx, 6);
+        duk_get_prop_string(ctx, 6, "\xff""\xff""rgba");
+		color1 = duk_get_uint(ctx, -1);
+		duk_pop(ctx);
     } else if (argc == 9) {
         x1 = duk_get_number(ctx, 0);
         y1 = duk_get_number(ctx, 1);
@@ -273,9 +311,15 @@ duk_ret_t athena_triangle_draw(duk_context *ctx){
         y2 = duk_get_number(ctx, 3);
         x3 = duk_get_number(ctx, 4);
         y3 = duk_get_number(ctx, 5);
-        color1 = duk_get_uint(ctx, 6);
-        color2 = duk_get_uint(ctx, 7);
-        color3 = duk_get_uint(ctx, 8);
+        duk_get_prop_string(ctx, 6, "\xff""\xff""rgba");
+		color1 = duk_get_uint(ctx, -1);
+		duk_pop(ctx);
+        duk_get_prop_string(ctx, 7, "\xff""\xff""rgba");
+		color2 = duk_get_uint(ctx, -1);
+		duk_pop(ctx);
+        duk_get_prop_string(ctx, 8, "\xff""\xff""rgba");
+		color3 = duk_get_uint(ctx, -1);
+		duk_pop(ctx);
     }
 
     if(color2 == 0 || color3 == 0){
@@ -305,12 +349,22 @@ duk_ret_t athena_quad_ctor(duk_context *ctx){
     float y4 = 0.0f;
 
     if (argc == 1){
-        color1 = duk_get_uint(ctx, 0);
+        duk_get_prop_string(ctx, 0, "\xff""\xff""rgba");
+		color1 = duk_get_uint(ctx, -1);
+		duk_pop(ctx);
     } else if (argc == 4) {
-        color1 = duk_get_uint(ctx, 0);
-        color2 = duk_get_uint(ctx, 1);
-        color3 = duk_get_uint(ctx, 2);
-        color4 = duk_get_uint(ctx, 3);
+        duk_get_prop_string(ctx, 0, "\xff""\xff""rgba");
+		color1 = duk_get_uint(ctx, -1);
+		duk_pop(ctx);
+        duk_get_prop_string(ctx, 1, "\xff""\xff""rgba");
+		color2 = duk_get_uint(ctx, -1);
+		duk_pop(ctx);
+        duk_get_prop_string(ctx, 2, "\xff""\xff""rgba");
+		color3 = duk_get_uint(ctx, -1);
+		duk_pop(ctx);
+        duk_get_prop_string(ctx, 3, "\xff""\xff""rgba");
+		color4 = duk_get_uint(ctx, -1);
+		duk_pop(ctx);
     } else if (argc == 8) {
         x1 = duk_get_number(ctx, 0);
         y1 = duk_get_number(ctx, 1);
@@ -329,7 +383,9 @@ duk_ret_t athena_quad_ctor(duk_context *ctx){
         y3 = duk_get_number(ctx, 5);
         x4 = duk_get_number(ctx, 6);
         y4 = duk_get_number(ctx, 7);
-        color1 = duk_get_uint(ctx, 8);
+        duk_get_prop_string(ctx, 8, "\xff""\xff""rgba");
+		color1 = duk_get_uint(ctx, -1);
+		duk_pop(ctx);
     } else if (argc == 12) {
         x1 = duk_get_number(ctx, 0);
         y1 = duk_get_number(ctx, 1);
@@ -339,10 +395,18 @@ duk_ret_t athena_quad_ctor(duk_context *ctx){
         y3 = duk_get_number(ctx, 5);
         x4 = duk_get_number(ctx, 6);
         y4 = duk_get_number(ctx, 7);
-        color1 = duk_get_uint(ctx, 8);
-        color2 = duk_get_uint(ctx, 9);
-        color3 = duk_get_uint(ctx, 10);
-        color4 = duk_get_uint(ctx, 11);
+        duk_get_prop_string(ctx, 8, "\xff""\xff""rgba");
+		color1 = duk_get_uint(ctx, -1);
+		duk_pop(ctx);
+        duk_get_prop_string(ctx, 9, "\xff""\xff""rgba");
+		color2 = duk_get_uint(ctx, -1);
+		duk_pop(ctx);
+        duk_get_prop_string(ctx, 10, "\xff""\xff""rgba");
+		color3 = duk_get_uint(ctx, -1);
+		duk_pop(ctx);
+        duk_get_prop_string(ctx, 11, "\xff""\xff""rgba");
+		color4 = duk_get_uint(ctx, -1);
+		duk_pop(ctx);
     }
 
     duk_push_this(ctx);
@@ -406,12 +470,22 @@ duk_ret_t athena_quad_draw(duk_context *ctx){
     Color color4 = get_obj_uint(ctx, -1, "color4");
 
     if (argc == 1){
-        color1 = duk_get_uint(ctx, 0);
+        duk_get_prop_string(ctx, 0, "\xff""\xff""rgba");
+		color1 = duk_get_uint(ctx, -1);
+		duk_pop(ctx);
     } else if (argc == 4) {
-        color1 = duk_get_uint(ctx, 0);
-        color2 = duk_get_uint(ctx, 1);
-        color3 = duk_get_uint(ctx, 2);
-        color4 = duk_get_uint(ctx, 3);
+        duk_get_prop_string(ctx, 0, "\xff""\xff""rgba");
+		color1 = duk_get_uint(ctx, -1);
+		duk_pop(ctx);
+        duk_get_prop_string(ctx, 1, "\xff""\xff""rgba");
+		color2 = duk_get_uint(ctx, -1);
+		duk_pop(ctx);
+        duk_get_prop_string(ctx, 2, "\xff""\xff""rgba");
+		color3 = duk_get_uint(ctx, -1);
+		duk_pop(ctx);
+        duk_get_prop_string(ctx, 3, "\xff""\xff""rgba");
+		color4 = duk_get_uint(ctx, -1);
+		duk_pop(ctx);
     } else if (argc == 8) {
         x1 = duk_get_number(ctx, 0);
         y1 = duk_get_number(ctx, 1);
@@ -430,7 +504,9 @@ duk_ret_t athena_quad_draw(duk_context *ctx){
         y3 = duk_get_number(ctx, 5);
         x4 = duk_get_number(ctx, 6);
         y4 = duk_get_number(ctx, 7);
-        color1 = duk_get_uint(ctx, 8);
+        duk_get_prop_string(ctx, 8, "\xff""\xff""rgba");
+		color1 = duk_get_uint(ctx, -1);
+		duk_pop(ctx);
     } else if (argc == 12) {
         x1 = duk_get_number(ctx, 0);
         y1 = duk_get_number(ctx, 1);
@@ -440,10 +516,18 @@ duk_ret_t athena_quad_draw(duk_context *ctx){
         y3 = duk_get_number(ctx, 5);
         x4 = duk_get_number(ctx, 6);
         y4 = duk_get_number(ctx, 7);
-        color1 = duk_get_uint(ctx, 8);
-        color2 = duk_get_uint(ctx, 9);
-        color3 = duk_get_uint(ctx, 10);
-        color4 = duk_get_uint(ctx, 11);
+        duk_get_prop_string(ctx, 8, "\xff""\xff""rgba");
+		color1 = duk_get_uint(ctx, -1);
+		duk_pop(ctx);
+        duk_get_prop_string(ctx, 9, "\xff""\xff""rgba");
+		color2 = duk_get_uint(ctx, -1);
+		duk_pop(ctx);
+        duk_get_prop_string(ctx, 10, "\xff""\xff""rgba");
+		color3 = duk_get_uint(ctx, -1);
+		duk_pop(ctx);
+        duk_get_prop_string(ctx, 11, "\xff""\xff""rgba");
+		color4 = duk_get_uint(ctx, -1);
+		duk_pop(ctx);
     }
 
     if(color2 == 0 || color3 == 0 || color4 == 0){
@@ -466,7 +550,9 @@ duk_ret_t athena_rect_ctor(duk_context *ctx){
     float h = 0.0f;
 
     if (argc == 1){
-        color = duk_get_uint(ctx, 0);
+        duk_get_prop_string(ctx, 0, "\xff""\xff""rgba");
+		color = duk_get_uint(ctx, -1);
+		duk_pop(ctx);
     } else if (argc == 4) {
         x = duk_get_number(ctx, 0);
         y = duk_get_number(ctx, 1);
@@ -477,7 +563,9 @@ duk_ret_t athena_rect_ctor(duk_context *ctx){
         y = duk_get_number(ctx, 1);
         w = duk_get_number(ctx, 2);
         h = duk_get_number(ctx, 3);
-        color = duk_get_uint(ctx, 4);
+        duk_get_prop_string(ctx, 4, "\xff""\xff""rgba");
+		color = duk_get_uint(ctx, -1);
+		duk_pop(ctx);
     }
 
     duk_push_this(ctx);
@@ -515,7 +603,9 @@ duk_ret_t athena_rect_draw(duk_context *ctx){
     Color color = get_obj_uint(ctx, -1, "color");
 
     if (argc == 1){
-        color = duk_get_uint(ctx, 0);
+        duk_get_prop_string(ctx, 0, "\xff""\xff""rgba");
+		color = duk_get_uint(ctx, -1);
+		duk_pop(ctx);
     } else if (argc == 4) {
         x = duk_get_number(ctx, 0);
         y = duk_get_number(ctx, 1);
@@ -526,7 +616,9 @@ duk_ret_t athena_rect_draw(duk_context *ctx){
         y = duk_get_number(ctx, 1);
         w = duk_get_number(ctx, 2);
         h = duk_get_number(ctx, 3);
-        color = duk_get_uint(ctx, 4);
+        duk_get_prop_string(ctx, 4, "\xff""\xff""rgba");
+		color = duk_get_uint(ctx, -1);
+		duk_pop(ctx);
     }
 
 	drawRect(x, y, w, h, color);
@@ -544,7 +636,9 @@ duk_ret_t athena_circle_ctor(duk_context *ctx){
     bool filled = true;
 
     if (argc == 1){
-        color = duk_get_uint(ctx, 0);
+        duk_get_prop_string(ctx, 0, "\xff""\xff""rgba");
+		color = duk_get_uint(ctx, -1);
+		duk_pop(ctx);
     } else if (argc == 3) {
         x = duk_get_number(ctx, 0);
         y = duk_get_number(ctx, 1);
@@ -553,12 +647,16 @@ duk_ret_t athena_circle_ctor(duk_context *ctx){
         x = duk_get_number(ctx, 0);
         y = duk_get_number(ctx, 1);
         r = duk_get_number(ctx, 2);
-        color = duk_get_uint(ctx, 3);
+        duk_get_prop_string(ctx, 3, "\xff""\xff""rgba");
+		color = duk_get_uint(ctx, -1);
+		duk_pop(ctx);
     } else if (argc == 5) {
         x = duk_get_number(ctx, 0);
         y = duk_get_number(ctx, 1);
         r = duk_get_number(ctx, 2);
-        color = duk_get_uint(ctx, 3);
+        duk_get_prop_string(ctx, 3, "\xff""\xff""rgba");
+		color = duk_get_uint(ctx, -1);
+		duk_pop(ctx);
         filled = duk_to_boolean(ctx, 4);
     }
 
@@ -596,7 +694,9 @@ duk_ret_t athena_circle_draw(duk_context *ctx){
     Color color = get_obj_uint(ctx, -1, "color");
 
     if (argc == 1){
-        color = duk_get_uint(ctx, 0);
+        duk_get_prop_string(ctx, 0, "\xff""\xff""rgba");
+		color = duk_get_uint(ctx, -1);
+		duk_pop(ctx);
     } else if (argc == 3) {
         x = duk_get_number(ctx, 0);
         y = duk_get_number(ctx, 1);
@@ -605,12 +705,16 @@ duk_ret_t athena_circle_draw(duk_context *ctx){
         x = duk_get_number(ctx, 0);
         y = duk_get_number(ctx, 1);
         r = duk_get_number(ctx, 2);
-        color = duk_get_uint(ctx, 3);
+        duk_get_prop_string(ctx, 3, "\xff""\xff""rgba");
+		color = duk_get_uint(ctx, -1);
+		duk_pop(ctx);
     } else if (argc == 5) {
         x = duk_get_number(ctx, 0);
         y = duk_get_number(ctx, 1);
         r = duk_get_number(ctx, 2);
-        color = duk_get_uint(ctx, 3);
+        duk_get_prop_string(ctx, 3, "\xff""\xff""rgba");
+		color = duk_get_uint(ctx, -1);
+		duk_pop(ctx);
         filled = duk_to_boolean(ctx, 4);
     }
 

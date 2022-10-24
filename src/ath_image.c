@@ -166,7 +166,10 @@ static duk_ret_t athena_image_ctor(duk_context *ctx) {
 	duk_push_number(ctx, (float)(0.0f));
     duk_put_prop_string(ctx, -2, "angle");
 
+    duk_push_this(ctx);
 	duk_push_uint(ctx, (uint32_t)(0x80808080));
+    duk_put_prop_string(ctx, -2, "\xff""\xff""rgba");
+
     duk_put_prop_string(ctx, -2, "color");
 
 	duk_push_uint(ctx, (uint32_t)(GS_FILTER_NEAREST));
@@ -201,7 +204,13 @@ static duk_ret_t athena_image_draw(duk_context *ctx){
 	float endx = get_obj_float(ctx, -1, "endx");
 	float endy = get_obj_float(ctx, -1, "endy");
 	float angle = get_obj_float(ctx, -1, "angle");
-	Color color = (Color)get_obj_uint(ctx, -1, "color");
+
+    duk_push_this(ctx);
+    duk_get_prop_string(ctx, -1, "color");
+    duk_get_prop_string(ctx, -1, "\xff""\xff""rgba");
+	Color color = duk_get_uint(ctx, -1);
+	duk_pop(ctx);
+	
 	source->Filter = get_obj_uint(ctx, -1, "filter");
 
 	if(angle != 0.0f){

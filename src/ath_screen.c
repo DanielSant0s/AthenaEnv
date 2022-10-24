@@ -81,68 +81,8 @@ DUK_EXTERNAL duk_ret_t dukopen_screen(duk_context *ctx) {
   return 1;  /* return module value */
 }
 
-
-duk_ret_t athena_color(duk_context *ctx){
-  int argc = duk_get_top(ctx);
-	unsigned int r = duk_get_uint(ctx, 0);
-	unsigned int g = duk_get_uint(ctx, 1);
-	unsigned int b = duk_get_uint(ctx, 2);
-  unsigned int a = 0x80;
-	if (argc == 4) a = duk_get_uint(ctx, 3);
-	Color color = r | (g << 8) | (b << 16) | (a << 24);
-	duk_push_uint(ctx, color);
-	return 1;
-}
-
-duk_ret_t athena_getR(duk_context *ctx){
-	int color = duk_get_int(ctx, 0);
-	int colour = color & 0xFF;
-	duk_push_uint(ctx, colour);
-	return 1;
-}
-
-
-duk_ret_t athena_getG(duk_context *ctx){
-	int color = duk_get_int(ctx, 0);
-	int colour = (color >> 8) & 0xFF;
-	duk_push_uint(ctx, colour);
-	return 1;
-}
-
-duk_ret_t athena_getB(duk_context *ctx){
-	int color = duk_get_int(ctx, 0);
-	int colour = (color >> 16) & 0xFF;
-	duk_push_uint(ctx, colour);
-	return 1;
-}
-
-duk_ret_t athena_getA(duk_context *ctx){
-	int color = duk_get_int(ctx, 0);
-	int colour = (color >> 24) & 0xFF;
-	duk_push_uint(ctx, colour);
-	return 1;
-}
-
-DUK_EXTERNAL duk_ret_t dukopen_color(duk_context *ctx) {
-  const duk_function_list_entry module_funcs[] = {
-    { "new",  athena_color, DUK_VARARGS },
-    { "getR", athena_getR,            1 },
-    { "getG", athena_getG,            1 },
-    { "getB", athena_getB,            1 },
-    { "getA", athena_getA,            1 },
-    { NULL, NULL, 0 }
-  };
-
-  duk_push_object(ctx);  /* module result */
-  duk_put_function_list(ctx, -1, module_funcs);
-
-  return 1;  /* return module value */
-}
-
-
 void athena_screen_init(duk_context* ctx){
 	push_athena_module(dukopen_screen, 	    "Display");
-	push_athena_module(dukopen_color, 	      "Color");
 	
 	duk_push_uint(ctx, GS_MODE_NTSC);
 	duk_put_global_string(ctx, "NTSC");
