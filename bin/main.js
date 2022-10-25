@@ -1,76 +1,45 @@
-function randint(min, max) {
-    min = Math.ceil(min);
-    max = Math.floor(max);
-    return Math.floor(Math.random() * (max - min) + min);
-}
-
-console.log(System.getFreeMemory() + "\n");
-
 var osdsys_font = new Font();
-osdsys_font.color = Color.new(255, 0, 0);
 
-var dejavu_font = new Font("dejavu.bmp");
-dejavu_font.color = Color.new(0, 255, 0);
-dejavu_font.setScale(2.0);
+var pad = Pads.get();
+var oldpad = pad;
 
-var antihero_font = new Font("minecraft.ttf");
-antihero_font.color = Color.new(0, 0, 255);
-antihero_font.setScale(2.0);
+var list_ptr = 0;
 
-console.log(System.getFreeMemory() + "\n");
+var demo_list = ["hello.js", "pads.js", "render.js"]
 
-var img_list = new ImageList();
-
-var wallpaper = new Image("owl.png", RAM); //TODO: ASYNC LOADING IS COMPLETELY FUCKED
-
-//img_list.process();
-
-wallpaper.filter = LINEAR;
-
-console.log("Free VRAM: " + Display.getFreeVRAM() + "\n");
-
-//Display.setVSync(false);
-
-for(var i = 0; i < 10000; i++){
+while(true){
     Display.clear();
+    oldpad = pad;
+    pad = Pads.get();
 
-    for(var j = 400.0; j < 410.0; j++){
-        for(var k = 315.0; k < 325.0; k++){
-            drawPoint(k, j, Color.new(randint(0, 256), randint(0, 256), randint(0, 256)));
+    osdsys_font.color = Color.new(128, 128, 128);
+    osdsys_font.print(80, 15, "Athena project: Demo menu");
+
+    if(Pads.check(pad, PAD_UP) && !Pads.check(oldpad, PAD_UP)){
+        if(list_ptr > 0){
+            list_ptr--;
+        } else {
+            list_ptr = demo_list.length - 1;
         }
     }
 
-    if(wallpaper.ready()) {
-        wallpaper.width = 512.0;
-        wallpaper.height = 256.0;
-        wallpaper.draw(0.0, 0.0);
+    if(Pads.check(pad, PAD_DOWN) && !Pads.check(oldpad, PAD_DOWN)){
+        if(list_ptr < demo_list.length-1){
+            list_ptr++;
+        } else {
+            list_ptr = 0;
+        }
     }
 
-    drawLine(20.0, 20.0, 150.0, 448.0, Color.new(64, 0, 128));
-    drawTriangle(29.0, 96.0, 120.0, 10.0, 170, 150.0, Color.new(0, 128, 0));
-    drawTriangle(150.0, 20.0, 150.0, 100.0, 250.0, 150.0, Color.new(0, 128, 0), Color.new(128, 0, 0), Color.new(0, 0, 128));
-    drawQuad(550.0, 100.0, 350.0, 100.0, 420.0, 350.0, 220.0, 420.0, Color.new(0, 128, 0), Color.new(128, 0, 0), Color.new(0, 0, 128), Color.new(64, 0, 128));
-    drawRect(200.0, 200.0, 50, 50, Color.new(255, 150, 0));
-    drawCircle(300.0, 300.0, 50, Color.new(128, 0, 255));
-
-    dejavu_font.print(10, 10, "Counter: " + i);
-    osdsys_font.print(10, 50, "Free memory: " + System.getFreeMemory());
-    osdsys_font.print(400, 10, Display.getFPS() + " FPS");
-    antihero_font.print(10, 120, "Counter: " + i);
+    if(Pads.check(pad, PAD_CROSS) && !Pads.check(oldpad, PAD_CROSS)){
+        dofile(demo_list[list_ptr]);
+    }
+ 
+    for(var i = 0; i < demo_list.length; i++){
+        osdsys_font.color = Color.new(128, 128, 128, (i == list_ptr? 128 : 64))
+        osdsys_font.print(80, 80+(i*35), demo_list[i]);
+    }
     
+
     Display.flip();
 }
-
-wallpaper = null;
-img_list = null;
-osdsys_font = null;
-dejavu_font = null;
-antihero_font = null;
-Duktape.gc();
-
-console.log("Finished!\n");
-
-while(true){
-    continue;
-}
-
