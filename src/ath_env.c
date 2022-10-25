@@ -9,6 +9,11 @@
 //ctx stands for duk JavaScript virtual machine stack and values.
 duk_context *ctx;
 
+void athena_new_function(duk_context *ctx, duk_c_function func, const char* name){
+    duk_push_c_function(ctx, func, DUK_VARARGS);
+    duk_put_global_string(ctx, name);
+}
+
 float get_obj_float(duk_context* ctx, duk_idx_t idx, const char* key){
 	duk_push_this(ctx);
     duk_get_prop_string(ctx, idx, key);
@@ -397,12 +402,9 @@ const char* runScript(const char* script, bool isBuffer)
 	duk_push_c_function(ctx, cb_load_module, DUK_VARARGS);
 	duk_put_prop_string(ctx, -2, "load");
 
-	duk_push_c_function(ctx, athena_dofile, DUK_VARARGS);
-	duk_put_global_string(ctx, "dofile");
-
-	duk_push_c_function(ctx, athena_dostring, DUK_VARARGS);
-	duk_put_global_string(ctx, "dostring");
-
+	athena_new_function(ctx, athena_dofile, "dofile");
+	athena_new_function(ctx, athena_dostring, "dostring");
+	
 	duk_module_node_init(ctx);
 
 	athena_system_init(ctx);

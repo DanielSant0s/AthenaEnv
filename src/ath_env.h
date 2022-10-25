@@ -15,6 +15,8 @@ extern char boot_path[255];
 const char* runScript(const char* script, bool isBuffer );
 void push_athena_module(duk_c_function func, const char *key);
 
+void athena_new_function(duk_context *ctx, duk_c_function func, const char* name);
+
 void athena_system_init(duk_context* ctx);
 void athena_render_init(duk_context* ctx);
 void athena_screen_init(duk_context* ctx);

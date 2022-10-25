@@ -166,10 +166,7 @@ static duk_ret_t athena_image_ctor(duk_context *ctx) {
 	duk_push_number(ctx, (float)(0.0f));
     duk_put_prop_string(ctx, -2, "angle");
 
-    duk_push_this(ctx);
 	duk_push_uint(ctx, (uint32_t)(0x80808080));
-    duk_put_prop_string(ctx, -2, "\xff""\xff""rgba");
-
     duk_put_prop_string(ctx, -2, "color");
 
 	duk_push_uint(ctx, (uint32_t)(GS_FILTER_NEAREST));
@@ -186,15 +183,10 @@ static duk_ret_t athena_image_ctor(duk_context *ctx) {
 
 static duk_ret_t athena_image_draw(duk_context *ctx){
 	int argc = duk_get_top(ctx);
-	if (argc != 2 && argc != 0) return duk_generic_error(ctx, "draw takes x and y arguments(2)!");
+	if (argc != 2) return duk_generic_error(ctx, "draw takes x and y arguments(2)!");
 
-	float x = 0.0f;
-	float y = 0.0f;
-
-	if(argc == 2){
-		x = duk_get_number(ctx, 0);
-		y = duk_get_number(ctx, 1);
-	}
+	float x = duk_get_number(ctx, 0);
+	float y = duk_get_number(ctx, 1);
 
   	GSTEXTURE* source = (GSTEXTURE*)get_obj_uint(ctx, -1, "\xff""\xff""data");
 	float width = get_obj_float(ctx, -1, "width");
@@ -204,13 +196,7 @@ static duk_ret_t athena_image_draw(duk_context *ctx){
 	float endx = get_obj_float(ctx, -1, "endx");
 	float endy = get_obj_float(ctx, -1, "endy");
 	float angle = get_obj_float(ctx, -1, "angle");
-
-    duk_push_this(ctx);
-    duk_get_prop_string(ctx, -1, "color");
-    duk_get_prop_string(ctx, -1, "\xff""\xff""rgba");
-	Color color = duk_get_uint(ctx, -1);
-	duk_pop(ctx);
-	
+	Color color = get_obj_uint(ctx, -1, "color");
 	source->Filter = get_obj_uint(ctx, -1, "filter");
 
 	if(angle != 0.0f){

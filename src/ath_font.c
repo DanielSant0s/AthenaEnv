@@ -69,10 +69,7 @@ duk_ret_t athena_font_ctor(duk_context *ctx){
 
     duk_put_prop_string(ctx, -2, "\xff""\xff""type");
 
-    duk_push_this(ctx);
 	duk_push_uint(ctx, (uint32_t)(0x80808080));
-    duk_put_prop_string(ctx, -2, "\xff""\xff""rgba");
-
     duk_put_prop_string(ctx, -2, "color");
 
     duk_push_number(ctx, (float)(1.0f));
@@ -89,13 +86,7 @@ duk_ret_t athena_font_print(duk_context *ctx) {
 	if (argc != 3) return duk_generic_error(ctx, "wrong number of arguments");
 
     unsigned int type = get_obj_uint(ctx, -1, "\xff""\xff""type");
-
-    duk_push_this(ctx);
-    duk_get_prop_string(ctx, -1, "color");
-    duk_get_prop_string(ctx, -1, "\xff""\xff""rgba");
-	Color color = duk_get_uint(ctx, -1);
-	duk_pop(ctx);
-
+	Color color = get_obj_uint(ctx, -1, "color");
     float scale =  get_obj_float(ctx, -1, "scale");
     float x = duk_get_number(ctx, 0);
 	float y = duk_get_number(ctx, 1);
