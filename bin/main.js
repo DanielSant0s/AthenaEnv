@@ -11,11 +11,11 @@ osdsys_font.color = Color.new(255, 0, 0);
 
 var dejavu_font = new Font("dejavu.bmp");
 dejavu_font.color = Color.new(0, 255, 0);
-dejavu_font.scale = 2.0;
+dejavu_font.setScale(2.0);
 
 var antihero_font = new Font("minecraft.ttf");
 antihero_font.color = Color.new(0, 0, 255);
-antihero_font.scale = 2.0;
+antihero_font.setScale(2.0);
 
 console.log(System.getFreeMemory() + "\n");
 

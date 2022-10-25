@@ -209,6 +209,7 @@ int main(int argc, char **argv) {
 
     init_taskman();
 	init_graphics();
+    loadFontM();
 	pad_init();
 
     chdir(boot_path); 
@@ -219,8 +220,6 @@ int main(int argc, char **argv) {
     {
         
         errMsg = runScript("main.js", false);
-
-        loadFontM();
 
         gsKit_clear_screens();
 
@@ -235,8 +234,6 @@ int main(int argc, char **argv) {
 				flipScreen();
 			}
         }
-
-		unloadFontM();
 
     }
 

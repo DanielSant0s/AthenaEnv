@@ -24,8 +24,6 @@ duk_ret_t athena_font_dtor(duk_context *ctx){
 		duk_pop(ctx);
 
 	    unloadFont(font);
-    } else if (type == 0) {
-        unloadFontM();
     } else {
         duk_get_prop_string(ctx, 0, "\xff""\xff""data");
 		int fontid = duk_to_int(ctx, -1);
@@ -63,7 +61,6 @@ duk_ret_t athena_font_ctor(duk_context *ctx){
             duk_push_uint(ctx, image_font);
         }
     } else {
-        loadFontM();
         duk_push_uint(ctx, osdsys_font);
     }
 
@@ -73,7 +70,7 @@ duk_ret_t athena_font_ctor(duk_context *ctx){
     duk_put_prop_string(ctx, -2, "color");
 
     duk_push_number(ctx, (float)(1.0f));
-    duk_put_prop_string(ctx, -2, "scale");
+    duk_put_prop_string(ctx, -2, "\xff""\xff""scale");
 
     duk_push_c_function(ctx, athena_font_dtor, 1);
     duk_set_finalizer(ctx, -2);
@@ -87,7 +84,7 @@ duk_ret_t athena_font_print(duk_context *ctx) {
 
     unsigned int type = get_obj_uint(ctx, -1, "\xff""\xff""type");
 	Color color = get_obj_uint(ctx, -1, "color");
-    float scale =  get_obj_float(ctx, -1, "scale");
+    float scale =  get_obj_float(ctx, -1, "\xff""\xff""scale");
     float x = duk_get_number(ctx, 0);
 	float y = duk_get_number(ctx, 1);
     const char* text = duk_get_string(ctx, 2);
@@ -99,8 +96,27 @@ duk_ret_t athena_font_print(duk_context *ctx) {
         printFontMText(text, x, y, scale, color);
     } else {
         int fontid = get_obj_int(ctx, -1, "\xff""\xff""data");
-        if (scale != 1.0f) fntSetCharSize(fontid, FNTSYS_CHAR_SIZE*64*scale, FNTSYS_CHAR_SIZE*64*scale);
         fntRenderString(fontid, x, y, 0, 0, 0, text, color);
+    }
+
+	return 0;
+}
+
+duk_ret_t athena_font_setscale(duk_context *ctx) {
+	int argc = duk_get_top(ctx);
+	if (argc != 1) return duk_generic_error(ctx, "wrong number of arguments");
+
+    unsigned int type = get_obj_uint(ctx, -1, "\xff""\xff""type");
+
+    float scale = duk_get_number(ctx, 0);
+
+    duk_push_this(ctx);
+    duk_push_number(ctx, (float)(scale));
+    duk_put_prop_string(ctx, -2, "\xff""\xff""scale");
+
+    if (type == truetype_font){
+        int fontid = get_obj_int(ctx, -1, "\xff""\xff""data");
+        fntSetCharSize(fontid, FNTSYS_CHAR_SIZE*64*scale, FNTSYS_CHAR_SIZE*64*scale);
     }
 
 	return 0;
@@ -113,6 +129,9 @@ void font_init(duk_context *ctx) {
 
     duk_push_c_function(ctx, athena_font_print, DUK_VARARGS);
     duk_put_prop_string(ctx, -2, "print");
+
+    duk_push_c_function(ctx, athena_font_setscale, 1);
+    duk_put_prop_string(ctx, -2, "setScale");
 
     duk_put_prop_string(ctx, -2, "prototype");
 
