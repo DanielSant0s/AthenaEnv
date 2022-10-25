@@ -23,10 +23,17 @@ duk_ret_t athena_loadobj(duk_context *ctx){
 	const char *file_tbo = duk_get_string(ctx, 0); //Model filename
 	
 	// Loading texture
-    GSTEXTURE* text = NULL;
-	if(argc == 2) text = (GSTEXTURE*)(duk_get_pointer(ctx, 1));
+    GSTEXTURE* tex = NULL;
+	if(argc == 2) {
+		duk_get_prop_string(ctx, 1, "\xff""\xff""data");
+		tex = (GSTEXTURE*)duk_get_uint(ctx, -1);
+		duk_pop(ctx);
+		duk_get_prop_string(ctx, 1, "filter");
+		tex->Filter = duk_get_uint(ctx, -1);
+		duk_pop(ctx);
+	}
 	
-	model* res_m = loadOBJ(file_tbo, text);
+	model* res_m = loadOBJ(file_tbo, tex);
 
 
 	// Push model object into Lua stack
