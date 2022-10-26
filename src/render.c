@@ -703,6 +703,7 @@ void drawOBJ(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float
 		gsKit_prim_list_triangle_goraud_texture_3d_st(gsGlobal, m->texture, m->facesCount*3, gs_vertices);
 
 		free(gs_vertices);
+		
 	} else {
 		GSPRIMPOINT* gs_vertices = (GSPRIMPOINT*)memalign(128, sizeof(GSPRIMPOINT)*m->facesCount*3);
 
