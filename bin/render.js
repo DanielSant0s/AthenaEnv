@@ -1,3 +1,6 @@
+var fntcpy = new Font();
+fntcpy.setScale(0.4);
+
 Display.setMode(NTSC, 640, 448, CT24, INTERLACED, FIELD, true, Z16S);
 Render.init(4/3);
 
@@ -19,7 +22,7 @@ Lights.create(4);
 //Lights.set(1,  0.0,  0.0,  0.0, 1.0, 1.0, 1.0,     AMBIENT);
 //Lights.set(2,  1.0,  0.0, -1.0, 1.0, 1.0, 1.0, DIRECTIONAL);
 Lights.set(3,  0.0,  1.0, -1.0, 0.9, 0.5, 0.5, DIRECTIONAL);
-Lights.set(4, -1.0, -1.0, -1.0, 0.5, 0.5, 0.5, DIRECTIONAL);
+//Lights.set(4, -1.0, -1.0, -1.0, 0.5, 0.5, 0.5, DIRECTIONAL);
 
 var pad = null;
 var oldpad = null;
@@ -34,7 +37,12 @@ var savedly = 180.0;
 var savedrx = 50.0;
 var savedry = 0.0;
 
+var free_mem = Math.ceil(System.getFreeMemory()/1024);
+var free_vram = Display.getFreeVRAM();
+
 while(true){
+    Display.clear(Color.new(40, 40, 40, 128));
+
     oldpad = pad;
     pad = Pads.get();
     lx = pad.lx / 1024.0;
@@ -49,13 +57,13 @@ while(true){
 
     Camera.position(0.0, savedry,  savedrx);
 
-    Display.clear(Color.new(40, 40, 40, 128));
-
     if((Pads.check(pad, PAD_LEFT) && !Pads.check(oldpad, PAD_LEFT)) || (Pads.check(pad, PAD_RIGHT) && !Pads.check(oldpad, PAD_RIGHT))){
         modeltodisplay ^= 1
     }
 
     Render.drawOBJ(model[modeltodisplay], 0.0, 0.0, 30.0, savedly, savedlx, 0.0);
+
+    fntcpy.print(10, 10, Display.getFPS(360) + " FPS | Free RAM: " + free_mem + "KB | Free VRAM: " + free_vram + "KB");
 
     Display.flip();
 }

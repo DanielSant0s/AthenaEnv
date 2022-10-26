@@ -1,12 +1,27 @@
 #include "graphics.h"
 
-
-typedef union TexCoord { 
+typedef union { 
+    u64 stq;
     struct {
         float s, t;
     };
-    u64 word;
-} __attribute__((packed, aligned(8))) TexCoord;
+} __attribute__((packed, aligned(8))) gs_st_t;
+
+typedef union {
+	u128 st;
+	struct {
+		gs_st_t stq;
+		u64 tag;
+	};
+} __attribute__((packed, aligned(8))) gs_stq2;
+
+struct gsPrimTri
+{
+	gs_rgbaq rgbaq;
+    gs_stq2 st;
+	gs_xyz2 xyz2;
+};
+typedef struct gsPrimTri ATHTEXTRI;
 
 //3D math
 
@@ -53,3 +68,5 @@ extern void gsKit_prim_triangle_goraud_texture_3d_st_fog(
     u64 color1, u64 color2, u64 color3,
     u8 fog1, u8 fog2, u8 fog3
 );
+
+void gsKit_prim_list_triangle_goraud_texture_3d_st(GSGLOBAL *gsGlobal, GSTEXTURE *Texture, int count, const void *vertices);

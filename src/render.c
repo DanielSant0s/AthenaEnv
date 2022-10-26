@@ -406,6 +406,27 @@ model* loadOBJ(const char* path, GSTEXTURE* text){
 		free(old);
 	}
 
+	VECTOR* c_verts = (VECTOR*)memalign(128, res_m->facesCount * 3 * sizeof(VECTOR));
+    VECTOR* c_texcoords = (VECTOR*)memalign(128, res_m->facesCount * 3 * sizeof(VECTOR));
+    VECTOR* c_normals =  (VECTOR*)memalign(128, res_m->facesCount * 3 * sizeof(VECTOR));
+
+	for (int i = 0; i < res_m->facesCount*3; i++)
+	{
+		c_verts[i][0] = res_m->positions[res_m->idxList[i]][0];
+		c_verts[i][1] = res_m->positions[res_m->idxList[i]][1];
+		c_verts[i][2] = res_m->positions[res_m->idxList[i]][2];
+		c_verts[i][3] = 1.0f;
+
+		c_normals[i][0] = res_m->normals[res_m->idxList[i]][0];
+		c_normals[i][1] = res_m->normals[res_m->idxList[i]][1];
+		c_normals[i][2] = res_m->normals[res_m->idxList[i]][2];
+		c_normals[i][3] = 1.0f;
+
+		c_texcoords[i][0] = res_m->texcoords[res_m->idxList[i]][0];
+		c_texcoords[i][1] = res_m->texcoords[res_m->idxList[i]][1];
+		c_texcoords[i][2] = 0.0f;
+		c_texcoords[i][3] = 0.0f;
+	}
 	
 	//calculate bounding box
 	float lowX, lowY, lowZ, hiX, hiY, hiZ;
@@ -464,6 +485,14 @@ model* loadOBJ(const char* path, GSTEXTURE* text){
 	res_m->bounding_box[7][2] = hiZ;
 	res_m->bounding_box[7][3] = 1.00f;
 
+	free(res_m->positions);
+	free(res_m->normals);
+	free(res_m->texcoords);
+
+	res_m->positions = c_verts;
+	res_m->normals = c_normals;
+	res_m->texcoords = c_texcoords;
+
     return res_m;
 }
 
@@ -511,6 +540,123 @@ void draw_bbox(model* m, float pos_x, float pos_y, float pos_z, float rot_x, flo
 	free(xyz);
 }
 
+int athena_process_xyz_rgbaq(GSPRIMPOINT *output, GSGLOBAL* gsGlobal, int count, color_f_t *colours, vertex_f_t *vertices)
+{
+
+	int z;
+	unsigned int max_z;
+	float q = 1.00f;
+
+	switch(gsGlobal->PSMZ){
+		case GS_PSMZ_32:
+			z = 32;
+			break;
+
+		case GS_PSMZ_24:
+			z = 24;
+			break;
+
+		case GS_PSMZ_16:
+		case GS_PSMZ_16S:
+			z = 16;
+			break;
+		
+		default:
+			return -1;
+	}
+
+	int center_x = gsGlobal->Width/2;
+	int center_y = gsGlobal->Height/2;
+	max_z = 1 << (z - 1);
+
+	for (int i = 0; i < count; i++)
+	{
+		// Calculate the Q value.
+		if (vertices[i].w != 0)
+		{
+			q = 1 / vertices[i].w;
+		}
+
+		output[i].rgbaq.color.r = (int)(colours[i].r * 128.0f);
+		output[i].rgbaq.color.g = (int)(colours[i].g * 128.0f);
+		output[i].rgbaq.color.b = (int)(colours[i].b * 128.0f);
+		output[i].rgbaq.color.a = 0x80;
+		output[i].rgbaq.color.q = q;
+		output[i].rgbaq.tag = GS_RGBAQ;
+
+		output[i].xyz2.xyz.x = gsKit_float_to_int_x(gsGlobal, (vertices[i].x + 1.0f) * center_x);
+		output[i].xyz2.xyz.y = gsKit_float_to_int_y(gsGlobal, (vertices[i].y + 1.0f) * center_y);
+		output[i].xyz2.xyz.z = (unsigned int)((vertices[i].z + 1.0f) * max_z);
+		output[i].xyz2.tag = GS_XYZ2;
+
+	}
+
+	// End function.
+	return 0;
+
+}
+
+
+int athena_process_xyz_rgbaq_st(ATHTEXTRI *output, GSGLOBAL* gsGlobal, int count, color_f_t *colours, vertex_f_t *vertices, texel_f_t *coords)
+{
+
+	int z;
+	unsigned int max_z;
+	float q = 1.00f;
+
+	switch(gsGlobal->PSMZ){
+		case GS_PSMZ_32:
+			z = 32;
+			break;
+
+		case GS_PSMZ_24:
+			z = 24;
+			break;
+
+		case GS_PSMZ_16:
+		case GS_PSMZ_16S:
+			z = 16;
+			break;
+		
+		default:
+			return -1;
+	}
+
+	int center_x = gsGlobal->Width/2;
+	int center_y = gsGlobal->Height/2;
+	max_z = 1 << (z - 1);
+
+	for (int i = 0; i < count; i++)
+	{
+		// Calculate the Q value.
+		if (vertices[i].w != 0)
+		{
+			q = 1 / vertices[i].w;
+		}
+
+		output[i].rgbaq.color.r = (int)(colours[i].r * 128.0f);
+		output[i].rgbaq.color.g = (int)(colours[i].g * 128.0f);
+		output[i].rgbaq.color.b = (int)(colours[i].b * 128.0f);
+		output[i].rgbaq.color.a = 0x80;
+		output[i].rgbaq.color.q = q;
+		output[i].rgbaq.tag = GS_RGBAQ;
+
+		output[i].st.stq.s = coords[i].s * q;
+		output[i].st.stq.t = coords[i].t * q;
+		output[i].st.tag = GS_ST;
+
+		output[i].xyz2.xyz.x = gsKit_float_to_int_x(gsGlobal, (vertices[i].x + 1.0f) * center_x);
+		output[i].xyz2.xyz.y = gsKit_float_to_int_y(gsGlobal, (vertices[i].y + 1.0f) * center_y);
+		output[i].xyz2.xyz.z = (unsigned int)((vertices[i].z + 1.0f) * max_z);
+		output[i].xyz2.tag = GS_XYZ2;
+
+	}
+
+	// End function.
+	return 0;
+
+}
+
 void drawOBJ(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z)
 {
 	VECTOR object_position = { pos_x, pos_y, pos_z, 1.00f };
@@ -541,9 +687,6 @@ void drawOBJ(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float
 	VECTOR *t_lights   = (VECTOR*)memalign(128, sizeof(VECTOR)*(m->facesCount*3));
 	color_f_t *t_colours  = (color_f_t*)memalign(128, sizeof(color_f_t)*(m->facesCount*3));
 	vertex_f_t *t_xyz = (vertex_f_t*)memalign(128, sizeof(vertex_f_t)*(m->facesCount*3));
-	texel_t *tex = (texel_t *)memalign(128, sizeof(texel_t) *  (m->facesCount*3));
-
-	//RotTransPersClipGsColN(t_xyz, local_screen, m->positions, m->normals, m->texcoords, m->colours, local_light, local_light, m->facesCount*3);
 
 	// Calculate the normal values.
 	calculate_normals(t_normals, m->facesCount*3, m->normals, local_light);
@@ -551,37 +694,27 @@ void drawOBJ(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float
 	calculate_colours((VECTOR *)t_colours, m->facesCount, m->colours, t_lights);
 	calculate_vertices_clipped((VECTOR *)t_xyz, m->facesCount*3, m->positions, local_screen);
 
-	// Convert floating point vertices to fixed point and translate to center of screen.
-	xyz_t   *xyz  = (xyz_t   *)memalign(128, sizeof(xyz_t)   *  (m->facesCount*3));
-	color_t *rgba = (color_t *)memalign(128, sizeof(color_t) *  (m->facesCount*3));
-	
-	draw_convert_xyz(xyz, 2048, 2048, 16,  m->facesCount*3, t_xyz);
-	draw_convert_rgbq(rgba, m->facesCount*3, t_xyz, (color_f_t*)t_lights, 0x80);
-	draw_convert_st(tex, m->facesCount*3, t_xyz, (texel_f_t *)m->texcoords);
+	if (m->texture != NULL) {
+		ATHTEXTRI* gs_vertices = (ATHTEXTRI*)memalign(128, sizeof(ATHTEXTRI)*m->facesCount*3);
 
-	float fX=gsGlobal->Width/2;
-	float fY=gsGlobal->Height/2;
+		athena_process_xyz_rgbaq_st(gs_vertices, gsGlobal, m->facesCount*3, (color_f_t*)t_lights, t_xyz, (texel_f_t *)m->texcoords);
 
-	if (m->texture != NULL) gsKit_TexManager_bind(gsGlobal, m->texture);
+		gsKit_TexManager_bind(gsGlobal, m->texture);
+		gsKit_prim_list_triangle_goraud_texture_3d_st(gsGlobal, m->texture, m->facesCount*3, gs_vertices);
 
-	for (int i = 0; i < m->facesCount*3; i+=3) {
-		if (m->texture == NULL){
-			gsKit_prim_triangle_gouraud_3d(gsGlobal,
-				(t_xyz[m->idxList[i]].x+1.0f)*fX, (t_xyz[m->idxList[i]].y+1.0f)*fY, xyz[m->idxList[i]].z,
-				(t_xyz[m->idxList[i+1]].x+1.0f)*fX, (t_xyz[m->idxList[i+1]].y+1.0f)*fY, xyz[m->idxList[i+1]].z,
-				(t_xyz[m->idxList[i+2]].x+1.0f)*fX, (t_xyz[m->idxList[i+2]].y+1.0f)*fY, xyz[m->idxList[i+2]].z,
-				rgba[m->idxList[i]].rgbaq, rgba[m->idxList[i+1]].rgbaq, rgba[m->idxList[i+2]].rgbaq);
-		} else {
-			gsKit_prim_triangle_goraud_texture_3d_st(gsGlobal, m->texture,
-				(t_xyz[m->idxList[i]].x+1.0f)*fX, (t_xyz[m->idxList[i]].y+1.0f)*fY, xyz[m->idxList[i]].z, tex[m->idxList[i]].s, tex[m->idxList[i]].t,
-				(t_xyz[m->idxList[i+1]].x+1.0f)*fX, (t_xyz[m->idxList[i+1]].y+1.0f)*fY, xyz[m->idxList[i+1]].z, tex[m->idxList[i+1]].s, tex[m->idxList[i+1]].t,
-				(t_xyz[m->idxList[i+2]].x+1.0f)*fX, (t_xyz[m->idxList[i+2]].y+1.0f)*fY, xyz[m->idxList[i+2]].z, tex[m->idxList[i+2]].s, tex[m->idxList[i+2]].t,
-				rgba[m->idxList[i]].rgbaq, rgba[m->idxList[i+1]].rgbaq, rgba[m->idxList[i+2]].rgbaq);
-		}
+		free(gs_vertices);
+	} else {
+		GSPRIMPOINT* gs_vertices = (GSPRIMPOINT*)memalign(128, sizeof(GSPRIMPOINT)*m->facesCount*3);
+
+		athena_process_xyz_rgbaq(gs_vertices, gsGlobal, m->facesCount*3, (color_f_t*)t_lights, t_xyz);
+
+		gsKit_prim_list_triangle_gouraud_3d(gsGlobal, m->facesCount*3, gs_vertices);
+
+		free(gs_vertices);
 	}
+
 	
 	free(t_normals); free(t_lights); free(t_colours); free(t_xyz);
-	free(xyz); free(rgba); free(tex);
 
 }
 

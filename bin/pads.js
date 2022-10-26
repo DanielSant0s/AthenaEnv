@@ -94,6 +94,8 @@ for(;;){
     if(Pads.check(new_pad, PAD_START) && Pads.check(new_pad, PAD_R3) && Pads.check(new_pad, PAD_UP)){
         break;
     }
+
+    font.print(10, 10, Display.getFPS(360) + " FPS");
     
     Display.flip();
 }

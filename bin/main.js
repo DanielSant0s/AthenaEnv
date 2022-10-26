@@ -7,6 +7,8 @@ var list_ptr = 0;
 
 var demo_list = ["hello.js", "pads.js", "render.js"]
 
+Display.setVSync(false);
+
 while(true){
     Display.clear();
     oldpad = pad;

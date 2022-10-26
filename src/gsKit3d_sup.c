@@ -1,5 +1,12 @@
 #include "include/render.h"
 
+typedef union TexCoord { 
+    struct {
+        float s, t;
+    };
+    u64 word;
+} __attribute__((packed, aligned(8))) TexCoord;
+
 #define GIF_TAG_TRIANGLE_GORAUD_TEXTURED_ST_REGS(ctx) \
     ((u64)(GS_TEX0_1 + ctx) << 0 ) | \
     ((u64)(GS_PRIM)         << 4 ) | \
@@ -225,3 +232,44 @@ void gsKit_prim_triangle_goraud_texture_3d_st_fog(
     *p_data++ = GS_SETREG_XYZF2( ix3, iy3, iz3, fog3 );
 }
 
+void gsKit_prim_list_triangle_goraud_texture_3d_st(GSGLOBAL *gsGlobal, GSTEXTURE *Texture, int count, const void *vertices) {
+    gsKit_set_texfilter(gsGlobal, Texture->Filter);
+    u64* p_store;
+    u64* p_data;
+    const int qsize = 4 + count*3;
+    int bytes = count * sizeof(ATHTEXTRI);
+
+    int tw, th;
+    gsKit_set_tw_th(Texture, &tw, &th);
+
+    p_store = p_data = (u64*)gsKit_heap_alloc(gsGlobal, qsize, (qsize*16), GIF_AD);
+
+    *p_data++ = GIF_TAG_AD(qsize);
+	*p_data++ = GIF_AD;
+
+    *p_data++ = GIF_TAG_TRIANGLE_GORAUD_TEXTURED(count-1);
+    *p_data++ = GIF_TAG_TRIANGLE_GORAUD_TEXTURED_ST_REGS(gsGlobal->PrimContext);
+
+    const int replace = 0; // cur_shader->tex_mode == TEXMODE_REPLACE;
+    const int alpha = gsGlobal->PrimAlphaEnable;
+
+    if (Texture->VramClut == 0) {
+        *p_data++ = GS_SETREG_TEX0(Texture->Vram/256, Texture->TBW, Texture->PSM,
+            tw, th, alpha, replace,
+            0, 0, 0, 0, GS_CLUT_STOREMODE_NOLOAD);
+    } else {
+        *p_data++ = GS_SETREG_TEX0(Texture->Vram/256, Texture->TBW, Texture->PSM,
+            tw, th, alpha, replace,
+            Texture->VramClut/256, Texture->ClutPSM, 0, 0, GS_CLUT_STOREMODE_LOAD);
+    }
+
+    *p_data++ = GS_TEX0_1;// + gsGlobal->PrimContext;
+
+    *p_data++ = GS_SETREG_PRIM( GS_PRIM_PRIM_TRIANGLE, 1, 1, gsGlobal->PrimFogEnable,
+                gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable,
+                0, gsGlobal->PrimContext, 0);
+
+    *p_data++ = GS_PRIM;
+
+    memcpy(p_data, vertices, bytes);
+}
