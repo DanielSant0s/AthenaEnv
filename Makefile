@@ -33,7 +33,7 @@ EE_BIN_PKD = athena_pkd.elf
 
 RESET_IOP = 1
 
-EE_LIBS = -L$(PS2SDK)/ports/lib -L$(PS2DEV)/gsKit/lib/ -Lmodules/ds34bt/ee/ -Lmodules/ds34usb/ee/ -lps2_drivers -lpatches -lfileXio -lcdvd -lpad -ldebug -lmath3d -ljpeg -lfreetype -lgskit_toolkit -lgskit -ldmakit -lpng -lz -lmc -laudsrv -lelf-loader -lds34bt -lds34usb
+EE_LIBS = -L$(PS2SDK)/ports/lib -L$(PS2DEV)/gsKit/lib/ -Lmodules/ds34bt/ee/ -Lmodules/ds34usb/ee/ -lps2_drivers -lmc -lpatches -ldebug -lmath3d -ljpeg -lfreetype -lgskit_toolkit -lgskit -ldmakit -lpng -lz -lelf-loader -lds34bt -lds34usb
 
 EE_INCS += -I$(PS2DEV)/gsKit/include -I$(PS2SDK)/ports/include -I$(PS2SDK)/ports/include/freetype2 -I$(PS2SDK)/ports/include/zlib
 
@@ -61,15 +61,11 @@ ATHENA_MODULES = src/duktape/duktape.o src/duktape/duk_console.o src/duktape/duk
 				 src/ath_color.o src/ath_font.o src/ath_pads.o src/ath_sound.o \
 				 src/ath_system.o src/ath_timer.o src/ath_render.o src/ath_task.o
 
-IOP_MODULES = src/cdfs.o src/ds34bt.o src/ds34usb.o
+IOP_MODULES = src/ds34bt.o src/ds34usb.o
 
 EE_OBJS = $(IOP_MODULES) $(APP_CORE) $(ATHENA_MODULES)
 
 #-------------------- Embedded IOP Modules ------------------------#
-src/cdfs.s: $(PS2SDK)/iop/irx/cdfs.irx
-	echo "Embedding CDFS Driver..."
-	$(BIN2S) $< $@ cdfs_irx
-
 modules/ds34bt/ee/libds34bt.a: modules/ds34bt/ee
 	echo "Building DS3/4 Bluetooth Library..."
 	$(MAKE) -C $<
@@ -121,9 +117,6 @@ clean:
 
 	echo "\nCleaning objects..."
 	rm -f $(EE_OBJS)
-	
-	echo "Cleaning CDFS Driver..."
-	rm -f src/cdfs.s
 
 	echo "Cleaning DS3/4 Drivers..."
 	rm -f src/ds34bt.s

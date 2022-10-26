@@ -26,9 +26,6 @@
 #include <libds34bt.h>
 #include <libds34usb.h>
 
-extern unsigned char cdfs_irx[] __attribute__((aligned(16)));
-extern unsigned int size_cdfs_irx;
-
 extern unsigned char ds34usb_irx[] __attribute__((aligned(16)));
 extern unsigned int size_ds34usb_irx;
 
@@ -37,41 +34,7 @@ extern unsigned int size_ds34bt_irx;
 
 char boot_path[255];
 
-void setBootPath(int argc, char ** argv, int idx)
-{
-    if (argc>=(idx+1))
-    {
-
-	char *p;
-	if ((p = strrchr(argv[idx], '/'))!=NULL) {
-	    snprintf(boot_path, sizeof(boot_path), "%s", argv[idx]);
-	    p = strrchr(boot_path, '/');
-	if (p!=NULL)
-	    p[1]='\0';
-	} else if ((p = strrchr(argv[idx], '\\'))!=NULL) {
-	   snprintf(boot_path, sizeof(boot_path), "%s", argv[idx]);
-	   p = strrchr(boot_path, '\\');
-	   if (p!=NULL)
-	     p[1]='\0';
-	} else if ((p = strchr(argv[idx], ':'))!=NULL) {
-	   snprintf(boot_path, sizeof(boot_path), "%s", argv[idx]);
-	   p = strchr(boot_path, ':');
-	   if (p!=NULL)
-	   p[1]='\0';
-	}
-
-    }
-    
-    // check if path needs patching
-    if( !strncmp( boot_path, "mass:/", 6) && (strlen (boot_path)>6))
-    {
-        strcpy((char *)&boot_path[5],(const char *)&boot_path[6]);
-    }
-         
-}
-
-int main(int argc, char **argv) {
-  
+static void prepare_IOP() {
     printf("AthenaEnv: Starting IOP Reset...\n");
     SifInitRpc(0);
     #if defined(RESET_IOP)  
@@ -85,48 +48,64 @@ int main(int argc, char **argv) {
     printf("AthenaEnv: Installing SBV Patches...\n");
     sbv_patch_enable_lmb();
     sbv_patch_disable_prefix_check(); 
-    sbv_patch_fileio(); 
+}
 
-	init_fileXio_driver();
+static void init_drivers() {
+    init_fileXio_driver();
 	init_memcard_driver(true);
 	init_usb_driver();
+    init_cdfs_driver();
 	init_joystick_driver(true);
 	init_audio_driver();
 
-    SifExecModuleBuffer(&cdfs_irx, size_cdfs_irx, 0, NULL, NULL);
     int ds3pads = 1;
     SifExecModuleBuffer(&ds34usb_irx, size_ds34usb_irx, 4, (char *)&ds3pads, NULL);
     SifExecModuleBuffer(&ds34bt_irx, size_ds34bt_irx, 4, (char *)&ds3pads, NULL);
     ds34usb_init();
     ds34bt_init();
 
-    //waitUntilDeviceIsReady by fjtrujy
-    
+    pad_init();
+}
+
+static void deinit_drivers() {
+	deinit_audio_driver();
+	deinit_joystick_driver(false);
+	deinit_usb_driver(false);
+	deinit_cdfs_driver();
+	deinit_memcard_driver(true);
+	deinit_fileXio_driver();
+}
+
+static void waitUntilDeviceIsReady(char *path)
+{
     struct stat buffer;
     int ret = -1;
     int retries = 50;
 
-    while(ret != 0 && retries > 0)
-    {
-        ret = stat("mass:/", &buffer);
-        // Wait until the device is ready
+    while(ret != 0 && retries > 0) {
+        ret = stat(path, &buffer);
+        /* Wait untill the device is ready */
         nopdelay();
 
         retries--;
     }
+}
+
+int main(int argc, char **argv) {
+    prepare_IOP();
+    init_drivers();
     
-	setBootPath(argc, argv, 0); 
+    getcwd(boot_path, sizeof(boot_path));
+    waitUntilDeviceIsReady(boot_path);
+    
     init_taskman();
 	init_graphics();
     loadFontM();
-
-    chdir(boot_path); 
 
 	const char* errMsg;
 
     while(true)
     {
-        
         errMsg = runScript("main.js", false);
 
         gsKit_clear_screens();
@@ -144,6 +123,8 @@ int main(int argc, char **argv) {
         }
 
     }
+
+    deinit_drivers();
 
 	// End program.
 	return 0;
