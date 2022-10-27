@@ -12,7 +12,7 @@ mine.setScale(1.0);
 var changed_colors = false;
 var changed_sizes = false;
 
-for(var i = 0; i < 12500; i++){
+for(var i = 0; i < 1250; i++){
     Display.clear();
     fntcpy.print(10, 10, Display.getFPS(360) + " FPS");
     fntcpy.print(10, 25, "Don't worry! This is a timed demo.");
@@ -45,3 +45,8 @@ for(var i = 0; i < 12500; i++){
     fntcpy.print(10, 420, i + " out of 1250 until the end of this demo");
     Display.flip();
 }
+
+dejavu = null;
+mine = null;
+
+Duktape.gc();
