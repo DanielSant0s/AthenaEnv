@@ -412,20 +412,9 @@ model* loadOBJ(const char* path, GSTEXTURE* text){
 
 	for (int i = 0; i < res_m->facesCount*3; i++)
 	{
-		c_verts[i][0] = res_m->positions[res_m->idxList[i]][0];
-		c_verts[i][1] = res_m->positions[res_m->idxList[i]][1];
-		c_verts[i][2] = res_m->positions[res_m->idxList[i]][2];
-		c_verts[i][3] = 1.0f;
-
-		c_normals[i][0] = res_m->normals[res_m->idxList[i]][0];
-		c_normals[i][1] = res_m->normals[res_m->idxList[i]][1];
-		c_normals[i][2] = res_m->normals[res_m->idxList[i]][2];
-		c_normals[i][3] = 1.0f;
-
-		c_texcoords[i][0] = res_m->texcoords[res_m->idxList[i]][0];
-		c_texcoords[i][1] = res_m->texcoords[res_m->idxList[i]][1];
-		c_texcoords[i][2] = 0.0f;
-		c_texcoords[i][3] = 0.0f;
+		memcpy(&c_verts[i], &res_m->positions[res_m->idxList[i]], sizeof(VECTOR));
+		memcpy(&c_texcoords[i], &res_m->texcoords[res_m->idxList[i]], sizeof(VECTOR));
+		memcpy(&c_normals[i], &res_m->normals[res_m->idxList[i]], sizeof(VECTOR));
 	}
 	
 	//calculate bounding box
