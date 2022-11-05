@@ -64,20 +64,23 @@ while(running){
                     player.y = 50;
                     player.r = 25;
 
-                    for(var i = 0; i < randint(8, 15); i++){
+                    enemies_qt = randint(8, 15);
+
+                    while(enemies_qt > enemies.length){
                         var color = Color.new(randint(0, 255), randint(0, 255), randint(0, 255));
                         var enemy = {color:color, x:randint(0, 640), y:randint(0, 448), r:randint(5, 75)};
 
-                        for(var j = 0; j < enemies.length; j++){
-                            if (circleCircleColl(enemy, enemies[j]) || circleCircleColl(enemy, player)) {
-                                enemy.x = randint(0, 640);
-                                enemy.y = randint(0, 448);
+                        var found_collision = false;
 
-                                j = 0;
+                        for(var j = 0; j < enemies.length; j++){
+                            if (circleCircleColl(enemy, enemies[j])) {
+                                found_collision = true;
                             }
                         }
 
-                        enemies.push(enemy);
+                        if (!found_collision && !circleCircleColl(enemy, player)){
+                            enemies.push(enemy);
+                        }
                     }
 
                     break;
