@@ -48,7 +48,6 @@ static void prepare_IOP() {
     printf("AthenaEnv: Installing SBV Patches...\n");
     sbv_patch_enable_lmb();
     sbv_patch_disable_prefix_check(); 
-    sbv_patch_fileio();
 }
 
 static void init_drivers() {
