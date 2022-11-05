@@ -117,12 +117,22 @@ while(running){
         font.print(50, 260, "Quit");
 
     } else if(game_state == RUN_GAME){
-        for(var i = 20; i < 448; i+=50){
-            drawLine(0, i, 640, i, Color.new(255, 255, 255, 40));
-        }
 
-        for(var i = 20; i < 640; i+=50){
-            drawLine(i, 0, i, 448, Color.new(255, 255, 255, 40));
+        var s_lines = null;
+        var e_lines = null;
+        for(var i = -1500; i < 1501; i+=50){
+            
+            s_lines = World2Screen({x:i, y:-1500}, camera);
+            if(s_lines[0] > 0 && s_lines[0] < 640) {
+                e_lines = World2Screen({x:i, y:1500}, camera);
+                drawLine(s_lines[0], s_lines[1], e_lines[0], e_lines[1], Color.new(255, 255, 255, 40));
+            }
+
+            s_lines = World2Screen({x:-1500, y:i}, camera);
+            if(s_lines[1] > 0 && s_lines[1] < 448) {
+                e_lines = World2Screen({x: 1500, y:i}, camera);
+                drawLine(s_lines[0], s_lines[1], e_lines[0], e_lines[1], Color.new(255, 255, 255, 40));
+            }
         }
 
         if(Pads.check(pad, PAD_LEFT)){
@@ -143,20 +153,26 @@ while(running){
         }
     
         for(var i = 0; i < enemies.length; i++){
-            drawCell(World2Screen(enemies[i], camera), enemies[i].r, enemies[i].color, false);
-            if (circleCircleColl(enemies[i], player)) {
-                if (enemies[i].r < player.r) {
-                    player.r += enemies[i].r/2;
-                    enemies.splice(i, 1);
-                    if (!enemies.length){
+            var enemy_coords = World2Screen(enemies[i], camera);
+            if((enemy_coords[0]+enemies[i].r) > 0 && (enemy_coords[0]-enemies[i].r) < 640 && 
+               (enemy_coords[1]+enemies[i].r) > 0 && (enemy_coords[1]-enemies[i].r) < 448 ){
+                drawCell(enemy_coords, enemies[i].r, enemies[i].color, false);
+                if (circleCircleColl(enemies[i], player)) {
+                    if (enemies[i].r < player.r) {
+                        player.r += enemies[i].r/2;
+                        enemies.splice(i, 1);
+                        if (!enemies.length){
+                            game_state = GAME_OVER;
+                            font.setScale(2);
+                        }
+                    } else if ((enemies[i].r > player.r)) {
                         game_state = GAME_OVER;
                         font.setScale(2);
                     }
-                } else if ((enemies[i].r > player.r)) {
-                    game_state = GAME_OVER;
-                    font.setScale(2);
                 }
+
             }
+
         }
     
         drawCell(World2Screen(player, camera), player.r, player.color, true);
