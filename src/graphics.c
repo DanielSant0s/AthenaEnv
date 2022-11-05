@@ -11,8 +11,6 @@
 
 #include "include/graphics.h"
 
-#define DEG2RAD(x) ((x)*0.01745329251)
-
 #define PI 3.14159265359
 
 static const u64 BLACK_RGBAQ   = GS_SETREG_RGBAQ(0x00,0x00,0x00,0x80,0x00);
@@ -981,7 +979,6 @@ void drawCircle(float x, float y, float radius, u64 color, u8 filled)
 	int a;
 
 	for (a = 0; a < 36; a++) {
-		//ra = DEG2RAD(a*10);
 		v[a*2] = (cos(a * (PI*2)/36) * radius) + x;
 		v[a*2+1] = (sin(a * (PI*2)/36) * radius) + y;
 	}
