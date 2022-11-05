@@ -868,6 +868,7 @@ void unloadFont(GSFONT* font)
 		free(font->RawData);
 
 	free(font);
+	font = NULL;
 }
 
 int getFreeVRAM(){
@@ -1002,18 +1003,6 @@ void InvalidateTexture(GSTEXTURE *txt)
 void UnloadTexture(GSTEXTURE *txt)
 {
 	gsKit_TexManager_free(gsGlobal, txt);
-
-	free(txt->Mem);
-	txt->Mem = NULL;
-
-	if(txt->Clut != NULL)
-	{
-		free(txt->Clut);
-		txt->Clut = NULL;
-	}
-
-	free(txt);
-	txt = NULL;
 	
 }
 
