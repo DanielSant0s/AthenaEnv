@@ -90,18 +90,6 @@ static duk_ret_t athena_image_dtor(duk_context *ctx){
 
 		UnloadTexture(source);
 
-		free(source->Mem);
-		source->Mem = NULL;
-
-		if(source->Clut != NULL)
-		{
-			free(source->Clut);
-			source->Clut = NULL;
-		}
-
-		free(source);
-		source = NULL;
-
         duk_push_boolean(ctx, true);
         duk_put_prop_string(ctx, 0, "\xff""\xff""deleted");
 	}
