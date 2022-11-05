@@ -20,6 +20,11 @@ function World2Screen(rect, camera){
     return [rect.x-camera.x, rect.y-camera.y]
 }
 
+function drawCell(coords, radius, color, hollow){
+    drawCircle(coords[0], coords[1], radius, color);
+    if(hollow) drawCircle(coords[0], coords[1], radius, Color.new(255, 255, 255), false);
+}
+
 function circleCircleColl(c1, c2) {
     var distX = c1.x - c2.x;
     var distY = c1.y - c2.y;
@@ -93,6 +98,8 @@ while(running){
                         }
                     }
 
+                    font.setScale(1);
+
                     break;
                 case 2:
                     running = false;
@@ -136,22 +143,25 @@ while(running){
         }
     
         for(var i = 0; i < enemies.length; i++){
-            drawCircle(World2Screen(enemies[i], camera)[0], World2Screen(enemies[i], camera)[1], enemies[i].r, enemies[i].color);
+            drawCell(World2Screen(enemies[i], camera), enemies[i].r, enemies[i].color, false);
             if (circleCircleColl(enemies[i], player)) {
                 if (enemies[i].r < player.r) {
                     player.r += enemies[i].r/2;
                     enemies.splice(i, 1);
                     if (!enemies.length){
                         game_state = GAME_OVER;
+                        font.setScale(2);
                     }
                 } else if ((enemies[i].r > player.r)) {
                     game_state = GAME_OVER;
+                    font.setScale(2);
                 }
             }
         }
     
-        drawCircle(World2Screen(player, camera)[0], World2Screen(player, camera)[1], player.r, player.color);
-        drawCircle(World2Screen(player, camera)[0], World2Screen(player, camera)[1], player.r, Color.new(255, 255, 255), false);
+        drawCell(World2Screen(player, camera), player.r, player.color, true);
+
+        font.print(10, 10, Display.getFPS(360) + " FPS");
 
     } else if(game_state == GAME_OVER){
         font.color = Color.new(128, 128, 128);
