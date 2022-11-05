@@ -10,9 +10,15 @@ var game_state = MAIN_MENU;
 
 var running = true;
 
-var player = {x:50, y:50, r:25, color:Color.new(128, 100, 255)};
+var player = {x:0, y:0, r:25, color:Color.new(128, 100, 255)};
+
+var camera = {x:-320, y:-224};
 
 var enemies = [];
+
+function World2Screen(rect, camera){
+    return [rect.x-camera.x, rect.y-camera.y]
+}
 
 function circleCircleColl(c1, c2) {
     var distX = c1.x - c2.x;
@@ -60,9 +66,13 @@ while(running){
                 case 0:
                     game_state = RUN_GAME;
 
-                    player.x = 50;
-                    player.y = 50;
+                    player.x = 0;
+                    player.y = 0;
                     player.r = 25;
+
+                    camera.x = -320;
+                    camera.y = -224;
+
 
                     enemies_qt = randint(8, 15);
 
@@ -110,19 +120,23 @@ while(running){
 
         if(Pads.check(pad, PAD_LEFT)){
             player.x-=4;
+            camera.x-=4;
         }
         if(Pads.check(pad, PAD_RIGHT)){
             player.x+=4;
+            camera.x+=4;
         }
         if(Pads.check(pad, PAD_UP)){
             player.y-=4;
+            camera.y-=4;
         }
         if(Pads.check(pad, PAD_DOWN)){
             player.y+=4;
+            camera.y+=4;
         }
     
         for(var i = 0; i < enemies.length; i++){
-            drawCircle(enemies[i].x, enemies[i].y, enemies[i].r, enemies[i].color);
+            drawCircle(World2Screen(enemies[i], camera)[0], World2Screen(enemies[i], camera)[1], enemies[i].r, enemies[i].color);
             if (circleCircleColl(enemies[i], player)) {
                 if (enemies[i].r < player.r) {
                     player.r += enemies[i].r/2;
@@ -136,8 +150,8 @@ while(running){
             }
         }
     
-        drawCircle(player.x, player.y, player.r, player.color);
-        drawCircle(player.x, player.y, player.r, Color.new(255, 255, 255), false);
+        drawCircle(World2Screen(player, camera)[0], World2Screen(player, camera)[1], player.r, player.color);
+        drawCircle(World2Screen(player, camera)[0], World2Screen(player, camera)[1], player.r, Color.new(255, 255, 255), false);
 
     } else if(game_state == GAME_OVER){
         font.color = Color.new(128, 128, 128);
