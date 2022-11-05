@@ -13,6 +13,8 @@
 
 #define DEG2RAD(x) ((x)*0.01745329251)
 
+#define PI 3.14159265359
+
 static const u64 BLACK_RGBAQ   = GS_SETREG_RGBAQ(0x00,0x00,0x00,0x80,0x00);
 
 #define RENDER_QUEUE_PER_POOLSIZE 1024 * 256 // 256K of persistent renderqueue
@@ -977,12 +979,11 @@ void drawCircle(float x, float y, float radius, u64 color, u8 filled)
 {
 	float v[37*2];
 	int a;
-	float ra;
 
 	for (a = 0; a < 36; a++) {
-		ra = DEG2RAD(a*10);
-		v[a*2] = cos(ra) * radius + x;
-		v[a*2+1] = sin(ra) * radius + y;
+		//ra = DEG2RAD(a*10);
+		v[a*2] = (cos(a * (PI*2)/36) * radius) + x;
+		v[a*2+1] = (sin(a * (PI*2)/36) * radius) + y;
 	}
 
 	if (!filled) {
