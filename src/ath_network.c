@@ -307,6 +307,18 @@ static duk_ret_t athena_socket_send(duk_context* ctx) {
     return 1;
 }
 
+static duk_ret_t athena_socket_listen(duk_context* ctx) {
+    int argc = duk_get_top(ctx);
+	if (argc != 0) return duk_generic_error(ctx, "Socket.send takes a single argument");
+
+    int s = get_obj_int(ctx, -1, "\xff""\xff""s");
+
+    int ret = lwip_listen(s, 0);
+
+    duk_push_int(ctx, ret);
+    return 1;
+}
+
 static duk_ret_t athena_socket_recv(duk_context* ctx) {
     int argc = duk_get_top(ctx);
 	if (argc != 1) return duk_generic_error(ctx, "Socket.send takes a single argument");
@@ -331,6 +343,9 @@ void socket_init(duk_context *ctx) {
 
     duk_push_c_function(ctx, athena_socket_bind, 2);
     duk_put_prop_string(ctx, -2, "bind");
+
+    duk_push_c_function(ctx, athena_socket_listen, 0);
+    duk_put_prop_string(ctx, -2, "listen");
 
     duk_push_c_function(ctx, athena_socket_send, 1);
     duk_put_prop_string(ctx, -2, "send");
