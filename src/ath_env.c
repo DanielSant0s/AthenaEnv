@@ -415,6 +415,7 @@ const char* runScript(const char* script, bool isBuffer)
 	athena_font_init(ctx);
 	athena_image_init(ctx);
 	athena_imagelist_init(ctx);
+	athena_network_init(ctx);
 	athena_pads_init(ctx);
 	athena_sound_init(ctx);
 	athena_timer_init(ctx);

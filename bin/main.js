@@ -1,3 +1,7 @@
+Network.init("192.168.1.10", "255.255.255.0", "192.168.0.1", "192.168.0.1");
+
+var nw_config = Network.getConfig();
+
 var lm_font = new Font("fonts/LEMONMILK-Regular.otf");
 var lml_font = new Font("fonts/LEMONMILK-Light.otf");
 lml_font.setScale(0.35);
@@ -55,6 +59,11 @@ while(true){
     lml_font.print(5, 380, "Cross - Run demo");
     lml_font.print(5, 395, "Up/Down - Switch demo");
     lml_font.print(5, 410, "R3 - " + (vsync? "Disable" : "Enable") + " frame limiter");
+
+    lml_font.print(5, 250, "IP Address: " + nw_config.ip);
+    lml_font.print(5, 265, "Netmask: " + nw_config.netmask);
+    lml_font.print(5, 280, "Gateway: " + nw_config.gateway);
+    lml_font.print(5, 295, "DNS: " + nw_config.dns);
 
     Display.flip();
 }

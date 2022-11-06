@@ -26,11 +26,23 @@
 #include <libds34bt.h>
 #include <libds34usb.h>
 
+#include <netman.h>
+#include <ps2ip.h>
+
 extern unsigned char ds34usb_irx[] __attribute__((aligned(16)));
 extern unsigned int size_ds34usb_irx;
 
 extern unsigned char ds34bt_irx[] __attribute__((aligned(16)));
 extern unsigned int size_ds34bt_irx;
+
+extern unsigned char DEV9_irx[];
+extern unsigned int size_DEV9_irx;
+
+extern unsigned char SMAP_irx[];
+extern unsigned int size_SMAP_irx;
+
+extern unsigned char NETMAN_irx[];
+extern unsigned int size_NETMAN_irx;
 
 char boot_path[255];
 
@@ -64,7 +76,13 @@ static void init_drivers() {
     ds34usb_init();
     ds34bt_init();
 
+	SifExecModuleBuffer(DEV9_irx, size_DEV9_irx, 0, NULL, NULL);
+	SifExecModuleBuffer(NETMAN_irx, size_NETMAN_irx, 0, NULL, NULL);
+	SifExecModuleBuffer(SMAP_irx, size_SMAP_irx, 0, NULL, NULL);
+
     pad_init();
+
+    
 }
 
 static void deinit_drivers() {

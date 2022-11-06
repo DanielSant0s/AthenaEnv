@@ -25,6 +25,7 @@ void athena_shape_init(duk_context* ctx);
 void athena_font_init(duk_context* ctx);
 void athena_image_init(duk_context* ctx);
 void athena_imagelist_init(duk_context* ctx);
+void athena_network_init(duk_context* ctx);
 void athena_pads_init(duk_context* ctx);
 void athena_sound_init(duk_context* ctx);
 void athena_timer_init(duk_context* ctx);

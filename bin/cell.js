@@ -121,7 +121,7 @@ while(running){
         var s_lines = null;
         var e_lines = null;
         for(var i = -1500; i < 1501; i+=50){
-            
+
             s_lines = World2Screen({x:i, y:-1500}, camera);
             if(s_lines[0] > 0 && s_lines[0] < 640) {
                 e_lines = World2Screen({x:i, y:1500}, camera);

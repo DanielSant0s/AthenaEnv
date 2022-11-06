@@ -33,13 +33,13 @@ EE_BIN_PKD = athena_pkd.elf
 
 RESET_IOP = 1
 
-EE_LIBS = -L$(PS2SDK)/ports/lib -L$(PS2DEV)/gsKit/lib/ -Lmodules/ds34bt/ee/ -Lmodules/ds34usb/ee/ -lps2_drivers -lmc -lpatches -ldebug -lmath3d -ljpeg -lfreetype -lgskit_toolkit -lgskit -ldmakit -lpng -lz -lelf-loader -lds34bt -lds34usb
+EE_LIBS = -L$(PS2SDK)/ports/lib -L$(PS2DEV)/gsKit/lib/ -Lmodules/ds34bt/ee/ -Lmodules/ds34usb/ee/ -lps2_drivers -lmc -lpatches -ldebug -lmath3d -ljpeg -lfreetype -lgskit_toolkit -lgskit -ldmakit -lpng -lz -lelf-loader -lds34bt -lds34usb -lnetman -lps2ip
 
 EE_INCS += -I$(PS2DEV)/gsKit/include -I$(PS2SDK)/ports/include -I$(PS2SDK)/ports/include/freetype2 -I$(PS2SDK)/ports/include/zlib
 
 EE_INCS += -Imodules/ds34bt/ee -Imodules/ds34usb/ee
 
-EE_CFLAGS += -Wno-sign-compare -fno-strict-aliasing -fno-exceptions -D_R5900
+EE_CFLAGS += -Wno-sign-compare -fno-strict-aliasing -fno-exceptions -D_R5900 -DPS2IP_DNS
 
 ifeq ($(RESET_IOP),1)
 EE_CFLAGS += -DRESET_IOP
@@ -59,9 +59,9 @@ APP_CORE = src/main.o src/taskman.o src/pad.o src/graphics.o src/atlas.o src/fnt
 ATHENA_MODULES = src/duktape/duktape.o src/duktape/duk_console.o src/duktape/duk_module_node.o \
 				 src/ath_env.o src/ath_screen.o src/ath_image.o src/ath_imagelist.o src/ath_shape.o \
 				 src/ath_color.o src/ath_font.o src/ath_pads.o src/ath_sound.o \
-				 src/ath_system.o src/ath_timer.o src/ath_render.o src/ath_task.o
+				 src/ath_system.o src/ath_timer.o src/ath_render.o src/ath_task.o src/ath_network.o
 
-IOP_MODULES = src/ds34bt.o src/ds34usb.o
+IOP_MODULES = src/ds34bt.o src/ds34usb.o src/DEV9.o src/NETMAN.o src/SMAP.o
 
 EE_OBJS = $(IOP_MODULES) $(APP_CORE) $(ATHENA_MODULES)
 
@@ -89,6 +89,18 @@ modules/ds34usb/iop/ds34usb.irx: modules/ds34usb/iop
 src/ds34usb.s: modules/ds34usb/iop/ds34usb.irx
 	echo "Embedding DS3/4 USB Driver..."
 	$(BIN2S) $< $@ ds34usb_irx
+
+src/DEV9.s: $(PS2SDK)/iop/irx/ps2dev9.irx
+	echo "Embedding DEV9 Driver..."
+	$(BIN2S) $< $@ DEV9_irx
+
+src/NETMAN.s: $(PS2SDK)/iop/irx/netman.irx
+	echo "Embedding NETMAN Driver..."
+	$(BIN2S) $< $@ NETMAN_irx
+
+src/SMAP.s: $(PS2SDK)/iop/irx/smap.irx
+	echo "Embedding SMAP Driver..."
+	$(BIN2S) $< $@ SMAP_irx
 	
 #-------------------------- App Content ---------------------------#
 
@@ -123,6 +135,11 @@ clean:
 	rm -f src/ds34usb.s
 	$(MAKE) -C modules/ds34usb clean
 	$(MAKE) -C modules/ds34bt clean
+
+	echo "Cleaning Network Driver..."
+	rm -f src/DEV9.s
+	rm -f src/NETMAN.s
+	rm -f src/SMAP.s
 
 rebuild: clean all
 

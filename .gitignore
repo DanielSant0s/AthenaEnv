@@ -22,3 +22,6 @@ src/main.js.c
 src/filexio.s
 src/iomanx.s
 src/usbhdfsd.s
+src/DEV9.s
+src/NETMAN.s
+src/SMAP.s
