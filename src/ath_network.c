@@ -195,10 +195,25 @@ duk_ret_t athena_nw_deinit(duk_context *ctx)
     return 0;
 }
 
+duk_ret_t athena_nw_gethostbyname(duk_context *ctx)
+{
+    const char* host = duk_get_string(ctx, 0);
+    struct hostent *host_address = lwip_gethostbyname(host);
+    
+    if (host_address == NULL)
+        return duk_generic_error(ctx, "Unable to resolve address.\n");
+
+    duk_push_string(ctx, inet_ntoa(*(struct in_addr*)host_address->h_addr));
+
+    return 1;
+}
+
+
 DUK_EXTERNAL duk_ret_t dukopen_network(duk_context *ctx) {
     const duk_function_list_entry module_funcs[] = {
         { "init",                athena_nw_init,       DUK_VARARGS },
         { "getConfig",           athena_nw_get_config,           0 },
+        { "getHostbyName",       athena_nw_gethostbyname,        1 },
         { "deinit",              athena_nw_deinit,               0 },
         { NULL, NULL, 0 }
     };
