@@ -39,15 +39,17 @@
 
 AthenaEnv is a project that seeks to facilitate and at the same time brings a complete kit for users to create homebrew software for PlayStation 2 using the JavaScript language. It has dozens of built-in functions, both for creating games and apps. The main advantage over using AthenaEnv project instead of the pure PS2SDK is above all the practicality, you will use one of the simplest possible languages to create what you have in mind, besides not having to compile, just script and test, fast and simple.
 
-### Function types:
-* System: Everything that involves files, folders and system stuff.
-* Graphics: You can control the entire 2D part of your project, that is, draw images, shapes, lines, change their properties, etc.
-* Render: 3D! Basic support for rendering a 3D environment in your project.
+### Modules:
+* System: Files, folders and system stuff.
+* Image: Image drawing.
+* Shape: Shape drawing, triangles, circles etc.
+* Render: Basic 3D support.
 * Display: The entire screen of your project (2D and 3D), being able to change the resolution, enable or disable parameters.
 * Font: Functions that control the texts that appear on the screen, loading texts, drawing and unloading from memory.
 * Pads: Above being able to draw and everything else, A human interface is important. Supports rumble and pressure sensitivity.
 * Timer: Control the time precisely in your code, it contains several timing functions.
 * Sound: Basic sound functions.
+* Network: Sockets and web requests :D.
 
 New types are always being added and this list can grow a lot over time, so stay tuned.
 
@@ -82,85 +84,68 @@ P.S.: *Italic* parameters refer to optional parameters
 
 Construction:  
 
-var image = new Image(path, *mode*, *async_list*);
-* path - Path to the file, E.g.: "images/test.png".
-* *mode* - Choose between storing the image between **RAM** or **VRAM**, default value is RAM.
-* *async_list* - Gets a ImageList object, which is a asynchronous image loading list, if you want to load images in the background.
-* Example: var test = new Image("owl.png", VRAM);  
+* var image = new Image(path, *mode*, *async_list*);  
+  path - Path to the file, E.g.: "images/test.png".  
+  *mode* - Choose between storing the image between **RAM** or **VRAM**, default value is RAM.  
+  *async_list* - Gets a ImageList object, which is a asynchronous image loading list, if you want to load images in the background.  
+  Example: var test = new Image("owl.png", VRAM);  
 
 Properties:
+
 * width, height - Image drawing size, default value is the original image size.
 * startx, starty - Beginning of the area that will be drawn from the image, the default value is 0.0.
 * endx, endy - End of the area that will be drawn from the image, the default value is the original image size.
 * angle - Define image rotation angle, default value is 0.0.
-* color - Define image tinting, default value is Color(255, 255, 255, 255).
+* color - Define image tinting, default value is Color.new(255, 255, 255, 128).
 * filter - Choose between **LINEAR** or **NEAREST**, default value is NEAREST.  
 
 Methods:
+
 * draw(x, y) - Draw loaded image onscreen(call it every frame). Example: image.draw(15.0, 100.0);
 * ready() - Returns true if an asynchronous image was successfully loaded in memory. Example: var loaded = image.ready();  
 
-### ImageList Module
+**ImageList**
 
 Construction:
 
-var async_list = new ImageList();
-* This constructor creates a new thread and a queue to load images in background, avoid building multiple ImageList objects.
+* var async_list = new ImageList();  
+  This constructor creates a new thread and a queue to load images in background, avoid building multiple ImageList objects.
 
 Methods:
 
 * process() - This method starts the thread and loads added images on the queue. Example: async_list.process();
-
-
-**Graphics functions:**
-
-Primitive shapes:
-* Graphics.drawPixel(x, y, color)
-* Graphics.drawRect(x, y, width, height, color)
-* Graphics.drawLine(x, y, x2, y2, color)
-* Graphics.drawCircle(x, y, radius, color, filled) *filled isn't mandatory
-* Graphics.drawTriangle(x, y, x2, y2, x3, y3, color, color2, color3) *color2 and color3 are not mandatory
-* Graphics.drawQuad(x, y, x2, y2, x3, y3, x4, y4 color, color2, color3, color4) *color2, color3 and color4 are not mandatory
-
-Image functions:
-* var image = Graphics.loadImage(path) *Supports BMP, JPG and PNG
-* Graphics.drawImage(image, x, y, color)
-* Graphics.drawRotateImage(image, x, y, angle, color)
-* Graphics.drawScaleImage(image, x, y, scale_x, scale_y, color)
-* Graphics.drawPartialImage(image, x, y, start_x, start_y, width, height, color)
-* Graphics.drawImageExtended(image, x, y, start_x, start_y, width, height, scale_x, scale_y, angle, color)
-* Graphics.setImageFilters(image, filter) *Choose between NEAREST and LINEAR filters
-* var width = Graphics.getImageWidth(image)
-* var height = Graphics.getImageHeight(image)
-* Graphics.freeImage(image)  
   
-Asynchronous functions:  
-* Graphics.threadLoadImage(path) *Supports BMP, JPG and PNG
-* var state = Graphics.getLoadState()
-* var image = Graphics.getLoadData()  
-   
-**Render functions:**
+  
+### Shape module
+* drawPoint(x, y, color)
+* drawRect(x, y, width, height, color)
+* drawLine(x, y, x2, y2, color)
+* drawCircle(x, y, radius, color, *filled*)
+* drawTriangle(x, y, x2, y2, x3, y3, color, *color2*, *color3*)
+* drawQuad(x, y, x2, y2, x3, y3, x4, y4 color, *color2*, *color3*, *color4*)
+
+### Render module
 
 • Remember to enable zbuffering on screen mode, put the line of code below  
 • Default NTSC mode(3D enabled): Display.setMode(NTSC, 640, 448, CT24, INTERLACED, FIELD, true, Z16S)  
 
 * Render.init(aspect) *default aspect is 4/3, widescreen is 16/9
-* var model = Render.loadOBJ(path, texture) *texture isn't mandatory
+* var model = Render.loadOBJ(path, *texture*)
 * Render.drawOBJ(model, pos_x, pos_y, pos_z, rot_x, rot_y, rot_z)
 * Render.freeOBJ(model)  
 
-Camera functions:  
+**Camera**   
 * Camera.position(x, y, z)
 * Camera.rotation(x, y, z)
 
-Lights functions:
+**Lights**  
 * Lights.create(count)
 * Lights.set(light, dir_x, dir_y, dir_z, r, g, b, type)  
   • Avaiable light types: AMBIENT, DIRECTIONAL  
 
-**Display functions:**
+### Display module
 
-* Display.clear(color) *color isn't mandatory
+* Display.clear(*color*)
 * Display.flip()
 * var freevram = Display.getFreeVRAM()
 * var fps = Display.getFPS(frame_interval)
@@ -177,29 +162,25 @@ Lights functions:
   • Available interlaces: INTERLACED, NONINTERLACED  
   • Available fields: FIELD, FRAME  
 
-**Font functions:**
+### Font module
 
-Freetype functions(TTF, OTF):
-* Font.ftInit()
-* var font = Font.ftLoad("font.ttf")
-* Font.ftPrint(font, x, y, align, width, height, text, color)
-* Font.ftSetPixelSize()
-* Font.ftUnload(font)
-* Font.ftEnd()
+Construction:  
 
-Image functions(FNT, PNG, BMP):
-* var font = Font.load("font.fnt/png/bmp")
-* Font.print(font, x, y, scale, text, color)
-* Font.unload(font)
+* var font = new Font(*path*);  
+  path - Path to a font file, E.g.: "images/atlas.png", "fonts/font.png".  
+  Example 1: var osdfnt = new Font();  //Load BIOS font  
+  Example 2: var font = new Font("Segoe UI.ttf"); //Load trueType font  
 
-ROM font functions:
-* Font.fmLoad()
-* Font.fmPrint(x, y, scale, text, color) *color isn't mandatory
-* Font.fmUnload()
+Properties:
+* color - Define font tinting, default value is Color.new(255, 255, 255, 128).
 
-**Pads functions:**
+Methods:
+* print(x, y, text) - Draw text on screen(call it every frame). Example: font.print(10.0, 10.0, "Hello world!));
+* setScale(scale) - Set font scale;
 
-* var pad = Pads.get(port) *port isn't mandatory  
+### Pads module
+
+* var pad = Pads.get(*port*)
   • pad.btns - Buttons  
   • pad.lx - Left analog horizontal position (left = -127, default = 0, right = 128)  
   • pad.ly - Left analog vertical position (up = -127, default = 0, down = 128)  
@@ -208,12 +189,12 @@ ROM font functions:
     
   ![analog_graph](https://user-images.githubusercontent.com/47725160/154816009-99d7e5da-badf-409b-9a3b-3618fd372f09.png)
 
-* var type = Pads.getType(port) *port isn't mandatory  
+* var type = Pads.getType(*port*)
   • PAD_DIGITAL  
   • PAD_ANALOG  
   • PAD_DUALSHOCK  
-* var press = Pads.getPressure(port, button) *port isn't mandatory
-* Pads.rumble(port, big, small) *port isn't mandatory
+* var press = Pads.getPressure(*port*, button)
+* Pads.rumble(port, big, small)
 * var ret = Pads.check(pad, button)
 * Buttons list:  
   • PAD_SELECT  
@@ -233,7 +214,7 @@ ROM font functions:
   • PAD_L3  
   • PAD_R3  
 
-**System functions:**
+### System module
 
 * var fd = System.openFile(path, type)
 * Types list:  
@@ -252,7 +233,7 @@ ROM font functions:
 * var size = System.sizeFile(fd)
 * System.doesFileExist(path)
 * System.CurrentDirectory(path) *if path given, it sets the current dir, else it gets the current dir
-* var listdir = System.listDir(path) *path isn't mandatory  
+* var listdir = System.listDir(*path*)
   • listdir[index].name - return file name on indicated index(string)  
   • listdir[index].size - return file size on indicated index(integer)  
   • listdir[index].directory - return if indicated index is a file or a directory(bool)  
@@ -276,7 +257,7 @@ Asynchronous functions:
   • progress.current  
   • progress.final  
 
-**Timer functions:**
+### Timer module
 
 * var timer = Timer.new()
 * Timer.getTime(timer)
@@ -287,13 +268,42 @@ Asynchronous functions:
 * Timer.reset(timer)
 * Timer.isPlaying(timer)
 
-**Sound functions:**
+### Sound module
 
 * Sound.setFormat(bitrate, freq, channels)
 * Sound.setVolume(volume)
 * Sound.setADPCMVolume(channel, volume)
 * var audio = Sound.loadADPCM(path)
 * Sound.playADPCM(channel, audio)
+
+### Network module
+
+* Network.init(*ip*, *netmask*, *gateway*, *dns*)  
+Example 1: Network.init("192.168.0.10", "255.255.255.0", "192.168.0.1", "192.168.0.1"); //Static mode  
+Example 2: Network.init(); //DHCP Mode, dynamic.  
+
+* var conf = Network.getConfig()  
+  Returns conf.ip, conf.netmask, conf.gateway, conf.dns.
+  
+* Network.deinit()  
+  Shutdown network module.
+  
+**Sockets**
+
+
+Construction:  
+
+* var s = new Socket(domain, type)  
+  Example: var s = new Socket(AF_INET, SOCK_STREAM);
+
+Methods:
+
+* connect(host, port)
+* bind(host, port)
+* listen()
+* send(data) - Send data with Buffer
+* recv(size) - Receive data to a buffer
+* close()
 
 ## Contributing
 
