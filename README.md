@@ -285,6 +285,9 @@ Example 2: Network.init(); //DHCP Mode, dynamic.
 * var conf = Network.getConfig()  
   Returns conf.ip, conf.netmask, conf.gateway, conf.dns.
   
+ * Network.get(address)
+ * Network.post(address, query)
+  
 * Network.deinit()  
   Shutdown network module.
   
