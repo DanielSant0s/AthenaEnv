@@ -1,50 +1,27 @@
 #include "graphics.h"
 
-typedef union { 
-    u64 stq;
-    struct {
-        float s, t;
-    };
-} __attribute__((packed, aligned(8))) gs_st_t;
-
-typedef union {
-	u128 st;
-	struct {
-		gs_st_t stq;
-		u64 tag;
-	};
-} __attribute__((packed, aligned(8))) gs_stq2;
-
-struct gsPrimTri
-{
-	gs_rgbaq rgbaq;
-    gs_stq2 st;
-	gs_xyz2 xyz2;
-};
-typedef struct gsPrimTri ATHTEXTRI;
-
 //3D math
 
-extern int clip_bounding_box(MATRIX local_clip, VECTOR *bounding_box);
+int clip_bounding_box(MATRIX local_clip, VECTOR *bounding_box);
 
-extern void RotTransPersClipGsColN(vertex_f_t *output, MATRIX local_screen, VECTOR *verts, VECTOR *normals,
+void RotTransPersClipGsColN(vertex_f_t *output, MATRIX local_screen, VECTOR *verts, VECTOR *normals,
 VECTOR *texels, VECTOR *colours, MATRIX local_light, MATRIX light_color, int count);
 
-extern void calculate_vertices_no_clip(VECTOR *output,  int count, VECTOR *vertices, MATRIX local_screen);
+void calculate_vertices_no_clip(VECTOR *output,  int count, VECTOR *vertices, MATRIX local_screen);
 
-extern void calculate_vertices_clipped(VECTOR *output,  int count, VECTOR *vertices, MATRIX local_screen);
+void calculate_vertices_clipped(VECTOR *output,  int count, VECTOR *vertices, MATRIX local_screen);
 
-extern int draw_convert_rgbq(color_t *output, int count, vertex_f_t *vertices, color_f_t *colours, unsigned char alpha);
+int draw_convert_rgbq(color_t *output, int count, vertex_f_t *vertices, color_f_t *colours, unsigned char alpha);
 
-extern int draw_convert_rgbaq(color_t *output, int count, vertex_f_t *vertices, color_f_t *colours);
+int draw_convert_rgbaq(color_t *output, int count, vertex_f_t *vertices, color_f_t *colours);
 
-extern int draw_convert_st(texel_t *output, int count, vertex_f_t *vertices, texel_f_t *coords);
+int draw_convert_st(texel_t *output, int count, vertex_f_t *vertices, texel_f_t *coords);
 
-extern int draw_convert_xyz(xyz_t *output, float x, float y, int z, int count, vertex_f_t *vertices);
+int draw_convert_xyz(xyz_t *output, float x, float y, int z, int count, vertex_f_t *vertices);
 
 //polygon drawing
 
-extern void gsKit_prim_triangle_goraud_texture_3d_st(
+void gsKit_prim_triangle_goraud_texture_3d_st(
     GSGLOBAL *gsGlobal, GSTEXTURE *Texture,
     float x1, float y1, int iz1, float u1, float v1,
     float x2, float y2, int iz2, float u2, float v2,
@@ -52,7 +29,7 @@ extern void gsKit_prim_triangle_goraud_texture_3d_st(
     u64 color1, u64 color2, u64 color3
 );
 
-extern void gsKit_prim_triangle_gouraud_3d_fog(
+void gsKit_prim_triangle_gouraud_3d_fog(
     GSGLOBAL *gsGlobal, float x1, float y1, int iz1,
     float x2, float y2, int iz2,
     float x3, float y3, int iz3,
@@ -60,7 +37,7 @@ extern void gsKit_prim_triangle_gouraud_3d_fog(
     u8 fog1, u8 fog2, u8 fog3
 );
 
-extern void gsKit_prim_triangle_goraud_texture_3d_st_fog(
+void gsKit_prim_triangle_goraud_texture_3d_st_fog(
     GSGLOBAL *gsGlobal, GSTEXTURE *Texture,
     float x1, float y1, int iz1, float u1, float v1,
     float x2, float y2, int iz2, float u2, float v2,
@@ -68,5 +45,3 @@ extern void gsKit_prim_triangle_goraud_texture_3d_st_fog(
     u64 color1, u64 color2, u64 color3,
     u8 fog1, u8 fog2, u8 fog3
 );
-
-void gsKit_prim_list_triangle_goraud_texture_3d_st(GSGLOBAL *gsGlobal, GSTEXTURE *Texture, int count, const void *vertices);

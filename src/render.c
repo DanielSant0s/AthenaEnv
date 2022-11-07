@@ -586,7 +586,7 @@ int athena_process_xyz_rgbaq(GSPRIMPOINT *output, GSGLOBAL* gsGlobal, int count,
 }
 
 
-int athena_process_xyz_rgbaq_st(ATHTEXTRI *output, GSGLOBAL* gsGlobal, int count, color_f_t *colours, vertex_f_t *vertices, texel_f_t *coords)
+int athena_process_xyz_rgbaq_st(GSPRIMSTQPOINT *output, GSGLOBAL* gsGlobal, int count, color_f_t *colours, vertex_f_t *vertices, texel_f_t *coords)
 {
 
 	int z;
@@ -630,9 +630,9 @@ int athena_process_xyz_rgbaq_st(ATHTEXTRI *output, GSGLOBAL* gsGlobal, int count
 		output[i].rgbaq.color.q = q;
 		output[i].rgbaq.tag = GS_RGBAQ;
 
-		output[i].st.stq.s = coords[i].s * q;
-		output[i].st.stq.t = coords[i].t * q;
-		output[i].st.tag = GS_ST;
+		output[i].stq.st.s = coords[i].s * q;
+		output[i].stq.st.t = coords[i].t * q;
+		output[i].stq.tag = GS_ST;
 
 		output[i].xyz2.xyz.x = gsKit_float_to_int_x(gsGlobal, (vertices[i].x + 1.0f) * center_x);
 		output[i].xyz2.xyz.y = gsKit_float_to_int_y(gsGlobal, (vertices[i].y + 1.0f) * center_y);
@@ -684,12 +684,12 @@ void drawOBJ(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float
 	calculate_vertices_clipped((VECTOR *)t_xyz, m->facesCount*3, m->positions, local_screen);
 
 	if (m->texture != NULL) {
-		ATHTEXTRI* gs_vertices = (ATHTEXTRI*)memalign(128, sizeof(ATHTEXTRI)*m->facesCount*3);
+		GSPRIMSTQPOINT* gs_vertices = (GSPRIMSTQPOINT*)memalign(128, sizeof(GSPRIMSTQPOINT)*m->facesCount*3);
 
 		athena_process_xyz_rgbaq_st(gs_vertices, gsGlobal, m->facesCount*3, (color_f_t*)t_lights, t_xyz, (texel_f_t *)m->texcoords);
 
 		gsKit_TexManager_bind(gsGlobal, m->texture);
-		gsKit_prim_list_triangle_goraud_texture_3d_st(gsGlobal, m->texture, m->facesCount*3, gs_vertices);
+		gsKit_prim_list_triangle_goraud_texture_stq_3d(gsGlobal, m->texture, m->facesCount*3, gs_vertices);
 
 		free(gs_vertices);
 		
