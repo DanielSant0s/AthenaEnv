@@ -28,7 +28,7 @@ static duk_ret_t athena_imagelist_dtor(duk_context *ctx){
     duk_pop(ctx);
 
     duk_get_prop_string(ctx, 0, "\xff""\xff""handle");
-    ImgList* list = duk_to_uint(ctx, -1);
+    ImgList* list = (ImgList*)duk_to_uint(ctx, -1);
     duk_pop(ctx);
 
 	if(!deleted){
@@ -62,7 +62,7 @@ static duk_ret_t athena_imagelist_ctor(duk_context *ctx){
 
     duk_push_this(ctx);
 
-	duk_push_uint(ctx, list);
+	duk_push_uint(ctx, (uint32_t)list);
     duk_put_prop_string(ctx, -2, "\xff""\xff""handle");
 
 
@@ -79,7 +79,7 @@ static duk_ret_t athena_imagelist_process(duk_context *ctx){
 	int argc = duk_get_top(ctx);
 	if(argc != 0) return duk_generic_error(ctx, "ImageList.process() takes no arguments");
 
-	ImgList* handle = get_obj_uint(ctx, -1, "\xff""\xff""handle");
+	ImgList* handle = (ImgList*)get_obj_uint(ctx, -1, "\xff""\xff""handle");
 	SignalSema(handle->sema_id);
 
 	return 0;

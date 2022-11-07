@@ -337,14 +337,9 @@ static duk_ret_t cb_load_module(duk_context *ctx) {
 
     if (EndsWith(resolved_id, ".js")) {
         char* data;
-        int len;
+
         module_read(resolved_id, &data);
-        if (len < 0) {
-            return duk_generic_error(ctx, "Module could not be loaded: %s", resolved_id);
-        }
-        if (strncmp(data, "#!", 2) == 0) {
-            memcpy((void*) data, "//", 2);
-        }
+
         duk_push_string(ctx, data);
         free(data);
         return 1;
@@ -386,7 +381,7 @@ static duk_ret_t athena_dostring(duk_context *ctx) {
 const char* runScript(const char* script, bool isBuffer)
 {	
 
-    const char* errMsg;
+    const char* errMsg = NULL;
 
     printf("\nStarting AthenaEnv...\n");
 

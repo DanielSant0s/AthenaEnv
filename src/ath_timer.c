@@ -22,7 +22,7 @@ duk_ret_t athena_newT(duk_context *ctx) {
 	Timer* new_timer = (Timer*)malloc(sizeof(Timer));
 	new_timer->tick = clock();
 	new_timer->isPlaying = true;
-	duk_push_uint(ctx, (void*)new_timer);
+	duk_push_uint(ctx, (uint32_t)new_timer);
 	return 1;
 }
 

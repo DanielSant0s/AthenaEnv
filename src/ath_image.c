@@ -42,7 +42,7 @@ static duk_ret_t athena_image_isloaded(duk_context *ctx){
 	if(argc != 0) return duk_generic_error(ctx, "isLoaded takes no arguments");
 
 	bool loaded = get_obj_boolean(ctx, -1, "\xff""\xff""loaded");
-	GSTEXTURE* testimg = get_obj_uint(ctx, -1, "\xff""\xff""data");
+	GSTEXTURE* testimg = (GSTEXTURE*)get_obj_uint(ctx, -1, "\xff""\xff""data");
 
 	if(loaded){
 		duk_push_boolean(ctx, true);
@@ -128,7 +128,7 @@ static duk_ret_t athena_image_ctor(duk_context *ctx) {
 
 	if(argc > 2) {
 		duk_get_prop_string(ctx, 2, "\xff""\xff""handle");
-		ImgList* list = duk_get_uint(ctx, -1);
+		ImgList* list = (ImgList*)duk_get_uint(ctx, -1);
 		duk_pop(ctx);
 
 		load_img_async(image, text, delayed, list);
@@ -138,7 +138,7 @@ static duk_ret_t athena_image_ctor(duk_context *ctx) {
 
 	} else {
 		load_image(image, text, delayed);
-		if (image == NULL) duk_generic_error(ctx, "Failed to load image %s.", text);
+		if (image == NULL) return duk_generic_error(ctx, "Failed to load image %s.", text);
 
 		duk_push_number(ctx, (float)(image->Width));
     	duk_put_prop_string(ctx, -2, "width");
@@ -154,7 +154,7 @@ static duk_ret_t athena_image_ctor(duk_context *ctx) {
 		
 	}
 
-	duk_push_uint(ctx, image);
+	duk_push_uint(ctx, (uint32_t)image);
     duk_put_prop_string(ctx, -2, "\xff""\xff""data");
 
 	duk_push_number(ctx, (float)(0.0f));

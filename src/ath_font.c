@@ -55,7 +55,7 @@ duk_ret_t athena_font_ctor(duk_context *ctx){
             GSFONT* font = loadFont(path);
             if (font == NULL) return duk_generic_error(ctx, "Error loading font (invalid magic).");
 
-            duk_push_uint(ctx, font);
+            duk_push_uint(ctx, (uint32_t)font);
             duk_put_prop_string(ctx, -2, "\xff""\xff""data");
 
             duk_push_uint(ctx, image_font);
