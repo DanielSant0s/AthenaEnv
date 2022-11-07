@@ -1,6 +1,32 @@
 #include "ath_env.h"
 #include <netman.h>
 #include <ps2ip.h>
+#include <curl/curl.h>
+
+struct MemoryStruct {
+    char *memory;
+    size_t size;
+};
+
+static size_t
+WriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp)
+{
+  size_t realsize = size * nmemb;
+  struct MemoryStruct *mem = (struct MemoryStruct *)userp;
+
+  mem->memory = realloc(mem->memory, mem->size + realsize + 1);
+  if(mem->memory == NULL) {
+    /* out of memory */
+    printf("not enough memory (realloc returned NULL)\n");
+    return 0;
+  }
+
+  memcpy(&(mem->memory[mem->size]), contents, realsize);
+  mem->size += realsize;
+  mem->memory[mem->size] = 0;
+
+  return realsize;
+}
 
 static int ethApplyNetIFConfig(int mode)
 {
@@ -208,12 +234,109 @@ duk_ret_t athena_nw_gethostbyname(duk_context *ctx)
     return 1;
 }
 
+duk_ret_t athena_nw_requests_get(duk_context *ctx)
+{
+    CURL *curl;
+    CURLcode res;
+
+    struct MemoryStruct chunk;
+
+    chunk.memory = malloc(1);  /* will be grown as needed by the realloc above */
+    chunk.size = 0;    /* no data at this point */
+
+    curl_global_init(CURL_GLOBAL_ALL);
+
+    curl = curl_easy_init();
+    if(curl) {
+        curl_easy_setopt(curl, CURLOPT_URL, duk_get_string(ctx, 0));
+
+        /* send all data to this function  */
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
+
+        /* we pass our 'chunk' struct to the callback function */
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&chunk);
+
+        curl_easy_setopt(curl, CURLOPT_USERAGENT, "libcurl-agent/1.0");
+
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+ 
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
+ 
+        /* Perform the request, res will get the return code */
+        res = curl_easy_perform(curl);
+        /* Check for errors */
+        if(res != CURLE_OK) {
+            fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+        }
+    
+        /* always cleanup */
+        curl_easy_cleanup(curl);
+
+        //free(chunk.memory);
+  }
+ 
+    curl_global_cleanup();
+ 
+    duk_push_lstring(ctx, chunk.memory, chunk.size);
+    return 1;
+}
+
+duk_ret_t athena_nw_requests_post(duk_context *ctx)
+{
+    CURL *curl;
+    CURLcode res;
+
+    struct MemoryStruct chunk;
+
+    chunk.memory = malloc(1);  /* will be grown as needed by the realloc above */
+    chunk.size = 0;    /* no data at this point */
+
+    unsigned int len = 0;
+
+    curl_global_init(CURL_GLOBAL_ALL);
+    
+    curl = curl_easy_init();
+    if(curl) {
+        curl_easy_setopt(curl, CURLOPT_URL, duk_get_string(ctx, 0));
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, duk_get_lstring(ctx, 1, &len));
+
+        /* if we do not provide POSTFIELDSIZE, libcurl will strlen() by
+           itself */
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, (long)len);
+
+        /* send all data to this function  */
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
+
+        /* we pass our 'chunk' struct to the callback function */
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&chunk);
+
+        curl_easy_setopt(curl, CURLOPT_USERAGENT, "libcurl-agent/1.0");
+
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+ 
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
+
+        /* Perform the request, res will get the return code */
+        res = curl_easy_perform(curl);
+        /* Check for errors */
+        if(res != CURLE_OK)
+            fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+
+        /* always cleanup */
+        curl_easy_cleanup(curl);
+    }
+
+    duk_push_lstring(ctx, chunk.memory, chunk.size);
+    return 1;
+}
 
 DUK_EXTERNAL duk_ret_t dukopen_network(duk_context *ctx) {
     const duk_function_list_entry module_funcs[] = {
         { "init",                athena_nw_init,       DUK_VARARGS },
         { "getConfig",           athena_nw_get_config,           0 },
         { "getHostbyName",       athena_nw_gethostbyname,        1 },
+        { "get",                 athena_nw_requests_get,         1 },
+        { "post",                athena_nw_requests_post,        2 },
         { "deinit",              athena_nw_deinit,               0 },
         { NULL, NULL, 0 }
     };
@@ -309,7 +432,7 @@ static duk_ret_t athena_socket_send(duk_context* ctx) {
 
 static duk_ret_t athena_socket_listen(duk_context* ctx) {
     int argc = duk_get_top(ctx);
-	if (argc != 0) return duk_generic_error(ctx, "Socket.send takes a single argument");
+	if (argc != 0) return duk_generic_error(ctx, "Socket.listen takes a single argument");
 
     int s = get_obj_int(ctx, -1, "\xff""\xff""s");
 
@@ -321,7 +444,7 @@ static duk_ret_t athena_socket_listen(duk_context* ctx) {
 
 static duk_ret_t athena_socket_recv(duk_context* ctx) {
     int argc = duk_get_top(ctx);
-	if (argc != 1) return duk_generic_error(ctx, "Socket.send takes a single argument");
+	if (argc != 1) return duk_generic_error(ctx, "Socket.recv takes a single argument");
 
     int s = get_obj_int(ctx, -1, "\xff""\xff""s");
 
@@ -372,7 +495,6 @@ void socket_init(duk_context *ctx) {
 	duk_push_uint(ctx, SOCK_RAW);
 	duk_put_global_string(ctx, "SOCK_RAW");
 }
-
 
 void athena_network_init(duk_context* ctx){
 	push_athena_module(dukopen_network,   		   "Network");
