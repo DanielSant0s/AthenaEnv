@@ -504,7 +504,7 @@ void draw_bbox(model* m, float pos_x, float pos_y, float pos_z, float rot_x, flo
 	if(clip_bounding_box(local_screen, m->bounding_box)) return;
 
 	vertex_f_t *t_xyz = (vertex_f_t *)memalign(128, sizeof(vertex_f_t)*8);
-	calculate_vertices_no_clip((VECTOR *)t_xyz,  8, m->bounding_box, local_screen);
+	calculate_vertices_clipped((VECTOR *)t_xyz,  8, m->bounding_box, local_screen);
 
 	xyz_t *xyz  = (xyz_t *)memalign(128, sizeof(xyz_t)*8);
 	draw_convert_xyz(xyz, 2048, 2048, 16,  8, t_xyz);

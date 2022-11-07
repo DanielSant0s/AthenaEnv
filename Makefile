@@ -54,7 +54,7 @@ BIN2S = $(PS2SDK)/bin/bin2s
 EXT_LIBS = modules/ds34usb/ee/libds34usb.a modules/ds34bt/ee/libds34bt.a
 
 APP_CORE = src/main.o src/taskman.o src/pad.o src/graphics.o src/atlas.o src/fntsys.o src/sound.o \
-		   src/system.o src/render.o src/calc_3d.o src/gsKit3d_sup.o
+		   src/system.o src/render.o src/calc_3d.o
 
 ATHENA_MODULES = src/duktape/duktape.o src/duktape/duk_console.o src/duktape/duk_module_node.o \
 				 src/ath_env.o src/ath_screen.o src/ath_image.o src/ath_imagelist.o src/ath_shape.o \
