@@ -112,7 +112,6 @@ duk_ret_t athena_dir(duk_context *ctx)
 
         
     //-----------------------------------------------------------------------------------------
-	
 	// read from MC ?
         
     if( !strcmp( path, "mc0:" ) || !strcmp( path, "mc1:" ) )
@@ -161,11 +160,11 @@ duk_ret_t athena_dir(duk_context *ctx)
 			duk_put_prop_index(ctx, arr_idx, cpt++);
 
 		}
-		return 1;  // table is already on top
+		return 1; 
     }
     //-----------------------------------------------------------------------------------------
     
-    // else regular one using Dopen/Dread
+    // else regular one using opendir/readdir
 
 	int i = 0;
 
@@ -190,11 +189,6 @@ duk_ret_t athena_dir(duk_context *ctx)
 			duk_put_prop_index(ctx, arr_idx, i++);
 	    }
 	    closedir(d);
-	}
-	else
-	{
-		duk_push_null(ctx);  // return null
-		return 1;
 	}
 	
 	return 1;  /* table is already on top */

@@ -85,7 +85,33 @@ static void poweroffHandler(void *arg)
    poweroffShutdown();
 }
 
+
+void initMC()
+{
+   int ret;
+   // mc variables
+   int mc_Type, mc_Free, mc_Format;
+
+   printf("initMC: Initializing Memory Card\n");
+
+   ret = mcInit(MC_TYPE_XMC);
+   
+   if( ret < 0 ) {
+	printf("initMC: failed to initialize memcard server.\n");
+   } else {
+       printf("initMC: memcard server started successfully.\n");
+   }
+   
+   // Since this is the first call, -1 should be returned.
+   // makes me sure that next ones will work !
+   mcGetInfo(0, 0, &mc_Type, &mc_Free, &mc_Format); 
+   mcSync(MC_WAIT, NULL, &ret);
+}
+
+
 static void init_drivers() {
+    int ds3pads = 1;
+
     init_poweroff_driver();
     init_fileXio_driver();
     init_memcard_driver(true);
@@ -94,20 +120,17 @@ static void init_drivers() {
     init_hdd_driver(false, false);
     init_joystick_driver(true);
     init_audio_driver();
-
-    poweroffSetCallback(&poweroffHandler, NULL);
-    mount_current_hdd_partition();
-
-    int ds3pads = 1;
     SifExecModuleBuffer(&ds34usb_irx, size_ds34usb_irx, 4, (char *)&ds3pads, NULL);
     SifExecModuleBuffer(&ds34bt_irx, size_ds34bt_irx, 4, (char *)&ds3pads, NULL);
-    ds34usb_init();
-    ds34bt_init();
-
     SifExecModuleBuffer(NETMAN_irx, size_NETMAN_irx, 0, NULL, NULL);
     SifExecModuleBuffer(SMAP_irx, size_SMAP_irx, 0, NULL, NULL);
 
+    poweroffSetCallback(&poweroffHandler, NULL);
+    mount_current_hdd_partition();
     pad_init();
+    ds34usb_init();
+    ds34bt_init();
+    initMC();
 }
 
 static void waitUntilDeviceIsReady(char *path)

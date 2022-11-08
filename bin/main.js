@@ -8,7 +8,7 @@ var oldpad = pad;
 
 var list_ptr = 0;
 
-var demo_list = ["hello.js", "pads.js", "render.js", "sockets.js", "request.js", "cell.js"];
+var demo_list = ["hello.js", "pads.js", "render.js", "app_filemgr.js", "sockets.js", "request.js", "cell.js"];
 
 Display.setVSync(false);
 
