@@ -476,7 +476,7 @@ duk_ret_t athena_loadELF(duk_context *ctx)
 	}
 
 	LoadELFFromFile(elftoload, n, args);
-	return 1;
+	return 0;
 }
 
 DiscType DiscTypes[] = {
