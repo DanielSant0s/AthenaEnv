@@ -180,7 +180,7 @@ duk_ret_t athena_dir(duk_context *ctx)
 			duk_push_string(ctx, dir->d_name);
 			duk_put_prop_string(ctx, obj_idx, "name");
 	
-        	duk_push_number(ctx, dir->d_stat.st_size);
+        	duk_push_uint(ctx, dir->d_stat.st_size);
 			duk_put_prop_string(ctx, obj_idx, "size");
         
 			duk_push_boolean(ctx,  S_ISDIR(dir->d_stat.st_mode));
