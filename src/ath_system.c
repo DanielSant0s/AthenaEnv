@@ -688,16 +688,16 @@ duk_ret_t athena_sifloadmodule(duk_context *ctx){
 
 duk_ret_t athena_sifloadmodulebuffer(duk_context *ctx){
 	int argc = duk_get_top(ctx);
-	if (argc != 2 && argc != 4) return duk_generic_error(ctx, "wrong number of arguments");
-	const char* ptr = duk_get_string(ctx, 0);
-	int size = duk_get_int(ctx, 1);
+	if (argc != 1 && argc != 3) return duk_generic_error(ctx, "wrong number of arguments");
+	size_t size = 0;
+	void* ptr = duk_get_buffer(ctx, 0, &size);
 
 	int arg_len = 0;
 	const char *args = NULL;
 
-	if(argc == 4){
-		arg_len = duk_get_int(ctx, 2);
-		args = duk_get_string(ctx, 3);
+	if(argc == 3){
+		arg_len = duk_get_int(ctx, 1);
+		args = duk_get_string(ctx, 2);
 	}
 
 	int result = SifExecModuleBuffer((void*)ptr, size, arg_len, args, NULL);
