@@ -61,7 +61,7 @@ ATHENA_MODULES = src/duktape/duktape.o src/duktape/duk_console.o src/duktape/duk
 				 src/ath_color.o src/ath_font.o src/ath_pads.o src/ath_sound.o \
 				 src/ath_system.o src/ath_timer.o src/ath_render.o src/ath_task.o src/ath_network.o
 
-IOP_MODULES = src/ds34bt.o src/ds34usb.o src/DEV9.o src/NETMAN.o src/SMAP.o
+IOP_MODULES = src/ds34bt.o src/ds34usb.o src/NETMAN.o src/SMAP.o
 
 EE_OBJS = $(IOP_MODULES) $(APP_CORE) $(ATHENA_MODULES)
 
@@ -89,10 +89,6 @@ modules/ds34usb/iop/ds34usb.irx: modules/ds34usb/iop
 src/ds34usb.s: modules/ds34usb/iop/ds34usb.irx
 	echo "Embedding DS3/4 USB Driver..."
 	$(BIN2S) $< $@ ds34usb_irx
-
-src/DEV9.s: $(PS2SDK)/iop/irx/ps2dev9.irx
-	echo "Embedding DEV9 Driver..."
-	$(BIN2S) $< $@ DEV9_irx
 
 src/NETMAN.s: $(PS2SDK)/iop/irx/netman.irx
 	echo "Embedding NETMAN Driver..."
@@ -137,7 +133,6 @@ clean:
 	$(MAKE) -C modules/ds34bt clean
 
 	echo "Cleaning Network Driver..."
-	rm -f src/DEV9.s
 	rm -f src/NETMAN.s
 	rm -f src/SMAP.s
 

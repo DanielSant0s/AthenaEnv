@@ -18,6 +18,7 @@
 #include <smem.h>
 
 #include <ps2_all_drivers.h>
+#include <libpwroff.h>
 
 #include "ath_env.h"
 #include "include/graphics.h"
@@ -34,9 +35,6 @@ extern unsigned int size_ds34usb_irx;
 
 extern unsigned char ds34bt_irx[] __attribute__((aligned(16)));
 extern unsigned int size_ds34bt_irx;
-
-extern unsigned char DEV9_irx[];
-extern unsigned int size_DEV9_irx;
 
 extern unsigned char SMAP_irx[];
 extern unsigned int size_SMAP_irx;
@@ -62,13 +60,43 @@ static void prepare_IOP() {
     sbv_patch_disable_prefix_check(); 
 }
 
+static void deinit_drivers(bool deinit_powerOff) {
+    deinit_audio_driver();
+    deinit_joystick_driver(false);
+    deinit_hdd_driver(false);
+    deinit_cdfs_driver();
+    deinit_usb_driver();
+    deinit_memcard_driver(true);
+    deinit_fileXio_driver();
+    
+    if (deinit_powerOff)
+        deinit_poweroff_driver();
+}
+
+static void prepare_for_exit(bool deinit_powerOff) {
+    umount_current_hdd_partition();
+
+    deinit_drivers(deinit_powerOff);
+}
+
+static void poweroffHandler(void *arg)
+{
+   prepare_for_exit(false);
+   poweroffShutdown();
+}
+
 static void init_drivers() {
+    init_poweroff_driver();
     init_fileXio_driver();
-	init_memcard_driver(true);
-	init_usb_driver();
+    init_memcard_driver(true);
+    init_usb_driver();
     init_cdfs_driver();
-	init_joystick_driver(true);
-	init_audio_driver();
+    init_hdd_driver(false, false);
+    init_joystick_driver(true);
+    init_audio_driver();
+
+    poweroffSetCallback(&poweroffHandler, NULL);
+    mount_current_hdd_partition();
 
     int ds3pads = 1;
     SifExecModuleBuffer(&ds34usb_irx, size_ds34usb_irx, 4, (char *)&ds3pads, NULL);
@@ -76,22 +104,10 @@ static void init_drivers() {
     ds34usb_init();
     ds34bt_init();
 
-	SifExecModuleBuffer(DEV9_irx, size_DEV9_irx, 0, NULL, NULL);
-	SifExecModuleBuffer(NETMAN_irx, size_NETMAN_irx, 0, NULL, NULL);
-	SifExecModuleBuffer(SMAP_irx, size_SMAP_irx, 0, NULL, NULL);
+    SifExecModuleBuffer(NETMAN_irx, size_NETMAN_irx, 0, NULL, NULL);
+    SifExecModuleBuffer(SMAP_irx, size_SMAP_irx, 0, NULL, NULL);
 
     pad_init();
-
-    
-}
-
-static void deinit_drivers() {
-	deinit_audio_driver();
-	deinit_joystick_driver(false);
-	deinit_usb_driver(false);
-	deinit_cdfs_driver();
-	deinit_memcard_driver(true);
-	deinit_fileXio_driver();
 }
 
 static void waitUntilDeviceIsReady(char *path)
@@ -142,7 +158,7 @@ int main(int argc, char **argv) {
 
     }
 
-    deinit_drivers();
+    prepare_for_exit(true);
 
 	// End program.
 	return 0;

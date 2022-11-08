@@ -135,19 +135,19 @@ while(running){
             }
         }
 
-        if(Pads.check(pad, PAD_LEFT)){
+        if(Pads.check(pad, PAD_LEFT) && player.x > -1500.0){
             player.x-=4;
             camera.x-=4;
         }
-        if(Pads.check(pad, PAD_RIGHT)){
+        if(Pads.check(pad, PAD_RIGHT) && player.x < 1500.0){
             player.x+=4;
             camera.x+=4;
         }
-        if(Pads.check(pad, PAD_UP)){
+        if(Pads.check(pad, PAD_UP) && player.y > -1500.0){
             player.y-=4;
             camera.y-=4;
         }
-        if(Pads.check(pad, PAD_DOWN)){
+        if(Pads.check(pad, PAD_DOWN) && player.y < 1500.0){
             player.y+=4;
             camera.y+=4;
         }
