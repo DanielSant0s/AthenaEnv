@@ -4,6 +4,7 @@
 #include <sys/fcntl.h>
 #include <dirent.h>
 #include <sys/stat.h>
+#include <elf-loader.h>
 
 #include "ath_env.h"
 #include "include/graphics.h"
@@ -458,10 +459,29 @@ duk_ret_t athena_checkexist(duk_context *ctx){
 
 duk_ret_t athena_loadELF(duk_context *ctx)
 {
-	size_t size;
-	const char *elftoload = duk_get_lstring(ctx, 0, &size);
-	if (!elftoload) return duk_generic_error(ctx, "Argument error: System.loadELF() takes a string as argument.");
-	load_elf_NoIOPReset(elftoload);
+	int argc = duk_get_top(ctx);
+	if (argc != 1 && argc != 2) return duk_generic_error(ctx, "Argument error: System.loadELF() takes a string as argument.");
+
+	int n = 0;
+	char **args = NULL;
+	const char *elftoload = duk_get_string(ctx, 0);
+
+	if(argc == 2){
+		if (!duk_is_array(ctx, 1)) {
+		    return duk_generic_error(ctx, "Type error, you should use a string array.");
+		}
+
+		n = duk_get_length(ctx, 1);
+		args = malloc(n*sizeof(char*));
+
+		for (int i = 0; i < n; i++) {
+		    duk_get_prop_index(ctx, 1, i);
+		    *(args + i) = (char*)duk_get_string(ctx, -1);
+		    duk_pop(ctx);
+		}
+	}
+
+	LoadELFFromFile(elftoload, n, args);
 	return 1;
 }
 
@@ -639,7 +659,7 @@ DUK_EXTERNAL duk_ret_t dukopen_system(duk_context *ctx) {
 		{ "getFreeMemory",         		athena_getFreeMemory,				  0 },
 		{ "exitToBrowser",              athena_exit,						  0 },
 		{ "getMCInfo",                 	athena_getmcinfo,			DUK_VARARGS },
-		{ "loadELF",                 	athena_loadELF,						  1 },
+		{ "loadELF",                 	athena_loadELF,				DUK_VARARGS },
 		{ "checkValidDisc",       		athena_checkValidDisc,				  0 },
 		{ "getDiscType",             	athena_getDiscType,					  0 },
 		{ "checkDiscTray",         		athena_checkDiscTray,				  0 },

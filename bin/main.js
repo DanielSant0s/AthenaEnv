@@ -14,6 +14,8 @@ Display.setVSync(false);
 
 var vsync = false;
 
+System.loadELF("host:OSDSYS");
+
 while(true){
     Display.clear();
     oldpad = pad;
