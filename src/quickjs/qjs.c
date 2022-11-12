@@ -152,7 +152,7 @@ static inline size_t js_trace_malloc_usable_size(void *ptr)
     return malloc_usable_size(ptr);
 #else
     /* change this to `return 0;` if compilation fails */
-    return malloc_usable_size(ptr);
+    return 0;
 #endif
 }
 
@@ -274,7 +274,7 @@ static const JSMallocFunctions trace_mf = {
     (size_t (*)(const void *))malloc_usable_size,
 #else
     /* change this to `NULL,` if compilation fails */
-    malloc_usable_size,
+    NULL,
 #endif
 };
 

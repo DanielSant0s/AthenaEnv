@@ -42,8 +42,8 @@
 #include <conio.h>
 #include <utime.h>
 #else
-#include <dlfcn.h>
-#include <termios.h>
+//#include <dlfcn.h>
+//#include <termios.h>
 #include <sys/ioctl.h>
 #include <sys/wait.h>
 
@@ -464,50 +464,7 @@ static JSModuleDef *js_module_loader_so(JSContext *ctx,
 static JSModuleDef *js_module_loader_so(JSContext *ctx,
                                         const char *module_name)
 {
-    JSModuleDef *m;
-    void *hd;
-    JSInitModuleFunc *init;
-    char *filename;
-    
-    if (!strchr(module_name, '/')) {
-        /* must add a '/' so that the DLL is not searched in the
-           system library paths */
-        filename = js_malloc(ctx, strlen(module_name) + 2 + 1);
-        if (!filename)
-            return NULL;
-        strcpy(filename, "./");
-        strcpy(filename + 2, module_name);
-    } else {
-        filename = (char *)module_name;
-    }
-    
-    /* C module */
-    hd = dlopen(filename, RTLD_NOW | RTLD_LOCAL);
-    if (filename != module_name)
-        js_free(ctx, filename);
-    if (!hd) {
-        JS_ThrowReferenceError(ctx, "could not load module filename '%s' as shared library",
-                               module_name);
-        goto fail;
-    }
-
-    init = dlsym(hd, "js_init_module");
-    if (!init) {
-        JS_ThrowReferenceError(ctx, "could not load module filename '%s': js_init_module not found",
-                               module_name);
-        goto fail;
-    }
-
-    m = init(ctx, module_name);
-    if (!m) {
-        JS_ThrowReferenceError(ctx, "could not load module filename '%s': initialization error",
-                               module_name);
-    fail:
-        if (hd)
-            dlclose(hd);
-        return NULL;
-    }
-    return m;
+    return NULL;
 }
 #endif /* !_WIN32 */
 
@@ -1714,6 +1671,7 @@ static JSValue js_os_ttySetRaw(JSContext *ctx, JSValueConst this_val,
 static JSValue js_os_ttyGetWinSize(JSContext *ctx, JSValueConst this_val,
                                    int argc, JSValueConst *argv)
 {
+    /*
     int fd;
     struct winsize ws;
     JSValue obj;
@@ -1731,19 +1689,24 @@ static JSValue js_os_ttyGetWinSize(JSContext *ctx, JSValueConst this_val,
     } else {
         return JS_NULL;
     }
+    */
+    return JS_NULL;
 }
 
-static struct termios oldtty;
+//static struct termios oldtty;
 
+/*
 static void term_exit(void)
 {
     tcsetattr(0, TCSANOW, &oldtty);
 }
+*/
 
 /* XXX: should add a way to go back to normal mode */
 static JSValue js_os_ttySetRaw(JSContext *ctx, JSValueConst this_val,
                                int argc, JSValueConst *argv)
 {
+    /*
     struct termios tty;
     int fd;
     
@@ -1766,6 +1729,7 @@ static JSValue js_os_ttySetRaw(JSContext *ctx, JSValueConst this_val,
     tcsetattr(fd, TCSANOW, &tty);
 
     atexit(term_exit);
+    */
     return JS_UNDEFINED;
 }
 
