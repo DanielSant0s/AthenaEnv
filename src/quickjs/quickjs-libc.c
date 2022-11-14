@@ -2510,6 +2510,8 @@ static JSValue js_os_realpath(JSContext *ctx, JSValueConst this_val,
 static JSValue js_os_symlink(JSContext *ctx, JSValueConst this_val,
                               int argc, JSValueConst *argv)
 {
+    return JS_UNDEFINED;
+    /*
     const char *target, *linkpath;
     int err;
     
@@ -2525,12 +2527,15 @@ static JSValue js_os_symlink(JSContext *ctx, JSValueConst this_val,
     JS_FreeCString(ctx, target);
     JS_FreeCString(ctx, linkpath);
     return JS_NewInt32(ctx, err);
+    */
 }
 
 /* return [path, errorcode] */
 static JSValue js_os_readlink(JSContext *ctx, JSValueConst this_val,
                               int argc, JSValueConst *argv)
 {
+    return JS_UNDEFINED;
+    /*
     const char *path;
     char buf[PATH_MAX];
     int err;
@@ -2549,6 +2554,7 @@ static JSValue js_os_readlink(JSContext *ctx, JSValueConst this_val,
     }
     JS_FreeCString(ctx, path);
     return make_string_error(ctx, buf, err);
+    */
 }
 
 static char **build_envp(JSContext *ctx, JSValueConst obj)
