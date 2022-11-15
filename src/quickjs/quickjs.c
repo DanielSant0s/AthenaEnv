@@ -40,6 +40,12 @@
 #include <malloc_np.h>
 #endif
 
+
+#define FE_DOWNWARD   	1
+#define FE_TONEAREST  	2
+#define FE_TOWARDZERO 	3
+#define FE_UPWARD     	4
+
 #include "cutils.h"
 #include "list.h"
 #include "quickjs.h"

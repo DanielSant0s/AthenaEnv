@@ -28,6 +28,8 @@
 #include <stddef.h>
 #endif
 
+#define PATH_MAX        256
+
 struct list_head {
     struct list_head *prev;
     struct list_head *next;
