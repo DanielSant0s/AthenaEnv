@@ -5,31 +5,36 @@
 #include <string.h>
 #include <stdbool.h>
 
+#include "quickjs/quickjs-libc.h"
+
 #include "duktape/duktape.h"
 #include "duktape/duk_console.h"
 #include "duktape/duk_module_node.h"
 #include "include/taskman.h"
 
+#define countof(x) (sizeof(x) / sizeof((x)[0]))
+
 extern char boot_path[255];
 
 const char* runScript(const char* script, bool isBuffer );
-void push_athena_module(duk_c_function func, const char *key);
 
 void athena_new_function(duk_context *ctx, duk_c_function func, const char* name);
 
-void athena_system_init(duk_context* ctx);
-void athena_render_init(duk_context* ctx);
-void athena_screen_init(duk_context* ctx);
-void athena_color_init(duk_context* ctx);
-void athena_shape_init(duk_context* ctx);
-void athena_font_init(duk_context* ctx);
-void athena_image_init(duk_context* ctx);
-void athena_imagelist_init(duk_context* ctx);
-void athena_network_init(duk_context* ctx);
-void athena_pads_init(duk_context* ctx);
-void athena_sound_init(duk_context* ctx);
-void athena_timer_init(duk_context* ctx);
-void athena_task_init(duk_context* ctx);
+JSModuleDef *athena_push_module(JSContext* ctx, JSModuleInitFunc *func, const JSCFunctionListEntry *func_list, int len, const char* module_name);
+
+//void athena_system_init(JSContext* ctx);
+//void athena_render_init(JSContext* ctx);
+JSModuleDef *athena_screen_init(JSContext* ctx);
+JSModuleDef *athena_color_init(JSContext* ctx);
+//void athena_shape_init(JSContext* ctx);
+//void athena_font_init(JSContext* ctx);
+//void athena_image_init(JSContext* ctx);
+//void athena_imagelist_init(JSContext* ctx);
+//void athena_network_init(JSContext* ctx);
+//void athena_pads_init(JSContext* ctx);
+JSModuleDef * athena_sound_init(JSContext* ctx);
+//void athena_timer_init(JSContext* ctx);
+//void athena_task_init(JSContext* ctx);
 
 float get_obj_float(duk_context* ctx, duk_idx_t idx, const char* key);
 uint32_t get_obj_uint(duk_context* ctx, duk_idx_t idx, const char* key);
