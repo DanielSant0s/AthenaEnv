@@ -153,11 +153,13 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"import * as Color from 'Color';\n"
 				"import * as Screen from 'Screen';\n"
 				"import * as Sound from 'Sound';\n"
+				"import * as Timer from 'Timer';\n"
                 "globalThis.std = std;\n"
                 "globalThis.os = os;\n"
 				"globalThis.Color = Color;\n"
 				"globalThis.Screen = Screen;\n"
-				"globalThis.Sound = Sound;\n";
+				"globalThis.Sound = Sound;\n"
+				"globalThis.Timer = Timer;\n";
             rc = qjs_eval_buf(ctx, str, strlen(str), "<input>", JS_EVAL_TYPE_MODULE);
             if (rc != 0) { return retval; }
         }
