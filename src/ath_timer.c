@@ -16,32 +16,29 @@ typedef struct{
 	clock_t tick;
 } Timer;
 
-duk_ret_t athena_newT(duk_context *ctx) {
-	int argc = duk_get_top(ctx);
-	if (argc != 0) return duk_generic_error(ctx, "wrong number of arguments");
+static JSValue athena_newT(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
+	if (argc != 0) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
 	Timer* new_timer = (Timer*)malloc(sizeof(Timer));
 	new_timer->tick = clock();
 	new_timer->isPlaying = true;
-	duk_push_uint(ctx, (uint32_t)new_timer);
-	return 1;
+	
+	return JS_NewUint32(ctx, (uint32_t)new_timer);
 }
 
-duk_ret_t athena_time(duk_context *ctx) {
-	int argc = duk_get_top(ctx);
-	if (argc != 1) return duk_generic_error(ctx, "wrong number of arguments");
-	Timer* src = (Timer*)duk_get_uint(ctx, 0);
-	if (src->isPlaying){
-		duk_push_int(ctx, (clock() - src->tick));
-	}else{
-		duk_push_int(ctx, src->tick);
-	}
-	return 1;
+static JSValue athena_time(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
+	Timer* src;
+	if (argc != 1) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
+	JS_ToUint32(ctx, &src, argv[0]);
+
+	if (src->isPlaying) return JS_NewInt32(ctx, (clock() - src->tick));
+	return JS_NewInt32(ctx, src->tick);
 }
 
-duk_ret_t athena_pause(duk_context *ctx){
-	int argc = duk_get_top(ctx);
-	if (argc != 1) return duk_generic_error(ctx, "wrong number of arguments");
-	Timer* src = (Timer*)duk_get_uint(ctx, 0);
+static JSValue athena_pause(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	Timer* src;
+	if (argc != 1) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
+	JS_ToUint32(ctx, &src, argv[0]);
+
 	if (src->isPlaying){
 		src->isPlaying = false;
 		src->tick = (clock()-src->tick);
@@ -49,10 +46,11 @@ duk_ret_t athena_pause(duk_context *ctx){
 	return 0;
 }
 
-duk_ret_t athena_resume(duk_context *ctx){
-	int argc = duk_get_top(ctx);
-	if (argc != 1) return duk_generic_error(ctx, "wrong number of arguments");
-	Timer* src = (Timer*)duk_get_uint(ctx, 0);
+static JSValue athena_resume(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	Timer* src;
+	if (argc != 1) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
+	JS_ToUint32(ctx, &src, argv[0]);
+
 	if (!src->isPlaying){
 		src->isPlaying = true;
 		src->tick = (clock()-src->tick);
@@ -60,60 +58,59 @@ duk_ret_t athena_resume(duk_context *ctx){
 	return 0;
 }
 
-duk_ret_t athena_reset(duk_context *ctx){
-	int argc = duk_get_top(ctx);
-	if (argc != 1) return duk_generic_error(ctx, "wrong number of arguments");
-	Timer* src = (Timer*)duk_get_uint(ctx, 0);
+static JSValue athena_reset(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	Timer* src;
+	if (argc != 1) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
+	JS_ToUint32(ctx, &src, argv[0]);
+
 	if (src->isPlaying) src->tick = clock();
 	else src->tick = 0;
 	return 0;
 }
 
-duk_ret_t athena_set(duk_context *ctx){
-	int argc = duk_get_top(ctx);
-	if (argc != 2) return duk_generic_error(ctx, "wrong number of arguments");
-	Timer* src = (Timer*)duk_get_uint(ctx, 0);
-	uint32_t val = (uint32_t)duk_get_int(ctx, 1);
+static JSValue athena_set(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	Timer* src; uint32_t val;
+	if (argc != 2) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
+	JS_ToUint32(ctx, &src, argv[0]);
+	JS_ToUint32(ctx, &val, argv[1]);
 	if (src->isPlaying) src->tick = clock() + val;
 	else src->tick = val;
 	return 0;
 }
 
-duk_ret_t athena_wisPlaying(duk_context *ctx){
-	int argc = duk_get_top(ctx);
-	if (argc != 1) return duk_generic_error(ctx, "wrong number of arguments");
-	Timer* src = (Timer*)duk_get_uint(ctx, 0);
-	duk_push_boolean(ctx, src->isPlaying);
-	return 1;
+static JSValue athena_wisPlaying(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	Timer* src;
+	if (argc != 1) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
+	JS_ToUint32(ctx, &src, argv[0]);
+
+	return JS_NewBool(ctx, src->isPlaying);
 }
 
-duk_ret_t athena_destroy(duk_context *ctx) {
-	int argc = duk_get_top(ctx);
-	if (argc != 1) return duk_generic_error(ctx, "wrong number of arguments");
-	Timer* timer = (Timer*)duk_get_uint(ctx, 0);
-	free(timer);
-	return 1;
+static JSValue athena_destroy(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
+	Timer* src;
+	if (argc != 1) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
+	JS_ToUint32(ctx, &src, argv[0]);
+
+	free(src);
+	return 0;
 }
 
-DUK_EXTERNAL duk_ret_t dukopen_timer(duk_context *ctx) {
-  const duk_function_list_entry module_funcs[] = {
-      { "new",        	    athena_newT,            DUK_VARARGS },
-      { "getTime",    		athena_time,            DUK_VARARGS },
-      { "setTime",    		athena_set,             DUK_VARARGS },
-      { "destroy",    	    athena_destroy,         DUK_VARARGS },
-      { "pause",      		athena_pause,           DUK_VARARGS },
-      { "resume",     		athena_resume,          DUK_VARARGS },
-      { "reset",      		athena_reset,           DUK_VARARGS },
-      { "isPlaying",  	    athena_wisPlaying,      DUK_VARARGS },
-      {NULL, NULL, 0}
-    };
+static const JSCFunctionListEntry module_funcs[] = {
+	JS_CFUNC_DEF("new", -1, athena_newT),
+	JS_CFUNC_DEF("getTime", -1, athena_time),
+	JS_CFUNC_DEF("setTime", -1, athena_set),
+	JS_CFUNC_DEF("destroy", -1, athena_destroy),
+	JS_CFUNC_DEF("pause", -1, athena_pause),
+	JS_CFUNC_DEF("resume", -1, athena_resume),
+	JS_CFUNC_DEF("reset", -1, athena_reset),
+	JS_CFUNC_DEF("isPlaying", -1, athena_wisPlaying)
+};
 
-  duk_push_object(ctx);  /* module result */
-  duk_put_function_list(ctx, -1, module_funcs);
-
-  return 1;  /* return module value */
+static int module_init(JSContext *ctx, JSModuleDef *m){
+    return JS_SetModuleExportList(ctx, m, module_funcs, countof(module_funcs));
 }
 
-void athena_timer_init(duk_context* ctx){
-	push_athena_module(dukopen_timer,   	  "Timer");
+JSModuleDef *athena_timer_init(JSContext* ctx){
+	return athena_push_module(ctx, module_init, module_funcs, countof(module_funcs), "Timer");
+
 }
