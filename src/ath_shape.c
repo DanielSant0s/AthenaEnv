@@ -7,115 +7,135 @@
 #include "include/graphics.h"
 #include "ath_env.h"
 
-duk_ret_t athena_point_draw(duk_context *ctx){
-	int argc = duk_get_top(ctx);
-	if (argc != 3) return duk_generic_error(ctx, "wrong number of arguments"); 
+static JSValue athena_point_draw(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+    double x, y;
+    Color color;
+	if (argc != 3) return JS_ThrowSyntaxError(ctx, "wrong number of arguments"); 
 
-    float x = duk_get_number(ctx, 0);
-    float y = duk_get_number(ctx, 1);
-    Color color = duk_get_uint(ctx, 2);
+    JS_ToFloat64(ctx, &x, argv[0]);
+    JS_ToFloat64(ctx, &y, argv[1]);
+	JS_ToUint32(ctx, &color, argv[2]);
 
 	drawPixel(x, y, color);
 	return 0;
 }
 
-duk_ret_t athena_line_draw(duk_context *ctx){
-	int argc = duk_get_top(ctx);
-	if (argc != 5) return duk_generic_error(ctx, "wrong number of arguments"); 
+static JSValue athena_line_draw(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+    double x1, y1, x2, y2;
+    Color color;
 
-    float x1 = duk_get_number(ctx, 0);
-    float y1 = duk_get_number(ctx, 1);
-    float x2 = duk_get_number(ctx, 2);
-    float y2 = duk_get_number(ctx, 3);
-    Color color = duk_get_uint(ctx, 4);
+	if (argc != 5) return JS_ThrowSyntaxError(ctx, "wrong number of arguments"); 
+
+    JS_ToFloat64(ctx, &x1, argv[0]);
+    JS_ToFloat64(ctx, &y1, argv[1]);
+    JS_ToFloat64(ctx, &x2, argv[2]);
+    JS_ToFloat64(ctx, &y2, argv[3]);
+	JS_ToUint32(ctx, &color, argv[4]);
 
 	drawLine(x1, y1, x2, y2, color);
 	return 0;
 }
 
-duk_ret_t athena_triangle_draw(duk_context *ctx){
-	int argc = duk_get_top(ctx);
-	if (argc != 7 && argc != 9) return duk_generic_error(ctx, "wrong number of arguments"); 
+static JSValue athena_triangle_draw(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+    double x1, y1, x2, y2, x3, y3;
+    Color color1, color2, color3;
 
-    float x1 = duk_get_number(ctx, 0);
-    float y1 = duk_get_number(ctx, 1);
-    float x2 = duk_get_number(ctx, 2);
-    float y2 = duk_get_number(ctx, 3);
-    float x3 = duk_get_number(ctx, 4);
-    float y3 = duk_get_number(ctx, 5);
-	Color color1 = duk_get_uint(ctx, 6);
+	if (argc != 7 && argc != 9) return JS_ThrowSyntaxError(ctx, "wrong number of arguments"); 
+
+    JS_ToFloat64(ctx, &x1, argv[0]);
+    JS_ToFloat64(ctx, &y1, argv[1]);
+    JS_ToFloat64(ctx, &x2, argv[2]);
+    JS_ToFloat64(ctx, &y2, argv[3]);
+    JS_ToFloat64(ctx, &x3, argv[4]);
+    JS_ToFloat64(ctx, &y3, argv[5]);
+	JS_ToUint32(ctx, &color1, argv[6]);
 
     if(argc == 7){
         drawTriangle(x1, y1, x2, y2, x3, y3, color1);
     } else {
-        Color color2 = duk_get_uint(ctx, 7);
-	    Color color3 = duk_get_uint(ctx, 8);
+        JS_ToUint32(ctx, &color2, argv[7]);
+        JS_ToUint32(ctx, &color3, argv[8]);
+
         drawTriangle_gouraud(x1, y1, x2, y2, x3, y3, color1, color2, color3);
     }
 	
 	return 0;
 }
 
-duk_ret_t athena_quad_draw(duk_context *ctx){
-	int argc = duk_get_top(ctx);
-	if (argc != 9 && argc != 12) return duk_generic_error(ctx, "wrong number of arguments"); 
+static JSValue athena_quad_draw(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+    double x1, y1, x2, y2, x3, y3, x4, y4;
+    Color color1, color2, color3, color4;
 
-    float x1 = duk_get_number(ctx, 0);
-    float y1 = duk_get_number(ctx, 1);
-    float x2 = duk_get_number(ctx, 2);
-    float y2 = duk_get_number(ctx, 3);
-    float x3 = duk_get_number(ctx, 4);
-    float y3 = duk_get_number(ctx, 5);
-    float x4 = duk_get_number(ctx, 6);
-    float y4 = duk_get_number(ctx, 7);
-	Color color1 = duk_get_uint(ctx, 8);
+	if (argc != 9 && argc != 12) return JS_ThrowSyntaxError(ctx, "wrong number of arguments"); 
+
+    JS_ToFloat64(ctx, &x1, argv[0]);
+    JS_ToFloat64(ctx, &y1, argv[1]);
+    JS_ToFloat64(ctx, &x2, argv[2]);
+    JS_ToFloat64(ctx, &y2, argv[3]);
+    JS_ToFloat64(ctx, &x3, argv[4]);
+    JS_ToFloat64(ctx, &y3, argv[5]);
+    JS_ToFloat64(ctx, &x4, argv[6]);
+    JS_ToFloat64(ctx, &y4, argv[7]);
+	JS_ToUint32(ctx, &color1, argv[8]);
 
     if(argc == 9){
         drawQuad(x1, y1, x2, y2, x3, y3, x4, y4, color1);
     } else {
-        Color color2 = duk_get_uint(ctx, 9);
-	    Color color3 = duk_get_uint(ctx, 10);
-	    Color color4 = duk_get_uint(ctx, 11);
+        JS_ToUint32(ctx, &color2, argv[9]);
+	    JS_ToUint32(ctx, &color3, argv[10]);
+	    JS_ToUint32(ctx, &color4, argv[11]);
+
         drawQuad_gouraud(x1, y1, x2, y2, x3, y3, x4, y4, color1, color2, color3, color4);
     }
 	
 	return 0;
 }
 
-duk_ret_t athena_rect_draw(duk_context *ctx){
-	int argc = duk_get_top(ctx);
-	if (argc != 5) return duk_generic_error(ctx, "wrong number of arguments"); 
+static JSValue athena_rect_draw(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	if (argc != 5) return JS_ThrowSyntaxError(ctx, "wrong number of arguments"); 
+    double x, y, w, h;
+    Color color;
 
-    float x = duk_get_number(ctx, 0);
-    float y = duk_get_number(ctx, 1);
-    float w = duk_get_number(ctx, 2);
-    float h = duk_get_number(ctx, 3);
-	Color color = duk_get_uint(ctx, 4);
+    JS_ToFloat64(ctx, &x, argv[0]);
+    JS_ToFloat64(ctx, &y, argv[1]);
+    JS_ToFloat64(ctx, &w, argv[2]);
+    JS_ToFloat64(ctx, &h, argv[3]);
+	JS_ToUint32(ctx, &color, argv[4]);
 
 	drawRect(x, y, w, h, color);
 	return 0;
 }
 
-duk_ret_t athena_circle_draw(duk_context *ctx){
-	int argc = duk_get_top(ctx);
-	if (argc != 4 && argc != 5) return duk_generic_error(ctx, "wrong number of arguments"); 
-
-    float x = duk_get_number(ctx, 0);
-    float y = duk_get_number(ctx, 1);
-    float r = duk_get_number(ctx, 2);
+static JSValue athena_circle_draw(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	if (argc != 4 && argc != 5) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
     bool filled = true;
-    Color color = duk_get_uint(ctx, 3);
-    if (argc == 5) filled = duk_to_boolean(ctx, 4);
+    double x, y, r;
+    Color color;
+
+    JS_ToFloat64(ctx, &x, argv[0]);
+    JS_ToFloat64(ctx, &y, argv[1]);
+    JS_ToFloat64(ctx, &r, argv[2]);
+    JS_ToUint32(ctx, &color, argv[3]);
+    if (argc == 5) filled = JS_ToBool(ctx, argv[4]);
 
 	drawCircle(x, y, r, color, filled);
 	return 0;
 }
 
-void athena_shape_init(duk_context* ctx){
-	athena_new_function(ctx, athena_point_draw, "drawPoint");
-    athena_new_function(ctx, athena_line_draw, "drawLine");
-    athena_new_function(ctx, athena_triangle_draw, "drawTriangle");
-    athena_new_function(ctx, athena_quad_draw, "drawQuad");
-    athena_new_function(ctx, athena_rect_draw, "drawRect");
-    athena_new_function(ctx, athena_circle_draw, "drawCircle");
+static const JSCFunctionListEntry module_funcs[] = {
+	JS_CFUNC_DEF("point", 3, athena_point_draw),
+	JS_CFUNC_DEF("line", -1, athena_line_draw),
+	JS_CFUNC_DEF("triangle", -1, athena_triangle_draw),
+	JS_CFUNC_DEF("quad", -1, athena_quad_draw),
+	JS_CFUNC_DEF("rect", -1, athena_rect_draw),
+    JS_CFUNC_DEF("circle", -1, athena_circle_draw)
+};
+
+static int module_init(JSContext *ctx, JSModuleDef *m){
+    return JS_SetModuleExportList(ctx, m, module_funcs, countof(module_funcs));
+}
+
+JSModuleDef *athena_shape_init(JSContext* ctx){
+	return athena_push_module(ctx, module_init, module_funcs, countof(module_funcs), "Draw");
+
 }

@@ -945,7 +945,7 @@ struct JSObject {
                 uint32_t *uint32_ptr;   /* JS_CLASS_UINT32_ARRAY */
                 int64_t *int64_ptr;     /* JS_CLASS_INT64_ARRAY */
                 uint64_t *uint64_ptr;   /* JS_CLASS_UINT64_ARRAY */
-                float *float_ptr;       /* JS_CLASS_FLOAT32_ARRAY */
+                double *float_ptr;       /* JS_CLASS_FLOAT32_ARRAY */
                 double *double_ptr;     /* JS_CLASS_FLOAT64_ARRAY */
             } u;
             uint32_t count; /* <= 2^31-1. 0 for a detached typed array */
@@ -13306,7 +13306,7 @@ static no_inline __exception int js_binary_arith_slow(JSContext *ctx, JSValue *s
     op2 = sp[-1];
     tag1 = JS_VALUE_GET_NORM_TAG(op1);
     tag2 = JS_VALUE_GET_NORM_TAG(op2);
-    /* fast path for float operations */
+    /* fast path for double operations */
     if (tag1 == JS_TAG_FLOAT64 && tag2 == JS_TAG_FLOAT64) {
         d1 = JS_VALUE_GET_FLOAT64(op1);
         d2 = JS_VALUE_GET_FLOAT64(op2);
@@ -20075,7 +20075,7 @@ typedef struct JSToken {
         struct {
             JSValue val;
 #ifdef CONFIG_BIGNUM
-            slimb_t exponent; /* may be != 0 only if val is a float */
+            slimb_t exponent; /* may be != 0 only if val is a double */
 #endif
         } num;
         struct {
@@ -41848,7 +41848,7 @@ static JSValue js_math_hypot(JSContext *ctx, JSValueConst this_val,
 
 static double js_math_fround(double a)
 {
-    return (float)a;
+    return (double)a;
 }
 
 static JSValue js_math_imul(JSContext *ctx, JSValueConst this_val,
@@ -51962,7 +51962,7 @@ static JSValue js_typed_array_fill(JSContext *ctx, JSValueConst this_val,
             return JS_EXCEPTION;
         if (p->class_id == JS_CLASS_FLOAT32_ARRAY) {
             union {
-                float f;
+                double f;
                 uint32_t u32;
             } u;
             u.f = d;
@@ -52080,7 +52080,7 @@ static JSValue js_typed_array_indexOf(JSContext *ctx, JSValueConst this_val,
     int len, tag, is_int, is_bigint, k, stop, inc, res = -1;
     int64_t v64;
     double d;
-    float f;
+    double f;
 
     len = js_typed_array_get_length_internal(ctx, this_val);
     if (len < 0)
@@ -52234,7 +52234,7 @@ static JSValue js_typed_array_indexOf(JSContext *ctx, JSValueConst this_val,
         if (is_bigint)
             break;
         if (isnan(d)) {
-            const float *pv = p->u.array.u.float_ptr;
+            const double *pv = p->u.array.u.float_ptr;
             /* special case: indexOf returns -1, includes finds NaN */
             if (special != special_includes)
                 goto done;
@@ -52244,8 +52244,8 @@ static JSValue js_typed_array_indexOf(JSContext *ctx, JSValueConst this_val,
                     break;
                 }
             }
-        } else if ((f = (float)d) == d) {
-            const float *pv = p->u.array.u.float_ptr;
+        } else if ((f = (double)d) == d) {
+            const double *pv = p->u.array.u.float_ptr;
             for (; k != stop; k += inc) {
                 if (pv[k] == f) {
                     res = k;
@@ -52598,7 +52598,7 @@ static int js_TA_cmp_uint64(const void *a, const void *b, void *opaque) {
 #endif
 
 static int js_TA_cmp_float32(const void *a, const void *b, void *opaque) {
-    return js_cmp_doubles(*(const float *)a, *(const float *)b);
+    return js_cmp_doubles(*(const double *)a, *(const double *)b);
 }
 
 static int js_TA_cmp_float64(const void *a, const void *b, void *opaque) {
@@ -52640,7 +52640,7 @@ static JSValue js_TA_get_uint64(JSContext *ctx, const void *a) {
 #endif
 
 static JSValue js_TA_get_float32(JSContext *ctx, const void *a) {
-    return __JS_NewFloat64(ctx, *(const float *)a);
+    return __JS_NewFloat64(ctx, *(const double *)a);
 }
 
 static JSValue js_TA_get_float64(JSContext *ctx, const void *a) {
@@ -53310,7 +53310,7 @@ static JSValue js_dataview_getValue(JSContext *ctx,
     case JS_CLASS_FLOAT32_ARRAY:
         {
             union {
-                float f;
+                double f;
                 uint32_t i;
             } u;
             v = get_u32(ptr);
@@ -53373,7 +53373,7 @@ static JSValue js_dataview_setValue(JSContext *ctx,
             return JS_EXCEPTION;
         if (class_id == JS_CLASS_FLOAT32_ARRAY) {
             union {
-                float f;
+                double f;
                 uint32_t i;
             } u;
             u.f = d;

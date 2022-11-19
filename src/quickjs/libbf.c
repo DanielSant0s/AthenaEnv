@@ -3877,7 +3877,7 @@ static char *bf_ftoa_internal(size_t *plen, const bf_t *a2, int radix,
                         n_digits = 1 + bf_mul_log2_radix(prec, radix, TRUE, TRUE);
                         /* max number of digits for non exponential
                            notation. The rational is to have the same rule
-                           as JS i.e. n_max = 21 for 64 bit float in base 10. */
+                           as JS i.e. n_max = 21 for 64 bit double in base 10. */
                         n_max = n_digits + 4;
                         if (fmt == BF_FTOA_FORMAT_FREE_MIN) {
                             bf_t b_s, *b = &b_s;
@@ -4612,7 +4612,7 @@ static int bf_pow_int(bf_t *r, const bf_t *x, limb_t prec, void *opaque)
     return ret;
 }
 
-/* x must be a finite non zero float. Return TRUE if there is a
+/* x must be a finite non zero double. Return TRUE if there is a
    floating point number r such as x=r^(2^n) and return this floating
    point number 'r'. Otherwise return FALSE and r is undefined. */
 static BOOL check_exact_power2n(bf_t *r, const bf_t *x, slimb_t n)

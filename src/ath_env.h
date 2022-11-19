@@ -26,7 +26,7 @@ JSModuleDef *athena_push_module(JSContext* ctx, JSModuleInitFunc *func, const JS
 //JSModuleDef *athena_render_init(JSContext* ctx);
 JSModuleDef *athena_screen_init(JSContext* ctx);
 JSModuleDef *athena_color_init(JSContext* ctx);
-//JSModuleDef *athena_shape_init(JSContext* ctx);
+JSModuleDef *athena_shape_init(JSContext* ctx);
 //JSModuleDef *athena_font_init(JSContext* ctx);
 //JSModuleDef *athena_image_init(JSContext* ctx);
 //JSModuleDef *athena_imagelist_init(JSContext* ctx);

@@ -152,12 +152,14 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
                 "import * as os from 'os';\n"
 				"import * as Color from 'Color';\n"
 				"import * as Screen from 'Screen';\n"
+				"import * as Draw from 'Draw';\n"
 				"import * as Sound from 'Sound';\n"
 				"import * as Timer from 'Timer';\n"
                 "globalThis.std = std;\n"
                 "globalThis.os = os;\n"
 				"globalThis.Color = Color;\n"
 				"globalThis.Screen = Screen;\n"
+				"globalThis.Draw = Draw;\n"
 				"globalThis.Sound = Sound;\n"
 				"globalThis.Timer = Timer;\n";
             rc = qjs_eval_buf(ctx, str, strlen(str), "<input>", JS_EVAL_TYPE_MODULE);
@@ -215,6 +217,7 @@ const char* runScript(const char* script, bool isBuffer)
 
 	athena_color_init(ctx);
 	athena_screen_init(ctx);
+	athena_shape_init(ctx);
 	athena_sound_init(ctx);
 	athena_timer_init(ctx);
 
