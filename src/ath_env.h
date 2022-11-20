@@ -34,7 +34,7 @@ JSModuleDef *athena_shape_init(JSContext* ctx);
 //JSModuleDef *athena_pads_init(JSContext* ctx);
 JSModuleDef *athena_sound_init(JSContext* ctx);
 JSModuleDef *athena_timer_init(JSContext* ctx);
-//JSModuleDef *athena_task_init(JSContext* ctx);
+JSModuleDef *athena_task_init(JSContext* ctx);
 
 float get_obj_float(duk_context* ctx, duk_idx_t idx, const char* key);
 uint32_t get_obj_uint(duk_context* ctx, duk_idx_t idx, const char* key);
