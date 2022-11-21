@@ -31,7 +31,7 @@ JSModuleDef *athena_shape_init(JSContext* ctx);
 //JSModuleDef *athena_image_init(JSContext* ctx);
 //JSModuleDef *athena_imagelist_init(JSContext* ctx);
 //JSModuleDef *athena_network_init(JSContext* ctx);
-//JSModuleDef *athena_pads_init(JSContext* ctx);
+JSModuleDef *athena_pads_init(JSContext* ctx);
 JSModuleDef *athena_sound_init(JSContext* ctx);
 JSModuleDef *athena_timer_init(JSContext* ctx);
 JSModuleDef *athena_task_init(JSContext* ctx);
