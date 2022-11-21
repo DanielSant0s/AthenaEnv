@@ -10,6 +10,14 @@ let oldpad = pad;
 let c_x = 300;
 let c_y = 300;
 
+Network.init();
+let netcfg = Network.getConfig();
+console.log("Network config\n" + 
+            "\nIP: " + netcfg.ip + 
+            "\nNetmask: " + netcfg.netmask + 
+            "\nGateway: " + netcfg.gateway + 
+            "\nDNS: " + netcfg.dns);
+
 
 Screen.setVSync(false);
 

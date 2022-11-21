@@ -144,9 +144,8 @@ static int ethApplyIPConfig(int use_dhcp, const struct ip4_addr *ip, const struc
 	return result;
 }
 
-duk_ret_t athena_nw_init(duk_context *ctx){
-	int argc = duk_get_top(ctx);
-	if (argc != 0 && argc != 4) return duk_generic_error(ctx, "wrong number of arguments.");
+static JSValue athena_nw_init(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	if (argc != 0 && argc != 4) return JS_ThrowSyntaxError(ctx, "wrong number of arguments.");
 	
     struct ip4_addr IP, NM, GW, DNS;
 
@@ -158,62 +157,53 @@ duk_ret_t athena_nw_init(duk_context *ctx){
     NetManInit();
 
 	if(ethApplyNetIFConfig(NETMAN_NETIF_ETH_LINK_MODE_AUTO) != 0) {
-		return duk_generic_error(ctx, "Error: failed to set link mode.");
+		return JS_ThrowSyntaxError(ctx, "Error: failed to set link mode.");
 	}
 
     if (argc == 4){
-        IP.addr = ipaddr_addr(duk_get_string(ctx, 0));
-        NM.addr = ipaddr_addr(duk_get_string(ctx, 1));
-        GW.addr = ipaddr_addr(duk_get_string(ctx, 2));
-        DNS.addr = ipaddr_addr(duk_get_string(ctx, 3));
+        IP.addr = ipaddr_addr(JS_ToCString(ctx, argv[0]));
+        NM.addr = ipaddr_addr(JS_ToCString(ctx, argv[1]));
+        GW.addr = ipaddr_addr(JS_ToCString(ctx, argv[2]));
+        DNS.addr = ipaddr_addr(JS_ToCString(ctx, argv[3]));
     }
 
     ps2ipInit(&IP, &NM, &GW);
     ethApplyIPConfig((argc == 4? 0 : 1), &IP, &NM, &GW, &DNS);
 
     if(ethWaitValidNetIFLinkState() != 0) {
-	    return duk_generic_error(ctx, "Error: failed to get valid link status.\n");
+	    return JS_ThrowSyntaxError(ctx, "Error: failed to get valid link status.\n");
 	}
 
     if(argc == 4) return 0;
 
 	if (ethWaitValidDHCPState() != 0)
 	{
-		return duk_generic_error(ctx, "DHCP failed\n.");
+		return JS_ThrowSyntaxError(ctx, "DHCP failed\n.");
 	}
 
 	return 0;
 }
 
-duk_ret_t athena_nw_get_config(duk_context *ctx)
+static JSValue athena_nw_get_config(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
 {
 	t_ip_info ip_info;
+    JSValue obj;
 
 	if (ps2ip_getconfig("sm0", &ip_info) >= 0)
 	{
-	    duk_idx_t obj_idx = duk_push_object(ctx);
-
-	    duk_push_string(ctx, inet_ntoa(ip_info.ipaddr));
-	    duk_put_prop_string(ctx, obj_idx, "ip");
-
-	    duk_push_string(ctx, inet_ntoa(ip_info.netmask));
-	    duk_put_prop_string(ctx, obj_idx, "netmask");
-
-	    duk_push_string(ctx, inet_ntoa(ip_info.gw));
-	    duk_put_prop_string(ctx, obj_idx, "gateway");
-
-	    duk_push_string(ctx, inet_ntoa(*dns_getserver(0)));
-	    duk_put_prop_string(ctx, obj_idx, "dns");
-	}
-	else
-	{
-		return duk_generic_error(ctx, "Unable to read IP address.\n");
+        obj = JS_NewObject(ctx);
+        JS_DefinePropertyValueStr(ctx, obj, "ip", JS_NewString(ctx, inet_ntoa(ip_info.ipaddr)), JS_PROP_C_W_E);
+        JS_DefinePropertyValueStr(ctx, obj, "netmask", JS_NewString(ctx, inet_ntoa(ip_info.netmask)), JS_PROP_C_W_E);
+        JS_DefinePropertyValueStr(ctx, obj, "gateway", JS_NewString(ctx, inet_ntoa(ip_info.gw)), JS_PROP_C_W_E);
+        JS_DefinePropertyValueStr(ctx, obj, "dns", JS_NewString(ctx, inet_ntoa(*dns_getserver(0))), JS_PROP_C_W_E);
+	} else {
+		obj = JS_ThrowSyntaxError(ctx, "Unable to read IP address.\n");
 	}
 
-    return 1;
+    return obj;
 }
 
-duk_ret_t athena_nw_deinit(duk_context *ctx)
+static JSValue athena_nw_deinit(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
 {
 	ps2ipDeinit();
 	NetManDeinit();
@@ -221,20 +211,18 @@ duk_ret_t athena_nw_deinit(duk_context *ctx)
     return 0;
 }
 
-duk_ret_t athena_nw_gethostbyname(duk_context *ctx)
+static JSValue athena_nw_gethostbyname(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
 {
-    const char* host = duk_get_string(ctx, 0);
+    const char* host = JS_ToCString(ctx, argv[0]);
     struct hostent *host_address = lwip_gethostbyname(host);
     
     if (host_address == NULL)
-        return duk_generic_error(ctx, "Unable to resolve address.\n");
+        return JS_ThrowSyntaxError(ctx, "Unable to resolve address.\n");
 
-    duk_push_string(ctx, inet_ntoa(*(struct in_addr*)host_address->h_addr));
-
-    return 1;
+    return JS_NewString(ctx, inet_ntoa(*(struct in_addr*)host_address->h_addr));
 }
 
-duk_ret_t athena_nw_requests_get(duk_context *ctx)
+static JSValue athena_nw_requests_get(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
 {
     CURL *curl;
     CURLcode res;
@@ -248,7 +236,7 @@ duk_ret_t athena_nw_requests_get(duk_context *ctx)
 
     curl = curl_easy_init();
     if(curl) {
-        curl_easy_setopt(curl, CURLOPT_URL, duk_get_string(ctx, 0));
+        curl_easy_setopt(curl, CURLOPT_URL, JS_ToCString(ctx, argv[0]));
 
         /* send all data to this function  */
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
@@ -277,11 +265,10 @@ duk_ret_t athena_nw_requests_get(duk_context *ctx)
  
     curl_global_cleanup();
  
-    duk_push_lstring(ctx, chunk.memory, chunk.size);
-    return 1;
+    return JS_NewStringLen(ctx, chunk.memory, chunk.size);
 }
 
-duk_ret_t athena_nw_requests_post(duk_context *ctx)
+static JSValue athena_nw_requests_post(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
 {
     CURL *curl;
     CURLcode res;
@@ -297,8 +284,8 @@ duk_ret_t athena_nw_requests_post(duk_context *ctx)
     
     curl = curl_easy_init();
     if(curl) {
-        curl_easy_setopt(curl, CURLOPT_URL, duk_get_string(ctx, 0));
-        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, duk_get_lstring(ctx, 1, &len));
+        curl_easy_setopt(curl, CURLOPT_URL, JS_ToCString(ctx, argv[0]));
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, JS_ToCStringLen(ctx, &len, argv[1]));
 
         /* if we do not provide POSTFIELDSIZE, libcurl will strlen() by
            itself */
@@ -326,177 +313,23 @@ duk_ret_t athena_nw_requests_post(duk_context *ctx)
         curl_easy_cleanup(curl);
     }
 
-    duk_push_lstring(ctx, chunk.memory, chunk.size);
-    return 1;
+    return JS_NewStringLen(ctx, chunk.memory, chunk.size);
 }
 
-DUK_EXTERNAL duk_ret_t dukopen_network(duk_context *ctx) {
-    const duk_function_list_entry module_funcs[] = {
-        { "init",                athena_nw_init,       DUK_VARARGS },
-        { "getConfig",           athena_nw_get_config,           0 },
-        { "getHostbyName",       athena_nw_gethostbyname,        1 },
-        { "get",                 athena_nw_requests_get,         1 },
-        { "post",                athena_nw_requests_post,        2 },
-        { "deinit",              athena_nw_deinit,               0 },
-        { NULL, NULL, 0 }
-    };
+static const JSCFunctionListEntry module_funcs[] = {
+    JS_CFUNC_DEF("init", -1, athena_nw_init),
+    JS_CFUNC_DEF("getConfig", 0, athena_nw_get_config),
+    JS_CFUNC_DEF("getHostbyName", 1, athena_nw_gethostbyname),
+    JS_CFUNC_DEF("get", 1, athena_nw_requests_get),
+    JS_CFUNC_DEF("post", 2, athena_nw_requests_post),
+    JS_CFUNC_DEF("deinit", 0, athena_nw_deinit),
+};
 
-    duk_push_object(ctx);  /* module result */
-    duk_put_function_list(ctx, -1, module_funcs);
-
-    return 1;  /* return module value */
+static int module_init(JSContext *ctx, JSModuleDef *m)
+{
+    return JS_SetModuleExportList(ctx, m, module_funcs, countof(module_funcs));
 }
 
-
-static duk_ret_t athena_socket_close(duk_context *ctx){
-    int s = get_obj_int(ctx, -1, "\xff""\xff""s");
-	lwip_close(s);
-
-	return 0;
-}
-
-static duk_ret_t athena_socket_ctor(duk_context *ctx) {
-	int argc = duk_get_top(ctx);
-	if (argc != 2) return duk_generic_error(ctx, "Socket takes only 2 arguments");
-    if (!duk_is_constructor_call(ctx)) return DUK_RET_TYPE_ERROR;
-
-    duk_push_this(ctx);
-
-    int sin_family = duk_get_int(ctx, 0);
-
-	int s = lwip_socket(sin_family, duk_get_int(ctx, 1), 0);
-
-	duk_push_uint(ctx, s);
-    duk_put_prop_string(ctx, -2, "\xff""\xff""s");
-
-	duk_push_uint(ctx, sin_family);
-    duk_put_prop_string(ctx, -2, "\xff""\xff""sin_family");
-
-    return 0;
-}
-
-static duk_ret_t athena_socket_connect(duk_context* ctx) {
-    int argc = duk_get_top(ctx);
-	if (argc != 2) return duk_generic_error(ctx, "Socket.connect takes only 2 arguments");
-
-    struct sockaddr_in addr;
-
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_len = sizeof(addr);
-    addr.sin_family = get_obj_int(ctx, -1, "\xff""\xff""sin_family");
-    addr.sin_addr.s_addr = inet_addr(duk_get_string(ctx, 0));
-    addr.sin_port = PP_HTONS(duk_get_int(ctx, 1));
-
-    int s = get_obj_int(ctx, -1, "\xff""\xff""s");
-
-    int ret = lwip_connect(s, (struct sockaddr*)&addr, sizeof(addr));
-
-    duk_push_int(ctx, ret);
-    return 1;
-}
-
-static duk_ret_t athena_socket_bind(duk_context* ctx) {
-    int argc = duk_get_top(ctx);
-	if (argc != 2) return duk_generic_error(ctx, "Socket.bind takes only 2 arguments");
-
-    struct sockaddr_in addr;
-
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_len = sizeof(addr);
-    addr.sin_family = get_obj_int(ctx, -1, "\xff""\xff""sin_family");
-    addr.sin_addr.s_addr = inet_addr(duk_get_string(ctx, 0));
-    addr.sin_port = PP_HTONS(duk_get_int(ctx, 1));
-
-    int s = get_obj_int(ctx, -1, "\xff""\xff""s");
-
-    int ret = lwip_bind(s, (struct sockaddr*)&addr, sizeof(addr));
-
-    duk_push_int(ctx, ret);
-    return 1;
-}
-
-static duk_ret_t athena_socket_send(duk_context* ctx) {
-    int argc = duk_get_top(ctx);
-	if (argc != 1) return duk_generic_error(ctx, "Socket.send takes a single argument");
-
-    int s = get_obj_int(ctx, -1, "\xff""\xff""s");
-
-    size_t len = 0;
-    void* buf = duk_to_buffer(ctx, 0, &len);
-
-    int ret = lwip_send(s, buf, len, MSG_DONTWAIT);
-
-    duk_push_int(ctx, ret);
-    return 1;
-}
-
-static duk_ret_t athena_socket_listen(duk_context* ctx) {
-    int argc = duk_get_top(ctx);
-	if (argc != 0) return duk_generic_error(ctx, "Socket.listen takes a single argument");
-
-    int s = get_obj_int(ctx, -1, "\xff""\xff""s");
-
-    int ret = lwip_listen(s, 0);
-
-    duk_push_int(ctx, ret);
-    return 1;
-}
-
-static duk_ret_t athena_socket_recv(duk_context* ctx) {
-    int argc = duk_get_top(ctx);
-	if (argc != 1) return duk_generic_error(ctx, "Socket.recv takes a single argument");
-
-    int s = get_obj_int(ctx, -1, "\xff""\xff""s");
-
-    int len = duk_get_int(ctx, 0);
-
-    void* buf = duk_push_buffer(ctx, len, 0);
-
-    lwip_recv(s, buf, len, MSG_PEEK);
-    return 1;
-}
-
-void socket_init(duk_context *ctx) {
-    duk_push_c_function(ctx, athena_socket_ctor, DUK_VARARGS);
-
-    duk_push_object(ctx);
-
-    duk_push_c_function(ctx, athena_socket_connect, 2);
-    duk_put_prop_string(ctx, -2, "connect");
-
-    duk_push_c_function(ctx, athena_socket_bind, 2);
-    duk_put_prop_string(ctx, -2, "bind");
-
-    duk_push_c_function(ctx, athena_socket_listen, 0);
-    duk_put_prop_string(ctx, -2, "listen");
-
-    duk_push_c_function(ctx, athena_socket_send, 1);
-    duk_put_prop_string(ctx, -2, "send");
-
-    duk_push_c_function(ctx, athena_socket_recv, 1);
-    duk_put_prop_string(ctx, -2, "recv");
-
-    duk_push_c_function(ctx, athena_socket_close, 0);
-    duk_put_prop_string(ctx, -2, "close");
-
-    duk_put_prop_string(ctx, -2, "prototype");
-
-    duk_put_global_string(ctx, "Socket");
-
-	duk_push_uint(ctx, AF_INET);
-	duk_put_global_string(ctx, "AF_INET");
-
-	duk_push_uint(ctx, SOCK_STREAM);
-	duk_put_global_string(ctx, "SOCK_STREAM");
-
-	duk_push_uint(ctx, SOCK_DGRAM);
-	duk_put_global_string(ctx, "SOCK_DGRAM");
-
-	duk_push_uint(ctx, SOCK_RAW);
-	duk_put_global_string(ctx, "SOCK_RAW");
-}
-
-void athena_network_init(duk_context* ctx){
-	push_athena_module(dukopen_network,   		   "Network");
-    socket_init(ctx);
+JSModuleDef *athena_network_init(JSContext* ctx){
+    return athena_push_module(ctx, module_init, module_funcs, countof(module_funcs), "Network");
 }
