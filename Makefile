@@ -56,13 +56,12 @@ EXT_LIBS = modules/ds34usb/ee/libds34usb.a modules/ds34bt/ee/libds34bt.a
 APP_CORE = src/main.o src/taskman.o src/pad.o src/graphics.o src/atlas.o src/fntsys.o src/sound.o \
 		   src/system.o src/render.o src/calc_3d.o
 
-
 ATHENA_MODULES = src/quickjs/cutils.o src/quickjs/libbf.o src/quickjs/libregexp.o src/quickjs/libunicode.o \
 				 src/quickjs/realpath.o src/quickjs/quickjs.o src/quickjs/quickjs-libc.o \
 				 src/duktape/duktape.o src/duktape/duk_console.o src/duktape/duk_module_node.o \
 				 src/ath_env.o src/ath_screen.o src/ath_image.o src/ath_imagelist.o src/ath_shape.o \
-				 src/ath_color.o src/ath_font.o src/ath_pads.o src/ath_sound.o \
-				 src/ath_system.o src/ath_timer.o src/ath_render.o src/ath_task.o src/ath_network.o
+				 src/ath_color.o src/ath_font.o src/ath_pads.o src/ath_sound.o src/ath_system.o \
+				 src/ath_timer.o src/ath_render.o src/ath_task.o src/ath_network.o src/ath_socket.o
 
 IOP_MODULES = src/ds34bt.o src/ds34usb.o src/NETMAN.o src/SMAP.o
 

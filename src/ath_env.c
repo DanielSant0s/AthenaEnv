@@ -229,6 +229,7 @@ const char* runScript(const char* script, bool isBuffer)
 	athena_task_init(ctx);
 	athena_pads_init(ctx);
 	athena_network_init(ctx);
+	athena_socket_init(ctx);
 
 
     int s = qjs_handle_file(ctx, script, NULL);
