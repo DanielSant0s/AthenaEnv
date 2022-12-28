@@ -174,14 +174,14 @@ static JSValue athena_nw_init(JSContext *ctx, JSValue this_val, int argc, JSValu
 	    return JS_ThrowSyntaxError(ctx, "Error: failed to get valid link status.\n");
 	}
 
-    if(argc == 4) return 0;
+    if(argc == 4) return JS_UNDEFINED;
 
 	if (ethWaitValidDHCPState() != 0)
 	{
 		return JS_ThrowSyntaxError(ctx, "DHCP failed\n.");
 	}
 
-	return 0;
+	return JS_UNDEFINED;
 }
 
 static JSValue athena_nw_get_config(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
@@ -317,7 +317,7 @@ static JSValue athena_nw_requests_post(JSContext *ctx, JSValue this_val, int arg
 }
 
 static const JSCFunctionListEntry module_funcs[] = {
-    JS_CFUNC_DEF("init", -1, athena_nw_init),
+    JS_CFUNC_DEF("init", 4, athena_nw_init),
     JS_CFUNC_DEF("getConfig", 0, athena_nw_get_config),
     JS_CFUNC_DEF("getHostbyName", 1, athena_nw_gethostbyname),
     JS_CFUNC_DEF("get", 1, athena_nw_requests_get),

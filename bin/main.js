@@ -10,6 +10,8 @@ let oldpad = pad;
 let c_x = 300;
 let c_y = 300;
 
+var mine_font = new Font("minecraft.ttf");
+
 Network.init();
 let netcfg = Network.getConfig();
 console.log("Network config\n" + 
@@ -17,7 +19,6 @@ console.log("Network config\n" +
             "\nNetmask: " + netcfg.netmask + 
             "\nGateway: " + netcfg.gateway + 
             "\nDNS: " + netcfg.dns);
-
 
 Screen.setVSync(false);
 
@@ -48,6 +49,8 @@ while (true){
         console.log(fps + " FPS");
         ti = Date.now();
     }
+
+    mine_font.print(10, 10, "Hello world!");
     
     Screen.flip();
 };

@@ -158,6 +158,8 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"import * as Tasks from 'Tasks';\n"
 				"import * as Pads from 'Pads';\n"
 				"import * as Network from 'Network';\n"
+				"import * as Socket from 'Socket';\n"
+				"import * as Font from 'Font';\n"
                 "globalThis.std = std;\n"
                 "globalThis.os = os;\n"
 				"globalThis.Color = Color;\n"
@@ -167,7 +169,9 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"globalThis.Timer = Timer;\n"
 				"globalThis.Tasks = Tasks;\n"
 				"globalThis.Pads = Pads;\n"
-				"globalThis.Network = Network;\n";
+				"globalThis.Network = Network;\n"
+				//"globalThis.Socket = Socket;\n";
+				"globalThis.Font = Font.Font;\n";
             rc = qjs_eval_buf(ctx, str, strlen(str), "<input>", JS_EVAL_TYPE_MODULE);
             if (rc != 0) { return retval; }
         }
@@ -230,6 +234,7 @@ const char* runScript(const char* script, bool isBuffer)
 	athena_pads_init(ctx);
 	athena_network_init(ctx);
 	athena_socket_init(ctx);
+	athena_font_init(ctx);
 
 
     int s = qjs_handle_file(ctx, script, NULL);

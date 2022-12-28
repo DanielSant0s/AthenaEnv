@@ -113,7 +113,7 @@ static JSValue athena_socket_recv(JSContext *ctx, JSValue this_val, int argc, JS
     int len;
     JS_ToInt32(ctx, &len, argv[0]);
 
-    void* buf = malloc(len);
+    void* buf = js_mallocz(ctx, len);
 
     lwip_recv(s->id, buf, len, MSG_PEEK);
     return JS_NewArrayBufferCopy(ctx, buf, len);
