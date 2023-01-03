@@ -12,6 +12,7 @@ let c_y = 300;
 
 var mine_font = new Font("minecraft.ttf");
 mine_font.scale = 2;
+mine_font.color = Color.new(255, 255, 0);
 
 Network.init();
 let netcfg = Network.getConfig();
