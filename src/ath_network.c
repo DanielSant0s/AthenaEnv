@@ -237,17 +237,17 @@ static JSValue athena_nw_requests_get(JSContext *ctx, JSValue this_val, int argc
     curl = curl_easy_init();
     if(curl) {
         curl_easy_setopt(curl, CURLOPT_URL, JS_ToCString(ctx, argv[0]));
+        curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1L);
+        curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 50L);
+        curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, 1L);
 
         /* send all data to this function  */
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
-
-        /* we pass our 'chunk' struct to the callback function */
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&chunk);
 
         curl_easy_setopt(curl, CURLOPT_USERAGENT, "libcurl-agent/1.0");
 
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
- 
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
  
         /* Perform the request, res will get the return code */
@@ -259,8 +259,6 @@ static JSValue athena_nw_requests_get(JSContext *ctx, JSValue this_val, int argc
     
         /* always cleanup */
         curl_easy_cleanup(curl);
-
-        //free(chunk.memory);
   }
  
     curl_global_cleanup();
@@ -311,7 +309,10 @@ static JSValue athena_nw_requests_post(JSContext *ctx, JSValue this_val, int arg
 
         /* always cleanup */
         curl_easy_cleanup(curl);
+        
     }
+
+    curl_global_cleanup();
 
     return JS_NewStringLen(ctx, chunk.memory, chunk.size);
 }

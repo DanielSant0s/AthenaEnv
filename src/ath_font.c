@@ -100,22 +100,52 @@ static JSValue athena_font_print(JSContext *ctx, JSValue this_val, int argc, JSV
 	return JS_UNDEFINED;
 }
 
-static JSValue athena_font_setscale(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
+static JSValue athena_font_get_scale(JSContext *ctx, JSValueConst this_val)
+{
+    JSFontData *s = JS_GetOpaque2(ctx, this_val, js_font_class_id);
+    if (!s)
+        return JS_EXCEPTION;
+    return JS_NewFloat64(ctx, s->scale);
+}
+
+static JSValue athena_font_set_scale(JSContext *ctx, JSValueConst this_val, JSValue val)
+{
+    JSFontData *s = JS_GetOpaque2(ctx, this_val, js_font_class_id);
     double scale;
-
-	if (argc != 1) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
-
-    JSFontData *font = JS_GetOpaque2(ctx, this_val, js_font_class_id);
-
-    JS_ToFloat64(ctx, &scale, argv[0]);
-
-    font->scale = scale;
-
-    if (font->type == truetype_font){
-        fntSetCharSize(font->id, FNTSYS_CHAR_SIZE*64*scale, FNTSYS_CHAR_SIZE*64*scale);
+    if (!s)
+        return JS_EXCEPTION;
+    if (JS_ToFloat64(ctx, &scale, val))
+        return JS_EXCEPTION;
+    s->scale = scale;
+    if (s->type == truetype_font){
+        fntSetCharSize(s->id, FNTSYS_CHAR_SIZE*64*scale, FNTSYS_CHAR_SIZE*64*scale);
     }
 
-	return JS_UNDEFINED;
+    return JS_UNDEFINED;
+}
+
+static JSValue athena_font_get_color(JSContext *ctx, JSValueConst this_val)
+{
+    JSFontData *s = JS_GetOpaque2(ctx, this_val, js_font_class_id);
+    if (!s)
+        return JS_EXCEPTION;
+    return JS_NewFloat64(ctx, s->scale);
+}
+
+static JSValue athena_font_set_color(JSContext *ctx, JSValueConst this_val, JSValue val)
+{
+    JSFontData *s = JS_GetOpaque2(ctx, this_val, js_font_class_id);
+    double scale;
+    if (!s)
+        return JS_EXCEPTION;
+    if (JS_ToFloat64(ctx, &scale, val))
+        return JS_EXCEPTION;
+    s->scale = scale;
+    if (s->type == truetype_font){
+        fntSetCharSize(s->id, FNTSYS_CHAR_SIZE*64*scale, FNTSYS_CHAR_SIZE*64*scale);
+    }
+
+    return JS_UNDEFINED;
 }
 
 static JSClassDef js_font_class = {
@@ -124,8 +154,10 @@ static JSClassDef js_font_class = {
 }; 
 
 static const JSCFunctionListEntry js_font_proto_funcs[] = {
+    //JS_CGETSET_MAGIC_DEF("x", js_point_get_xy, js_point_set_xy, 0),
+    JS_CGETSET_DEF("scale", athena_font_get_scale, athena_font_set_scale),
+    JS_CGETSET_DEF("color", athena_font_get_scale, athena_font_set_scale),
     JS_CFUNC_DEF("print", 3, athena_font_print),
-    JS_CFUNC_DEF("setScale", 1, athena_font_setscale),
 };
 
 static int font_init(JSContext *ctx, JSModuleDef *m) {
