@@ -2,8 +2,20 @@ console.log('Hello, QuickJS!');
 let s = Date.now();
 let ti = Date.now();
 
+Screen.setMode(Screen.NTSC, 640, 448, Screen.CT24, Screen.INTERLACED, Screen.FIELD, true, Screen.Z16S);
+Render.init(4/3);
+
+let dragonmesh = Render.loadOBJ("render/dragon.obj");
+
 let test = Color.new(128, 0, 255);
 console.log('Color module test - R:' + Color.getR(test) + ' G: ' + Color.getG(test) + ' B: ' + Color.getB(test));
+
+Camera.position(0.0, 0.0, 50.0);
+Camera.rotation(0.0, 0.0,  0.0);
+
+Lights.create(1);
+
+Lights.set(1,  0.0,  1.0, -1.0, 0.9, 0.5, 0.5, Lights.DIRECTIONAL);
 
 let pad = Pads.get();
 let oldpad = pad;
@@ -22,9 +34,15 @@ console.log("Network config\n" +
             "\nGateway: " + netcfg.gateway + 
             "\nDNS: " + netcfg.dns);
 
-console.log(Network.get("https://github.com"));
+//console.log(Network.get("https://github.com"));
 
 Screen.setVSync(false);
+
+let circle = new Image("pads/circle.png", VRAM);
+circle.width = 100.0;
+circle.height = 100.0;
+circle.color = Color.new(0, 0, 128);
+circle.filter = LINEAR;
 
 while (true){
     Screen.clear(test);
@@ -55,6 +73,10 @@ while (true){
     }
 
     mine_font.print(10, 10, "Hello world!");
+
+    circle.draw(200, 200);
+
+    Render.drawOBJ(dragonmesh, 0.0, 0.0, 30.0, 180.0, 0.0, 0.0);
     
     Screen.flip();
 };

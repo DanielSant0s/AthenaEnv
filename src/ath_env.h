@@ -23,12 +23,12 @@ void athena_new_function(duk_context *ctx, duk_c_function func, const char* name
 JSModuleDef *athena_push_module(JSContext* ctx, JSModuleInitFunc *func, const JSCFunctionListEntry *func_list, int len, const char* module_name);
 
 //JSModuleDef *athena_system_init(JSContext* ctx);
-//JSModuleDef *athena_render_init(JSContext* ctx);
+JSModuleDef *athena_render_init(JSContext* ctx);
 JSModuleDef *athena_screen_init(JSContext* ctx);
 JSModuleDef *athena_color_init(JSContext* ctx);
 JSModuleDef *athena_shape_init(JSContext* ctx);
 JSModuleDef *athena_font_init(JSContext* ctx);
-//JSModuleDef *athena_image_init(JSContext* ctx);
+JSModuleDef *athena_image_init(JSContext* ctx);
 //JSModuleDef *athena_imagelist_init(JSContext* ctx);
 JSModuleDef *athena_socket_init(JSContext* ctx);
 JSModuleDef *athena_network_init(JSContext* ctx);

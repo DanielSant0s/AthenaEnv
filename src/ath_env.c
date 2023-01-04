@@ -160,6 +160,10 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"import * as Network from 'Network';\n"
 				"import * as Socket from 'Socket';\n"
 				"import * as Font from 'Font';\n"
+				"import * as Image from 'Image';\n"
+				"import * as Render from 'Render';\n"
+				"import * as Lights from 'Lights';\n"
+				"import * as Camera from 'Camera';\n"
                 "globalThis.std = std;\n"
                 "globalThis.os = os;\n"
 				"globalThis.Color = Color;\n"
@@ -170,8 +174,16 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"globalThis.Tasks = Tasks;\n"
 				"globalThis.Pads = Pads;\n"
 				"globalThis.Network = Network;\n"
-				//"globalThis.Socket = Socket;\n";
-				"globalThis.Font = Font.Font;\n";
+				"globalThis.Socket = Socket.Socket;\n"
+				"globalThis.Font = Font.Font;\n"
+				"globalThis.NEAREST = 0;\n"
+				"globalThis.LINEAR = 1;\n"
+				"globalThis.VRAM = false;\n"
+				"globalThis.RAM = true;\n"
+				"globalThis.Image = Image.Image;\n"
+				"globalThis.Render = Render;\n"
+				"globalThis.Lights = Lights;\n"
+				"globalThis.Camera = Camera;\n";
             rc = qjs_eval_buf(ctx, str, strlen(str), "<input>", JS_EVAL_TYPE_MODULE);
             if (rc != 0) { return retval; }
         }
@@ -227,10 +239,12 @@ const char* runScript(const char* script, bool isBuffer)
 
 	athena_color_init(ctx);
 	athena_screen_init(ctx);
+	athena_render_init(ctx);
 	athena_shape_init(ctx);
 	athena_sound_init(ctx);
 	athena_timer_init(ctx);
 	athena_task_init(ctx);
+	athena_image_init(ctx);
 	athena_pads_init(ctx);
 	athena_network_init(ctx);
 	athena_socket_init(ctx);

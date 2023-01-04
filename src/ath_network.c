@@ -254,7 +254,7 @@ static JSValue athena_nw_requests_get(JSContext *ctx, JSValue this_val, int argc
         res = curl_easy_perform(curl);
         /* Check for errors */
         if(res != CURLE_OK) {
-            fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+            JS_ThrowSyntaxError(ctx, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
         }
     
         /* always cleanup */
@@ -305,7 +305,7 @@ static JSValue athena_nw_requests_post(JSContext *ctx, JSValue this_val, int arg
         res = curl_easy_perform(curl);
         /* Check for errors */
         if(res != CURLE_OK)
-            fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+            JS_ThrowSyntaxError(ctx, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
 
         /* always cleanup */
         curl_easy_cleanup(curl);
