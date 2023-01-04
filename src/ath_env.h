@@ -11,6 +11,21 @@
 #include "duktape/duk_console.h"
 #include "duktape/duk_module_node.h"
 #include "include/taskman.h"
+#include "include/graphics.h"
+
+typedef struct {
+    GSTEXTURE tex;
+    Color color;
+	double width;
+	double height;
+	double startx;
+	double starty;
+	double endx;
+	double endy;
+    double angle;
+} JSImageData;
+
+JSClassID get_img_class_id();
 
 #define countof(x) (sizeof(x) / sizeof((x)[0]))
 

@@ -16,7 +16,8 @@ static JSValue athena_initrender(JSContext *ctx, JSValue this_val, int argc, JSV
 }
 
 static JSValue athena_loadobj(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-	JSValue val;
+	JSImageData *image;
+	model* res_m;
 
 	#ifndef SKIP_ERROR_HANDLING
 	if (argc != 2 && argc != 1) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
@@ -24,16 +25,12 @@ static JSValue athena_loadobj(JSContext *ctx, JSValue this_val, int argc, JSValu
 	const char *file_tbo = JS_ToCString(ctx, argv[0]); //Model filename
 	
 	// Loading texture
-	/*if(argc == 2) {
-		duk_get_prop_string(ctx, 1, "\xff""\xff""data");
-		tex = (GSTEXTURE*)duk_get_uint(ctx, -1);
-		duk_pop(ctx);
-		duk_get_prop_string(ctx, 1, "filter");
-		tex->Filter = duk_get_uint(ctx, -1);
-		duk_pop(ctx);
-	}*/
-	
-	model* res_m = loadOBJ(file_tbo, NULL/*tex*/);
+	if(argc == 2) {
+		image = JS_GetOpaque2(ctx, argv[1], get_img_class_id());
+		res_m = loadOBJ(file_tbo, &(image->tex));
+	} else {
+		res_m = loadOBJ(file_tbo, NULL);
+	}
 
 	return JS_NewUint32(ctx, res_m);
 }
@@ -108,10 +105,10 @@ static JSValue athena_drawbbox(JSContext *ctx, JSValue this_val, int argc, JSVal
 }
 
 static const JSCFunctionListEntry render_funcs[] = {
-    JS_CFUNC_DEF( "init",      1,     		athena_initrender),
+    JS_CFUNC_DEF( "init",      1,     		 athena_initrender),
   	JS_CFUNC_DEF( "loadOBJ",   2,        		athena_loadobj ),
     JS_CFUNC_DEF( "drawOBJ",   7,        		athena_drawobj ),
-	JS_CFUNC_DEF( "drawBbox",  8,         	athena_drawbbox),
+	JS_CFUNC_DEF( "drawBbox",  8,         	    athena_drawbbox),
     JS_CFUNC_DEF( "freeOBJ",   1,        		athena_freeobj ),
 };
 

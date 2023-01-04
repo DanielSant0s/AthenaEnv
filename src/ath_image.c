@@ -7,21 +7,12 @@
 #include "include/graphics.h"
 #include "ath_env.h"
 
-typedef struct {
-    GSTEXTURE tex;
-    Color color;
-	double width;
-	double height;
-	double startx;
-	double starty;
-	double endx;
-	double endy;
-    double angle;
-} JSImageData;
-
 static JSClassID js_image_class_id;
 
-/*
+JSClassID get_img_class_id(){
+	return js_image_class_id;
+}
+
 int append_img(AsyncImage* img, ImgList* list)
 {
     AsyncImage** aux = malloc((list->size+1)*sizeof(AsyncImage*));
@@ -50,6 +41,7 @@ static int load_img_async(GSTEXTURE* image, const char* path, bool delayed, ImgL
 	return 0;
 }
 
+/*
 
 static JSValue athena_image_isloaded(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	if(argc != 0) return JS_ThrowSyntaxError(ctx, "isLoaded takes no arguments");

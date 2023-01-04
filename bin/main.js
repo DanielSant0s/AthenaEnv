@@ -2,10 +2,12 @@ console.log('Hello, QuickJS!');
 let s = Date.now();
 let ti = Date.now();
 
-Screen.setMode(Screen.NTSC, 640, 448, Screen.CT24, Screen.INTERLACED, Screen.FIELD, true, Screen.Z16S);
+Screen.setMode(NTSC, 640, 448, CT24, INTERLACED, FIELD, true, Z16S);
 Render.init(4/3);
 
-let dragonmesh = Render.loadOBJ("render/dragon.obj");
+let dragontex = new Image("render/dragon.png");
+dragontex.filter = LINEAR;
+let dragonmesh = Render.loadOBJ("render/dragon.obj", dragontex);
 
 let test = Color.new(128, 0, 255);
 console.log('Color module test - R:' + Color.getR(test) + ' G: ' + Color.getG(test) + ' B: ' + Color.getB(test));
@@ -15,7 +17,7 @@ Camera.rotation(0.0, 0.0,  0.0);
 
 Lights.create(1);
 
-Lights.set(1,  0.0,  1.0, -1.0, 0.9, 0.5, 0.5, Lights.DIRECTIONAL);
+Lights.set(1,  0.0,  1.0, -1.0, 0.9, 0.5, 0.5, DIRECTIONAL);
 
 let pad = Pads.get();
 let oldpad = pad;
@@ -34,7 +36,7 @@ console.log("Network config\n" +
             "\nGateway: " + netcfg.gateway + 
             "\nDNS: " + netcfg.dns);
 
-//console.log(Network.get("https://github.com"));
+console.log(Network.get("https://github.com"));
 
 Screen.setVSync(false);
 

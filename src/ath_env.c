@@ -167,22 +167,54 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
                 "globalThis.std = std;\n"
                 "globalThis.os = os;\n"
 				"globalThis.Color = Color;\n"
+
 				"globalThis.Screen = Screen;\n"
+
+				"globalThis.NTSC = Screen.NTSC;\n"
+				"globalThis.DTV_480p = Screen.DTV_480p;\n"
+				"globalThis.PAL = Screen.PAL;\n"
+				"globalThis.DTV_576p = Screen.DTV_576p;\n"
+				"globalThis.DTV_1080i = Screen.DTV_1080i;\n"
+
+				"globalThis.INTERLACED = Screen.INTERLACED;\n"
+				"globalThis.PROGRESSIVE = Screen.PROGRESSIVE;\n"
+
+				"globalThis.FIELD = Screen.FIELD;\n"
+				"globalThis.FRAME = Screen.FRAME;\n"
+
+				"globalThis.CT16 = Screen.CT16;\n"
+				"globalThis.CT16S = Screen.CT16S;\n"
+				"globalThis.CT24 = Screen.CT24;\n"
+				"globalThis.CT32 = Screen.CT32;\n"
+
+				"globalThis.Z16 = Screen.Z16;\n"
+				"globalThis.Z16S = Screen.Z16S;\n"
+				"globalThis.Z24 = Screen.Z24;\n"
+				"globalThis.Z32 = Screen.Z32;\n"
+
 				"globalThis.Draw = Draw;\n"
 				"globalThis.Sound = Sound;\n"
 				"globalThis.Timer = Timer;\n"
 				"globalThis.Tasks = Tasks;\n"
 				"globalThis.Pads = Pads;\n"
 				"globalThis.Network = Network;\n"
+
 				"globalThis.Socket = Socket.Socket;\n"
+
 				"globalThis.Font = Font.Font;\n"
+
 				"globalThis.NEAREST = 0;\n"
 				"globalThis.LINEAR = 1;\n"
 				"globalThis.VRAM = false;\n"
 				"globalThis.RAM = true;\n"
 				"globalThis.Image = Image.Image;\n"
+
 				"globalThis.Render = Render;\n"
+
 				"globalThis.Lights = Lights;\n"
+				"globalThis.AMBIENT = Lights.AMBIENT;\n"
+				"globalThis.DIRECTIONAL = Lights.DIRECTIONAL;\n"
+
 				"globalThis.Camera = Camera;\n";
             rc = qjs_eval_buf(ctx, str, strlen(str), "<input>", JS_EVAL_TYPE_MODULE);
             if (rc != 0) { return retval; }
