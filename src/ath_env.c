@@ -11,35 +11,6 @@
 //ctx stands for duk JavaScript virtual machine stack and values.
 duk_context *ctx;
 
-void athena_new_function(duk_context *ctx, duk_c_function func, const char* name){
-    duk_push_c_function(ctx, func, DUK_VARARGS);
-    duk_put_global_string(ctx, name);
-}
-
-float get_obj_float(duk_context* ctx, duk_idx_t idx, const char* key){
-	duk_push_this(ctx);
-    duk_get_prop_string(ctx, idx, key);
-	return duk_to_number(ctx, idx);
-}
-
-uint32_t get_obj_uint(duk_context* ctx, duk_idx_t idx, const char* key){
-	duk_push_this(ctx);
-    duk_get_prop_string(ctx, idx, key);
-	return duk_to_uint(ctx, idx);
-}
-
-int get_obj_int(duk_context* ctx, duk_idx_t idx, const char* key){
-	duk_push_this(ctx);
-    duk_get_prop_string(ctx, idx, key);
-	return duk_to_int(ctx, idx);
-}
-
-bool get_obj_boolean(duk_context* ctx, duk_idx_t idx, const char* key){
-	duk_push_this(ctx);
-    duk_get_prop_string(ctx, idx, key);
-	return duk_to_boolean(ctx, idx);
-}
-
 void push_athena_module(duk_c_function func, const char *key){
 	printf("AthenaEnv: Pushing %s module...\n", key);
 	duk_push_c_function(ctx, func, 0);
@@ -164,6 +135,8 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"import * as Render from 'Render';\n"
 				"import * as Lights from 'Lights';\n"
 				"import * as Camera from 'Camera';\n"
+				"import * as System from 'System';\n"
+				"import * as Sif from 'Sif';\n"
                 "globalThis.std = std;\n"
                 "globalThis.os = os;\n"
 				"globalThis.Color = Color;\n"
@@ -208,6 +181,8 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"globalThis.VRAM = false;\n"
 				"globalThis.RAM = true;\n"
 				"globalThis.Image = Image.Image;\n"
+
+				"globalThis.Sif = Sif;\n"
 
 				"globalThis.Render = Render;\n"
 
@@ -269,6 +244,7 @@ const char* runScript(const char* script, bool isBuffer)
     js_std_init_handlers(rt);
     JSContext *ctx = JS_NewCustomContext(rt); if (!ctx) { return qjserr; }
 
+	athena_system_init(ctx);
 	athena_color_init(ctx);
 	athena_screen_init(ctx);
 	athena_render_init(ctx);

@@ -20,7 +20,7 @@ static int imgThread(void* data)
 
 	return 0;
 }
-
+/*
 static duk_ret_t athena_imagelist_dtor(duk_context *ctx){
 
     duk_get_prop_string(ctx, 0, "\xff""\xff""deleted");
@@ -97,3 +97,5 @@ void athena_imagelist_init(duk_context *ctx) {
 
     duk_put_global_string(ctx, "ImageList");
 }
+
+*/

@@ -36,7 +36,7 @@ console.log("Network config\n" +
             "\nGateway: " + netcfg.gateway + 
             "\nDNS: " + netcfg.dns);
 
-console.log(Network.get("https://github.com"));
+//console.log(Network.get("https://github.com"));
 
 Screen.setVSync(false);
 
