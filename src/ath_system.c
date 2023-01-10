@@ -80,7 +80,6 @@ static JSValue athena_dir(JSContext *ctx, JSValue this_val, int argc, JSValueCon
 	if (argc != 0 && argc != 1) return JS_ThrowSyntaxError(ctx, "Argument error: System.listDir([path]) takes zero or one argument.");
 	
 	JSValue arr = JS_NewArray(ctx);
-	duk_idx_t arr_idx = duk_push_array(ctx);
 
     const char *temp_path = "";
 	char path[255];

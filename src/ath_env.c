@@ -8,16 +8,6 @@
 
 #define TRUE 1
 
-//ctx stands for duk JavaScript virtual machine stack and values.
-duk_context *ctx;
-
-void push_athena_module(duk_c_function func, const char *key){
-	printf("AthenaEnv: Pushing %s module...\n", key);
-	duk_push_c_function(ctx, func, 0);
-    duk_call(ctx, 0);
-    duk_put_global_string(ctx, key);
-}
-
 JSModuleDef *athena_push_module(JSContext* ctx, JSModuleInitFunc *func, const JSCFunctionListEntry *func_list, int len, const char* module_name){
     JSModuleDef *m;
     m = JS_NewCModule(ctx, module_name, func);

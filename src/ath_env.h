@@ -7,9 +7,6 @@
 
 #include "quickjs/quickjs-libc.h"
 
-#include "duktape/duktape.h"
-#include "duktape/duk_console.h"
-#include "duktape/duk_module_node.h"
 #include "include/taskman.h"
 #include "include/graphics.h"
 
