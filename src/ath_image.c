@@ -149,12 +149,12 @@ static JSValue athena_image_ctor(JSContext *ctx, JSValueConst new_target, int ar
 static JSValue athena_image_draw(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	if (argc != 2) return JS_ThrowSyntaxError(ctx, "draw takes x and y arguments(2)!");
 
-	double x, y;
+	float x, y;
 
 	JSImageData *image = JS_GetOpaque2(ctx, this_val, js_image_class_id);
 
-	JS_ToFloat64(ctx, &x, argv[0]);
-	JS_ToFloat64(ctx, &y, argv[1]);
+	JS_ToFloat32(ctx, &x, argv[0]);
+	JS_ToFloat32(ctx, &y, argv[1]);
 
 	if(image->angle != 0.0){
 		drawImageRotate(&(image->tex), x, y, image->width, image->height, image->startx, image->starty, image->endx, image->endy, image->angle, image->color);
@@ -176,25 +176,25 @@ static JSValue js_image_get(JSContext *ctx, JSValueConst this_val, int magic)
 
 	switch(magic) {
 		case 0:
-			val = JS_NewFloat64(ctx, (double)s->width);
+			val = JS_NewFloat32(ctx, (float)s->width);
 			break;
 		case 1:
-			val = JS_NewFloat64(ctx, (double)s->height);
+			val = JS_NewFloat32(ctx, (float)s->height);
 			break;
 		case 2:
-			val = JS_NewFloat64(ctx, s->startx);
+			val = JS_NewFloat32(ctx, s->startx);
 			break;
 		case 3:
-			val = JS_NewFloat64(ctx, s->starty);
+			val = JS_NewFloat32(ctx, s->starty);
 			break;
 		case 4:
-			val = JS_NewFloat64(ctx, s->endx);
+			val = JS_NewFloat32(ctx, s->endx);
 			break;
 		case 5:
-			val = JS_NewFloat64(ctx, s->endy);
+			val = JS_NewFloat32(ctx, s->endy);
 			break;
 		case 6:
-			val = JS_NewFloat64(ctx, s->angle);
+			val = JS_NewFloat32(ctx, s->angle);
 			break;
 	}
 
@@ -205,9 +205,9 @@ static JSValue js_image_get(JSContext *ctx, JSValueConst this_val, int magic)
 static JSValue js_image_set(JSContext *ctx, JSValueConst this_val, JSValue val, int magic)
 {
     JSImageData *s = JS_GetOpaque2(ctx, this_val, js_image_class_id);
-    double v;
+    float v;
 
-    if (!s || JS_ToFloat64(ctx, &v, val)){
+    if (!s || JS_ToFloat32(ctx, &v, val)){
 		return JS_EXCEPTION;
 	}
 

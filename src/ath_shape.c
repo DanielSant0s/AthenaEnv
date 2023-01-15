@@ -8,12 +8,12 @@
 #include "ath_env.h"
 
 static JSValue athena_point_draw(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-    double x, y;
+    float x, y;
     Color color;
 	if (argc != 3) return JS_ThrowSyntaxError(ctx, "wrong number of arguments"); 
 
-    JS_ToFloat64(ctx, &x, argv[0]);
-    JS_ToFloat64(ctx, &y, argv[1]);
+    JS_ToFloat32(ctx, &x, argv[0]);
+    JS_ToFloat32(ctx, &y, argv[1]);
 	JS_ToUint32(ctx, &color, argv[2]);
 
 	drawPixel(x, y, color);
@@ -21,15 +21,15 @@ static JSValue athena_point_draw(JSContext *ctx, JSValue this_val, int argc, JSV
 }
 
 static JSValue athena_line_draw(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-    double x1, y1, x2, y2;
+    float x1, y1, x2, y2;
     Color color;
 
 	if (argc != 5) return JS_ThrowSyntaxError(ctx, "wrong number of arguments"); 
 
-    JS_ToFloat64(ctx, &x1, argv[0]);
-    JS_ToFloat64(ctx, &y1, argv[1]);
-    JS_ToFloat64(ctx, &x2, argv[2]);
-    JS_ToFloat64(ctx, &y2, argv[3]);
+    JS_ToFloat32(ctx, &x1, argv[0]);
+    JS_ToFloat32(ctx, &y1, argv[1]);
+    JS_ToFloat32(ctx, &x2, argv[2]);
+    JS_ToFloat32(ctx, &y2, argv[3]);
 	JS_ToUint32(ctx, &color, argv[4]);
 
 	drawLine(x1, y1, x2, y2, color);
@@ -37,17 +37,17 @@ static JSValue athena_line_draw(JSContext *ctx, JSValue this_val, int argc, JSVa
 }
 
 static JSValue athena_triangle_draw(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-    double x1, y1, x2, y2, x3, y3;
+    float x1, y1, x2, y2, x3, y3;
     Color color1, color2, color3;
 
 	if (argc != 7 && argc != 9) return JS_ThrowSyntaxError(ctx, "wrong number of arguments"); 
 
-    JS_ToFloat64(ctx, &x1, argv[0]);
-    JS_ToFloat64(ctx, &y1, argv[1]);
-    JS_ToFloat64(ctx, &x2, argv[2]);
-    JS_ToFloat64(ctx, &y2, argv[3]);
-    JS_ToFloat64(ctx, &x3, argv[4]);
-    JS_ToFloat64(ctx, &y3, argv[5]);
+    JS_ToFloat32(ctx, &x1, argv[0]);
+    JS_ToFloat32(ctx, &y1, argv[1]);
+    JS_ToFloat32(ctx, &x2, argv[2]);
+    JS_ToFloat32(ctx, &y2, argv[3]);
+    JS_ToFloat32(ctx, &x3, argv[4]);
+    JS_ToFloat32(ctx, &y3, argv[5]);
 	JS_ToUint32(ctx, &color1, argv[6]);
 
     if(argc == 7){
@@ -63,19 +63,19 @@ static JSValue athena_triangle_draw(JSContext *ctx, JSValue this_val, int argc, 
 }
 
 static JSValue athena_quad_draw(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-    double x1, y1, x2, y2, x3, y3, x4, y4;
+    float x1, y1, x2, y2, x3, y3, x4, y4;
     Color color1, color2, color3, color4;
 
 	if (argc != 9 && argc != 12) return JS_ThrowSyntaxError(ctx, "wrong number of arguments"); 
 
-    JS_ToFloat64(ctx, &x1, argv[0]);
-    JS_ToFloat64(ctx, &y1, argv[1]);
-    JS_ToFloat64(ctx, &x2, argv[2]);
-    JS_ToFloat64(ctx, &y2, argv[3]);
-    JS_ToFloat64(ctx, &x3, argv[4]);
-    JS_ToFloat64(ctx, &y3, argv[5]);
-    JS_ToFloat64(ctx, &x4, argv[6]);
-    JS_ToFloat64(ctx, &y4, argv[7]);
+    JS_ToFloat32(ctx, &x1, argv[0]);
+    JS_ToFloat32(ctx, &y1, argv[1]);
+    JS_ToFloat32(ctx, &x2, argv[2]);
+    JS_ToFloat32(ctx, &y2, argv[3]);
+    JS_ToFloat32(ctx, &x3, argv[4]);
+    JS_ToFloat32(ctx, &y3, argv[5]);
+    JS_ToFloat32(ctx, &x4, argv[6]);
+    JS_ToFloat32(ctx, &y4, argv[7]);
 	JS_ToUint32(ctx, &color1, argv[8]);
 
     if(argc == 9){
@@ -109,12 +109,12 @@ static JSValue athena_rect_draw(JSContext *ctx, JSValue this_val, int argc, JSVa
 static JSValue athena_circle_draw(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	if (argc != 4 && argc != 5) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
     bool filled = true;
-    double x, y, r;
+    float x, y, r;
     Color color;
 
-    JS_ToFloat64(ctx, &x, argv[0]);
-    JS_ToFloat64(ctx, &y, argv[1]);
-    JS_ToFloat64(ctx, &r, argv[2]);
+    JS_ToFloat32(ctx, &x, argv[0]);
+    JS_ToFloat32(ctx, &y, argv[1]);
+    JS_ToFloat32(ctx, &r, argv[2]);
     JS_ToUint32(ctx, &color, argv[3]);
     if (argc == 5) filled = JS_ToBool(ctx, argv[4]);
 
