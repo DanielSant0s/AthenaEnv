@@ -84,6 +84,7 @@ enum {
     JS_TAG_CATCH_OFFSET = 5,
     JS_TAG_EXCEPTION   = 6,
     JS_TAG_FLOAT64     = 7,
+    JS_CUSTOM_TAG_FLOAT32 = 8,
     /* any larger tag is FLOAT64 if JS_NAN_BOXING */
 };
 
@@ -143,6 +144,20 @@ typedef uint64_t JSValue;
 
 #define JS_FLOAT64_TAG_ADDEND (0x7ff80000 - JS_TAG_FIRST + 1) /* quiet NaN encoding */
 
+//#define JS_VALUE_GET_FLOAT32(v) (float)JS_VALUE_GET_INT(v) /* Custom float32 implement */
+#define JS_TAG_IS_FLOAT32(tag) ((unsigned)(tag) == JS_CUSTOM_TAG_FLOAT32) /* Custom float32 implement */
+
+static inline float JS_VALUE_GET_FLOAT32(JSValue v)
+{
+    union {
+        JSValue v;
+        float f[2];
+    } u;
+    u.v = v;
+    u.v += (uint64_t)JS_CUSTOM_TAG_FLOAT32 << 32;
+    return u.f[1];
+}
+
 static inline double JS_VALUE_GET_FLOAT64(JSValue v)
 {
     union {
@@ -155,6 +170,15 @@ static inline double JS_VALUE_GET_FLOAT64(JSValue v)
 }
 
 #define JS_NAN (0x7ff8000000000000 - ((uint64_t)JS_FLOAT64_TAG_ADDEND << 32))
+
+
+
+/* Custom float32 implement */
+static inline JSValue custom_JS_NewFloat32(JSContext *ctx, float f)
+{
+    uint32_t tmp;
+    return JS_MKVAL(JS_CUSTOM_TAG_FLOAT32, memcpy(&tmp, &f, sizeof(float)));
+}
 
 static inline JSValue __JS_NewFloat64(JSContext *ctx, double d)
 {
@@ -215,6 +239,7 @@ typedef struct JSValue {
 #define JS_VALUE_GET_FLOAT64(v) ((v).u.float64)
 #define JS_VALUE_GET_PTR(v) ((v).u.ptr)
 
+
 #define JS_MKVAL(tag, val) (JSValue){ (JSValueUnion){ .int32 = val }, tag }
 #define JS_MKPTR(tag, p) (JSValue){ (JSValueUnion){ .ptr = p }, tag }
 
@@ -234,10 +259,18 @@ static inline JS_BOOL JS_VALUE_IS_NAN(JSValue v)
 {
     union {
         double d;
+        float f;
         uint64_t u64;
+        uint32_t u32;
     } u;
-    if (v.tag != JS_TAG_FLOAT64)
+    if (v.tag != JS_TAG_FLOAT64){
+            if (v.tag == JS_CUSTOM_TAG_FLOAT32){  /* Custom float32 implement */
+                u.f = v.u.float32;
+                return (u.u32 & 0x7fffffff) > 0x7FC00000;
+            }
         return 0;
+
+    }   
     u.d = v.u.float64;
     return (u.u64 & 0x7fffffffffffffff) > 0x7ff0000000000000;
 }
@@ -563,10 +596,32 @@ static js_force_inline JSValue JS_NewFloat64(JSContext *ctx, double d)
     return v;
 }
 
+
+static js_force_inline JSValue JS_NewFloat32(JSContext *ctx, float f)
+{
+    JSValue v;
+    int32_t val;
+    union {
+        float f;
+        uint32_t u;
+    } u, t;
+    u.f = f;
+    val = (int32_t)f;
+    t.f = val;
+    /* -0 cannot be represented as integer, so we compare the bit
+        representation */
+    if (u.u == t.u) {
+        v = JS_MKVAL(JS_TAG_INT, val);
+    } else {
+        v = custom_JS_NewFloat32(ctx, f);
+    }
+    return v;
+}
+
 static inline JS_BOOL JS_IsNumber(JSValueConst v)
 {
     int tag = JS_VALUE_GET_TAG(v);
-    return tag == JS_TAG_INT || JS_TAG_IS_FLOAT64(tag);
+    return tag == JS_TAG_INT || JS_TAG_IS_FLOAT64(tag) || tag == JS_CUSTOM_TAG_FLOAT32;
 }
 
 static inline JS_BOOL JS_IsBigInt(JSContext *ctx, JSValueConst v)
@@ -687,6 +742,7 @@ static inline int JS_ToUint32(JSContext *ctx, uint32_t *pres, JSValueConst val)
 int JS_ToInt64(JSContext *ctx, int64_t *pres, JSValueConst val);
 int JS_ToIndex(JSContext *ctx, uint64_t *plen, JSValueConst val);
 int JS_ToFloat64(JSContext *ctx, double *pres, JSValueConst val);
+int JS_ToFloat32(JSContext *ctx, float *pres, JSValueConst val);
 /* return an exception if 'val' is a Number */
 int JS_ToBigInt64(JSContext *ctx, int64_t *pres, JSValueConst val);
 /* same as JS_ToInt64() but allow BigInt */
@@ -988,6 +1044,7 @@ typedef struct JSCFunctionListEntry {
         const char *str;
         int32_t i32;
         int64_t i64;
+        float f32;
         double f64;
     } u;
 } JSCFunctionListEntry;

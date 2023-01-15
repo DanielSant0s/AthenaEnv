@@ -471,6 +471,11 @@ typedef union JSFloat64Union {
     uint32_t u32[2];
 } JSFloat64Union;
 
+typedef union JSFloat32Union {
+    float f;
+    uint32_t u32;
+} JSFloat32Union;
+
 enum {
     JS_ATOM_TYPE_STRING = 1,
     JS_ATOM_TYPE_GLOBAL_SYMBOL,
@@ -10446,6 +10451,7 @@ static JSValue JS_ToNumberHintFree(JSContext *ctx, JSValue val,
 #endif
     case JS_TAG_FLOAT64:
     case JS_TAG_INT:
+    case JS_CUSTOM_TAG_FLOAT32:
     case JS_TAG_EXCEPTION:
         ret = val;
         break;
@@ -10575,6 +10581,61 @@ int JS_ToFloat64(JSContext *ctx, double *pres, JSValueConst val)
     return JS_ToFloat64Free(ctx, pres, JS_DupValue(ctx, val));
 }
 
+/* -------------------------------------- Custom float32 implement -------------------------------------- */
+
+static __exception int __JS_ToFloat32Free(JSContext *ctx, float *pres,
+                                          JSValue val)
+{
+    float f;
+    uint32_t tag;
+
+    val = JS_ToNumberFree(ctx, val);
+    if (JS_IsException(val)) {
+        *pres = JS_FLOAT64_NAN;
+        return -1;
+    }
+    tag = JS_VALUE_GET_NORM_TAG(val);
+    switch(tag) {
+    case JS_TAG_INT:
+        f = JS_VALUE_GET_INT(val);
+        break;
+    case JS_TAG_FLOAT64:
+        f = JS_VALUE_GET_FLOAT64(val);
+        break;
+    case JS_CUSTOM_TAG_FLOAT32:
+        f = JS_VALUE_GET_FLOAT32(val);
+        break;
+    default:
+        abort();
+    }
+    *pres = f;
+    return 0;
+}
+
+static inline int JS_ToFloat32Free(JSContext *ctx, float *pres, JSValue val)
+{
+    uint32_t tag;
+
+    tag = JS_VALUE_GET_TAG(val);
+    if (tag <= JS_TAG_NULL) {
+        *pres = JS_VALUE_GET_INT(val);
+        return 0;
+    } else if (JS_TAG_IS_FLOAT64(tag)) {
+        *pres = JS_VALUE_GET_FLOAT64(val);
+        return 0;
+    }  else if (JS_TAG_IS_FLOAT32(tag)) {
+        *pres = JS_VALUE_GET_FLOAT32(val);
+        return 0;
+    } else {
+        return __JS_ToFloat32Free(ctx, pres, val);
+    }
+}
+
+int JS_ToFloat32(JSContext *ctx, float *pres, JSValueConst val)
+{
+    return JS_ToFloat32Free(ctx, pres, JS_DupValue(ctx, val));
+}
+
 static JSValue JS_ToNumber(JSContext *ctx, JSValueConst val)
 {
     return JS_ToNumberFree(ctx, JS_DupValue(ctx, val));
@@ -10604,6 +10665,18 @@ static __maybe_unused JSValue JS_ToIntegerFree(JSContext *ctx, JSValue val)
                 /* convert -0 to +0 */
                 d = trunc(d) + 0.0;
                 ret = JS_NewFloat64(ctx, d);
+            }
+        }
+        break;
+    case JS_CUSTOM_TAG_FLOAT32: /* Custom float32 implement */
+        {
+            float f = JS_VALUE_GET_FLOAT32(val);
+            if (isnanf(f)) {
+                ret = JS_NewInt32(ctx, 0);
+            } else {
+                /* convert -0 to +0 */
+                f = truncf(f) + 0.0;
+                ret = JS_NewFloat32(ctx, f);
             }
         }
         break;
@@ -10674,6 +10747,21 @@ static int JS_ToInt32SatFree(JSContext *ctx, int *pres, JSValue val)
                     ret = INT32_MAX;
                 else
                     ret = (int)d;
+            }
+        }
+        break;
+    case JS_CUSTOM_TAG_FLOAT32: /* Custom float32 implement */
+        {
+            float f = JS_VALUE_GET_FLOAT32(val);
+            if (isnanf(f)) {
+                ret = 0;
+            } else {
+                if (f < INT32_MIN)
+                    ret = INT32_MIN;
+                else if (f > INT32_MAX)
+                    ret = INT32_MAX;
+                else
+                    ret = (int)f;
             }
         }
         break;
@@ -10748,6 +10836,21 @@ static int JS_ToInt64SatFree(JSContext *ctx, int64_t *pres, JSValue val)
                     *pres = INT64_MAX;
                 else
                     *pres = (int64_t)d;
+            }
+        }
+        return 0;
+    case JS_CUSTOM_TAG_FLOAT32: /* Custom float32 implement */
+        {
+            float f = JS_VALUE_GET_FLOAT32(val);
+            if (isnanf(f)) {
+                *pres = 0;
+            } else {
+                if (f < INT64_MIN)
+                    *pres = INT64_MIN;
+                else if (f > INT64_MAX)
+                    *pres = INT64_MAX;
+                else
+                    *pres = (int64_t)f;
             }
         }
         return 0;
@@ -10831,6 +10934,19 @@ static int JS_ToInt64Free(JSContext *ctx, int64_t *pres, JSValue val)
             }
         }
         break;
+    case JS_CUSTOM_TAG_FLOAT32:  /* Custom float32 implement */
+        {
+            float f;
+            
+            f = JS_VALUE_GET_FLOAT32(val);
+
+            if (!isnanf(f)) {
+                ret = (int64_t)f;
+            } else {
+                ret = 0;
+            }
+
+        }
 #ifdef CONFIG_BIGNUM
     case JS_TAG_BIG_FLOAT:
         {
@@ -10906,6 +11022,19 @@ static int JS_ToInt32Free(JSContext *ctx, int32_t *pres, JSValue val)
             }
         }
         break;
+    case JS_CUSTOM_TAG_FLOAT32:  /* Custom float32 implement */
+        {
+            float f;
+            
+            f = JS_VALUE_GET_FLOAT32(val);
+
+            if (!isnanf(f)) {
+                ret = (int32_t)f;
+            } else {
+                ret = 0;
+            }
+
+        }
 #ifdef CONFIG_BIGNUM
     case JS_TAG_BIG_FLOAT:
         {
@@ -11134,6 +11263,12 @@ static BOOL JS_NumberIsNegativeOrMinusZero(JSContext *ctx, JSValueConst val)
             JSFloat64Union u;
             u.d = JS_VALUE_GET_FLOAT64(val);
             return (u.u64 >> 63);
+        }
+    case JS_CUSTOM_TAG_FLOAT32:
+        {
+            JSFloat32Union u;
+            u.f = JS_VALUE_GET_FLOAT32(val);
+            return (u.u32 >> 31);
         }
 #ifdef CONFIG_BIGNUM
     case JS_TAG_BIG_INT:

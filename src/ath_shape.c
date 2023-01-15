@@ -93,13 +93,13 @@ static JSValue athena_quad_draw(JSContext *ctx, JSValue this_val, int argc, JSVa
 
 static JSValue athena_rect_draw(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	if (argc != 5) return JS_ThrowSyntaxError(ctx, "wrong number of arguments"); 
-    double x, y, w, h;
+    float x, y, w, h;
     Color color;
 
-    JS_ToFloat64(ctx, &x, argv[0]);
-    JS_ToFloat64(ctx, &y, argv[1]);
-    JS_ToFloat64(ctx, &w, argv[2]);
-    JS_ToFloat64(ctx, &h, argv[3]);
+    JS_ToFloat32(ctx, &x, argv[0]);
+    JS_ToFloat32(ctx, &y, argv[1]);
+    JS_ToFloat32(ctx, &w, argv[2]);
+    JS_ToFloat32(ctx, &h, argv[3]);
 	JS_ToUint32(ctx, &color, argv[4]);
 
 	drawRect(x, y, w, h, color);
