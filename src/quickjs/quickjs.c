@@ -18162,9 +18162,11 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
                         goto binary_arith_slow;
                     sp[-2] = JS_NewInt32(ctx, r);
                     sp--;
-                } else if (JS_VALUE_IS_BOTH_FLOAT(op1, op2)) {
-                    sp[-2] = __JS_NewFloat64(ctx, JS_VALUE_GET_FLOAT64(op1) -
-                                             JS_VALUE_GET_FLOAT64(op2));
+                } else if ((!JS_TAG_IS_FLOAT32(JS_VALUE_GET_TAG(op1)) && !JS_TAG_IS_FLOAT32(JS_VALUE_GET_TAG(op2))) && JS_VALUE_IS_BOTH_FLOAT(op1, op2)) {
+                    sp[-2] = __JS_NewFloat64(ctx, JS_VALUE_GET_FLOAT64(op1) - JS_VALUE_GET_FLOAT64(op2));
+                    sp--;
+                } else if (JS_VALUE_IS_BOTH_FLOAT32(op1, op2)) {
+                    sp[-2] = custom_JS_NewFloat32(ctx, JS_VALUE_GET_FLOAT32(op1) - JS_VALUE_GET_FLOAT32(op2));
                     sp--;
                 } else {
                     goto binary_arith_slow;
@@ -18199,7 +18201,7 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
                     }
                     sp[-2] = JS_NewInt32(ctx, r);
                     sp--;
-                } else if (JS_VALUE_IS_BOTH_FLOAT(op1, op2)) {
+                } else if ((!JS_TAG_IS_FLOAT32(JS_VALUE_GET_TAG(op1)) && !JS_TAG_IS_FLOAT32(JS_VALUE_GET_TAG(op2))) && JS_VALUE_IS_BOTH_FLOAT(op1, op2)) {
 #ifdef CONFIG_BIGNUM
                     if (unlikely(sf->js_mode & JS_MODE_MATH))
                         goto binary_arith_slow;
@@ -18207,6 +18209,9 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
                     d = JS_VALUE_GET_FLOAT64(op1) * JS_VALUE_GET_FLOAT64(op2);
                 mul_fp_res:
                     sp[-2] = __JS_NewFloat64(ctx, d);
+                    sp--;
+                } else if (JS_VALUE_IS_BOTH_FLOAT32(op1, op2)) {
+                    sp[-2] = custom_JS_NewFloat32(ctx, JS_VALUE_GET_FLOAT32(op1) * JS_VALUE_GET_FLOAT32(op2));
                     sp--;
                 } else {
                     goto binary_arith_slow;
@@ -18225,6 +18230,9 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
                     v1 = JS_VALUE_GET_INT(op1);
                     v2 = JS_VALUE_GET_INT(op2);
                     sp[-2] = JS_NewFloat64(ctx, (double)v1 / (double)v2);
+                    sp--;
+                } else if (JS_VALUE_IS_BOTH_FLOAT32(op1, op2)) {
+                    sp[-2] = JS_NewFloat32(ctx, JS_VALUE_GET_FLOAT32(op1) / JS_VALUE_GET_FLOAT32(op2));
                     sp--;
                 } else {
                     goto binary_arith_slow;
