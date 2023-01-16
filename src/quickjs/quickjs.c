@@ -10629,11 +10629,11 @@ static inline int JS_ToFloat32Free(JSContext *ctx, float *pres, JSValue val)
     if (tag <= JS_TAG_NULL) {
         *pres = JS_VALUE_GET_INT(val);
         return 0;
+    } else if (JS_TAG_IS_FLOAT32(tag)) {
+        *pres = JS_VALUE_GET_FLOAT32(val);
+        return 0;
     } else if (JS_TAG_IS_FLOAT64(tag)) {
         *pres = JS_VALUE_GET_FLOAT64(val);
-        return 0;
-    }  else if (JS_TAG_IS_FLOAT32(tag)) {
-        *pres = JS_VALUE_GET_FLOAT32(val);
         return 0;
     } else {
         return __JS_ToFloat32Free(ctx, pres, val);
