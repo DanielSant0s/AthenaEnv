@@ -14449,7 +14449,19 @@ static no_inline __exception int js_add_slow(JSContext *ctx, JSValue *sp)
     op2 = sp[-1];
     tag1 = JS_VALUE_GET_TAG(op1);
     tag2 = JS_VALUE_GET_TAG(op2);
-    if ((tag1 == JS_TAG_INT || JS_TAG_IS_FLOAT64(tag1)) &&
+    if ((tag1 == JS_TAG_INT || JS_TAG_IS_FLOAT32(tag1) || JS_TAG_IS_FLOAT64(tag1)) &&
+        (tag2 == JS_TAG_INT || JS_TAG_IS_FLOAT32(tag2) || JS_TAG_IS_FLOAT64(tag2))) {
+        float f1, f2;
+        if (JS_ToFloat32Free(ctx, &f1, op1)) {
+            JS_FreeValue(ctx, op2);
+            goto exception;
+        }
+        if (JS_ToFloat32Free(ctx, &f2, op2))
+            goto exception;
+        sp[-2] = JS_NewFloat32(ctx, f1 + f2);
+        return 0;
+
+    } else if ((tag1 == JS_TAG_INT || JS_TAG_IS_FLOAT64(tag1)) &&
         (tag2 == JS_TAG_INT || JS_TAG_IS_FLOAT64(tag2))) {
         goto add_numbers;
     } else {
@@ -18085,7 +18097,7 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
                     sp[-2] = custom_JS_NewFloat32(ctx, JS_VALUE_GET_FLOAT32(op1) +
                                              JS_VALUE_GET_FLOAT32(op2));
                     sp--;
-                } else if (JS_VALUE_IS_BOTH_FLOAT(op1, op2)) {
+                } else if ((!JS_TAG_IS_FLOAT32(JS_VALUE_GET_TAG(op1)) && !JS_TAG_IS_FLOAT32(JS_VALUE_GET_TAG(op2))) && JS_VALUE_IS_BOTH_FLOAT(op1, op2)) {
                     sp[-2] = __JS_NewFloat64(ctx, JS_VALUE_GET_FLOAT64(op1) +
                                              JS_VALUE_GET_FLOAT64(op2));
                     sp--;
