@@ -9975,12 +9975,12 @@ static int JS_ToBoolFree(JSContext *ctx, JSValue val)
         }
         break;
     default:
-        if (JS_TAG_IS_FLOAT64(tag)) {
-            double d = JS_VALUE_GET_FLOAT64(val);
-            return !isnan(d) && d != 0;
-        } else if (JS_TAG_IS_FLOAT32(tag)) {
+        if (JS_TAG_IS_FLOAT32(tag)) {
             float f = JS_VALUE_GET_FLOAT32(val);
             return !isnanf(f) && f != 0;
+        } else if (JS_TAG_IS_FLOAT64(tag)) {
+            double d = JS_VALUE_GET_FLOAT64(val);
+            return !isnan(d) && d != 0;
         } else {
             JS_FreeValue(ctx, val);
             return TRUE;
