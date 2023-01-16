@@ -10540,6 +10540,9 @@ static __exception int __JS_ToFloat64Free(JSContext *ctx, double *pres,
     case JS_TAG_INT:
         d = JS_VALUE_GET_INT(val);
         break;
+    case JS_CUSTOM_TAG_FLOAT32:
+        d = JS_VALUE_GET_FLOAT32(val);
+        break;
     case JS_TAG_FLOAT64:
         d = JS_VALUE_GET_FLOAT64(val);
         break;
@@ -10570,6 +10573,9 @@ static inline int JS_ToFloat64Free(JSContext *ctx, double *pres, JSValue val)
     tag = JS_VALUE_GET_TAG(val);
     if (tag <= JS_TAG_NULL) {
         *pres = JS_VALUE_GET_INT(val);
+        return 0;
+    } else if (JS_TAG_IS_FLOAT32(tag)) {
+        *pres = JS_VALUE_GET_FLOAT32(val);
         return 0;
     } else if (JS_TAG_IS_FLOAT64(tag)) {
         *pres = JS_VALUE_GET_FLOAT64(val);
