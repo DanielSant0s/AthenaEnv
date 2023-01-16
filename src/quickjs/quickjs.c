@@ -18081,6 +18081,10 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
                         goto add_slow;
                     sp[-2] = JS_NewInt32(ctx, r);
                     sp--;
+                } else if (JS_VALUE_IS_BOTH_FLOAT32(op1, op2)) {
+                    sp[-2] = custom_JS_NewFloat32(ctx, JS_VALUE_GET_FLOAT32(op1) +
+                                             JS_VALUE_GET_FLOAT32(op2));
+                    sp--;
                 } else if (JS_VALUE_IS_BOTH_FLOAT(op1, op2)) {
                     sp[-2] = __JS_NewFloat64(ctx, JS_VALUE_GET_FLOAT64(op1) +
                                              JS_VALUE_GET_FLOAT64(op2));
