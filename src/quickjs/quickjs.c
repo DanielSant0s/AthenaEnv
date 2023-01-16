@@ -11726,6 +11726,10 @@ JSValue JS_ToStringInternal(JSContext *ctx, JSValueConst val, BOOL is_ToProperty
     case JS_TAG_FLOAT64:
         return js_dtoa(ctx, JS_VALUE_GET_FLOAT64(val), 10, 0,
                        JS_DTOA_VAR_FORMAT);
+    case JS_CUSTOM_TAG_FLOAT32:
+        snprintf(buf, sizeof(buf), "%f", JS_VALUE_GET_FLOAT32(val));
+        str = buf;
+        goto new_string;
 #ifdef CONFIG_BIGNUM
     case JS_TAG_BIG_INT:
         return ctx->rt->bigint_ops.to_string(ctx, val);
@@ -12018,6 +12022,9 @@ static __maybe_unused void JS_DumpValueShort(JSRuntime *rt,
         break;
     case JS_TAG_FLOAT64:
         printf("%.14g", JS_VALUE_GET_FLOAT64(val));
+        break;
+    case JS_CUSTOM_TAG_FLOAT32:
+        printf("%f", JS_VALUE_GET_FLOAT32(val));
         break;
 #ifdef CONFIG_BIGNUM
     case JS_TAG_BIG_INT:

@@ -70,7 +70,7 @@ while (true){
 
     let fps = Screen.getFPS(360);
     if(Date.now() - ti > 360){
-        console.log(fps + " FPS");
+        console.log(fps, "FPS");
         ti = Date.now();
     }
 

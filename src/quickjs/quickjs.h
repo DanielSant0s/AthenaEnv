@@ -151,11 +151,11 @@ static inline float JS_VALUE_GET_FLOAT32(JSValue v)
 {
     union {
         JSValue v;
-        float f[2];
+        float f;
     } u;
     u.v = v;
-    u.v += (uint64_t)JS_CUSTOM_TAG_FLOAT32 << 32;
-    return u.f[1];
+    u.v -= ((uint64_t)JS_CUSTOM_TAG_FLOAT32 << 32);
+    return u.f;
 }
 
 static inline double JS_VALUE_GET_FLOAT64(JSValue v)
@@ -174,10 +174,17 @@ static inline double JS_VALUE_GET_FLOAT64(JSValue v)
 
 
 /* Custom float32 implement */
+
 static inline JSValue custom_JS_NewFloat32(JSContext *ctx, float f)
 {
-    uint32_t tmp;
-    return JS_MKVAL(JS_CUSTOM_TAG_FLOAT32, memcpy(&tmp, &f, sizeof(float)));
+    union {
+        uint32_t u32;
+        float f;
+    } u;
+    JSValue v;
+    u.f = f;
+    v = u.u32 + ((uint64_t)JS_CUSTOM_TAG_FLOAT32 << 32);
+    return v;
 }
 
 static inline JSValue __JS_NewFloat64(JSContext *ctx, double d)
@@ -203,10 +210,13 @@ static inline int JS_VALUE_GET_NORM_TAG(JSValue v)
 {
     uint32_t tag;
     tag = JS_VALUE_GET_TAG(v);
-    if (JS_TAG_IS_FLOAT64(tag))
+    if (JS_TAG_IS_FLOAT32(tag)){
+        return JS_CUSTOM_TAG_FLOAT32;
+    } else if (JS_TAG_IS_FLOAT64(tag)) {
         return JS_TAG_FLOAT64;
-    else
+    } else {
         return tag;
+    }
 }
 
 static inline JS_BOOL JS_VALUE_IS_NAN(JSValue v)

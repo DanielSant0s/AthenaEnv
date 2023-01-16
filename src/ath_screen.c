@@ -39,7 +39,7 @@ static JSValue athena_getFreeVRAM(JSContext *ctx, JSValue this_val, int argc, JS
 static JSValue athena_getFPS(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	int time_intvl;
 	JS_ToInt32(ctx, &time_intvl, argv[0]);
-	return JS_NewFloat64(ctx, FPSCounter(time_intvl));
+	return JS_NewFloat32(ctx, FPSCounter(time_intvl));
 }
 
 
