@@ -83,8 +83,8 @@ enum {
     JS_TAG_UNINITIALIZED = 4,
     JS_TAG_CATCH_OFFSET = 5,
     JS_TAG_EXCEPTION   = 6,
-    JS_TAG_FLOAT64     = 7,
-    JS_CUSTOM_TAG_FLOAT32 = 8,
+    JS_CUSTOM_TAG_FLOAT32 = 7,
+    JS_TAG_FLOAT64     = 8,
     /* any larger tag is FLOAT64 if JS_NAN_BOXING */
 };
 
@@ -210,9 +210,7 @@ static inline int JS_VALUE_GET_NORM_TAG(JSValue v)
 {
     uint32_t tag;
     tag = JS_VALUE_GET_TAG(v);
-    if (JS_TAG_IS_FLOAT32(tag)){
-        return JS_CUSTOM_TAG_FLOAT32;
-    } else if (JS_TAG_IS_FLOAT64(tag)) {
+    if (JS_TAG_IS_FLOAT64(tag)) {
         return JS_TAG_FLOAT64;
     } else {
         return tag;
