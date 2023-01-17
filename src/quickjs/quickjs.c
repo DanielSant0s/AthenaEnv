@@ -10383,7 +10383,10 @@ static JSValue js_atof(JSContext *ctx, const char *str, const char **pp,
         abort();
     }
 #else
-    {
+    if ((flags & ATOD_ACCEPT_SUFFIX) && (*p == 'f')) {
+        p++;
+        val = JS_NewFloat32(ctx, atof(buf));
+    } else {
         double d;
         (void)has_legacy_octal;
         if (is_float && radix != 10)
@@ -21082,6 +21085,7 @@ static __exception int next_token(JSParseState *s)
                     flags |= ATOD_TYPE_BIG_FLOAT;
             }
 #endif
+            flags |= ATOD_ACCEPT_SUFFIX;
             radix = 0;
 #ifdef CONFIG_BIGNUM
             s->token.u.num.exponent = 0;
@@ -21094,8 +21098,8 @@ static __exception int next_token(JSParseState *s)
             if (JS_IsException(ret))
                 goto fail;
             /* reject `10instanceof Number` */
-            if (JS_VALUE_IS_NAN(ret) ||
-                lre_js_is_ident_next(unicode_from_utf8(p, UTF8_CHAR_LEN_MAX, &p1))) {
+            if ((JS_VALUE_IS_NAN(ret) ||
+                lre_js_is_ident_next(unicode_from_utf8(p, UTF8_CHAR_LEN_MAX, &p1)))) {
                 JS_FreeValue(s->ctx, ret);
                 js_parse_error(s, "invalid number literal");
                 goto fail;
