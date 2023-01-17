@@ -14406,9 +14406,37 @@ static no_inline __exception int js_binary_arith_slow(JSContext *ctx, JSValue *s
 {
     JSValue op1, op2;
     double d1, d2, r;
+    float f1, f2, res;
 
     op1 = sp[-2];
     op2 = sp[-1];
+    if (JS_TAG_IS_FLOAT32(JS_VALUE_GET_NORM_TAG(op1)) || JS_TAG_IS_FLOAT32(JS_VALUE_GET_NORM_TAG(op2))){
+        JS_ToFloat32Free(ctx, &f1, op1);
+        JS_ToFloat32Free(ctx, &f2, op2);
+
+        switch(op) {
+        case OP_sub:
+            res = f1 - f2;
+            break;
+        case OP_mul:
+            res = f1 * f2;
+            break;
+        case OP_div:
+            res = f1 / f2;
+            break;
+        case OP_mod:
+            res = fmodf(f1, f2);
+            break;
+        case OP_pow:
+            res = powf(f1, f2);
+            break;
+        default:
+            abort();
+        }
+        sp[-2] = JS_NewFloat32(ctx, res);
+        return 0;
+    }
+
     if (unlikely(JS_ToFloat64Free(ctx, &d1, op1))) {
         JS_FreeValue(ctx, op2);
         goto exception;

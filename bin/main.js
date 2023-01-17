@@ -66,7 +66,7 @@ while (true){
         c_y++;
     }
 
-    console.log(float_test);
+    console.log(float_test * 2);
 
     Draw.rect(50, 50, 150, 150, Color.new(128, 128, 128));
 
