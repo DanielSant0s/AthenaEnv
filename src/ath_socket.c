@@ -88,7 +88,7 @@ static JSValue athena_socket_send(JSContext *ctx, JSValue this_val, int argc, JS
     JSSocketData* s = JS_GetOpaque2(ctx, this_val, js_socket_class_id);
 
     size_t len = 0;
-    void* buf = JS_GetArrayBuffer(ctx, &len, argv[0]);
+    const char* buf = JS_ToCStringLen(ctx, &len, argv[0]);
 
     int ret = lwip_send(s->id, buf, len, MSG_DONTWAIT);
 
@@ -116,7 +116,7 @@ static JSValue athena_socket_recv(JSContext *ctx, JSValue this_val, int argc, JS
     void* buf = js_mallocz(ctx, len);
 
     lwip_recv(s->id, buf, len, MSG_PEEK);
-    return JS_NewArrayBufferCopy(ctx, buf, len);
+    return JS_NewStringLen(ctx, buf, len);
 }
 
 static JSClassDef js_socket_class = {
@@ -131,10 +131,6 @@ static const JSCFunctionListEntry js_socket_proto_funcs[] = {
     JS_CFUNC_DEF("send", 1, athena_socket_send ),
     JS_CFUNC_DEF("recv", 1, athena_socket_recv ),
     JS_CFUNC_DEF("close", 0, athena_socket_close ),
-    JS_PROP_INT32_DEF("AF_INET", AF_INET, JS_PROP_CONFIGURABLE ),
-    JS_PROP_INT32_DEF("SOCK_STREAM", SOCK_STREAM, JS_PROP_CONFIGURABLE ),
-    JS_PROP_INT32_DEF("SOCK_DGRAM", SOCK_DGRAM, JS_PROP_CONFIGURABLE ),
-    JS_PROP_INT32_DEF("SOCK_RAW", SOCK_RAW, JS_PROP_CONFIGURABLE ),
 };
 
 static int js_socket_init(JSContext *ctx, JSModuleDef *m)
@@ -157,6 +153,18 @@ static int js_socket_init(JSContext *ctx, JSModuleDef *m)
     return 0;
 }
 
+static const JSCFunctionListEntry js_socket_consts[] = {
+    JS_PROP_INT32_DEF("AF_INET", AF_INET, JS_PROP_CONFIGURABLE ),
+    JS_PROP_INT32_DEF("SOCK_STREAM", SOCK_STREAM, JS_PROP_CONFIGURABLE ),
+    JS_PROP_INT32_DEF("SOCK_DGRAM", SOCK_DGRAM, JS_PROP_CONFIGURABLE ),
+    JS_PROP_INT32_DEF("SOCK_RAW", SOCK_RAW, JS_PROP_CONFIGURABLE ),
+};
+
+
+static int socket_consts_init(JSContext *ctx, JSModuleDef *m){
+    return JS_SetModuleExportList(ctx, m, js_socket_consts, countof(js_socket_consts));
+}
+
 JSModuleDef *athena_socket_init(JSContext *ctx)
 {
     JSModuleDef *m;
@@ -164,6 +172,8 @@ JSModuleDef *athena_socket_init(JSContext *ctx)
     if (!m)
         return NULL;
     JS_AddModuleExport(ctx, m, "Socket");
+
+    athena_push_module(ctx, socket_consts_init, js_socket_consts, countof(js_socket_consts), "SocketConst");
 
     printf("AthenaEnv: %s module pushed at 0x%x\n", "Socket", m);
     return m;

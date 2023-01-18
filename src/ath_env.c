@@ -120,6 +120,7 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"import * as Pads from 'Pads';\n"
 				"import * as Network from 'Network';\n"
 				"import * as Socket from 'Socket';\n"
+				"import * as SocketConst from 'SocketConst';\n"
 				"import * as Font from 'Font';\n"
 				"import * as Image from 'Image';\n"
 				"import * as Render from 'Render';\n"
@@ -162,6 +163,10 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"globalThis.Pads = Pads;\n"
 				"globalThis.Network = Network;\n"
 
+				"globalThis.AF_INET = SocketConst.AF_INET;\n"
+				"globalThis.SOCK_STREAM = SocketConst.SOCK_STREAM;\n"
+				"globalThis.SOCK_DGRAM = SocketConst.SOCK_DGRAM;\n"
+				"globalThis.SOCK_RAW = SocketConst.SOCK_RAW;\n"
 				"globalThis.Socket = Socket.Socket;\n"
 
 				"globalThis.Font = Font.Font;\n"
