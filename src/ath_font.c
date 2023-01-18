@@ -18,7 +18,7 @@ typedef struct {
     GSFONT* data;
     int id;
     Color color;
-    double scale;
+    float scale;
 } JSFontData;
 
 static JSClassID js_font_class_id;
@@ -80,13 +80,13 @@ static JSValue athena_font_ctor(JSContext *ctx, JSValueConst new_target, int arg
 }
 
 static JSValue athena_font_print(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
-    double x, y;
+    float x, y;
 	if (argc != 3) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
 
     JSFontData *font = JS_GetOpaque2(ctx, this_val, js_font_class_id);
 
-    JS_ToFloat64(ctx, &x, argv[0]);
-	JS_ToFloat64(ctx, &y, argv[1]);
+    JS_ToFloat32(ctx, &x, argv[0]);
+	JS_ToFloat32(ctx, &y, argv[1]);
     const char* text = JS_ToCString(ctx, argv[2]);
 
     if (font->type == 1){
@@ -105,16 +105,16 @@ static JSValue athena_font_get_scale(JSContext *ctx, JSValueConst this_val)
     JSFontData *s = JS_GetOpaque2(ctx, this_val, js_font_class_id);
     if (!s)
         return JS_EXCEPTION;
-    return JS_NewFloat64(ctx, s->scale);
+    return JS_NewFloat32(ctx, s->scale);
 }
 
 static JSValue athena_font_set_scale(JSContext *ctx, JSValueConst this_val, JSValue val)
 {
     JSFontData *s = JS_GetOpaque2(ctx, this_val, js_font_class_id);
-    double scale;
+    float scale;
     if (!s)
         return JS_EXCEPTION;
-    if (JS_ToFloat64(ctx, &scale, val))
+    if (JS_ToFloat32(ctx, &scale, val))
         return JS_EXCEPTION;
     s->scale = scale;
     if (s->type == truetype_font){
