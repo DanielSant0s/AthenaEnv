@@ -48,19 +48,6 @@ typedef struct {
     GSTEXTURE* texture;
 } model;
 
-typedef struct AsyncImage {
-	const char* path;
-	GSTEXTURE* handle;
-	bool delayed;
-} AsyncImage;
-
-typedef struct ImgList {
-    AsyncImage** list;
-	int size;
-	int sema_id;
-	int thread_id;
-} ImgList;
-
 typedef u32 Color;
 #define A(color) ((u8)(color >> 24 & 0xFF))
 #define B(color) ((u8)(color >> 16 & 0xFF))

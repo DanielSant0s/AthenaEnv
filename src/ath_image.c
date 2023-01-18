@@ -13,12 +13,12 @@ JSClassID get_img_class_id(){
 	return js_image_class_id;
 }
 
-int append_img(AsyncImage* img, ImgList* list)
+int append_img(JSImageData* img, JSImgList* list)
 {
-    AsyncImage** aux = malloc((list->size+1)*sizeof(AsyncImage*));
+    JSImageData** aux = malloc((list->size+1)*sizeof(JSImageData*));
 
 	if(list->size > 0){
-		memcpy(aux, list->list, list->size*sizeof(AsyncImage*));
+		memcpy(aux, list->list, list->size*sizeof(JSImageData*));
 		free(list->list);
 	}
     
@@ -29,58 +29,12 @@ int append_img(AsyncImage* img, ImgList* list)
     return 0;
 }
 
-static int load_img_async(GSTEXTURE* image, const char* path, bool delayed, ImgList* list) {
-	AsyncImage* async_img = malloc(sizeof(AsyncImage));
-
-	async_img->path = path;
-	async_img->handle = image;
-	async_img->delayed = delayed;
-
-	append_img(async_img, list);
-
-	return 0;
-}
-
-/*
-
 static JSValue athena_image_isloaded(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-	if(argc != 0) return JS_ThrowSyntaxError(ctx, "isLoaded takes no arguments");
+	JSImageData *image = JS_GetOpaque2(ctx, this_val, js_image_class_id);
 
-	bool loaded = get_obj_boolean(ctx, -1, "\xff""\xff""loaded");
-	GSTEXTURE* testimg = (GSTEXTURE*)get_obj_uint(ctx, -1, "\xff""\xff""data");
-
-	if(loaded){
-		duk_push_boolean(ctx, true);
-		return 1;
-	} else {
-		if (testimg->Width != 0){
-			duk_push_this(ctx);
-
-		    duk_push_boolean(ctx, true);
-    		duk_put_prop_string(ctx, -2, "\xff""\xff""loaded");
-
-				duk_push_number(ctx, (float)(testimg->Width));
-    			duk_put_prop_string(ctx, -2, "width");
-
-				duk_push_number(ctx, (float)(testimg->Height));
-    			duk_put_prop_string(ctx, -2, "height");
-
-				duk_push_number(ctx, (float)(testimg->Width));
-    			duk_put_prop_string(ctx, -2, "endx");
-
-				duk_push_number(ctx, (float)(testimg->Height));
-    			duk_put_prop_string(ctx, -2, "endy");
-
-			duk_push_boolean(ctx, true);
-			return 1;
-		}
-		duk_push_boolean(ctx, false);
-		return 1;
-	}
+	return (image->loaded? JS_TRUE : JS_FALSE);
 	
 }
-
-*/
 
 static void athena_image_dtor(JSRuntime *rt, JSValue val){
 		JSImageData *image = JS_GetOpaque(val, js_image_class_id);
@@ -113,17 +67,25 @@ static JSValue athena_image_ctor(JSContext *ctx, JSValueConst new_target, int ar
 	image->tex.Width = 0;
 	image->tex.Height = 0;
 
-	const char* text = JS_ToCString(ctx, argv[0]);
+	image->path = JS_ToCString(ctx, argv[0]);
 
-	bool delayed = true;
-	if (argc > 1) delayed = JS_ToBool(ctx, argv[1]);
+	image->delayed = true;
+	if (argc > 1) image->delayed = JS_ToBool(ctx, argv[1]);
+	if (argc > 2) {
+		append_img(image, JS_GetOpaque2(ctx, argv[2], get_imglist_class_id()));
+		image->loaded = false;
+		goto register_obj;
+	}
 
-	load_image(&(image->tex), text, delayed);
+	load_image(&(image->tex), image->path, image->delayed);
 
+	image->loaded = true;
 	image->width = image->tex.Width;
 	image->height = image->tex.Height;
 	image->endx = image->tex.Width;
 	image->endy = image->tex.Height;
+
+ register_obj:
 	image->startx = 0.0;
 	image->starty = 0.0;
 	image->angle = 0.0;
@@ -272,6 +234,7 @@ static JSClassDef js_image_class = {
 
 static const JSCFunctionListEntry js_image_proto_funcs[] = {
     JS_CFUNC_DEF("draw", 2, athena_image_draw),
+	JS_CFUNC_DEF("ready", 0, athena_image_isloaded),
 	JS_CGETSET_MAGIC_DEF("width", js_image_get, js_image_set, 0),
 	JS_CGETSET_MAGIC_DEF("height", js_image_get, js_image_set, 1),
 	JS_CGETSET_MAGIC_DEF("startx", js_image_get, js_image_set, 2),

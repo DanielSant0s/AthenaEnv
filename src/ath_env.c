@@ -123,6 +123,7 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"import * as SocketConst from 'SocketConst';\n"
 				"import * as Font from 'Font';\n"
 				"import * as Image from 'Image';\n"
+				"import * as ImageList from 'ImageList';\n"
 				"import * as Render from 'Render';\n"
 				"import * as Lights from 'Lights';\n"
 				"import * as Camera from 'Camera';\n"
@@ -176,6 +177,7 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"globalThis.VRAM = false;\n"
 				"globalThis.RAM = true;\n"
 				"globalThis.Image = Image.Image;\n"
+				"globalThis.ImageList = ImageList.ImageList;\n"
 
 				"globalThis.Sif = Sif;\n"
 
@@ -248,6 +250,7 @@ const char* runScript(const char* script, bool isBuffer)
 	athena_timer_init(ctx);
 	athena_task_init(ctx);
 	athena_image_init(ctx);
+	athena_imagelist_init(ctx);
 	athena_pads_init(ctx);
 	athena_network_init(ctx);
 	athena_socket_init(ctx);

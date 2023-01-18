@@ -7,51 +7,57 @@
 #include "include/graphics.h"
 #include "ath_env.h"
 
+static JSClassID js_imagelist_class_id;
+
+JSClassID get_imglist_class_id(){
+	return js_imagelist_class_id;
+}
+
 static int imgThread(void* data)
 {
-	ImgList* list = data;
+	JSImgList* list = data;
 
 	while(true){
 		WaitSema(list->sema_id);
-		for(int i = 0; i < list->size; i++) load_image(list->list[i]->handle, list->list[i]->path, list->list[i]->delayed);
+		printf("\n\nLoading images..\n\n");
+		for(int i = 0; i < list->size; i++) {
+			load_image(&(list->list[i]->tex), list->list[i]->path, list->list[i]->delayed);
+			list->list[i]->width = list->list[i]->tex.Width;
+			list->list[i]->height = list->list[i]->tex.Height;
+			list->list[i]->endx = list->list[i]->tex.Width;
+			list->list[i]->endy = list->list[i]->tex.Height;
+			list->list[i]->loaded = true;
+		}
 		free(list->list);
 		list->size = 0;
 	}
 
 	return 0;
 }
-/*
-static duk_ret_t athena_imagelist_dtor(duk_context *ctx){
 
-    duk_get_prop_string(ctx, 0, "\xff""\xff""deleted");
-    bool deleted = duk_to_boolean(ctx, -1);
-    duk_pop(ctx);
+static void athena_imagelist_dtor(JSRuntime *rt, JSValue val){
 
-    duk_get_prop_string(ctx, 0, "\xff""\xff""handle");
-    ImgList* list = (ImgList*)duk_to_uint(ctx, -1);
-    duk_pop(ctx);
+    JSImgList *list = JS_GetOpaque(val, js_imagelist_class_id);
 
-	if(!deleted){
-		kill_task(list->thread_id);
-		DeleteSema(list->sema_id);
-		if(list->size > 0) free(list->list);
-		free(list);
-
-        duk_push_boolean(ctx, true);
-        duk_put_prop_string(ctx, 0, "\xff""\xff""deleted");
-	}
-
-	return 0;
+	kill_task(list->thread_id);
+	DeleteSema(list->sema_id);
+	if(list->size > 0) free(list->list);
+	
+	js_free_rt(rt, list);
 }
 
-static duk_ret_t athena_imagelist_ctor(duk_context *ctx){
-	int argc = duk_get_top(ctx);
-	if(argc != 0) return duk_generic_error(ctx, "new ImageAsync() takes no arguments");
+static JSValue athena_imagelist_ctor(JSContext *ctx, JSValueConst new_target, int argc, JSValueConst *argv){
+	JSImgList* list;
+    JSValue obj = JS_UNDEFINED;
+    JSValue proto;
+
+	list = js_mallocz(ctx, sizeof(*list));
+    if (!list)
+        return JS_EXCEPTION;
 
     ee_sema_t sema; sema.init_count = 0; sema.max_count = 1; sema.option = 0;
     int sema_id = CreateSema(&sema);
 
-	ImgList* list = malloc(sizeof(ImgList));
 	list->size = 0;
 	list->sema_id = sema_id;
 
@@ -60,42 +66,67 @@ static duk_ret_t athena_imagelist_ctor(duk_context *ctx){
 
 	list->thread_id = task;
 
-    duk_push_this(ctx);
+    proto = JS_GetPropertyStr(ctx, new_target, "prototype");
+    if (JS_IsException(proto))
+        goto fail;
+    obj = JS_NewObjectProtoClass(ctx, proto, js_imagelist_class_id);
+    JS_FreeValue(ctx, proto);
+    if (JS_IsException(obj))
+        goto fail;
+    JS_SetOpaque(obj, list);
+    return obj;
 
-	duk_push_uint(ctx, (uint32_t)list);
-    duk_put_prop_string(ctx, -2, "\xff""\xff""handle");
-
-
-    duk_push_boolean(ctx, false);
-    duk_put_prop_string(ctx, -2, "\xff""\xff""deleted");
-
-    duk_push_c_function(ctx, athena_imagelist_dtor, 1);
-    duk_set_finalizer(ctx, -2);
-
-	return 0;
+ fail:
+    js_free(ctx, list);
+    JS_FreeValue(ctx, obj);
+    return JS_EXCEPTION;
 }
 
-static duk_ret_t athena_imagelist_process(duk_context *ctx){
-	int argc = duk_get_top(ctx);
-	if(argc != 0) return duk_generic_error(ctx, "ImageList.process() takes no arguments");
-
-	ImgList* handle = (ImgList*)get_obj_uint(ctx, -1, "\xff""\xff""handle");
+static JSValue athena_imagelist_process(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	JSImgList* handle = JS_GetOpaque2(ctx, this_val, js_imagelist_class_id);
 	SignalSema(handle->sema_id);
 
-	return 0;
+	return JS_UNDEFINED;
 }
 
-void athena_imagelist_init(duk_context *ctx) {
-    duk_push_c_function(ctx, athena_imagelist_ctor, DUK_VARARGS);
 
-    duk_push_object(ctx);
+static JSClassDef js_imagelist_class = {
+    "ImageList",
+    .finalizer = athena_imagelist_dtor,
+}; 
 
-    duk_push_c_function(ctx, athena_imagelist_process, 0);
-    duk_put_prop_string(ctx, -2, "process");
+static const JSCFunctionListEntry js_imagelist_proto_funcs[] = {
+    JS_CFUNC_DEF("process", 0, athena_imagelist_process ),
+};
 
-    duk_put_prop_string(ctx, -2, "prototype");
+static int js_imagelist_init(JSContext *ctx, JSModuleDef *m)
+{
+    JSValue imagelist_proto, imagelist_class;
+    
+    // create the Point class 
+    JS_NewClassID(&js_imagelist_class_id);
+    JS_NewClass(JS_GetRuntime(ctx), js_imagelist_class_id, &js_imagelist_class);
 
-    duk_put_global_string(ctx, "ImageList");
+    imagelist_proto = JS_NewObject(ctx);
+    JS_SetPropertyFunctionList(ctx, imagelist_proto, js_imagelist_proto_funcs, countof(js_imagelist_proto_funcs));
+    
+    imagelist_class = JS_NewCFunction2(ctx, athena_imagelist_ctor, "ImageList", 0, JS_CFUNC_constructor, 0);
+    // set proto.constructor and ctor.prototype 
+    JS_SetConstructor(ctx, imagelist_class, imagelist_proto);
+    JS_SetClassProto(ctx, js_imagelist_class_id, imagelist_proto);
+                      
+    JS_SetModuleExport(ctx, m, "ImageList", imagelist_class);
+    return 0;
 }
 
-*/
+JSModuleDef *athena_imagelist_init(JSContext *ctx)
+{
+    JSModuleDef *m;
+    m = JS_NewCModule(ctx, "ImageList", js_imagelist_init);
+    if (!m)
+        return NULL;
+    JS_AddModuleExport(ctx, m, "ImageList");
+
+    printf("AthenaEnv: %s module pushed at 0x%x\n", "ImageList", m);
+    return m;
+}

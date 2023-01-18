@@ -11,18 +11,29 @@
 #include "include/graphics.h"
 
 typedef struct {
+	const char* path;
     GSTEXTURE tex;
+	bool delayed;
+	bool loaded;
     Color color;
-	double width;
-	double height;
-	double startx;
-	double starty;
-	double endx;
-	double endy;
-    double angle;
+	float width;
+	float height;
+	float startx;
+	float starty;
+	float endx;
+	float endy;
+    float angle;
 } JSImageData;
 
+typedef struct JSImgList {
+    JSImageData** list;
+	int size;
+	int sema_id;
+	int thread_id;
+} JSImgList;
+
 JSClassID get_img_class_id();
+JSClassID get_imglist_class_id();
 
 #define countof(x) (sizeof(x) / sizeof((x)[0]))
 
@@ -39,7 +50,7 @@ JSModuleDef *athena_color_init(JSContext* ctx);
 JSModuleDef *athena_shape_init(JSContext* ctx);
 JSModuleDef *athena_font_init(JSContext* ctx);
 JSModuleDef *athena_image_init(JSContext* ctx);
-//JSModuleDef *athena_imagelist_init(JSContext* ctx);
+JSModuleDef *athena_imagelist_init(JSContext* ctx);
 JSModuleDef *athena_socket_init(JSContext* ctx);
 JSModuleDef *athena_network_init(JSContext* ctx);
 JSModuleDef *athena_pads_init(JSContext* ctx);
