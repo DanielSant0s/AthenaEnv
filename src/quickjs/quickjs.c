@@ -14695,7 +14695,11 @@ static no_inline __exception int js_eq_slow(JSContext *ctx, JSValue *sp,
     tag2 = JS_VALUE_GET_NORM_TAG(op2);
     if (tag1 == tag2 ||
         (tag1 == JS_TAG_INT && tag2 == JS_TAG_FLOAT64) ||
-        (tag2 == JS_TAG_INT && tag1 == JS_TAG_FLOAT64)) {
+        (tag2 == JS_TAG_INT && tag1 == JS_TAG_FLOAT64) ||
+        (tag1 == JS_CUSTOM_TAG_FLOAT32 && tag2 == JS_TAG_FLOAT64) ||
+        (tag2 == JS_CUSTOM_TAG_FLOAT32 && tag1 == JS_TAG_FLOAT64) ||
+        (tag1 == JS_TAG_INT && tag2 == JS_CUSTOM_TAG_FLOAT32) ||
+        (tag2 == JS_TAG_INT && tag1 == JS_CUSTOM_TAG_FLOAT32)) {
         res = js_strict_eq(ctx, op1, op2);
     } else if ((tag1 == JS_TAG_NULL && tag2 == JS_TAG_UNDEFINED) ||
                (tag2 == JS_TAG_NULL && tag1 == JS_TAG_UNDEFINED)) {
@@ -14787,6 +14791,7 @@ static BOOL js_strict_eq2(JSContext *ctx, JSValue op1, JSValue op2,
     BOOL res;
     int tag1, tag2;
     double d1, d2;
+    float f1, f2;
 
     tag1 = JS_VALUE_GET_NORM_TAG(op1);
     tag2 = JS_VALUE_GET_NORM_TAG(op2);
@@ -14851,6 +14856,9 @@ static BOOL js_strict_eq2(JSContext *ctx, JSValue op1, JSValue op2,
             d2 = JS_VALUE_GET_FLOAT64(op2);
         } else if (tag2 == JS_TAG_INT) {
             d2 = JS_VALUE_GET_INT(op2);
+        } else if (tag2 == JS_CUSTOM_TAG_FLOAT32) {
+            d2 = (double)JS_VALUE_GET_FLOAT32(op2);
+    
         } else {
             res = FALSE;
             break;
@@ -14863,6 +14871,8 @@ static BOOL js_strict_eq2(JSContext *ctx, JSValue op1, JSValue op2,
                 res = isnan(d1) == isnan(d2);
             } else if (eq_mode == JS_EQ_SAME_VALUE_ZERO) {
                 res = (d1 == d2); /* +0 == -0 */
+            } else if (tag2 == JS_CUSTOM_TAG_FLOAT32) {
+                res = (fabs(d1 - d2) < 0.000000001);
             } else {
                 u1.d = d1;
                 u2.d = d2;
@@ -14870,6 +14880,37 @@ static BOOL js_strict_eq2(JSContext *ctx, JSValue op1, JSValue op2,
             }
         } else {
             res = (d1 == d2); /* if NaN return false and +0 == -0 */
+        }
+        goto done_no_free;
+    case JS_CUSTOM_TAG_FLOAT32:
+        f1 = JS_VALUE_GET_FLOAT32(op1);
+        if (tag2 == JS_CUSTOM_TAG_FLOAT32) {
+            f2 = JS_VALUE_GET_FLOAT32(op2);
+        } else if (tag2 == JS_TAG_INT) {
+            f2 = JS_VALUE_GET_INT(op2);
+        } else if (tag2 == JS_TAG_FLOAT64) {
+            f2 = (float)JS_VALUE_GET_FLOAT64(op2);
+        } else {
+            res = FALSE;
+            break;
+        }
+
+        if (unlikely(eq_mode >= JS_EQ_SAME_VALUE)) {
+            JSFloat32Union u1, u2;
+            /* NaN is not always normalized, so this test is necessary */
+            if (isnanf(f1) || isnanf(f2)) {
+                res = isnanf(f1) == isnanf(f2);
+            } else if (eq_mode == JS_EQ_SAME_VALUE_ZERO) {
+                res = (f1 == f2); /* +0 == -0 */
+            } else if (tag2 == JS_TAG_FLOAT64) {
+                res = (fabsf(f1 - f2) < 0.000000001);
+            } else {
+                u1.f = f1;
+                u2.f = f2;
+                res = (u1.u32 == u2.u32); /* +0 != -0 */
+            }
+        } else {
+            res = (f1 == f2); /* if NaN return false and +0 == -0 */
         }
         goto done_no_free;
 #ifdef CONFIG_BIGNUM
