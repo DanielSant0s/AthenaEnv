@@ -42,7 +42,7 @@ AthenaEnv is a project that seeks to facilitate and at the same time brings a co
 ### Modules:
 * System: Files, folders and system stuff.
 * Image: Image drawing.
-* Shape: Shape drawing, triangles, circles etc.
+* Draw: Shape drawing, triangles, circles etc.
 * Render: Basic 3D support.
 * Display: The entire screen of your project (2D and 3D), being able to change the resolution, enable or disable parameters.
 * Font: Functions that control the texts that appear on the screen, loading texts, drawing and unloading from memory.
@@ -56,7 +56,7 @@ New types are always being added and this list can grow a lot over time, so stay
 ### Built With
 
 * [PS2DEV](https://github.com/ps2dev/ps2dev)
-* [Duktape](https://github.com/svaarala/duktape)
+* [QuickJS](https://bellard.org/quickjs/)
 
 ## Coding
 
@@ -319,8 +319,7 @@ Network.init(); //DHCP Mode, dynamic.
 * Network.deinit()  
   Shutdown network module.
   
-**Sockets**
-
+### Socket module
 
 Construction:  
 
