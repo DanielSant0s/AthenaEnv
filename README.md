@@ -99,7 +99,9 @@ Construction:
   path - Path to the file, E.g.: "images/test.png".  
   *mode* - Choose between storing the image between **RAM** or **VRAM**, default value is RAM.  
   *async_list* - Gets a ImageList object, which is a asynchronous image loading list, if you want to load images in the background.  
-  Example: var test = new Image("owl.png", VRAM);  
+```js
+var test = new Image("owl.png", VRAM); 
+``` 
 
 Properties:
 
@@ -113,32 +115,41 @@ Properties:
 Methods:
 
 * draw(x, y) - Draw loaded image onscreen(call it every frame). Example: image.draw(15.0, 100.0);
-* ready() - Returns true if an asynchronous image was successfully loaded in memory. Example: var loaded = image.ready();  
+* ready() - Returns true if an asynchronous image was successfully loaded in memory. 
+```js
+var loaded = image.ready();  
+```
 
 **ImageList**
 
 Construction:
 
-* var async_list = new ImageList();  
-  This constructor creates a new thread and a queue to load images in background, avoid building multiple ImageList objects.
-
+```js
+var async_list = new ImageList(); // This constructor creates a new thread and a queue to load images in background, avoid building multiple ImageList objects.
+```
 Methods:
 
-* process() - This method starts the thread and loads added images on the queue. Example: async_list.process();
+* process() - This method starts the thread and loads added images on the queue. 
+```js
+async_list.process();
+```
   
   
 ### Shape module
-* drawPoint(x, y, color)
-* drawRect(x, y, width, height, color)
-* drawLine(x, y, x2, y2, color)
-* drawCircle(x, y, radius, color, *filled*)
-* drawTriangle(x, y, x2, y2, x3, y3, color, *color2*, *color3*)
-* drawQuad(x, y, x2, y2, x3, y3, x4, y4 color, *color2*, *color3*, *color4*)
+* Draw.point(x, y, color)
+* Draw.rect(x, y, width, height, color)
+* Draw.line(x, y, x2, y2, color)
+* Draw.circle(x, y, radius, color, *filled*)
+* Draw.triangle(x, y, x2, y2, x3, y3, color, *color2*, *color3*)
+* Draw.quad(x, y, x2, y2, x3, y3, x4, y4 color, *color2*, *color3*, *color4*)
 
 ### Render module
 
 • Remember to enable zbuffering on screen mode, put the line of code below  
-• Default NTSC mode(3D enabled): Display.setMode(NTSC, 640, 448, CT24, INTERLACED, FIELD, true, Z16S)  
+• Default NTSC mode(3D enabled): 
+```js
+Display.setMode(NTSC, 640, 448, CT24, INTERLACED, FIELD, true, Z16S);
+```
 
 * Render.init(aspect) *default aspect is 4/3, widescreen is 16/9
 * var model = Render.loadOBJ(path, *texture*)
@@ -177,10 +188,14 @@ Methods:
 
 Construction:  
 
-* var font = new Font(*path*);  
+```js
+var font = new Font(path);  
+```
   path - Path to a font file, E.g.: "images/atlas.png", "fonts/font.png".  
-  Example 1: var osdfnt = new Font();  //Load BIOS font  
-  Example 2: var font = new Font("Segoe UI.ttf"); //Load trueType font  
+```js
+var osdfnt = new Font();  //Load BIOS font  
+var font = new Font("Segoe UI.ttf"); //Load trueType font 
+``` 
 
 Properties:
 * color - Define font tinting, default value is Color.new(255, 255, 255, 128).
@@ -201,46 +216,46 @@ Methods:
   ![analog_graph](https://user-images.githubusercontent.com/47725160/154816009-99d7e5da-badf-409b-9a3b-3618fd372f09.png)
 
 * var type = Pads.getType(*port*)
-  • PAD_DIGITAL  
-  • PAD_ANALOG  
-  • PAD_DUALSHOCK  
+  • Pads.DIGITAL  
+  • Pads.ANALOG  
+  • Pads.DUALSHOCK  
 * var press = Pads.getPressure(*port*, button)
 * Pads.rumble(port, big, small)
 * var ret = Pads.check(pad, button)
 * Buttons list:  
-  • PAD_SELECT  
-  • PAD_START  
-  • PAD_UP  
-  • PAD_RIGHT  
-  • PAD_DOWN  
-  • PAD_LEFT  
-  • PAD_TRIANGLE  
-  • PAD_CIRCLE  
-  • PAD_CROSS  
-  • PAD_SQUARE  
-  • PAD_L1  
-  • PAD_R1  
-  • PAD_L2  
-  • PAD_R2  
-  • PAD_L3  
-  • PAD_R3  
+  • Pads.SELECT  
+  • Pads.START  
+  • Pads.UP  
+  • Pads.RIGHT  
+  • Pads.DOWN  
+  • Pads.LEFT  
+  • Pads.TRIANGLE  
+  • Pads.CIRCLE  
+  • Pads.CROSS  
+  • Pads.SQUARE  
+  • Pads.L1  
+  • Pads.R1  
+  • Pads.L2  
+  • Pads.R2  
+  • Pads.L3  
+  • Pads.R3  
 
 ### System module
 
 * var fd = System.openFile(path, type)
 * Types list:  
-  • FREAD   
-  • FWRITE  
-  • FCREATE  
-  • FRDWR  
+  • System.FREAD   
+  • System.FWRITE  
+  • System.FCREATE  
+  • System.FRDWR  
 * var buffer = System.readFile(file, size)
 * System.writeFile(fd, data, size)
 * System.closeFile(fd)
 * System.seekFile(fd, pos, type)
 * Types list:  
-  • SET  
-  • CUR  
-  • END  
+  • System.SET  
+  • System.CUR  
+  • System.END  
 * var size = System.sizeFile(fd)
 * System.doesFileExist(path)
 * System.CurrentDirectory(path) *if path given, it sets the current dir, else it gets the current dir
@@ -290,8 +305,10 @@ Asynchronous functions:
 ### Network module
 
 * Network.init(*ip*, *netmask*, *gateway*, *dns*)  
-Example 1: Network.init("192.168.0.10", "255.255.255.0", "192.168.0.1", "192.168.0.1"); //Static mode  
-Example 2: Network.init(); //DHCP Mode, dynamic.  
+```js
+Network.init("192.168.0.10", "255.255.255.0", "192.168.0.1", "192.168.0.1"); //Static mode  
+Network.init(); //DHCP Mode, dynamic.  
+```
 
 * var conf = Network.getConfig()  
   Returns conf.ip, conf.netmask, conf.gateway, conf.dns.
@@ -308,7 +325,9 @@ Example 2: Network.init(); //DHCP Mode, dynamic.
 Construction:  
 
 * var s = new Socket(domain, type)  
-  Example: var s = new Socket(AF_INET, SOCK_STREAM);
+```js
+var s = new Socket(AF_INET, SOCK_STREAM);
+```
 
 Methods:
 
