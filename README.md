@@ -76,7 +76,18 @@ Oh, and I also have to mention that an essential prerequisite for using AthenaEn
 
 ### Features
 
-AthenaEnv uses the Duktape 2.6.0 for JavaScript language, which means that it brings all ES5 JS features so far. Below is the list of usable functions of AthenaEnv project currently, this list is constantly being updated. Some custom modules are embedded, such as console, Node.js module loading and dofile/dostring from Lua.
+AthenaEnv uses a slightly modified version of the QuickJS interpreter for JavaScript language, which means that it brings almost modern JavaScript features so far.
+
+**Float32**
+
+This project introduces a (old)new data type for JavaScript: single floats. Despite being less accurate than the classic doubles for number semantics, they are important for performance on the PS2, as the console only processes 32-bit floats on its FPU.
+
+You can write single floats on AthenaEnv following the syntax below:
+```js
+let test_float = 15.0f; // The 'f' suffix makes QuickJS recognizes it as a single float.
+```
+
+Below is the list of usable functions of AthenaEnv project currently, this list is constantly being updated.
 
 P.S.: *Italic* parameters refer to optional parameters
 
