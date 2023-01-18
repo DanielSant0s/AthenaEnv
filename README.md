@@ -136,7 +136,7 @@ async_list.process();
 ```
   
   
-### Shape module
+### Draw module
 * Draw.point(x, y, color)
 * Draw.rect(x, y, width, height, color)
 * Draw.line(x, y, x2, y2, color)
@@ -166,8 +166,7 @@ Display.setMode(NTSC, 640, 448, CT24, INTERLACED, FIELD, true, Z16S);
 * Lights.set(light, dir_x, dir_y, dir_z, r, g, b, type)  
   • Avaiable light types: AMBIENT, DIRECTIONAL  
 
-### Display module
-
+### Screen module
 * Screen.clear(*color*)
 * Screen.flip()
 * var freevram = Screen.getFreeVRAM()
