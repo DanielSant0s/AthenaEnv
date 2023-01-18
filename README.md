@@ -168,17 +168,17 @@ Display.setMode(NTSC, 640, 448, CT24, INTERLACED, FIELD, true, Z16S);
 
 ### Display module
 
-* Display.clear(*color*)
-* Display.flip()
-* var freevram = Display.getFreeVRAM()
-* var fps = Display.getFPS(frame_interval)
-* Display.setVSync(bool)
-* Display.waitVblankStart()
-* Display.setMode(mode, width, height, colormode, interlace, field, zbuffering, zbuf_colormode)  
-  • Default NTSC mode(3D disabled): Display.setMode(NTSC, 640, 448, CT24, INTERLACED, FIELD)  
-  • Default NTSC mode(3D enabled):  Display.setMode(NTSC, 640, 448, CT24, INTERLACED, FIELD, true, Z16S)  
-  • Default PAL mode(3D disabled): Display.setMode(PAL, 640, 512, CT24, INTERLACED, FIELD)  
-  • Default PAL mode(3D enabled):  Display.setMode(PAL, 640, 512, CT24, INTERLACED, FIELD, true, Z16S)  
+* Screen.clear(*color*)
+* Screen.flip()
+* var freevram = Screen.getFreeVRAM()
+* var fps = Screen.getFPS(frame_interval)
+* Screen.setVSync(bool)
+* Screen.waitVblankStart()
+* Screen.setMode(mode, width, height, colormode, interlace, field, zbuffering, zbuf_colormode)  
+  • Default NTSC mode(3D disabled): Screen.setMode(NTSC, 640, 448, CT24, INTERLACED, FIELD)  
+  • Default NTSC mode(3D enabled):  Screen.setMode(NTSC, 640, 448, CT24, INTERLACED, FIELD, true, Z16S)  
+  • Default PAL mode(3D disabled): Screen.setMode(PAL, 640, 512, CT24, INTERLACED, FIELD)  
+  • Default PAL mode(3D enabled):  Screen.setMode(PAL, 640, 512, CT24, INTERLACED, FIELD, true, Z16S)  
   • Available modes: NTSC, _480p, PAL, _576p, _720p, _1080i  
   • Available colormodes: CT16, CT16S, CT24, CT32  
   • Available zbuffer colormodes: Z16, Z16S, Z24, Z32  
