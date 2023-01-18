@@ -44,12 +44,13 @@ AthenaEnv is a project that seeks to facilitate and at the same time brings a co
 * Image: Image drawing.
 * Draw: Shape drawing, triangles, circles etc.
 * Render: Basic 3D support.
-* Display: The entire screen of your project (2D and 3D), being able to change the resolution, enable or disable parameters.
+* Screen: The entire screen of your project (2D and 3D), being able to change the resolution, enable or disable parameters.
 * Font: Functions that control the texts that appear on the screen, loading texts, drawing and unloading from memory.
 * Pads: Above being able to draw and everything else, A human interface is important. Supports rumble and pressure sensitivity.
 * Timer: Control the time precisely in your code, it contains several timing functions.
 * Sound: Basic sound functions.
-* Network: Sockets and web requests :D.
+* Network: Net basics and web requests :D.
+* Socket: Well, sockets.
 
 New types are always being added and this list can grow a lot over time, so stay tuned.
 
@@ -70,7 +71,7 @@ Using AthenaEnv you only need one way to code and one way to test your code, tha
 * How to enable HostFS on PCSX2 1.7.0:  
 ![image](https://user-images.githubusercontent.com/47725160/145600021-b07dd873-137d-4364-91ec-7ace0b1936e2.png)
 
-* Android: [QuickEdit](https://play.google.com/store/apps/details?id=com.rhmsoft.edit&hl=pt_BR&gl=US) and a PS2 with uLE for test.
+* Android: [QuickEdit](https://play.google.com/store/apps/details?id=com.rhmsoft.edit&hl=pt_BR&gl=US) and AetherSX2(HostFS is required) or a PS2 with uLE for test.
 
 Oh, and I also have to mention that an essential prerequisite for using AthenaEnv is knowing how to code in JavaScript.
 
