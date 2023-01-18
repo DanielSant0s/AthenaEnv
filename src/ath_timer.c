@@ -96,14 +96,14 @@ static JSValue athena_destroy(JSContext *ctx, JSValue this_val, int argc, JSValu
 }
 
 static const JSCFunctionListEntry module_funcs[] = {
-	JS_CFUNC_DEF("new", -1, athena_newT),
-	JS_CFUNC_DEF("getTime", -1, athena_time),
-	JS_CFUNC_DEF("setTime", -1, athena_set),
-	JS_CFUNC_DEF("destroy", -1, athena_destroy),
-	JS_CFUNC_DEF("pause", -1, athena_pause),
-	JS_CFUNC_DEF("resume", -1, athena_resume),
-	JS_CFUNC_DEF("reset", -1, athena_reset),
-	JS_CFUNC_DEF("isPlaying", -1, athena_wisPlaying)
+	JS_CFUNC_DEF("new", 0, athena_newT),
+	JS_CFUNC_DEF("getTime", 1, athena_time),
+	JS_CFUNC_DEF("setTime", 2, athena_set),
+	JS_CFUNC_DEF("destroy", 1, athena_destroy),
+	JS_CFUNC_DEF("pause", 1, athena_pause),
+	JS_CFUNC_DEF("resume", 1, athena_resume),
+	JS_CFUNC_DEF("reset", 1, athena_reset),
+	JS_CFUNC_DEF("isPlaying", 1, athena_wisPlaying)
 };
 
 static int module_init(JSContext *ctx, JSModuleDef *m){

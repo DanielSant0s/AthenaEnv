@@ -124,11 +124,11 @@ static JSValue athena_circle_draw(JSContext *ctx, JSValue this_val, int argc, JS
 
 static const JSCFunctionListEntry module_funcs[] = {
 	JS_CFUNC_DEF("point", 3, athena_point_draw),
-	JS_CFUNC_DEF("line", -1, athena_line_draw),
-	JS_CFUNC_DEF("triangle", -1, athena_triangle_draw),
-	JS_CFUNC_DEF("quad", -1, athena_quad_draw),
-	JS_CFUNC_DEF("rect", -1, athena_rect_draw),
-    JS_CFUNC_DEF("circle", -1, athena_circle_draw)
+	JS_CFUNC_DEF("line", 5, athena_line_draw),
+	JS_CFUNC_DEF("triangle", 9, athena_triangle_draw),
+	JS_CFUNC_DEF("quad", 12, athena_quad_draw),
+	JS_CFUNC_DEF("rect", 5, athena_rect_draw),
+    JS_CFUNC_DEF("circle", 5, athena_circle_draw)
 };
 
 static int module_init(JSContext *ctx, JSModuleDef *m){

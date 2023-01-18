@@ -186,12 +186,12 @@ static JSValue athena_set_led(JSContext *ctx, JSValue this_val, int argc, JSValu
 }
 
 static const JSCFunctionListEntry module_funcs[] = {
-    JS_CFUNC_DEF("get", -1, athena_getpad),
-    JS_CFUNC_DEF("getType", -1, athena_gettype),
-    JS_CFUNC_DEF("getPressure", -1, athena_getpressure),
-    JS_CFUNC_DEF("rumble", -1, athena_rumble),
-    JS_CFUNC_DEF("setLED", -1, athena_set_led),
-    JS_CFUNC_DEF("check", -1, athena_check),
+    JS_CFUNC_DEF("get", 1, athena_getpad),
+    JS_CFUNC_DEF("getType", 1, athena_gettype),
+    JS_CFUNC_DEF("getPressure", 2, athena_getpressure),
+    JS_CFUNC_DEF("rumble", 3, athena_rumble),
+    JS_CFUNC_DEF("setLED", 4, athena_set_led),
+    JS_CFUNC_DEF("check", 2, athena_check),
 	JS_PROP_INT32_DEF("SELECT", PAD_SELECT, JS_PROP_CONFIGURABLE ),
 	JS_PROP_INT32_DEF("START", PAD_START, JS_PROP_CONFIGURABLE ),
 	JS_PROP_INT32_DEF("UP", PAD_UP, JS_PROP_CONFIGURABLE ),
