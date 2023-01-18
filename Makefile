@@ -33,13 +33,13 @@ EE_BIN_PKD = athena_pkd.elf
 
 RESET_IOP = 1
 
-EE_LIBS = -L$(PS2SDK)/ports/lib -L$(PS2DEV)/gsKit/lib/ -Lmodules/ds34bt/ee/ -Lmodules/ds34usb/ee/ -lps2_drivers -lmc -lpatches -ldebug -lmath3d -ljpeg -lfreetype -lgskit_toolkit -lgskit -ldmakit -lpng -lz -lelf-loader -lds34bt -lds34usb -lnetman -lps2ip -lcurl
+EE_LIBS = -L$(PS2SDK)/ports/lib -L$(PS2DEV)/gsKit/lib/ -Lmodules/ds34bt/ee/ -Lmodules/ds34usb/ee/ -lps2_drivers -lmc -lpatches -ldebug -lmath3d -ljpeg -lfreetype -lgskit_toolkit -lgskit -ldmakit -lpng -lz -lelf-loader -lds34bt -lds34usb -lnetman -lps2ip -lcurl -lwolfssl
 
 EE_INCS += -I$(PS2DEV)/gsKit/include -I$(PS2SDK)/ports/include -I$(PS2SDK)/ports/include/freetype2 -I$(PS2SDK)/ports/include/zlib
 
 EE_INCS += -Imodules/ds34bt/ee -Imodules/ds34usb/ee
 
-EE_CFLAGS += -Wno-sign-compare -fno-strict-aliasing -fno-exceptions -D_R5900 -DPS2IP_DNS
+EE_CFLAGS += -Wno-sign-compare -fno-strict-aliasing -fno-exceptions -DPS2IP_DNS -DCONFIG_VERSION=\"$(shell cat VERSION)\" -D__TM_GMTOFF=tm_gmtoff -DPATH_MAX=256 -DEMSCRIPTEN
 
 ifeq ($(RESET_IOP),1)
 EE_CFLAGS += -DRESET_IOP
@@ -56,10 +56,11 @@ EXT_LIBS = modules/ds34usb/ee/libds34usb.a modules/ds34bt/ee/libds34bt.a
 APP_CORE = src/main.o src/taskman.o src/pad.o src/graphics.o src/atlas.o src/fntsys.o src/sound.o \
 		   src/system.o src/render.o src/calc_3d.o
 
-ATHENA_MODULES = src/duktape/duktape.o src/duktape/duk_console.o src/duktape/duk_module_node.o \
+ATHENA_MODULES = src/quickjs/cutils.o src/quickjs/libbf.o src/quickjs/libregexp.o src/quickjs/libunicode.o \
+				 src/quickjs/realpath.o src/quickjs/quickjs.o src/quickjs/quickjs-libc.o \
 				 src/ath_env.o src/ath_screen.o src/ath_image.o src/ath_imagelist.o src/ath_shape.o \
-				 src/ath_color.o src/ath_font.o src/ath_pads.o src/ath_sound.o \
-				 src/ath_system.o src/ath_timer.o src/ath_render.o src/ath_task.o src/ath_network.o
+				 src/ath_color.o src/ath_font.o src/ath_pads.o src/ath_sound.o src/ath_system.o \
+				 src/ath_timer.o src/ath_render.o src/ath_task.o src/ath_network.o src/ath_socket.o
 
 IOP_MODULES = src/ds34bt.o src/ds34usb.o src/NETMAN.o src/SMAP.o
 

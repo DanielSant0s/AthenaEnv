@@ -1,61 +1,88 @@
+console.log('Hello, QuickJS!');
+let s = Date.now();
+let ti = Date.now();
 
-var lm_font = new Font("fonts/LEMONMILK-Regular.otf");
-var lml_font = new Font("fonts/LEMONMILK-Light.otf");
-lml_font.setScale(0.35);
+Screen.setMode(NTSC, 640, 448, CT24, INTERLACED, FIELD, true, Z16S);
+Render.init(4/3);
 
-var pad = Pads.get();
-var oldpad = pad;
+let dragontex = new Image("render/dragon.png");
+dragontex.filter = LINEAR;
+let dragonmesh = Render.loadOBJ("render/dragon.obj", dragontex);
 
-var list_ptr = 0;
+let test = Color.new(128, 0, 255);
+console.log('Color module test - R:' + Color.getR(test) + ' G: ' + Color.getG(test) + ' B: ' + Color.getB(test));
 
-var demo_list = ["hello.js", "pads.js", "render.js", "app_filemgr.js", "sockets.js", "request.js", "cell.js"];
+Camera.position(0.0, 0.0, 50.0);
+Camera.rotation(0.0, 0.0,  0.0);
 
-Display.setVSync(false);
+Lights.create(1);
 
-var vsync = false;
+Lights.set(1,  0.0,  1.0, -1.0, 0.9, 0.5, 0.5, DIRECTIONAL);
 
-while(true){
-    Display.clear();
+let pad = Pads.get();
+let oldpad = pad;
+let c_x = 300;
+let c_y = 300;
+
+var mine_font = new Font("minecraft.ttf");
+mine_font.scale = 2;
+mine_font.color = Color.new(255, 255, 0);
+
+Network.init();
+let netcfg = Network.getConfig();
+console.log("Network config\n" + 
+            "\nIP: " + netcfg.ip + 
+            "\nNetmask: " + netcfg.netmask + 
+            "\nGateway: " + netcfg.gateway + 
+            "\nDNS: " + netcfg.dns);
+
+//console.log(Network.get("https://github.com"));
+
+Screen.setVSync(false);
+
+let circle = new Image("pads/circle.png", VRAM);
+circle.width = 100.0;
+circle.height = 100.0;
+circle.color = Color.new(0, 0, 128);
+circle.filter = LINEAR;
+
+let float_test = 15.6f;
+
+while (true){
+    Screen.clear(test);
     oldpad = pad;
     pad = Pads.get();
 
-    lm_font.color = Color.new(128, 128, 128);
-    lm_font.print(80, 15, "Athena Demo Gallery");
-
-    if(Pads.check(pad, PAD_UP) && !Pads.check(oldpad, PAD_UP)){
-        if(list_ptr > 0){
-            list_ptr--;
-        } else {
-            list_ptr = demo_list.length - 1;
-        }
+    if(Pads.check(pad, Pads.LEFT)){
+        c_x--;
+    }
+    if(Pads.check(pad, Pads.RIGHT)){
+        c_x++;
+    }
+    if(Pads.check(pad, Pads.UP)){
+        c_y--;
+    }
+    if(Pads.check(pad, Pads.DOWN)){
+        c_y++;
     }
 
-    if(Pads.check(pad, PAD_DOWN) && !Pads.check(oldpad, PAD_DOWN)){
-        if(list_ptr < demo_list.length-1){
-            list_ptr++;
-        } else {
-            list_ptr = 0;
-        }
+    Draw.rect(50, 50, 150, 150, Color.new(128, 128, 128));
+
+    Draw.circle(c_x, c_y, 25, Color.new(255, 0, 0));
+
+    let fps = Screen.getFPS(360);
+    if(Date.now() - ti > 360){
+        console.log(fps, "FPS");
+        ti = Date.now();
     }
 
-    if(Pads.check(pad, PAD_CROSS) && !Pads.check(oldpad, PAD_CROSS)){
-        dofile(demo_list[list_ptr]);
-        lml_font.setScale(0.35);
-    }
+    mine_font.print(10, 10, "Hello world!");
 
-    if(Pads.check(pad, PAD_R3) && !Pads.check(oldpad, PAD_R3)){
-        vsync = !vsync;
-        Display.setVSync(vsync);
-    }
- 
-    for(var i = 0; i < demo_list.length; i++){
-        lm_font.color = Color.new(128, 128, 128, (i == list_ptr? 128 : 64))
-        lm_font.print(80, 80+(i*35), demo_list[i]);
-    }
+    circle.draw(200, 200);
 
-    lml_font.print(5, 380, "Cross - Run demo");
-    lml_font.print(5, 395, "Up/Down - Switch demo");
-    lml_font.print(5, 410, "R3 - " + (vsync? "Disable" : "Enable") + " frame limiter");
+    Render.drawOBJ(dragonmesh, 0.0, 0.0, 30.0, 180.0, 0.0, 0.0);
+    
+    Screen.flip();
+};
 
-    Display.flip();
-}
+

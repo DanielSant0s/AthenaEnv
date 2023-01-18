@@ -7,6 +7,11 @@
 #include "include/graphics.h"
 #include "ath_env.h"
 
+static JSClassID js_image_class_id;
+
+JSClassID get_img_class_id(){
+	return js_image_class_id;
+}
 
 int append_img(AsyncImage* img, ImgList* list)
 {
@@ -36,10 +41,10 @@ static int load_img_async(GSTEXTURE* image, const char* path, bool delayed, ImgL
 	return 0;
 }
 
+/*
 
-static duk_ret_t athena_image_isloaded(duk_context *ctx){
-	int argc = duk_get_top(ctx);
-	if(argc != 0) return duk_generic_error(ctx, "isLoaded takes no arguments");
+static JSValue athena_image_isloaded(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	if(argc != 0) return JS_ThrowSyntaxError(ctx, "isLoaded takes no arguments");
 
 	bool loaded = get_obj_boolean(ctx, -1, "\xff""\xff""loaded");
 	GSTEXTURE* testimg = (GSTEXTURE*)get_obj_uint(ctx, -1, "\xff""\xff""data");
@@ -75,167 +80,233 @@ static duk_ret_t athena_image_isloaded(duk_context *ctx){
 	
 }
 
-static duk_ret_t athena_image_dtor(duk_context *ctx){
+*/
 
-    // The object to delete is passed as first argument instead
-    duk_get_prop_string(ctx, 0, "\xff""\xff""deleted");
+static void athena_image_dtor(JSRuntime *rt, JSValue val){
+		JSImageData *image = JS_GetOpaque(val, js_image_class_id);
 
-    bool deleted = duk_to_boolean(ctx, -1);
-    duk_pop(ctx);
+		UnloadTexture(&(image->tex));
 
-	if(!deleted){
-		duk_get_prop_string(ctx, 0, "\xff""\xff""data");
-		GSTEXTURE* source = (GSTEXTURE*)duk_to_uint(ctx, -1);
-		duk_pop(ctx);
+		free(image->tex.Mem);
+		image->tex.Mem = NULL;
 
-		UnloadTexture(source);
-
-		free(source->Mem);
-		source->Mem = NULL;
-
-		if(source->Clut != NULL)
+		if(image->tex.Clut != NULL)
 		{
-			free(source->Clut);
-			source->Clut = NULL;
+			free(image->tex.Clut);
+			image->tex.Clut = NULL;
 		}
 
-		free(source);
-		source = NULL;
-
-        duk_push_boolean(ctx, true);
-        duk_put_prop_string(ctx, 0, "\xff""\xff""deleted");
+		js_free_rt(rt, image);
 	}
 
-	return 0;
-}
+static JSValue athena_image_ctor(JSContext *ctx, JSValueConst new_target, int argc, JSValueConst *argv) {
+	if (argc != 1 && argc != 2 && argc != 3) return JS_ThrowSyntaxError(ctx, "Image takes 1, 2 or 3 arguments");
 
-static duk_ret_t athena_image_ctor(duk_context *ctx) {
-	
-	int argc = duk_get_top(ctx);
-	if (argc != 1 && argc != 2 && argc != 3) return duk_generic_error(ctx, "Image takes 1, 2 or 3 arguments");
-    if (!duk_is_constructor_call(ctx)) return DUK_RET_TYPE_ERROR;
+    JSImageData* image;
+    JSValue obj = JS_UNDEFINED;
+    JSValue proto;
 
-	GSTEXTURE* image = malloc(sizeof(GSTEXTURE));
-	image->Width = 0;
-	image->Height = 0;
+	image = js_mallocz(ctx, sizeof(*image));
+    if (!image)
+        return JS_EXCEPTION;
 
-    duk_push_this(ctx);
+	image->tex.Width = 0;
+	image->tex.Height = 0;
 
-	const char* text = duk_get_string(ctx, 0);
+	const char* text = JS_ToCString(ctx, argv[0]);
 
 	bool delayed = true;
-	if (argc > 1) delayed = duk_get_boolean(ctx, 1);
+	if (argc > 1) delayed = JS_ToBool(ctx, argv[1]);
 
-	if(argc > 2) {
-		duk_get_prop_string(ctx, 2, "\xff""\xff""handle");
-		ImgList* list = (ImgList*)duk_get_uint(ctx, -1);
-		duk_pop(ctx);
+	load_image(&(image->tex), text, delayed);
 
-		load_img_async(image, text, delayed, list);
+	image->width = image->tex.Width;
+	image->height = image->tex.Height;
+	image->endx = image->tex.Width;
+	image->endy = image->tex.Height;
+	image->startx = 0.0;
+	image->starty = 0.0;
+	image->angle = 0.0;
+	image->color = 0x80808080;
+	image->tex.Filter = GS_FILTER_NEAREST;
 
-		duk_push_boolean(ctx, false);
-    	duk_put_prop_string(ctx, -2, "\xff""\xff""loaded");
+    proto = JS_GetPropertyStr(ctx, new_target, "prototype");
+    if (JS_IsException(proto))
+        goto fail;
+    obj = JS_NewObjectProtoClass(ctx, proto, js_image_class_id);
+    JS_FreeValue(ctx, proto);
+    if (JS_IsException(obj))
+        goto fail;
+    JS_SetOpaque(obj, image);
+    return obj;
 
+ fail:
+    js_free(ctx, image);
+    JS_FreeValue(ctx, obj);
+    return JS_EXCEPTION;
+}
+
+static JSValue athena_image_draw(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	if (argc != 2) return JS_ThrowSyntaxError(ctx, "draw takes x and y arguments(2)!");
+
+	float x, y;
+
+	JSImageData *image = JS_GetOpaque2(ctx, this_val, js_image_class_id);
+
+	JS_ToFloat32(ctx, &x, argv[0]);
+	JS_ToFloat32(ctx, &y, argv[1]);
+
+	if(image->angle != 0.0){
+		drawImageRotate(&(image->tex), x, y, image->width, image->height, image->startx, image->starty, image->endx, image->endy, image->angle, image->color);
 	} else {
-		load_image(image, text, delayed);
-		if (image == NULL) return duk_generic_error(ctx, "Failed to load image %s.", text);
-
-		duk_push_number(ctx, (float)(image->Width));
-    	duk_put_prop_string(ctx, -2, "width");
-
-		duk_push_number(ctx, (float)(image->Height));
-    	duk_put_prop_string(ctx, -2, "height");
-
-		duk_push_number(ctx, (float)(image->Width));
-    	duk_put_prop_string(ctx, -2, "endx");
-
-		duk_push_number(ctx, (float)(image->Height));
-    	duk_put_prop_string(ctx, -2, "endy");
-		
+		drawImage(&(image->tex), x, y, image->width, image->height, image->startx, image->starty, image->endx, image->endy, image->color);
 	}
 
-	duk_push_uint(ctx, (uint32_t)image);
-    duk_put_prop_string(ctx, -2, "\xff""\xff""data");
+	return JS_UNDEFINED;
+}
 
-	duk_push_number(ctx, (float)(0.0f));
-    duk_put_prop_string(ctx, -2, "startx");
+static JSValue js_image_get(JSContext *ctx, JSValueConst this_val, int magic)
+{
+	JSValue val = JS_UNDEFINED;
+    JSImageData *s = JS_GetOpaque2(ctx, this_val, js_image_class_id);
+	
+    if (!s){
+		return JS_EXCEPTION;
+	}
 
-	duk_push_number(ctx, (float)(0.0f));
-    duk_put_prop_string(ctx, -2, "starty");
+	switch(magic) {
+		case 0:
+			val = JS_NewFloat32(ctx, (float)s->width);
+			break;
+		case 1:
+			val = JS_NewFloat32(ctx, (float)s->height);
+			break;
+		case 2:
+			val = JS_NewFloat32(ctx, s->startx);
+			break;
+		case 3:
+			val = JS_NewFloat32(ctx, s->starty);
+			break;
+		case 4:
+			val = JS_NewFloat32(ctx, s->endx);
+			break;
+		case 5:
+			val = JS_NewFloat32(ctx, s->endy);
+			break;
+		case 6:
+			val = JS_NewFloat32(ctx, s->angle);
+			break;
+	}
 
-	duk_push_number(ctx, (float)(0.0f));
-    duk_put_prop_string(ctx, -2, "angle");
+	return val;
 
-	duk_push_uint(ctx, (uint32_t)(0x80808080));
-    duk_put_prop_string(ctx, -2, "color");
+}
 
-	duk_push_uint(ctx, (uint32_t)(GS_FILTER_NEAREST));
-    duk_put_prop_string(ctx, -2, "filter");
+static JSValue js_image_set(JSContext *ctx, JSValueConst this_val, JSValue val, int magic)
+{
+    JSImageData *s = JS_GetOpaque2(ctx, this_val, js_image_class_id);
+    float v;
 
-    duk_push_boolean(ctx, false);
-    duk_put_prop_string(ctx, -2, "\xff""\xff""deleted");
+    if (!s || JS_ToFloat32(ctx, &v, val)){
+		return JS_EXCEPTION;
+	}
 
-    duk_push_c_function(ctx, athena_image_dtor, 1);
-    duk_set_finalizer(ctx, -2);
+	switch(magic) {
+		case 0:
+			s->width = v;
+			break;
+		case 1:
+			s->height = v;
+			break;
+		case 2:
+			s->startx = v;
+			break;
+		case 3:
+			s->starty = v;
+			break;
+		case 4:
+			s->endx = v;
+			break;
+		case 5:
+			s->endy = v;
+			break;
+		case 6:
+			s->angle = v;
+			break;
+	}
 
+    return JS_UNDEFINED;
+}
+
+static JSValue athena_image_get_uint(JSContext *ctx, JSValueConst this_val, int magic)
+{
+    JSImageData *s = JS_GetOpaque2(ctx, this_val, js_image_class_id);
+    if (!s)
+        return JS_EXCEPTION;
+
+	return JS_NewUint32(ctx, (magic == 0? s->color : s->tex.Filter));
+}
+
+static JSValue athena_image_set_uint(JSContext *ctx, JSValueConst this_val, JSValue val, int magic)
+{
+    JSImageData *s = JS_GetOpaque2(ctx, this_val, js_image_class_id);
+    uint32_t value;
+    if (!s)
+        return JS_EXCEPTION;
+    if (JS_ToUint32(ctx, &value, val))
+        return JS_EXCEPTION;
+	
+	if(magic == 0){
+		s->color = value;
+	} else {
+		s->tex.Filter = value;
+	}
+
+    return JS_UNDEFINED;
+}
+
+static JSClassDef js_image_class = {
+    "Image",
+    .finalizer = athena_image_dtor,
+}; 
+
+static const JSCFunctionListEntry js_image_proto_funcs[] = {
+    JS_CFUNC_DEF("draw", 2, athena_image_draw),
+	JS_CGETSET_MAGIC_DEF("width", js_image_get, js_image_set, 0),
+	JS_CGETSET_MAGIC_DEF("height", js_image_get, js_image_set, 1),
+	JS_CGETSET_MAGIC_DEF("startx", js_image_get, js_image_set, 2),
+	JS_CGETSET_MAGIC_DEF("starty", js_image_get, js_image_set, 3),
+	JS_CGETSET_MAGIC_DEF("endx", js_image_get, js_image_set, 4),
+	JS_CGETSET_MAGIC_DEF("endy", js_image_get, js_image_set, 5),
+	JS_CGETSET_MAGIC_DEF("angle", js_image_get, js_image_set, 6),
+	JS_CGETSET_MAGIC_DEF("color", athena_image_get_uint, athena_image_set_uint, 0),
+	JS_CGETSET_MAGIC_DEF("filter", athena_image_get_uint, athena_image_set_uint, 1),
+};
+
+static int image_init(JSContext *ctx, JSModuleDef *m) {
+    JSValue image_proto, image_class;
+    
+    /* create the Point class */
+    JS_NewClassID(&js_image_class_id);
+    JS_NewClass(JS_GetRuntime(ctx), js_image_class_id, &js_image_class);
+
+    image_proto = JS_NewObject(ctx);
+    JS_SetPropertyFunctionList(ctx, image_proto, js_image_proto_funcs, countof(js_image_proto_funcs));
+    
+    image_class = JS_NewCFunction2(ctx, athena_image_ctor, "Image", 2, JS_CFUNC_constructor, 0);
+    /* set proto.constructor and ctor.prototype */
+    JS_SetConstructor(ctx, image_class, image_proto);
+    JS_SetClassProto(ctx, js_image_class_id, image_proto);
+                      
+    JS_SetModuleExport(ctx, m, "Image", image_class);
     return 0;
 }
 
-static duk_ret_t athena_image_draw(duk_context *ctx){
-	int argc = duk_get_top(ctx);
-	if (argc != 2) return duk_generic_error(ctx, "draw takes x and y arguments(2)!");
-
-	float x = duk_get_number(ctx, 0);
-	float y = duk_get_number(ctx, 1);
-
-  	GSTEXTURE* source = (GSTEXTURE*)get_obj_uint(ctx, -1, "\xff""\xff""data");
-	float width = get_obj_float(ctx, -1, "width");
-	float height = get_obj_float(ctx, -1, "height");
-	float startx = get_obj_float(ctx, -1, "startx");
-	float starty = get_obj_float(ctx, -1, "starty");
-	float endx = get_obj_float(ctx, -1, "endx");
-	float endy = get_obj_float(ctx, -1, "endy");
-	float angle = get_obj_float(ctx, -1, "angle");
-	Color color = get_obj_uint(ctx, -1, "color");
-	source->Filter = get_obj_uint(ctx, -1, "filter");
-
-	if(angle != 0.0f){
-		drawImageRotate(source, x, y, width, height, startx, starty, endx, endy, angle, color);
-	} else {
-		drawImage(source, x, y, width, height, startx, starty, endx, endy, color);
-	}
-
-	return 0;
-}
-
-void image_init(duk_context *ctx) {
-    duk_push_c_function(ctx, athena_image_ctor, DUK_VARARGS);
-
-    duk_push_object(ctx);
-
-    duk_push_c_function(ctx, athena_image_draw, DUK_VARARGS);
-    duk_put_prop_string(ctx, -2, "draw");
-
-    duk_push_c_function(ctx, athena_image_isloaded, DUK_VARARGS);
-    duk_put_prop_string(ctx, -2, "ready");
-
-    duk_put_prop_string(ctx, -2, "prototype");
-
-    duk_put_global_string(ctx, "Image");
-
-	duk_push_uint(ctx, GS_FILTER_NEAREST);
-	duk_put_global_string(ctx, "NEAREST");
-
-	duk_push_uint(ctx, GS_FILTER_LINEAR);
-	duk_put_global_string(ctx, "LINEAR");
-
-	duk_push_boolean(ctx, false);
-	duk_put_global_string(ctx, "VRAM");
-
-	duk_push_boolean(ctx, true);
-	duk_put_global_string(ctx, "RAM");
-}
-
-void athena_image_init(duk_context* ctx){
-	image_init(ctx);
+JSModuleDef *athena_image_init(JSContext* ctx){
+    JSModuleDef *m;
+    m = JS_NewCModule(ctx, "Image", image_init);
+    if (!m)
+        return NULL;
+    JS_AddModuleExport(ctx, m, "Image");
+    return m;
 }

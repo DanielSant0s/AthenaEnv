@@ -7,91 +7,85 @@
 #include "include/graphics.h"
 #include "ath_env.h"
 
-duk_ret_t athena_color_ctor(duk_context *ctx){
-  	int argc = duk_get_top(ctx);
-	unsigned int r = duk_get_uint(ctx, 0);
-	unsigned int g = duk_get_uint(ctx, 1);
-	unsigned int b = duk_get_uint(ctx, 2);
-  	unsigned int a = 0x80;
-	if (argc == 4) a = duk_get_uint(ctx, 3);
+static JSValue athena_color_ctor(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	uint32_t r, g, b, a = 0x80;
+	JS_ToUint32(ctx, &r, argv[0]);
+	JS_ToUint32(ctx, &g, argv[1]);
+	JS_ToUint32(ctx, &b, argv[2]);
+	if (argc == 4) JS_ToUint32(ctx, &a, argv[3]);
 
-	duk_push_uint(ctx, r | (g << 8) | (b << 16) | (a << 24));
-	return 1;
+	return JS_NewUint32(ctx, r | (g << 8) | (b << 16) | (a << 24));
 }
 
-duk_ret_t athena_getR(duk_context *ctx){
-	int color = duk_get_uint(ctx, 0);
-	duk_push_uint(ctx, R(color));
-	return 1;
+static JSValue athena_getR(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	uint32_t color;
+	JS_ToUint32(ctx, &color, argv[0]);
+	return JS_NewUint32(ctx, R(color));
 }
 
-duk_ret_t athena_getG(duk_context *ctx){
-	int color = duk_get_uint(ctx, 0);
-	duk_push_uint(ctx, G(color));
-	return 1;
+static JSValue athena_getG(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	uint32_t color;
+	JS_ToUint32(ctx, &color, argv[0]);
+	return JS_NewUint32(ctx, G(color));
 }
 
-duk_ret_t athena_getB(duk_context *ctx){
-	int color = duk_get_uint(ctx, 0);
-	duk_push_uint(ctx, B(color));
-	return 1;
+static JSValue athena_getB(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	uint32_t color;
+	JS_ToUint32(ctx, &color, argv[0]);
+	return JS_NewUint32(ctx, B(color));
 }
 
-duk_ret_t athena_getA(duk_context *ctx){
-	int color = duk_get_uint(ctx, 0);
-	duk_push_uint(ctx, A(color));
-	return 1;
+static JSValue athena_getA(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	uint32_t color;
+	JS_ToUint32(ctx, &color, argv[0]);
+	return JS_NewUint32(ctx, A(color));
 }
 
-duk_ret_t athena_setR(duk_context *ctx){
-	int color = duk_get_uint(ctx, 0);
-	int r = duk_get_uint(ctx, 1);
-	duk_push_uint(ctx, (r | (G(color) << 8) | (B(color) << 16) | (A(color) << 24)));
-	return 1;
+static JSValue athena_setR(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	uint32_t color, r;
+	JS_ToUint32(ctx, &color, argv[0]);
+	JS_ToUint32(ctx, &r, argv[1]);
+	return JS_NewUint32(ctx, (r | (G(color) << 8) | (B(color) << 16) | (A(color) << 24)));
 }
 
-duk_ret_t athena_setG(duk_context *ctx){
-	int color = duk_get_uint(ctx, 0);
-	int g = duk_get_uint(ctx, 1);
-	duk_push_uint(ctx, (R(color) | (g << 8) | (B(color) << 16) | (A(color) << 24)));
-	return 1;
+static JSValue athena_setG(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	uint32_t color, g;
+	JS_ToUint32(ctx, &color, argv[0]);
+	JS_ToUint32(ctx, &g, argv[1]);
+	return JS_NewUint32(ctx, (R(color) | (g << 8) | (B(color) << 16) | (A(color) << 24)));
 }
 
-duk_ret_t athena_setB(duk_context *ctx){
-	int color = duk_get_uint(ctx, 0);
-	int b = duk_get_uint(ctx, 1);
-	duk_push_uint(ctx, (R(color) | (G(color) << 8) | (b << 16) | (A(color) << 24)));
-	return 1;
+static JSValue athena_setB(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	uint32_t color, b;
+	JS_ToUint32(ctx, &color, argv[0]);
+	JS_ToUint32(ctx, &b, argv[1]);
+	return JS_NewUint32(ctx, (R(color) | (G(color) << 8) | (b << 16) | (A(color) << 24)));
 }
 
-duk_ret_t athena_setA(duk_context *ctx){
-	int color = duk_get_uint(ctx, 0);
-	int a = duk_get_uint(ctx, 1);
-	duk_push_uint(ctx, (R(color) | (G(color) << 8) | (B(color) << 16) | (a << 24)));
-	return 1;
+static JSValue athena_setA(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	uint32_t color, a;
+	JS_ToUint32(ctx, &color, argv[0]);
+	JS_ToUint32(ctx, &a, argv[1]);
+	return JS_NewUint32(ctx, (R(color) | (G(color) << 8) | (B(color) << 16) | (a << 24)));
 }
 
-DUK_EXTERNAL duk_ret_t athena_open_color(duk_context *ctx) {
-	const duk_function_list_entry module_funcs[] = {
-		{ "new",      				   		athena_color_ctor,     DUK_VARARGS },
-		{ "getR",      				   		athena_getR,           1 },
-		{ "getG",      				   		athena_getG,           1 },
-		{ "getB",      				   		athena_getB,           1 },
-		{ "getA",      				   		athena_getA,           1 },
-		{ "setR",      				   		athena_setR,           2 },
-		{ "setG",      				   		athena_setG,           2 },
-		{ "setB",      				   		athena_setB,           2 },
-		{ "setA",      				   		athena_setA,           2 },
-		{ NULL, NULL, 0 }
-	};
+static const JSCFunctionListEntry color_funcs[] = {
+	JS_CFUNC_DEF("new", -1, athena_color_ctor),
+	JS_CFUNC_DEF("getR", 1, athena_getR),
+	JS_CFUNC_DEF("getG", 1, athena_getG),
+	JS_CFUNC_DEF("getB", 1, athena_getB),
+	JS_CFUNC_DEF("getA", 1, athena_getA),
+	JS_CFUNC_DEF("setR", 2, athena_setR),
+	JS_CFUNC_DEF("setG", 2, athena_setG),
+	JS_CFUNC_DEF("setB", 2, athena_setB),
+	JS_CFUNC_DEF("setA", 2, athena_setA),
+};
 
-  duk_push_object(ctx);  /* module result */
-  duk_put_function_list(ctx, -1, module_funcs);
-
-  return 1;  /* return module value */
+static int color_init(JSContext *ctx, JSModuleDef *m)
+{
+    return JS_SetModuleExportList(ctx, m, color_funcs, countof(color_funcs));
 }
 
-void athena_color_init(duk_context* ctx){
-    push_athena_module(athena_open_color,   	  "Color");
-	
+JSModuleDef *athena_color_init(JSContext* ctx){
+    return athena_push_module(ctx, color_init, color_funcs, countof(color_funcs), "Color");
 }

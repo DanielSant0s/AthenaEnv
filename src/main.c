@@ -6,7 +6,6 @@
 #include <sifrpc.h>
 #include <loadfile.h>
 #include <libmc.h>
-#include <libcdvd.h>
 #include <iopheap.h>
 #include <iopcontrol.h>
 #include <smod.h>
@@ -85,7 +84,6 @@ static void poweroffHandler(void *arg)
    poweroffShutdown();
 }
 
-
 void initMC()
 {
    int ret;
@@ -112,18 +110,20 @@ void initMC()
 static void init_drivers() {
     int ds3pads = 1;
 
+    //init_ps2_filesystem_driver();
     init_poweroff_driver();
     init_fileXio_driver();
     init_memcard_driver(true);
     init_usb_driver();
     init_cdfs_driver();
     init_hdd_driver(false, false);
+    SifExecModuleBuffer(&NETMAN_irx, size_NETMAN_irx, 0, NULL, NULL);
+    SifExecModuleBuffer(&SMAP_irx, size_SMAP_irx, 0, NULL, NULL);
+
     init_joystick_driver(true);
     init_audio_driver();
     SifExecModuleBuffer(&ds34usb_irx, size_ds34usb_irx, 4, (char *)&ds3pads, NULL);
     SifExecModuleBuffer(&ds34bt_irx, size_ds34bt_irx, 4, (char *)&ds3pads, NULL);
-    SifExecModuleBuffer(NETMAN_irx, size_NETMAN_irx, 0, NULL, NULL);
-    SifExecModuleBuffer(SMAP_irx, size_SMAP_irx, 0, NULL, NULL);
 
     poweroffSetCallback(&poweroffHandler, NULL);
     mount_current_hdd_partition();
@@ -131,21 +131,6 @@ static void init_drivers() {
     ds34usb_init();
     ds34bt_init();
     initMC();
-}
-
-static void waitUntilDeviceIsReady(char *path)
-{
-    struct stat buffer;
-    int ret = -1;
-    int retries = 50;
-
-    while(ret != 0 && retries > 0) {
-        ret = stat(path, &buffer);
-        /* Wait untill the device is ready */
-        nopdelay();
-
-        retries--;
-    }
 }
 
 int main(int argc, char **argv) {

@@ -13,20 +13,18 @@
 
 #define MAX_DIR_FILES 512
 
-duk_ret_t athena_getCurrentDirectory(duk_context *ctx)
+static JSValue athena_getCurrentDirectory(JSContext *ctx)
 {
 	char path[256];
 	getcwd(path, 256);
-	duk_push_string(ctx, path);
-	
-	return 1;
+	return JS_NewString(ctx, path);
 }
 
-duk_ret_t athena_setCurrentDirectory(duk_context *ctx)
+static JSValue athena_setCurrentDirectory(JSContext *ctx, JSValueConst *argv)
 {
         static char temp_path[256];
-	const char *path = duk_get_string(ctx, 0);
-	if(!path) return duk_generic_error(ctx, "Argument error: System.currentDirectory(file) takes a filename as string as argument.");
+	const char *path = JS_ToCString(ctx, argv[0]);
+	if(!path) return JS_ThrowSyntaxError(ctx, "Argument error: System.currentDirectory(file) takes a filename as string as argument.");
 
 	athena_getCurrentDirectory(ctx);
 	
@@ -66,24 +64,22 @@ duk_ret_t athena_setCurrentDirectory(duk_context *ctx)
         printf("changing directory to %s\n",__ps2_normalize_path(temp_path));
         chdir(__ps2_normalize_path(temp_path));
        
-	return 1;
+	return JS_UNDEFINED;
 }
 
-duk_ret_t athena_curdir(duk_context *ctx) {
-	int argc = duk_get_top(ctx);
+static JSValue athena_curdir(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
 	if(argc == 0) return athena_getCurrentDirectory(ctx);
-	if(argc == 1) return athena_setCurrentDirectory(ctx);
-	return duk_generic_error(ctx, "Argument error: System.currentDirectory([file]) takes zero or one argument.");
+	if(argc == 1) return athena_setCurrentDirectory(ctx, argv);
+	return JS_ThrowSyntaxError(ctx, "Argument error: System.currentDirectory([file]) takes zero or one argument.");
 }
 
 
-duk_ret_t athena_dir(duk_context *ctx)
+static JSValue athena_dir(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
 {
 	
-	int argc = duk_get_top(ctx);
-	if (argc != 0 && argc != 1) return duk_generic_error(ctx, "Argument error: System.listDir([path]) takes zero or one argument.");
+	if (argc != 0 && argc != 1) return JS_ThrowSyntaxError(ctx, "Argument error: System.listDir([path]) takes zero or one argument.");
 	
-	duk_idx_t arr_idx = duk_push_array(ctx);
+	JSValue arr = JS_NewArray(ctx);
 
     const char *temp_path = "";
 	char path[255];
@@ -93,7 +89,7 @@ duk_ret_t athena_dir(duk_context *ctx)
 	
 	if (argc != 0) 
 	{
-		temp_path = duk_get_string(ctx, 0);
+		temp_path = JS_ToCString(ctx, argv[0]);
 		// append the given path to the boot_path
 	        
 	        strcpy ((char *)path, boot_path);
@@ -146,21 +142,16 @@ duk_ret_t athena_dir(duk_context *ctx)
 
 		for( int i = 0; i < numRead; i++ )
 		{	
-			duk_idx_t obj_idx = duk_push_object(ctx);
+			JSValue obj = JS_NewObject(ctx);
 
-            duk_push_string(ctx, (const char *)mcEntries[i].EntryName);
-			duk_put_prop_string(ctx, obj_idx, "name");
-        
-            duk_push_number(ctx, mcEntries[i].FileSizeByte);
-			duk_put_prop_string(ctx, obj_idx, "size");
+			JS_DefinePropertyValueStr(ctx, obj, "name", JS_NewString(ctx, (const char *)mcEntries[i].EntryName), JS_PROP_C_W_E);
+			JS_DefinePropertyValueStr(ctx, obj, "size", JS_NewUint32(ctx, mcEntries[i].FileSizeByte), JS_PROP_C_W_E);
+			JS_DefinePropertyValueStr(ctx, obj, "dir", JS_NewBool(ctx, ( mcEntries[i].AttrFile & MC_ATTR_SUBDIR )), JS_PROP_C_W_E);
 
-            duk_push_boolean(ctx, ( mcEntries[i].AttrFile & MC_ATTR_SUBDIR ));
-			duk_put_prop_string(ctx, obj_idx, "dir");
-
-			duk_put_prop_index(ctx, arr_idx, cpt++);
+			JS_DefinePropertyValueUint32(ctx, arr, cpt++, obj, JS_PROP_C_W_E);
 
 		}
-		return 1; 
+		return arr; 
     }
     //-----------------------------------------------------------------------------------------
     
@@ -175,51 +166,46 @@ duk_ret_t athena_dir(duk_context *ctx)
 	if (d) {
 		while ((dir = readdir(d)) != NULL) {
 
-			duk_idx_t obj_idx = duk_push_object(ctx);
-			
-			duk_push_string(ctx, dir->d_name);
-			duk_put_prop_string(ctx, obj_idx, "name");
-	
-        	duk_push_uint(ctx, dir->d_stat.st_size);
-			duk_put_prop_string(ctx, obj_idx, "size");
-        
-			duk_push_boolean(ctx,  S_ISDIR(dir->d_stat.st_mode));
-        	duk_put_prop_string(ctx, obj_idx, "dir");
+			JSValue obj = JS_NewObject(ctx);
 
-			duk_put_prop_index(ctx, arr_idx, i++);
+			JS_DefinePropertyValueStr(ctx, obj, "name", JS_NewString(ctx, dir->d_name), JS_PROP_C_W_E);
+			JS_DefinePropertyValueStr(ctx, obj, "size", JS_NewUint32(ctx, dir->d_stat.st_size), JS_PROP_C_W_E);
+			JS_DefinePropertyValueStr(ctx, obj, "dir", JS_NewBool(ctx, S_ISDIR(dir->d_stat.st_mode)), JS_PROP_C_W_E);
+
+			JS_DefinePropertyValueUint32(ctx, arr, i++, obj, JS_PROP_C_W_E);
 	    }
 	    closedir(d);
 	}
 	
-	return 1;  /* table is already on top */
+	return arr;
 }
 
-duk_ret_t athena_createDir(duk_context *ctx)
+static JSValue athena_createDir(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
 {
-	const char *path = duk_get_string(ctx, 0);
-	if(!path) return duk_generic_error(ctx, "Argument error: System.createDirectory(directory) takes a directory name as string as argument.");
+	const char *path = JS_ToCString(ctx, argv[0]);
+	if(!path) return JS_ThrowSyntaxError(ctx, "Argument error: System.createDirectory(directory) takes a directory name as string as argument.");
 	mkdir(path, 0777);
 	
-	return 0;
+	return JS_UNDEFINED;
 }
 
-duk_ret_t athena_removeDir(duk_context *ctx)
+static JSValue athena_removeDir(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
 {
-	const char *path = duk_get_string(ctx, 0);
-	if(!path) return duk_generic_error(ctx, "Argument error: System.removeDirectory(directory) takes a directory name as string as argument.");
+	const char *path = JS_ToCString(ctx, argv[0]);
+	if(!path) return JS_ThrowSyntaxError(ctx, "Argument error: System.removeDirectory(directory) takes a directory name as string as argument.");
 	rmdir(path);
 	
-	return 0;
+	return JS_UNDEFINED;
 }
 
-duk_ret_t athena_movefile(duk_context *ctx)
+static JSValue athena_movefile(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
 {
-	const char *path = duk_get_string(ctx, 0);
-	if(!path) return duk_generic_error(ctx, "Argument error: System.removeFile(filename) takes a filename as string as argument.");
-		const char *oldName = duk_get_string(ctx, 0);
-	const char *newName = duk_get_string(ctx, 1);
+	const char *path = JS_ToCString(ctx, argv[0]);
+	if(!path) return JS_ThrowSyntaxError(ctx, "Argument error: System.removeFile(filename) takes a filename as string as argument.");
+		const char *oldName = JS_ToCString(ctx, argv[0]);
+	const char *newName = JS_ToCString(ctx, argv[1]);
 	if(!oldName || !newName)
-		return duk_generic_error(ctx, "Argument error: System.rename(source, destination) takes two filenames as strings as arguments.");
+		return JS_ThrowSyntaxError(ctx, "Argument error: System.rename(source, destination) takes two filenames as strings as arguments.");
 
 	char buf[BUFSIZ];
     size_t size;
@@ -236,24 +222,24 @@ duk_ret_t athena_movefile(duk_context *ctx)
 
 	remove(oldName);
 
-	return 0;
+	return JS_UNDEFINED;
 }
 
-duk_ret_t athena_removeFile(duk_context *ctx)
+static JSValue athena_removeFile(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
 {
-	const char *path = duk_get_string(ctx, 0);
-	if(!path) return duk_generic_error(ctx, "Argument error: System.removeFile(filename) takes a filename as string as argument.");
+	const char *path = JS_ToCString(ctx, argv[0]);
+	if(!path) return JS_ThrowSyntaxError(ctx, "Argument error: System.removeFile(filename) takes a filename as string as argument.");
 	remove(path);
 
-	return 0;
+	return JS_UNDEFINED;
 }
 
-duk_ret_t athena_rename(duk_context *ctx)
+static JSValue athena_rename(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
 {
-	const char *oldName = duk_get_string(ctx, 0);
-	const char *newName = duk_get_string(ctx, 1);
+	const char *oldName = JS_ToCString(ctx, argv[0]);
+	const char *newName = JS_ToCString(ctx, argv[1]);
 	if(!oldName || !newName)
-		return duk_generic_error(ctx, "Argument error: System.rename(source, destination) takes two filenames as strings as arguments.");
+		return JS_ThrowSyntaxError(ctx, "Argument error: System.rename(source, destination) takes two filenames as strings as arguments.");
 
 	char buf[BUFSIZ];
     size_t size;
@@ -270,15 +256,15 @@ duk_ret_t athena_rename(duk_context *ctx)
 
 	remove(oldName);
 	
-	return 0;
+	return JS_UNDEFINED;
 }
 
-duk_ret_t athena_copyfile(duk_context *ctx)
+static JSValue athena_copyfile(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
 {
-	const char *ogfile = duk_get_string(ctx, 0);
-	const char *newfile = duk_get_string(ctx, 1);
+	const char *ogfile = JS_ToCString(ctx, argv[0]);
+	const char *newfile = JS_ToCString(ctx, argv[1]);
 	if(!ogfile || !newfile)
-		return duk_generic_error(ctx, "Argument error: System.copyFile(source, destination) takes two filenames as strings as arguments.");
+		return JS_ThrowSyntaxError(ctx, "Argument error: System.copyFile(source, destination) takes two filenames as strings as arguments.");
 
 	char buf[BUFSIZ];
     size_t size;
@@ -293,7 +279,7 @@ duk_ret_t athena_copyfile(duk_context *ctx)
     close(source);
     close(dest);
 	
-	return 0;
+	return JS_UNDEFINED;
 }
 
 static char modulePath[256];
@@ -303,34 +289,33 @@ static void setModulePath()
 	getcwd( modulePath, 256 );
 }
 
-duk_ret_t athena_sleep(duk_context *ctx)
+static JSValue athena_sleep(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
 {
-	if (duk_get_top(ctx) != 1) return duk_generic_error(ctx, "milliseconds expected.");
-	int sec = duk_get_int(ctx, 0);
+	if (argc != 1) return JS_ThrowSyntaxError(ctx, "milliseconds expected.");
+	int sec;
+	JS_ToInt32(ctx, &sec, argv[0]);
 	sleep(sec);
-	return 0;
+	return JS_UNDEFINED;
 }
 
-duk_ret_t athena_getFreeMemory(duk_context *ctx)
+static JSValue athena_getFreeMemory(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
 {
-	if (duk_get_top(ctx) != 0) return duk_generic_error(ctx, "no arguments expected.");
+	if (argc != 0) return JS_ThrowSyntaxError(ctx, "no arguments expected.");
 	
 	size_t result = GetFreeSize();
 
-	duk_push_int(ctx, (uint32_t)(result));
-	return 1;
+	return JS_NewUint32(ctx, (uint32_t)(result));
 }
 
-duk_ret_t athena_exit(duk_context *ctx)
+static JSValue athena_exit(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
 {
-	int argc = duk_get_top(ctx);
-	if (argc != 0) return duk_generic_error(ctx, "System.exitToBrowser");
+	if (argc != 0) return JS_ThrowSyntaxError(ctx, "System.exitToBrowser");
 	asm volatile(
             "li $3, 0x04;"
             "syscall;"
             "nop;"
         );
-	return 0;
+	return JS_UNDEFINED;
 }
 
 
@@ -347,136 +332,135 @@ void recursive_mkdir(char *dir) {
 	}
 }
 
-duk_ret_t athena_getmcinfo(duk_context *ctx){
-	int argc = duk_get_top(ctx);
+static JSValue athena_getmcinfo(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	int mcslot, type, freespace, format, result;
 	mcslot = 0;
-	if(argc == 1) mcslot = duk_get_int(ctx, 0);
+	if(argc == 1) JS_ToInt32(ctx, &mcslot, argv[0]);
 
 	mcGetInfo(mcslot, 0, &type, &freespace, &format);
 	mcSync(0, NULL, &result);
 
-	duk_idx_t obj_idx = duk_push_object(ctx);
+	JSValue obj = JS_NewObject(ctx);
 
-    duk_push_uint(ctx, type);
-	duk_put_prop_string(ctx, obj_idx, "type");
-    
-    duk_push_uint(ctx, freespace);
-	duk_put_prop_string(ctx, obj_idx, "freemem");
+	JS_DefinePropertyValueStr(ctx, obj, "type", JS_NewUint32(ctx, type), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "freemem", JS_NewUint32(ctx, freespace), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "format", JS_NewUint32(ctx, format), JS_PROP_C_W_E);
 
-    duk_push_uint(ctx, format);
-	duk_put_prop_string(ctx, obj_idx, "format");
-
-	return 1;
+	return obj;
 }
 
-duk_ret_t athena_openfile(duk_context *ctx){
-	int argc = duk_get_top(ctx);
-	if (argc != 2) return duk_generic_error(ctx, "wrong number of arguments");
-	const char *file_tbo = duk_get_string(ctx, 0);
-	int type = duk_get_int(ctx, 1);
-	int fileHandle = open(file_tbo, type, 0777);
-	if (fileHandle < 0) return duk_generic_error(ctx, "cannot open requested file.");
-	duk_push_int(ctx,fileHandle);
-	return 1;
+static JSValue athena_openfile(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	if (argc != 2) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
+	const char *file_tbo = JS_ToCString(ctx, argv[0]);
+	int type;
+	JS_ToInt32(ctx, &type, argv[1]);
+
+	int fd = open(file_tbo, type, 0777);
+	if (fd < 0) return JS_ThrowSyntaxError(ctx, "cannot open requested file.");
+
+	return JS_NewInt32(ctx, fd);
 }
 
 
-duk_ret_t athena_readfile(duk_context *ctx){
-	int argc = duk_get_top(ctx);
-	if (argc != 2) return duk_generic_error(ctx, "wrong number of arguments");
-	int file = duk_get_int(ctx, 0);
-	uint32_t size = duk_get_int(ctx, 1);
+static JSValue athena_readfile(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	if (argc != 2) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
+	
+	int file;
+	uint32_t size;
+
+	JS_ToInt32(ctx, &file, argv[0]);
+	JS_ToUint32(ctx, &size, argv[1]);
 	uint8_t *buffer = (uint8_t*)malloc(size + 1);
 	int len = read(file,buffer, size);
 	buffer[len] = 0;
-	duk_push_lstring(ctx, (const char*)buffer, len);
-	free(buffer);
-	return 1;
+	return JS_NewStringLen(ctx, (const char*)buffer, len);
 }
 
 
-duk_ret_t athena_writefile(duk_context *ctx){
-	int argc = duk_get_top(ctx);
-	if (argc != 3) return duk_generic_error(ctx, "wrong number of arguments");
-	int fileHandle = duk_get_int(ctx, 0);
-	const char *text = duk_get_string(ctx, 1);
-	int size = duk_get_number(ctx, 2);
-	write(fileHandle, text, size);
-	return 0;
+static JSValue athena_writefile(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	if (argc != 3) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
+
+	int fd;
+	uint32_t size;
+
+	JS_ToInt32(ctx, &fd, argv[0]);
+	const char *text = JS_ToCString(ctx, argv[1]);
+	JS_ToUint32(ctx, &size, argv[2]);
+	write(fd, text, size);
+	return JS_UNDEFINED;
 }
 
-duk_ret_t athena_closefile(duk_context *ctx){
-	int argc = duk_get_top(ctx);
-	if (argc != 1) return duk_generic_error(ctx, "wrong number of arguments");
-	int fileHandle = duk_get_int(ctx, 0);
-	close(fileHandle);
-	return 0;
+static JSValue athena_closefile(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	if (argc != 1) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
+	int fd;
+	JS_ToInt32(ctx, &fd, argv[0]);
+	close(fd);
+	return JS_UNDEFINED;
 }
 
-duk_ret_t athena_seekfile(duk_context *ctx){
-	int argc = duk_get_top(ctx);
-	if (argc != 3) return duk_generic_error(ctx, "wrong number of arguments");
-	int fileHandle = duk_get_int(ctx, 0);
-	int pos = duk_get_int(ctx, 1);
-	uint32_t type = duk_get_int(ctx, 2);
-	lseek(fileHandle, pos, type);	
-	return 0;
-}
+static JSValue athena_seekfile(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	if (argc != 3) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
+	int fd;
+	int pos;
+	uint32_t type;
 
+	JS_ToInt32(ctx, &fd, argv[0]);
+	JS_ToInt32(ctx, &pos, argv[1]);
+	JS_ToUint32(ctx, &type, argv[2]);
 
-duk_ret_t athena_sizefile(duk_context *ctx){
-	int argc = duk_get_top(ctx);
-	if (argc != 1) return duk_generic_error(ctx, "wrong number of arguments");
-	int fileHandle = duk_get_int(ctx, 0);
-	uint32_t cur_off = lseek(fileHandle, 0, SEEK_CUR);
-	uint32_t size = lseek(fileHandle, 0, SEEK_END);
-	lseek(fileHandle, cur_off, SEEK_SET);
-	duk_push_int(ctx, size);
-	return 1;
+	lseek(fd, pos, type);	
+	return JS_UNDEFINED;
 }
 
 
-duk_ret_t athena_checkexist(duk_context *ctx){
-	int argc = duk_get_top(ctx);
-	if (argc != 1) return duk_generic_error(ctx, "wrong number of arguments");
-	const char *file_tbo = duk_get_string(ctx, 0);
-	int fileHandle = open(file_tbo, O_RDONLY, 0777);
-	if (fileHandle < 0) duk_push_boolean(ctx, false);
-	else{
-		close(fileHandle);
-		duk_push_boolean(ctx, true);
-	}
-	return 1;
+static JSValue athena_sizefile(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	if (argc != 1) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
+	int fd;
+	JS_ToInt32(ctx, &fd, argv[0]);
+	uint32_t cur_off = lseek(fd, 0, SEEK_CUR);
+	uint32_t size = lseek(fd, 0, SEEK_END);
+	lseek(fd, cur_off, SEEK_SET);
+	return JS_NewUint32(ctx, size);
 }
 
 
-duk_ret_t athena_loadELF(duk_context *ctx)
+static JSValue athena_checkexist(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	if (argc != 1) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
+	const char *file_tbo = JS_ToCString(ctx, argv[0]);
+	int fd = open(file_tbo, O_RDONLY, 0777);
+	if (fd < 0) return JS_NewBool(ctx, false);
+	close(fd);
+	return JS_NewBool(ctx, true);
+}
+
+
+static JSValue athena_loadELF(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
 {
-	int argc = duk_get_top(ctx);
-	if (argc != 1 && argc != 2) return duk_generic_error(ctx, "Argument error: System.loadELF() takes a string as argument.");
+	if (argc != 1 && argc != 2) return JS_ThrowSyntaxError(ctx, "Argument error: System.loadELF() takes a string as argument.");
 
+	JSValue val;
 	int n = 0;
 	char **args = NULL;
-	const char *elftoload = duk_get_string(ctx, 0);
+	const char *elftoload = JS_ToCString(ctx, argv[0]);
 
 	if(argc == 2){
-		if (!duk_is_array(ctx, 1)) {
-		    return duk_generic_error(ctx, "Type error, you should use a string array.");
+		if (!JS_IsArray(ctx, argv[1])) {
+		    return JS_ThrowSyntaxError(ctx, "Type error, you should use a string array.");
 		}
 
-		n = duk_get_length(ctx, 1);
+		val = JS_GetPropertyStr(ctx, argv[1], "length");
+		JS_ToInt32(ctx, &n, val);
+
 		args = malloc(n*sizeof(char*));
 
 		for (int i = 0; i < n; i++) {
-		    duk_get_prop_index(ctx, 1, i);
-		    *(args + i) = (char*)duk_get_string(ctx, -1);
-		    duk_pop(ctx);
+			val = JS_GetPropertyUint32(ctx, argv[1], i);
+		    *(args + i) = (char*)JS_ToCString(ctx, val);
 		}
 	}
 
 	LoadELFFromFile(elftoload, n, args);
-	return 0;
+	return JS_UNDEFINED;
 }
 
 DiscType DiscTypes[] = {
@@ -501,7 +485,7 @@ DiscType DiscTypes[] = {
 };              //ends DiscTypes array
 
 
-duk_ret_t athena_checkValidDisc(duk_context *ctx)
+static JSValue athena_checkValidDisc(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
 {
 	int testValid;
 	int result;
@@ -528,11 +512,10 @@ duk_ret_t athena_checkValidDisc(duk_context *ctx)
 			result = 0;
 	}
 	printf("Valid Disc: %d\n",result);
-	duk_push_int(ctx, result); //return the value itself to Lua stack
-    return 1; //return value quantity on stack
+	return JS_NewInt32(ctx, result);
 }
 
-duk_ret_t athena_checkDiscTray(duk_context *ctx)
+static JSValue athena_checkDiscTray(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
 {
 	int result;
 	if (sceCdStatus() == SCECdStatShellOpen){
@@ -540,12 +523,11 @@ duk_ret_t athena_checkDiscTray(duk_context *ctx)
 	} else {
 		result = 0;
 	}
-	duk_push_int(ctx, result); //return the value itself to Lua stack
-    return 1; //return value quantity on stack
+	return JS_NewInt32(ctx, result);
 }
 
 
-duk_ret_t athena_getDiscType(duk_context *ctx)
+static JSValue athena_getDiscType(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
 {
     int discType;
     int iz;
@@ -556,8 +538,7 @@ duk_ret_t athena_getDiscType(duk_context *ctx)
             if (DiscTypes[iz].type == discType)
                 DiscType_ix = iz;
     printf("getDiscType: %d\n",DiscTypes[DiscType_ix].value);
-    duk_push_int(ctx, DiscTypes[DiscType_ix].value); //return the value itself to Lua stack
-    return 1; //return value quantity on stack
+    return JS_NewInt32(ctx, DiscTypes[DiscType_ix].value); //return the value itself to Lua stack
 }
 
 extern void *_gp;
@@ -596,161 +577,123 @@ static int copyThread(void* data)
     close(out);
 	free(paths);
 	exitkill_task();
-    return 0;
+    return JS_UNDEFINED;
 }
 
 
-duk_ret_t athena_copyasync(duk_context *ctx){
-	int argc = duk_get_top(ctx);
-	if (argc != 2) return duk_generic_error(ctx, "wrong number of arguments");
+static JSValue athena_copyasync(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	if (argc != 2) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
 
 	struct pathMap* copypaths = (struct pathMap*)malloc(sizeof(struct pathMap));
 
-	copypaths->in = duk_get_string(ctx, 0);
-	copypaths->out = duk_get_string(ctx, 1);
+	copypaths->in = JS_ToCString(ctx, argv[0]);
+	copypaths->out = JS_ToCString(ctx, argv[1]);
 	int task = create_task("FileSystem: Copy", (void*)copyThread, 8192+1024, 100);
 	init_task(task, (void*)copypaths);
-	return 0;
+	return JS_UNDEFINED;
 }
 
 
-duk_ret_t athena_getfileprogress(duk_context *ctx) {
-	int argc = duk_get_top(ctx);
-	if (argc != 0) return duk_generic_error(ctx, "wrong number of arguments");
+static JSValue athena_getfileprogress(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
+	if (argc != 0) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
 
-	duk_idx_t obj_idx = duk_push_object(ctx);
+	JSValue obj = JS_NewObject(ctx);
 
-	duk_push_int(ctx, (int)progress);
-    duk_put_prop_string(ctx, obj_idx, "current");
+	JS_DefinePropertyValueStr(ctx, obj, "current", JS_NewInt32(ctx, (int)progress), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "final", JS_NewInt32(ctx, (int)max_progress), JS_PROP_C_W_E);
 
-	duk_push_int(ctx, (int)max_progress);
-    duk_put_prop_string(ctx, obj_idx, "final");
-
-	return 1;
+	return obj;
 }
 
-DUK_EXTERNAL duk_ret_t dukopen_system(duk_context *ctx) {
-	setModulePath();
-	const duk_function_list_entry module_funcs[] = {
-		{ "openFile",                   athena_openfile,					  2 },
-		{ "readFile",                   athena_readfile,					  2 },
-		{ "writeFile",                 	athena_writefile,					  3 },
-		{ "closeFile",                 	athena_closefile,					  1 },  
-		{ "seekFile",                   athena_seekfile,					  3 },  
-		{ "sizeFile",                   athena_sizefile,					  1 },
-		{ "doesFileExist",            	athena_checkexist,					  1 },
-		{ "currentDir",           		athena_curdir,				DUK_VARARGS },
-		{ "listDir",           			athena_dir,					DUK_VARARGS },
-		{ "createDirectory",           	athena_createDir,					  1 },
-		{ "removeDirectory",           	athena_removeDir,					  1 },
-		{ "moveFile",	               	athena_movefile,					  2 },
-		{ "copyFile",	               	athena_copyfile,					  2 },
-		{ "threadCopyFile",	          	athena_copyasync,					  2 },
-		{ "getFileProgress",	    	athena_getfileprogress,				  0 },
-		{ "removeFile",               	athena_removeFile,					  2 },
-		{ "rename",                     athena_rename,						  2 },
-		{ "sleep",                      athena_sleep,						  1 },
-		{ "getFreeMemory",         		athena_getFreeMemory,				  0 },
-		{ "exitToBrowser",              athena_exit,						  0 },
-		{ "getMCInfo",                 	athena_getmcinfo,			DUK_VARARGS },
-		{ "loadELF",                 	athena_loadELF,				DUK_VARARGS },
-		{ "checkValidDisc",       		athena_checkValidDisc,				  0 },
-		{ "getDiscType",             	athena_getDiscType,					  0 },
-		{ "checkDiscTray",         		athena_checkDiscTray,				  0 },
-		{ NULL, NULL, 0 }
-	};
+static const JSCFunctionListEntry system_funcs[] = {
+	JS_CFUNC_DEF( "openFile",           		  2,         athena_openfile),
+	JS_CFUNC_DEF( "readFile",          		  2,         athena_readfile		 ),
+	JS_CFUNC_DEF( "writeFile",          		  3,       	athena_writefile		 ),
+	JS_CFUNC_DEF( "closeFile",          		  1,       	athena_closefile		 ),  
+	JS_CFUNC_DEF( "seekFile",          		  3,         athena_seekfile		 ),  
+	JS_CFUNC_DEF( "sizeFile",          		  1,         athena_sizefile			 ),
+	JS_CFUNC_DEF( "doesFileExist",      		  1,      	athena_checkexist	 ),
+	JS_CFUNC_DEF( "currentDir",   1,        		athena_curdir		 ),
+	JS_CFUNC_DEF( "listDir",  1,         			athena_dir			 		 ),
+	JS_CFUNC_DEF( "createDirectory",    		  1,       	athena_createDir	 ),
+	JS_CFUNC_DEF( "removeDirectory",    		  1,       	athena_removeDir	 ),
+	JS_CFUNC_DEF( "moveFile",	       		  2,        	athena_movefile	 ),
+	JS_CFUNC_DEF( "copyFile",	       		  2,        	athena_copyfile	 ),
+	JS_CFUNC_DEF( "threadCopyFile",	   		  2,       	athena_copyasync	   	 ),
+	JS_CFUNC_DEF( "getFileProgress",	  		  0,  	athena_getfileprogress     ),
+	JS_CFUNC_DEF( "removeFile",         		  2,      	athena_removeFile		 ),
+	JS_CFUNC_DEF( "rename",           		  2,          athena_rename		 ),
+	JS_CFUNC_DEF( "sleep",           		  1,           athena_sleep		 ),
+	JS_CFUNC_DEF( "getFreeMemory",      		  0,   		athena_getFreeMemory ),
+	JS_CFUNC_DEF( "exitToBrowser",  		  0,            athena_exit	 ),
+	JS_CFUNC_DEF( "getMCInfo",          2,       	athena_getmcinfo	 		 ),
+	JS_CFUNC_DEF( "loadELF",         3,        	athena_loadELF	 			 ),
+	JS_CFUNC_DEF( "checkValidDisc",     		  0,  		athena_checkValidDisc ),
+	JS_CFUNC_DEF( "getDiscType",        		  0,     	athena_getDiscType	 ),
+	JS_CFUNC_DEF( "checkDiscTray",      		  0,   		athena_checkDiscTray	 ),
+	JS_PROP_INT32_DEF("FREAD", O_RDONLY, JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("FWRITE", O_WRONLY, JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("FCREATE", O_CREAT | O_WRONLY, JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("FRDWR", O_RDWR, JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("SET", SEEK_SET, JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("END", SEEK_END, JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("CUR", SEEK_CUR, JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("READ_ONLY", 1, JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("SELECT", 2, JS_PROP_CONFIGURABLE ),
+};
 
-    duk_push_object(ctx);  /* module result */
-    duk_put_function_list(ctx, -1, module_funcs);
-
-    return 1;  /* return module value */
-}
-
-duk_ret_t athena_sifloadmodule(duk_context *ctx){
-	int argc = duk_get_top(ctx);
-	if (argc != 1 && argc != 3) return duk_generic_error(ctx, "wrong number of arguments");
-	const char *path = duk_get_string(ctx, 0);
+static JSValue athena_sifloadmodule(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	if (argc != 1 && argc != 3) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
+	const char *path = JS_ToCString(ctx, argv[0]);
 
 	int arg_len = 0;
 	const char *args = NULL;
 
 	if(argc == 3){
-		arg_len = duk_get_int(ctx, 1);
-		args = duk_get_string(ctx, 2);
+		JS_ToInt32(ctx, &arg_len, argv[1]);
+		args = JS_ToCString(ctx, argv[2]);
 	}
 	
-
 	int result = SifLoadModule(path, arg_len, args);
-	duk_push_int(ctx, result);
-	return 1;
+	return JS_NewInt32(ctx, result);
 }
 
 
-duk_ret_t athena_sifloadmodulebuffer(duk_context *ctx){
-	int argc = duk_get_top(ctx);
-	if (argc != 1 && argc != 3) return duk_generic_error(ctx, "wrong number of arguments");
+static JSValue athena_sifloadmodulebuffer(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	if (argc != 1 && argc != 3) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
 	size_t size = 0;
-	void* ptr = duk_get_buffer(ctx, 0, &size);
+	void* ptr = JS_ToCStringLen(ctx, &size, argv[0]);
 
 	int arg_len = 0;
 	const char *args = NULL;
 
 	if(argc == 3){
-		arg_len = duk_get_int(ctx, 1);
-		args = duk_get_string(ctx, 2);
+		JS_ToInt32(ctx, &arg_len, argv[1]);
+		args = JS_ToCString(ctx, argv[2]);
 	}
 
 	int result = SifExecModuleBuffer((void*)ptr, size, arg_len, args, NULL);
-	duk_push_int(ctx, result);
-	return 1;
+	return JS_NewInt32(ctx, result);
 }
 
-DUK_EXTERNAL duk_ret_t dukopen_sif(duk_context *ctx) {
-	const duk_function_list_entry module_funcs[] = {
-		{"loadModule",             		 athena_sifloadmodule, 			DUK_VARARGS },
-		{"loadModuleBuffer",             athena_sifloadmodulebuffer, 	DUK_VARARGS },
+static const JSCFunctionListEntry sif_funcs[] = {
+	JS_CFUNC_DEF("loadModule",            3, 		 athena_sifloadmodule),
+	JS_CFUNC_DEF("loadModuleBuffer",      3,       athena_sifloadmodulebuffer),
+};
 
-		{NULL, NULL, 0}
-	};
-
-    duk_push_object(ctx);  /* module result */
-    duk_put_function_list(ctx, -1, module_funcs);
-
-    return 1;  /* return module value */
+static int system_init(JSContext *ctx, JSModuleDef *m)
+{
+    return JS_SetModuleExportList(ctx, m, system_funcs, countof(system_funcs));
 }
 
+static int sif_init(JSContext *ctx, JSModuleDef *m)
+{
+    return JS_SetModuleExportList(ctx, m, sif_funcs, countof(sif_funcs));
+}
 
-void athena_system_init(duk_context* ctx){
-	push_athena_module(dukopen_system,   	 "System");
-	push_athena_module(dukopen_sif,   	  		"Sif");
-
-	duk_push_uint(ctx, O_RDONLY);
-	duk_put_global_string(ctx, "FREAD");
-
-	duk_push_uint(ctx, O_WRONLY);
-	duk_put_global_string(ctx, "FWRITE");
-
-	duk_push_uint(ctx, O_CREAT | O_WRONLY);
-	duk_put_global_string(ctx, "FCREATE");
-
-	duk_push_uint(ctx, O_RDWR);
-	duk_put_global_string(ctx, "FRDWR");
-	
-	duk_push_uint(ctx, SEEK_SET);
-	duk_put_global_string(ctx, "SET");
-
-	duk_push_uint(ctx, SEEK_END);
-	duk_put_global_string(ctx, "END");
-
-	duk_push_uint(ctx, SEEK_CUR);
-	duk_put_global_string(ctx, "CUR");
-
-	duk_push_uint(ctx, 1);
-	duk_put_global_string(ctx, "READ_ONLY");
-
-	duk_push_uint(ctx, 2);
-	duk_put_global_string(ctx, "READ_WRITE");
-    
-
+JSModuleDef *athena_system_init(JSContext* ctx){
+	setModulePath();
+	athena_push_module(ctx, system_init, system_funcs, countof(system_funcs), "System");
+	return athena_push_module(ctx, sif_init, sif_funcs, countof(sif_funcs), "Sif");
 }
 
