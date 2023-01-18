@@ -46,6 +46,8 @@ circle.height = 100.0;
 circle.color = Color.new(0, 0, 128);
 circle.filter = LINEAR;
 
+let float_test = 15.6f;
+
 while (true){
     Screen.clear(test);
     oldpad = pad;
@@ -70,7 +72,7 @@ while (true){
 
     let fps = Screen.getFPS(360);
     if(Date.now() - ti > 360){
-        console.log(fps + " FPS");
+        console.log(fps, "FPS");
         ti = Date.now();
     }
 

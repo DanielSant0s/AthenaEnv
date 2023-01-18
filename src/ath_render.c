@@ -9,8 +9,8 @@
 
 static JSValue athena_initrender(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
   	if (argc != 1) return JS_ThrowSyntaxError(ctx, "wrong number of arguments.");
-	double aspect;
-	JS_ToFloat64(ctx, &aspect, argv[0]);
+	float aspect;
+	JS_ToFloat32(ctx, &aspect, argv[0]);
   	init3D(aspect);
 	return JS_UNDEFINED;
 }
@@ -66,16 +66,16 @@ static JSValue athena_freeobj(JSContext *ctx, JSValue this_val, int argc, JSValu
 static JSValue athena_drawobj(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	if (argc != 7) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
 
-	double pos_x, pos_y, pos_z, rot_x, rot_y, rot_z;
+	float pos_x, pos_y, pos_z, rot_x, rot_y, rot_z;
 	model* m;
 	JS_ToUint32(ctx, &m, argv[0]);
 
-	JS_ToFloat64(ctx, &pos_x, argv[1]);
-	JS_ToFloat64(ctx, &pos_y, argv[2]);
-	JS_ToFloat64(ctx, &pos_z, argv[3]);
-	JS_ToFloat64(ctx, &rot_x, argv[4]);
-	JS_ToFloat64(ctx, &rot_y, argv[5]);
-	JS_ToFloat64(ctx, &rot_z, argv[6]);
+	JS_ToFloat32(ctx, &pos_x, argv[1]);
+	JS_ToFloat32(ctx, &pos_y, argv[2]);
+	JS_ToFloat32(ctx, &pos_z, argv[3]);
+	JS_ToFloat32(ctx, &rot_x, argv[4]);
+	JS_ToFloat32(ctx, &rot_y, argv[5]);
+	JS_ToFloat32(ctx, &rot_z, argv[6]);
 	
 	drawOBJ(m, pos_x, pos_y, pos_z, rot_x, rot_y, rot_z);
 
@@ -86,17 +86,17 @@ static JSValue athena_drawobj(JSContext *ctx, JSValue this_val, int argc, JSValu
 static JSValue athena_drawbbox(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	if (argc != 8) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
 
-	double pos_x, pos_y, pos_z, rot_x, rot_y, rot_z;
+	float pos_x, pos_y, pos_z, rot_x, rot_y, rot_z;
 	Color color;
 	model* m;
 	JS_ToUint32(ctx, &m, argv[0]);
 
-	JS_ToFloat64(ctx, &pos_x, argv[1]);
-	JS_ToFloat64(ctx, &pos_y, argv[2]);
-	JS_ToFloat64(ctx, &pos_z, argv[3]);
-	JS_ToFloat64(ctx, &rot_x, argv[4]);
-	JS_ToFloat64(ctx, &rot_y, argv[5]);
-	JS_ToFloat64(ctx, &rot_z, argv[6]);
+	JS_ToFloat32(ctx, &pos_x, argv[1]);
+	JS_ToFloat32(ctx, &pos_y, argv[2]);
+	JS_ToFloat32(ctx, &pos_z, argv[3]);
+	JS_ToFloat32(ctx, &rot_x, argv[4]);
+	JS_ToFloat32(ctx, &rot_y, argv[5]);
+	JS_ToFloat32(ctx, &rot_z, argv[6]);
 	JS_ToUint32(ctx, &color, argv[7]);
 	
 	draw_bbox(m, pos_x, pos_y, pos_z, rot_x, rot_y, rot_z, color);
@@ -127,16 +127,16 @@ static JSValue athena_lightnumber(JSContext *ctx, JSValue this_val, int argc, JS
 static JSValue athena_createlight(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	if (argc != 8) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
 
-	double dir_x, dir_y, dir_z, r, g, b;
+	float dir_x, dir_y, dir_z, r, g, b;
 	int id, type;
 
 	JS_ToInt32(ctx, &id, argv[0]);
-	JS_ToFloat64(ctx, &dir_x, argv[1]);
-	JS_ToFloat64(ctx, &dir_y, argv[2]);
-	JS_ToFloat64(ctx, &dir_z, argv[3]);
-	JS_ToFloat64(ctx, &r, argv[4]);
-	JS_ToFloat64(ctx, &g, argv[5]);
-	JS_ToFloat64(ctx, &b, argv[6]);
+	JS_ToFloat32(ctx, &dir_x, argv[1]);
+	JS_ToFloat32(ctx, &dir_y, argv[2]);
+	JS_ToFloat32(ctx, &dir_z, argv[3]);
+	JS_ToFloat32(ctx, &r, argv[4]);
+	JS_ToFloat32(ctx, &g, argv[5]);
+	JS_ToFloat32(ctx, &b, argv[6]);
 	JS_ToInt32(ctx, &type, argv[7]);
 	
 	createLight(id, dir_x, dir_y, dir_z, type, r, g, b);
@@ -154,10 +154,10 @@ static const JSCFunctionListEntry light_funcs[] = {
 
 static JSValue athena_camposition(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	if (argc != 3) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
-	double x, y, z;
-	JS_ToFloat64(ctx, &x, argv[0]);
-	JS_ToFloat64(ctx, &y, argv[1]);
-	JS_ToFloat64(ctx, &z, argv[2]);
+	float x, y, z;
+	JS_ToFloat32(ctx, &x, argv[0]);
+	JS_ToFloat32(ctx, &y, argv[1]);
+	JS_ToFloat32(ctx, &z, argv[2]);
 	
 	setCameraPosition(x, y, z);
 
@@ -167,10 +167,10 @@ static JSValue athena_camposition(JSContext *ctx, JSValue this_val, int argc, JS
 
 static JSValue athena_camrotation(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	if (argc != 3) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
-	double x, y, z;
-	JS_ToFloat64(ctx, &x, argv[0]);
-	JS_ToFloat64(ctx, &y, argv[1]);
-	JS_ToFloat64(ctx, &z, argv[2]);
+	float x, y, z;
+	JS_ToFloat32(ctx, &x, argv[0]);
+	JS_ToFloat32(ctx, &y, argv[1]);
+	JS_ToFloat32(ctx, &z, argv[2]);
 	
 	setCameraRotation(x, y, z);
 

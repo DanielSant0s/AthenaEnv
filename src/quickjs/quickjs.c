@@ -471,6 +471,11 @@ typedef union JSFloat64Union {
     uint32_t u32[2];
 } JSFloat64Union;
 
+typedef union JSFloat32Union {
+    float f;
+    uint32_t u32;
+} JSFloat32Union;
+
 enum {
     JS_ATOM_TYPE_STRING = 1,
     JS_ATOM_TYPE_GLOBAL_SYMBOL,
@@ -6894,6 +6899,7 @@ static JSValueConst JS_GetPrototypePrimitive(JSContext *ctx, JSValueConst val)
 #endif
     case JS_TAG_INT:
     case JS_TAG_FLOAT64:
+    case JS_CUSTOM_TAG_FLOAT32:
         val = ctx->class_proto[JS_CLASS_NUMBER];
         break;
     case JS_TAG_BOOL:
@@ -9970,7 +9976,10 @@ static int JS_ToBoolFree(JSContext *ctx, JSValue val)
         }
         break;
     default:
-        if (JS_TAG_IS_FLOAT64(tag)) {
+        if (JS_TAG_IS_FLOAT32(tag)) {
+            float f = JS_VALUE_GET_FLOAT32(val);
+            return !isnanf(f) && f != 0;
+        } else if (JS_TAG_IS_FLOAT64(tag)) {
             double d = JS_VALUE_GET_FLOAT64(val);
             return !isnan(d) && d != 0;
         } else {
@@ -10375,7 +10384,10 @@ static JSValue js_atof(JSContext *ctx, const char *str, const char **pp,
         abort();
     }
 #else
-    {
+    if ((flags & ATOD_ACCEPT_SUFFIX) && (*p == 'f')) {
+        p++;
+        val = JS_NewFloat32(ctx, atof(buf));
+    } else {
         double d;
         (void)has_legacy_octal;
         if (is_float && radix != 10)
@@ -10446,6 +10458,7 @@ static JSValue JS_ToNumberHintFree(JSContext *ctx, JSValue val,
 #endif
     case JS_TAG_FLOAT64:
     case JS_TAG_INT:
+    case JS_CUSTOM_TAG_FLOAT32:
     case JS_TAG_EXCEPTION:
         ret = val;
         break;
@@ -10531,6 +10544,9 @@ static __exception int __JS_ToFloat64Free(JSContext *ctx, double *pres,
     case JS_TAG_INT:
         d = JS_VALUE_GET_INT(val);
         break;
+    case JS_CUSTOM_TAG_FLOAT32:
+        d = JS_VALUE_GET_FLOAT32(val);
+        break;
     case JS_TAG_FLOAT64:
         d = JS_VALUE_GET_FLOAT64(val);
         break;
@@ -10562,6 +10578,9 @@ static inline int JS_ToFloat64Free(JSContext *ctx, double *pres, JSValue val)
     if (tag <= JS_TAG_NULL) {
         *pres = JS_VALUE_GET_INT(val);
         return 0;
+    } else if (JS_TAG_IS_FLOAT32(tag)) {
+        *pres = JS_VALUE_GET_FLOAT32(val);
+        return 0;
     } else if (JS_TAG_IS_FLOAT64(tag)) {
         *pres = JS_VALUE_GET_FLOAT64(val);
         return 0;
@@ -10573,6 +10592,61 @@ static inline int JS_ToFloat64Free(JSContext *ctx, double *pres, JSValue val)
 int JS_ToFloat64(JSContext *ctx, double *pres, JSValueConst val)
 {
     return JS_ToFloat64Free(ctx, pres, JS_DupValue(ctx, val));
+}
+
+/* -------------------------------------- Custom float32 implement -------------------------------------- */
+
+static __exception int __JS_ToFloat32Free(JSContext *ctx, float *pres,
+                                          JSValue val)
+{
+    float f;
+    uint32_t tag;
+
+    val = JS_ToNumberFree(ctx, val);
+    if (JS_IsException(val)) {
+        *pres = JS_FLOAT64_NAN;
+        return -1;
+    }
+    tag = JS_VALUE_GET_NORM_TAG(val);
+    switch(tag) {
+    case JS_TAG_INT:
+        f = JS_VALUE_GET_INT(val);
+        break;
+    case JS_TAG_FLOAT64:
+        f = JS_VALUE_GET_FLOAT64(val);
+        break;
+    case JS_CUSTOM_TAG_FLOAT32:
+        f = JS_VALUE_GET_FLOAT32(val);
+        break;
+    default:
+        abort();
+    }
+    *pres = f;
+    return 0;
+}
+
+static inline int JS_ToFloat32Free(JSContext *ctx, float *pres, JSValue val)
+{
+    uint32_t tag;
+
+    tag = JS_VALUE_GET_TAG(val);
+    if (tag <= JS_TAG_NULL) {
+        *pres = JS_VALUE_GET_INT(val);
+        return 0;
+    } else if (JS_TAG_IS_FLOAT32(tag)) {
+        *pres = JS_VALUE_GET_FLOAT32(val);
+        return 0;
+    } else if (JS_TAG_IS_FLOAT64(tag)) {
+        *pres = JS_VALUE_GET_FLOAT64(val);
+        return 0;
+    } else {
+        return __JS_ToFloat32Free(ctx, pres, val);
+    }
+}
+
+int JS_ToFloat32(JSContext *ctx, float *pres, JSValueConst val)
+{
+    return JS_ToFloat32Free(ctx, pres, JS_DupValue(ctx, val));
 }
 
 static JSValue JS_ToNumber(JSContext *ctx, JSValueConst val)
@@ -10604,6 +10678,18 @@ static __maybe_unused JSValue JS_ToIntegerFree(JSContext *ctx, JSValue val)
                 /* convert -0 to +0 */
                 d = trunc(d) + 0.0;
                 ret = JS_NewFloat64(ctx, d);
+            }
+        }
+        break;
+    case JS_CUSTOM_TAG_FLOAT32: /* Custom float32 implement */
+        {
+            float f = JS_VALUE_GET_FLOAT32(val);
+            if (isnanf(f)) {
+                ret = JS_NewInt32(ctx, 0);
+            } else {
+                /* convert -0 to +0 */
+                f = truncf(f) + 0.0;
+                ret = JS_NewFloat32(ctx, f);
             }
         }
         break;
@@ -10674,6 +10760,21 @@ static int JS_ToInt32SatFree(JSContext *ctx, int *pres, JSValue val)
                     ret = INT32_MAX;
                 else
                     ret = (int)d;
+            }
+        }
+        break;
+    case JS_CUSTOM_TAG_FLOAT32: /* Custom float32 implement */
+        {
+            float f = JS_VALUE_GET_FLOAT32(val);
+            if (isnanf(f)) {
+                ret = 0;
+            } else {
+                if (f < INT32_MIN)
+                    ret = INT32_MIN;
+                else if (f > INT32_MAX)
+                    ret = INT32_MAX;
+                else
+                    ret = (int)f;
             }
         }
         break;
@@ -10748,6 +10849,21 @@ static int JS_ToInt64SatFree(JSContext *ctx, int64_t *pres, JSValue val)
                     *pres = INT64_MAX;
                 else
                     *pres = (int64_t)d;
+            }
+        }
+        return 0;
+    case JS_CUSTOM_TAG_FLOAT32: /* Custom float32 implement */
+        {
+            float f = JS_VALUE_GET_FLOAT32(val);
+            if (isnanf(f)) {
+                *pres = 0;
+            } else {
+                if (f < INT64_MIN)
+                    *pres = INT64_MIN;
+                else if (f > INT64_MAX)
+                    *pres = INT64_MAX;
+                else
+                    *pres = (int64_t)f;
             }
         }
         return 0;
@@ -10831,6 +10947,19 @@ static int JS_ToInt64Free(JSContext *ctx, int64_t *pres, JSValue val)
             }
         }
         break;
+    case JS_CUSTOM_TAG_FLOAT32:  /* Custom float32 implement */
+        {
+            float f;
+            
+            f = JS_VALUE_GET_FLOAT32(val);
+
+            if (!isnanf(f)) {
+                ret = (int64_t)f;
+            } else {
+                ret = 0;
+            }
+
+        }
 #ifdef CONFIG_BIGNUM
     case JS_TAG_BIG_FLOAT:
         {
@@ -10906,6 +11035,19 @@ static int JS_ToInt32Free(JSContext *ctx, int32_t *pres, JSValue val)
             }
         }
         break;
+    case JS_CUSTOM_TAG_FLOAT32:  /* Custom float32 implement */
+        {
+            float f;
+            
+            f = JS_VALUE_GET_FLOAT32(val);
+
+            if (!isnanf(f)) {
+                ret = (int32_t)f;
+            } else {
+                ret = 0;
+            }
+
+        }
 #ifdef CONFIG_BIGNUM
     case JS_TAG_BIG_FLOAT:
         {
@@ -10967,6 +11109,21 @@ static int JS_ToUint8ClampFree(JSContext *ctx, int32_t *pres, JSValue val)
                     res = 255;
                 else
                     res = lrint(d);
+            }
+        }
+        break;
+    case JS_CUSTOM_TAG_FLOAT32:
+        {
+            float f = JS_VALUE_GET_FLOAT32(val);
+            if (isnanf(f)) {
+                res = 0;
+            } else {
+                if (f < 0)
+                    res = 0;
+                else if (f > 255)
+                    res = 255;
+                else
+                    res = lrintf(f);
             }
         }
         break;
@@ -11134,6 +11291,12 @@ static BOOL JS_NumberIsNegativeOrMinusZero(JSContext *ctx, JSValueConst val)
             JSFloat64Union u;
             u.d = JS_VALUE_GET_FLOAT64(val);
             return (u.u64 >> 63);
+        }
+    case JS_CUSTOM_TAG_FLOAT32:
+        {
+            JSFloat32Union u;
+            u.f = JS_VALUE_GET_FLOAT32(val);
+            return (u.u32 >> 31);
         }
 #ifdef CONFIG_BIGNUM
     case JS_TAG_BIG_INT:
@@ -11591,6 +11754,10 @@ JSValue JS_ToStringInternal(JSContext *ctx, JSValueConst val, BOOL is_ToProperty
     case JS_TAG_FLOAT64:
         return js_dtoa(ctx, JS_VALUE_GET_FLOAT64(val), 10, 0,
                        JS_DTOA_VAR_FORMAT);
+    case JS_CUSTOM_TAG_FLOAT32:
+        snprintf(buf, sizeof(buf), "%f", JS_VALUE_GET_FLOAT32(val));
+        str = buf;
+        goto new_string;
 #ifdef CONFIG_BIGNUM
     case JS_TAG_BIG_INT:
         return ctx->rt->bigint_ops.to_string(ctx, val);
@@ -11883,6 +12050,9 @@ static __maybe_unused void JS_DumpValueShort(JSRuntime *rt,
         break;
     case JS_TAG_FLOAT64:
         printf("%.14g", JS_VALUE_GET_FLOAT64(val));
+        break;
+    case JS_CUSTOM_TAG_FLOAT32:
+        printf("%f", JS_VALUE_GET_FLOAT32(val));
         break;
 #ifdef CONFIG_BIGNUM
     case JS_TAG_BIG_INT:
@@ -13919,7 +14089,7 @@ static BOOL tag_is_number(uint32_t tag)
 {
     return (tag == JS_TAG_INT || tag == JS_TAG_BIG_INT ||
             tag == JS_TAG_FLOAT64 || tag == JS_TAG_BIG_FLOAT ||
-            tag == JS_TAG_BIG_DECIMAL);
+            tag == JS_TAG_BIG_DECIMAL || tag == JS_CUSTOM_TAG_FLOAT32);
 }
 
 static no_inline __exception int js_eq_slow(JSContext *ctx, JSValue *sp,
@@ -14204,8 +14374,31 @@ static no_inline __exception int js_unary_arith_slow(JSContext *ctx,
 {
     JSValue op1;
     double d;
+    float f;
 
     op1 = sp[-1];
+
+    if (JS_TAG_IS_FLOAT32(JS_VALUE_GET_NORM_TAG(op1))) {
+        f = JS_VALUE_GET_FLOAT32(op1);
+        switch(op) {
+        case OP_inc:
+            f++;
+            break;
+        case OP_dec:
+            f--;
+            break;
+        case OP_plus:
+            break;
+        case OP_neg:
+            f = -f;
+            break;
+        default:
+            abort();
+        }
+        sp[-1] = JS_NewFloat32(ctx, f);
+        return 0;
+    }
+
     if (unlikely(JS_ToFloat64Free(ctx, &d, op1))) {
         sp[-1] = JS_UNDEFINED;
         return -1;
@@ -14252,9 +14445,37 @@ static no_inline __exception int js_binary_arith_slow(JSContext *ctx, JSValue *s
 {
     JSValue op1, op2;
     double d1, d2, r;
+    float f1, f2, res;
 
     op1 = sp[-2];
     op2 = sp[-1];
+    if (JS_TAG_IS_FLOAT32(JS_VALUE_GET_NORM_TAG(op1)) || JS_TAG_IS_FLOAT32(JS_VALUE_GET_NORM_TAG(op2))){
+        JS_ToFloat32Free(ctx, &f1, op1);
+        JS_ToFloat32Free(ctx, &f2, op2);
+
+        switch(op) {
+        case OP_sub:
+            res = f1 - f2;
+            break;
+        case OP_mul:
+            res = f1 * f2;
+            break;
+        case OP_div:
+            res = f1 / f2;
+            break;
+        case OP_mod:
+            res = fmodf(f1, f2);
+            break;
+        case OP_pow:
+            res = powf(f1, f2);
+            break;
+        default:
+            abort();
+        }
+        sp[-2] = JS_NewFloat32(ctx, res);
+        return 0;
+    }
+
     if (unlikely(JS_ToFloat64Free(ctx, &d1, op1))) {
         JS_FreeValue(ctx, op2);
         goto exception;
@@ -14298,7 +14519,19 @@ static no_inline __exception int js_add_slow(JSContext *ctx, JSValue *sp)
     op2 = sp[-1];
     tag1 = JS_VALUE_GET_TAG(op1);
     tag2 = JS_VALUE_GET_TAG(op2);
-    if ((tag1 == JS_TAG_INT || JS_TAG_IS_FLOAT64(tag1)) &&
+    if ((tag1 == JS_TAG_INT || JS_TAG_IS_FLOAT32(tag1) || JS_TAG_IS_FLOAT64(tag1)) &&
+        (tag2 == JS_TAG_INT || JS_TAG_IS_FLOAT32(tag2) || JS_TAG_IS_FLOAT64(tag2))) {
+        float f1, f2;
+        if (JS_ToFloat32Free(ctx, &f1, op1)) {
+            JS_FreeValue(ctx, op2);
+            goto exception;
+        }
+        if (JS_ToFloat32Free(ctx, &f2, op2))
+            goto exception;
+        sp[-2] = JS_NewFloat32(ctx, f1 + f2);
+        return 0;
+
+    } else if ((tag1 == JS_TAG_INT || JS_TAG_IS_FLOAT64(tag1)) &&
         (tag2 == JS_TAG_INT || JS_TAG_IS_FLOAT64(tag2))) {
         goto add_numbers;
     } else {
@@ -14478,7 +14711,11 @@ static no_inline __exception int js_eq_slow(JSContext *ctx, JSValue *sp,
     tag2 = JS_VALUE_GET_NORM_TAG(op2);
     if (tag1 == tag2 ||
         (tag1 == JS_TAG_INT && tag2 == JS_TAG_FLOAT64) ||
-        (tag2 == JS_TAG_INT && tag1 == JS_TAG_FLOAT64)) {
+        (tag2 == JS_TAG_INT && tag1 == JS_TAG_FLOAT64) ||
+        (tag1 == JS_CUSTOM_TAG_FLOAT32 && tag2 == JS_TAG_FLOAT64) ||
+        (tag2 == JS_CUSTOM_TAG_FLOAT32 && tag1 == JS_TAG_FLOAT64) ||
+        (tag1 == JS_TAG_INT && tag2 == JS_CUSTOM_TAG_FLOAT32) ||
+        (tag2 == JS_TAG_INT && tag1 == JS_CUSTOM_TAG_FLOAT32)) {
         res = js_strict_eq(ctx, op1, op2);
     } else if ((tag1 == JS_TAG_NULL && tag2 == JS_TAG_UNDEFINED) ||
                (tag2 == JS_TAG_NULL && tag1 == JS_TAG_UNDEFINED)) {
@@ -14570,6 +14807,7 @@ static BOOL js_strict_eq2(JSContext *ctx, JSValue op1, JSValue op2,
     BOOL res;
     int tag1, tag2;
     double d1, d2;
+    float f1, f2;
 
     tag1 = JS_VALUE_GET_NORM_TAG(op1);
     tag2 = JS_VALUE_GET_NORM_TAG(op2);
@@ -14634,6 +14872,9 @@ static BOOL js_strict_eq2(JSContext *ctx, JSValue op1, JSValue op2,
             d2 = JS_VALUE_GET_FLOAT64(op2);
         } else if (tag2 == JS_TAG_INT) {
             d2 = JS_VALUE_GET_INT(op2);
+        } else if (tag2 == JS_CUSTOM_TAG_FLOAT32) {
+            d2 = (double)JS_VALUE_GET_FLOAT32(op2);
+    
         } else {
             res = FALSE;
             break;
@@ -14646,6 +14887,8 @@ static BOOL js_strict_eq2(JSContext *ctx, JSValue op1, JSValue op2,
                 res = isnan(d1) == isnan(d2);
             } else if (eq_mode == JS_EQ_SAME_VALUE_ZERO) {
                 res = (d1 == d2); /* +0 == -0 */
+            } else if (tag2 == JS_CUSTOM_TAG_FLOAT32) {
+                res = (fabs(d1 - d2) < 0.000000001);
             } else {
                 u1.d = d1;
                 u2.d = d2;
@@ -14653,6 +14896,37 @@ static BOOL js_strict_eq2(JSContext *ctx, JSValue op1, JSValue op2,
             }
         } else {
             res = (d1 == d2); /* if NaN return false and +0 == -0 */
+        }
+        goto done_no_free;
+    case JS_CUSTOM_TAG_FLOAT32:
+        f1 = JS_VALUE_GET_FLOAT32(op1);
+        if (tag2 == JS_CUSTOM_TAG_FLOAT32) {
+            f2 = JS_VALUE_GET_FLOAT32(op2);
+        } else if (tag2 == JS_TAG_INT) {
+            f2 = JS_VALUE_GET_INT(op2);
+        } else if (tag2 == JS_TAG_FLOAT64) {
+            f2 = (float)JS_VALUE_GET_FLOAT64(op2);
+        } else {
+            res = FALSE;
+            break;
+        }
+
+        if (unlikely(eq_mode >= JS_EQ_SAME_VALUE)) {
+            JSFloat32Union u1, u2;
+            /* NaN is not always normalized, so this test is necessary */
+            if (isnanf(f1) || isnanf(f2)) {
+                res = isnanf(f1) == isnanf(f2);
+            } else if (eq_mode == JS_EQ_SAME_VALUE_ZERO) {
+                res = (f1 == f2); /* +0 == -0 */
+            } else if (tag2 == JS_TAG_FLOAT64) {
+                res = (fabsf(f1 - f2) < 0.000000001);
+            } else {
+                u1.f = f1;
+                u2.f = f2;
+                res = (u1.u32 == u2.u32); /* +0 != -0 */
+            }
+        } else {
+            res = (f1 == f2); /* if NaN return false and +0 == -0 */
         }
         goto done_no_free;
 #ifdef CONFIG_BIGNUM
@@ -14829,6 +15103,7 @@ static __exception int js_operator_typeof(JSContext *ctx, JSValueConst op1)
         break;
 #endif
     case JS_TAG_INT:
+    case JS_CUSTOM_TAG_FLOAT32:
     case JS_TAG_FLOAT64:
         atom = JS_ATOM_number;
         break;
@@ -17930,6 +18205,10 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
                         goto add_slow;
                     sp[-2] = JS_NewInt32(ctx, r);
                     sp--;
+                } else if (JS_VALUE_IS_BOTH_FLOAT32(op1, op2)) {
+                    sp[-2] = custom_JS_NewFloat32(ctx, JS_VALUE_GET_FLOAT32(op1) +
+                                             JS_VALUE_GET_FLOAT32(op2));
+                    sp--;
                 } else if (JS_VALUE_IS_BOTH_FLOAT(op1, op2)) {
                     sp[-2] = __JS_NewFloat64(ctx, JS_VALUE_GET_FLOAT64(op1) +
                                              JS_VALUE_GET_FLOAT64(op2));
@@ -17996,8 +18275,10 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
                     sp[-2] = JS_NewInt32(ctx, r);
                     sp--;
                 } else if (JS_VALUE_IS_BOTH_FLOAT(op1, op2)) {
-                    sp[-2] = __JS_NewFloat64(ctx, JS_VALUE_GET_FLOAT64(op1) -
-                                             JS_VALUE_GET_FLOAT64(op2));
+                    sp[-2] = __JS_NewFloat64(ctx, JS_VALUE_GET_FLOAT64(op1) - JS_VALUE_GET_FLOAT64(op2));
+                    sp--;
+                } else if (JS_VALUE_IS_BOTH_FLOAT32(op1, op2)) {
+                    sp[-2] = custom_JS_NewFloat32(ctx, JS_VALUE_GET_FLOAT32(op1) - JS_VALUE_GET_FLOAT32(op2));
                     sp--;
                 } else {
                     goto binary_arith_slow;
@@ -18041,6 +18322,9 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
                 mul_fp_res:
                     sp[-2] = __JS_NewFloat64(ctx, d);
                     sp--;
+                } else if (JS_VALUE_IS_BOTH_FLOAT32(op1, op2)) {
+                    sp[-2] = custom_JS_NewFloat32(ctx, JS_VALUE_GET_FLOAT32(op1) * JS_VALUE_GET_FLOAT32(op2));
+                    sp--;
                 } else {
                     goto binary_arith_slow;
                 }
@@ -18058,6 +18342,9 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
                     v1 = JS_VALUE_GET_INT(op1);
                     v2 = JS_VALUE_GET_INT(op2);
                     sp[-2] = JS_NewFloat64(ctx, (double)v1 / (double)v2);
+                    sp--;
+                } else if (JS_VALUE_IS_BOTH_FLOAT32(op1, op2)) {
+                    sp[-2] = JS_NewFloat32(ctx, JS_VALUE_GET_FLOAT32(op1) / JS_VALUE_GET_FLOAT32(op2));
                     sp--;
                 } else {
                     goto binary_arith_slow;
@@ -20907,6 +21194,7 @@ static __exception int next_token(JSParseState *s)
                     flags |= ATOD_TYPE_BIG_FLOAT;
             }
 #endif
+            flags |= ATOD_ACCEPT_SUFFIX;
             radix = 0;
 #ifdef CONFIG_BIGNUM
             s->token.u.num.exponent = 0;
@@ -20919,8 +21207,8 @@ static __exception int next_token(JSParseState *s)
             if (JS_IsException(ret))
                 goto fail;
             /* reject `10instanceof Number` */
-            if (JS_VALUE_IS_NAN(ret) ||
-                lre_js_is_ident_next(unicode_from_utf8(p, UTF8_CHAR_LEN_MAX, &p1))) {
+            if ((JS_VALUE_IS_NAN(ret) ||
+                lre_js_is_ident_next(unicode_from_utf8(p, UTF8_CHAR_LEN_MAX, &p1)))) {
                 JS_FreeValue(s->ctx, ret);
                 js_parse_error(s, "invalid number literal");
                 goto fail;
@@ -33866,6 +34154,7 @@ typedef enum BCTagEnum {
     BC_TAG_BOOL_TRUE,
     BC_TAG_INT32,
     BC_TAG_FLOAT64,
+    BC_TAG_FLOAT32,
     BC_TAG_STRING,
     BC_TAG_OBJECT,
     BC_TAG_ARRAY,
@@ -33924,6 +34213,7 @@ static const char * const bc_tag_str[] = {
     "true",
     "int32",
     "float64",
+    "float32",
     "string",
     "object",
     "array",
@@ -34586,6 +34876,13 @@ static int JS_WriteObjectRec(BCWriterState *s, JSValueConst obj)
             bc_put_u64(s, u.u64);
         }
         break;
+    case JS_CUSTOM_TAG_FLOAT32:
+        {
+            JSFloat32Union u;
+            bc_put_u8(s, BC_TAG_FLOAT32);
+            u.f = JS_VALUE_GET_FLOAT32(obj);
+            bc_put_u32(s, u.u32);
+        }
     case JS_TAG_STRING:
         {
             JSString *p = JS_VALUE_GET_STRING(obj);
@@ -36278,6 +36575,7 @@ static JSValue JS_ToObject(JSContext *ctx, JSValueConst val)
         goto set_value;
 #endif
     case JS_TAG_INT:
+    case JS_CUSTOM_TAG_FLOAT32:
     case JS_TAG_FLOAT64:
         obj = JS_NewObjectClass(ctx, JS_CLASS_NUMBER);
         goto set_value;
@@ -37729,6 +38027,18 @@ static JSValue js_function_bind(JSContext *ctx, JSValueConst this_val,
                     d -= (double)arg_count; /* also converts -0 to +0 */
             }
             len_val = JS_NewFloat64(ctx, d);
+        } else if (JS_VALUE_GET_NORM_TAG(len_val) == JS_CUSTOM_TAG_FLOAT32) {
+            float f = JS_VALUE_GET_FLOAT32(len_val);
+            if (isnanf(f)) {
+                f = 0.0;
+            } else {
+                f = truncf(f);
+                if (f <= (float)arg_count)
+                    f = 0.0;
+                else
+                    f -= (float)arg_count; /* also converts -0 to +0 */
+            }
+            len_val = JS_NewFloat32(ctx, f);
         } else {
             JS_FreeValue(ctx, len_val);
             len_val = JS_NewInt32(ctx, 0);
@@ -43850,6 +44160,7 @@ static JSValue js_json_check(JSContext *ctx, JSONStringifyContext *jsc,
             break;
     case JS_TAG_STRING:
     case JS_TAG_INT:
+    case JS_CUSTOM_TAG_FLOAT32:
     case JS_TAG_FLOAT64:
 #ifdef CONFIG_BIGNUM
     case JS_TAG_BIG_FLOAT:
@@ -44039,6 +44350,7 @@ static int js_json_to_str(JSContext *ctx, JSONStringifyContext *jsc,
             val = JS_NULL;
         }
         goto concat_value;
+    case JS_CUSTOM_TAG_FLOAT32:
     case JS_TAG_INT:
 #ifdef CONFIG_BIGNUM
     case JS_TAG_BIG_FLOAT:
@@ -45625,6 +45937,20 @@ static uint32_t map_hash_key(JSContext *ctx, JSValueConst key)
     case JS_TAG_INT:
         d = JS_VALUE_GET_INT(key) * 3163;
         goto hash_float64;
+    case JS_CUSTOM_TAG_FLOAT32:
+        {
+            JSFloat32Union f;
+            f.f = JS_VALUE_GET_FLOAT32(key);
+
+            if (isnanf(f.f)) {
+                f.f = NAN;
+            } else if (f.f == -0.0f) {
+                f.f = 0.0f;
+            }
+
+            h = f.u32;
+        }
+        break;
     case JS_TAG_FLOAT64:
         d = JS_VALUE_GET_FLOAT64(key);
         /* normalize the NaN */
@@ -52081,7 +52407,7 @@ static JSValue js_typed_array_indexOf(JSContext *ctx, JSValueConst this_val,
     int64_t v64;
     double d;
     double f;
-
+    
     len = js_typed_array_get_length_internal(ctx, this_val);
     if (len < 0)
         goto exception;
