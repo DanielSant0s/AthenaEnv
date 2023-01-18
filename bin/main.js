@@ -12,12 +12,12 @@ let dragonmesh = Render.loadOBJ("render/dragon.obj", dragontex);
 let test = Color.new(128, 0, 255);
 console.log('Color module test - R:' + Color.getR(test) + ' G: ' + Color.getG(test) + ' B: ' + Color.getB(test));
 
-Camera.position(0.0, 0.0, 50.0);
-Camera.rotation(0.0, 0.0,  0.0);
+Camera.position(0, 0, 50);
+Camera.rotation(0, 0,  0);
 
 Lights.create(1);
 
-Lights.set(1,  0.0,  1.0, -1.0, 0.9, 0.5, 0.5, DIRECTIONAL);
+Lights.set(1,  0,  1, -1, 0.9f, 0.5f, 0.5f, DIRECTIONAL);
 
 let pad = Pads.get();
 let oldpad = pad;
