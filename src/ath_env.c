@@ -38,7 +38,6 @@ static int qjs_eval_buf(JSContext *ctx, const void *buf, int buf_len,
         val = JS_Eval(ctx, buf, buf_len, filename, eval_flags);
     }
     if (JS_IsException(val)) {
-        js_std_dump_error(ctx);
         ret = -1;
     } else {
         ret = 0;
@@ -256,8 +255,16 @@ const char* runScript(const char* script, bool isBuffer)
 	athena_socket_init(ctx);
 	athena_font_init(ctx);
 
-
     int s = qjs_handle_file(ctx, script, NULL);
-    if (s < 0) { return qjserr; }
+    if (s < 0) { 
+		JSValue val = JS_GetException(ctx);
+		const char* exception = JS_ToCString(ctx, val);
+		const char* stack = JS_ToCString(ctx, JS_GetPropertyStr(ctx, val, "stack"));
+		const char* error = malloc(strlen(exception) + strlen(stack) + 2);
+		strcpy(error, exception);
+		strcat(error, "\n");
+		strcat(error, stack);
+		return error; 
+	}
     return NULL;
 }
