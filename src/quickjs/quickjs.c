@@ -14358,8 +14358,31 @@ static no_inline __exception int js_unary_arith_slow(JSContext *ctx,
 {
     JSValue op1;
     double d;
+    float f;
 
     op1 = sp[-1];
+
+    if (JS_TAG_IS_FLOAT32(JS_VALUE_GET_NORM_TAG(op1))) {
+        f = JS_VALUE_GET_FLOAT32(op1);
+        switch(op) {
+        case OP_inc:
+            f++;
+            break;
+        case OP_dec:
+            f--;
+            break;
+        case OP_plus:
+            break;
+        case OP_neg:
+            f = -f;
+            break;
+        default:
+            abort();
+        }
+        sp[-1] = JS_NewFloat32(ctx, f);
+        return 0;
+    }
+
     if (unlikely(JS_ToFloat64Free(ctx, &d, op1))) {
         sp[-1] = JS_UNDEFINED;
         return -1;

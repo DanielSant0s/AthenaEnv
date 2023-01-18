@@ -46,7 +46,7 @@ circle.height = 100.0;
 circle.color = Color.new(0, 0, 128);
 circle.filter = LINEAR;
 
-let float_test = 15.6f;
+let float_test = 15.67545757f;
 
 while (true){
     Screen.clear(test);
@@ -66,7 +66,7 @@ while (true){
         c_y++;
     }
 
-    console.log(float_test * 2);
+    console.log(float_test);
 
     Draw.rect(50, 50, 150, 150, Color.new(128, 128, 128));
 
