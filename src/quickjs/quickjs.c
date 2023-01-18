@@ -14073,7 +14073,7 @@ static BOOL tag_is_number(uint32_t tag)
 {
     return (tag == JS_TAG_INT || tag == JS_TAG_BIG_INT ||
             tag == JS_TAG_FLOAT64 || tag == JS_TAG_BIG_FLOAT ||
-            tag == JS_TAG_BIG_DECIMAL);
+            tag == JS_TAG_BIG_DECIMAL || tag == JS_CUSTOM_TAG_FLOAT32);
 }
 
 static no_inline __exception int js_eq_slow(JSContext *ctx, JSValue *sp,
