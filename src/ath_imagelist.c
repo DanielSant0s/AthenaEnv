@@ -19,7 +19,6 @@ static int imgThread(void* data)
 
 	while(true){
 		WaitSema(list->sema_id);
-		printf("\n\nLoading images..\n\n");
 		for(int i = 0; i < list->size; i++) {
 			load_image(&(list->list[i]->tex), list->list[i]->path, list->list[i]->delayed);
 			list->list[i]->width = list->list[i]->tex.Width;
