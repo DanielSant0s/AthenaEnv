@@ -978,6 +978,8 @@ typedef enum JSCFunctionEnum {  /* XXX: should rename for namespace isolation */
     JS_CFUNC_constructor_magic,
     JS_CFUNC_constructor_or_func,
     JS_CFUNC_constructor_or_func_magic,
+    JS_CFUNC_d_d,
+    JS_CFUNC_d_d_d,
     JS_CFUNC_f_f,
     JS_CFUNC_f_f_f,
     JS_CFUNC_getter,
@@ -993,8 +995,10 @@ typedef union JSCFunctionType {
     JSCFunction *constructor;
     JSValue (*constructor_magic)(JSContext *ctx, JSValueConst new_target, int argc, JSValueConst *argv, int magic);
     JSCFunction *constructor_or_func;
-    double (*f_f)(double);
-    double (*f_f_f)(double, double);
+    double (*d_d)(double);
+    double (*d_d_d)(double, double);
+    float (*f_f)(float);
+    float (*f_f_f)(float, float);
     JSValue (*getter)(JSContext *ctx, JSValueConst this_val);
     JSValue (*setter)(JSContext *ctx, JSValueConst this_val, JSValueConst val);
     JSValue (*getter_magic)(JSContext *ctx, JSValueConst this_val, int magic);

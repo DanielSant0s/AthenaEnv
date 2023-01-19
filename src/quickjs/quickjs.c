@@ -16383,7 +16383,7 @@ static JSValue js_call_c_function(JSContext *ctx, JSValueConst func_obj,
     case JS_CFUNC_setter_magic:
         ret_val = func.setter_magic(ctx, this_obj, arg_buf[0], p->u.cfunc.magic);
         break;
-    case JS_CFUNC_f_f:
+    case JS_CFUNC_d_d:
         {
             double d1;
 
@@ -16391,10 +16391,10 @@ static JSValue js_call_c_function(JSContext *ctx, JSValueConst func_obj,
                 ret_val = JS_EXCEPTION;
                 break;
             }
-            ret_val = JS_NewFloat64(ctx, func.f_f(d1));
+            ret_val = JS_NewFloat64(ctx, func.d_d(d1));
         }
         break;
-    case JS_CFUNC_f_f_f:
+    case JS_CFUNC_d_d_d:
         {
             double d1, d2;
 
@@ -16406,7 +16406,33 @@ static JSValue js_call_c_function(JSContext *ctx, JSValueConst func_obj,
                 ret_val = JS_EXCEPTION;
                 break;
             }
-            ret_val = JS_NewFloat64(ctx, func.f_f_f(d1, d2));
+            ret_val = JS_NewFloat64(ctx, func.d_d_d(d1, d2));
+        }
+        break;
+    case JS_CFUNC_f_f:
+        {
+            float f1;
+
+            if (unlikely(JS_ToFloat32(ctx, &f1, arg_buf[0]))) {
+                ret_val = JS_EXCEPTION;
+                break;
+            }
+            ret_val = JS_NewFloat32(ctx, func.f_f(f1));
+        }
+        break;
+    case JS_CFUNC_f_f_f:
+        {
+            float f1, f2;
+
+            if (unlikely(JS_ToFloat32(ctx, &f1, arg_buf[0]))) {
+                ret_val = JS_EXCEPTION;
+                break;
+            }
+            if (unlikely(JS_ToFloat32(ctx, &f2, arg_buf[1]))) {
+                ret_val = JS_EXCEPTION;
+                break;
+            }
+            ret_val = JS_NewFloat32(ctx, func.f_f_f(f1, f2));
         }
         break;
     case JS_CFUNC_iterator_next:
@@ -42225,39 +42251,72 @@ static JSValue js_math_random(JSContext *ctx, JSValueConst this_val,
 static const JSCFunctionListEntry js_math_funcs[] = {
     JS_CFUNC_MAGIC_DEF("min", 2, js_math_min_max, 0 ),
     JS_CFUNC_MAGIC_DEF("max", 2, js_math_min_max, 1 ),
-    JS_CFUNC_SPECIAL_DEF("abs", 1, f_f, fabs ),
-    JS_CFUNC_SPECIAL_DEF("floor", 1, f_f, floor ),
-    JS_CFUNC_SPECIAL_DEF("ceil", 1, f_f, ceil ),
-    JS_CFUNC_SPECIAL_DEF("round", 1, f_f, js_math_round ),
-    JS_CFUNC_SPECIAL_DEF("sqrt", 1, f_f, sqrt ),
 
-    JS_CFUNC_SPECIAL_DEF("acos", 1, f_f, acos ),
-    JS_CFUNC_SPECIAL_DEF("asin", 1, f_f, asin ),
-    JS_CFUNC_SPECIAL_DEF("atan", 1, f_f, atan ),
-    JS_CFUNC_SPECIAL_DEF("atan2", 2, f_f_f, atan2 ),
-    JS_CFUNC_SPECIAL_DEF("cos", 1, f_f, cos ),
-    JS_CFUNC_SPECIAL_DEF("exp", 1, f_f, exp ),
-    JS_CFUNC_SPECIAL_DEF("log", 1, f_f, log ),
-    JS_CFUNC_SPECIAL_DEF("pow", 2, f_f_f, js_pow ),
-    JS_CFUNC_SPECIAL_DEF("sin", 1, f_f, sin ),
-    JS_CFUNC_SPECIAL_DEF("tan", 1, f_f, tan ),
+    JS_CFUNC_SPECIAL_DEF("abs", 1, d_d, fabs ),
+    JS_CFUNC_SPECIAL_DEF("floor", 1, d_d, floor ),
+    JS_CFUNC_SPECIAL_DEF("ceil", 1, d_d, ceil ),
+    JS_CFUNC_SPECIAL_DEF("round", 1, d_d, js_math_round ),
+    JS_CFUNC_SPECIAL_DEF("sqrt", 1, d_d, sqrt ),
+
+    JS_CFUNC_SPECIAL_DEF("absf", 1, f_f, fabsf ),
+    JS_CFUNC_SPECIAL_DEF("floorf", 1, f_f, floorf ),
+    JS_CFUNC_SPECIAL_DEF("ceilf", 1, f_f, ceilf ),
+    JS_CFUNC_SPECIAL_DEF("roundf", 1, f_f, roundf ),
+    JS_CFUNC_SPECIAL_DEF("sqrtf", 1, f_f, sqrtf ),
+
+    JS_CFUNC_SPECIAL_DEF("acos", 1, d_d, acos ),
+    JS_CFUNC_SPECIAL_DEF("asin", 1, d_d, asin ),
+    JS_CFUNC_SPECIAL_DEF("atan", 1, d_d, atan ),
+    JS_CFUNC_SPECIAL_DEF("atan2", 2, d_d_d, atan2 ),
+    JS_CFUNC_SPECIAL_DEF("cos", 1, d_d, cos ),
+    JS_CFUNC_SPECIAL_DEF("exp", 1, d_d, exp ),
+    JS_CFUNC_SPECIAL_DEF("log", 1, d_d, log ),
+    JS_CFUNC_SPECIAL_DEF("pow", 2, d_d_d, js_pow ),
+    JS_CFUNC_SPECIAL_DEF("sin", 1, d_d, sin ),
+    JS_CFUNC_SPECIAL_DEF("tan", 1, d_d, tan ),
+
+    JS_CFUNC_SPECIAL_DEF("acosf", 1, f_f, acosf ),
+    JS_CFUNC_SPECIAL_DEF("asinf", 1, f_f, asinf ),
+    JS_CFUNC_SPECIAL_DEF("atanf", 1, f_f, atanf ),
+    JS_CFUNC_SPECIAL_DEF("atan2f", 2, f_f_f, atan2f ),
+    JS_CFUNC_SPECIAL_DEF("cosf", 1, f_f, cosf ),
+    JS_CFUNC_SPECIAL_DEF("expf", 1, f_f, expf ),
+    JS_CFUNC_SPECIAL_DEF("logf", 1, f_f, logf ),
+    //JS_CFUNC_SPECIAL_DEF("powf", 2, f_f_f, js_pow ),
+    JS_CFUNC_SPECIAL_DEF("sinf", 1, f_f, sinf ),
+    JS_CFUNC_SPECIAL_DEF("tanf", 1, f_f, tanf ),
     /* ES6 */
-    JS_CFUNC_SPECIAL_DEF("trunc", 1, f_f, trunc ),
-    JS_CFUNC_SPECIAL_DEF("sign", 1, f_f, js_math_sign ),
-    JS_CFUNC_SPECIAL_DEF("cosh", 1, f_f, cosh ),
-    JS_CFUNC_SPECIAL_DEF("sinh", 1, f_f, sinh ),
-    JS_CFUNC_SPECIAL_DEF("tanh", 1, f_f, tanh ),
-    JS_CFUNC_SPECIAL_DEF("acosh", 1, f_f, acosh ),
-    JS_CFUNC_SPECIAL_DEF("asinh", 1, f_f, asinh ),
-    JS_CFUNC_SPECIAL_DEF("atanh", 1, f_f, atanh ),
-    JS_CFUNC_SPECIAL_DEF("expm1", 1, f_f, expm1 ),
-    JS_CFUNC_SPECIAL_DEF("log1p", 1, f_f, log1p ),
-    JS_CFUNC_SPECIAL_DEF("log2", 1, f_f, log2 ),
-    JS_CFUNC_SPECIAL_DEF("log10", 1, f_f, log10 ),
-    JS_CFUNC_SPECIAL_DEF("cbrt", 1, f_f, cbrt ),
+    JS_CFUNC_SPECIAL_DEF("trunc", 1, d_d, trunc ),
+    JS_CFUNC_SPECIAL_DEF("sign", 1, d_d, js_math_sign ),
+    JS_CFUNC_SPECIAL_DEF("cosh", 1, d_d, cosh ),
+    JS_CFUNC_SPECIAL_DEF("sinh", 1, d_d, sinh ),
+    JS_CFUNC_SPECIAL_DEF("tanh", 1, d_d, tanh ),
+    JS_CFUNC_SPECIAL_DEF("acosh", 1, d_d, acosh ),
+    JS_CFUNC_SPECIAL_DEF("asinh", 1, d_d, asinh ),
+    JS_CFUNC_SPECIAL_DEF("atanh", 1, d_d, atanh ),
+    JS_CFUNC_SPECIAL_DEF("expm1", 1, d_d, expm1 ),
+    JS_CFUNC_SPECIAL_DEF("log1p", 1, d_d, log1p ),
+    JS_CFUNC_SPECIAL_DEF("log2", 1, d_d, log2 ),
+    JS_CFUNC_SPECIAL_DEF("log10", 1, d_d, log10 ),
+    JS_CFUNC_SPECIAL_DEF("cbrt", 1, d_d, cbrt ),
+
+    JS_CFUNC_SPECIAL_DEF("truncf", 1, f_f, truncf ),
+    //JS_CFUNC_SPECIAL_DEF("signf", 1, f_f, js_math_sign ),
+    JS_CFUNC_SPECIAL_DEF("coshf", 1, f_f, coshf ),
+    JS_CFUNC_SPECIAL_DEF("sinhf", 1, f_f, sinhf ),
+    JS_CFUNC_SPECIAL_DEF("tanhf", 1, f_f, tanhf ),
+    JS_CFUNC_SPECIAL_DEF("acoshf", 1, f_f, acoshf ),
+    JS_CFUNC_SPECIAL_DEF("asinhf", 1, f_f, asinhf ),
+    JS_CFUNC_SPECIAL_DEF("atanhf", 1, f_f, atanhf ),
+    JS_CFUNC_SPECIAL_DEF("expm1f", 1, f_f, expm1f ),
+    JS_CFUNC_SPECIAL_DEF("log1pf", 1, f_f, log1pf ),
+    JS_CFUNC_SPECIAL_DEF("log2f", 1, f_f, log2f ),
+    JS_CFUNC_SPECIAL_DEF("log10f", 1, f_f, log10f ),
+    JS_CFUNC_SPECIAL_DEF("cbrtf", 1, f_f, cbrtf ),
+
     JS_CFUNC_DEF("hypot", 2, js_math_hypot ),
     JS_CFUNC_DEF("random", 0, js_math_random ),
-    JS_CFUNC_SPECIAL_DEF("fround", 1, f_f, js_math_fround ),
+    JS_CFUNC_SPECIAL_DEF("fround", 1, d_d, js_math_fround ),
     JS_CFUNC_DEF("imul", 2, js_math_imul ),
     JS_CFUNC_DEF("clz32", 1, js_math_clz32 ),
     JS_PROP_STRING_DEF("[Symbol.toStringTag]", "Math", JS_PROP_CONFIGURABLE ),
