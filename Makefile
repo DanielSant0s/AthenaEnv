@@ -33,7 +33,7 @@ EE_BIN_PKD = athena_pkd.elf
 
 RESET_IOP = 1
 
-EE_LIBS = -L$(PS2SDK)/ports/lib -L$(PS2DEV)/gsKit/lib/ -Lmodules/ds34bt/ee/ -Lmodules/ds34usb/ee/ -lps2_drivers -lmc -lpatches -ldebug -lmath3d -ljpeg -lfreetype -lgskit_toolkit -lgskit -ldmakit -lpng -lz -lelf-loader -lds34bt -lds34usb -lnetman -lps2ip -lcurl -lwolfssl -lkbd
+EE_LIBS = -L$(PS2SDK)/ports/lib -L$(PS2DEV)/gsKit/lib/ -Lmodules/ds34bt/ee/ -Lmodules/ds34usb/ee/ -lps2_drivers -lmc -lpatches -ldebug -lmath3d -ljpeg -lfreetype -lgskit_toolkit -lgskit -ldmakit -lpng -lz -lelf-loader -lds34bt -lds34usb -lnetman -lps2ip -lcurl -lwolfssl -lkbd -lmouse
 
 EE_INCS += -I$(PS2DEV)/gsKit/include -I$(PS2SDK)/ports/include -I$(PS2SDK)/ports/include/freetype2 -I$(PS2SDK)/ports/include/zlib
 
@@ -58,11 +58,11 @@ APP_CORE = src/main.o src/taskman.o src/pad.o src/graphics.o src/atlas.o src/fnt
 
 ATHENA_MODULES = src/quickjs/cutils.o src/quickjs/libbf.o src/quickjs/libregexp.o src/quickjs/libunicode.o \
 				 src/quickjs/realpath.o src/quickjs/quickjs.o src/quickjs/quickjs-libc.o \
-				 src/ath_env.o src/ath_screen.o src/ath_image.o src/ath_imagelist.o src/ath_shape.o \
+				 src/ath_env.o src/ath_screen.o src/ath_image.o src/ath_imagelist.o src/ath_shape.o src/ath_mouse.o\
 				 src/ath_color.o src/ath_font.o src/ath_pads.o src/ath_keyboard.o src/ath_sound.o src/ath_system.o \
 				 src/ath_timer.o src/ath_render.o src/ath_task.o src/ath_network.o src/ath_socket.o
 
-IOP_MODULES = src/ds34bt.o src/ds34usb.o src/NETMAN.o src/SMAP.o src/ps2kbd.o
+IOP_MODULES = src/ds34bt.o src/ds34usb.o src/NETMAN.o src/SMAP.o src/ps2kbd.o src/ps2mouse.o
 
 EE_OBJS = $(IOP_MODULES) $(APP_CORE) $(ATHENA_MODULES)
 
@@ -102,6 +102,10 @@ src/SMAP.s: $(PS2SDK)/iop/irx/smap.irx
 src/ps2kbd.s: $(PS2SDK)/iop/irx/ps2kbd.irx
 	echo "Embedding Keyboard Driver..."
 	$(BIN2S) $< $@ ps2kbd_irx
+
+src/ps2mouse.s: $(PS2SDK)/iop/irx/ps2mouse.irx
+	echo "Embedding Mouse Driver..."
+	$(BIN2S) $< $@ ps2mouse_irx
 	
 #-------------------------- App Content ---------------------------#
 
@@ -141,6 +145,7 @@ clean:
 	rm -f src/NETMAN.s
 	rm -f src/SMAP.s
 	rm -f src/ps2kbd.s
+	rm -f src/ps2mouse.s
 
 rebuild: clean all
 

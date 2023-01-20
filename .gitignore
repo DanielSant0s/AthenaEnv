@@ -26,3 +26,4 @@ src/DEV9.s
 src/NETMAN.s
 src/SMAP.s
 src/ps2kbd.s
+src/ps2mouse.s

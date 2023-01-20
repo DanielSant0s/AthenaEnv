@@ -436,7 +436,6 @@ static JSValue athena_checkexist(JSContext *ctx, JSValue this_val, int argc, JSV
 
 static JSValue athena_loadELF(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
 {
-	if (argc != 1 && argc != 2) return JS_ThrowSyntaxError(ctx, "Argument error: System.loadELF() takes a string as argument.");
 
 	JSValue val;
 	int n = 0;
@@ -450,7 +449,6 @@ static JSValue athena_loadELF(JSContext *ctx, JSValue this_val, int argc, JSValu
 
 		val = JS_GetPropertyStr(ctx, argv[1], "length");
 		JS_ToInt32(ctx, &n, val);
-
 		args = malloc(n*sizeof(char*));
 
 		for (int i = 0; i < n; i++) {
