@@ -117,6 +117,7 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"import * as Timer from 'Timer';\n"
 				"import * as Tasks from 'Tasks';\n"
 				"import * as Pads from 'Pads';\n"
+				"import * as Keyboard from 'Keyboard';\n"
 				"import * as Network from 'Network';\n"
 				"import * as Socket from 'Socket';\n"
 				"import * as SocketConst from 'SocketConst';\n"
@@ -161,6 +162,7 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"globalThis.Timer = Timer;\n"
 				"globalThis.Tasks = Tasks;\n"
 				"globalThis.Pads = Pads;\n"
+				"globalThis.Keyboard = Keyboard;\n"
 				"globalThis.Network = Network;\n"
 
 				"globalThis.AF_INET = SocketConst.AF_INET;\n"
@@ -250,6 +252,7 @@ const char* runScript(const char* script, bool isBuffer)
 	athena_task_init(ctx);
 	athena_image_init(ctx);
 	athena_imagelist_init(ctx);
+	athena_keyboard_init(ctx);
 	athena_pads_init(ctx);
 	athena_network_init(ctx);
 	athena_socket_init(ctx);

@@ -25,3 +25,4 @@ src/usbhdfsd.s
 src/DEV9.s
 src/NETMAN.s
 src/SMAP.s
+src/ps2kbd.s

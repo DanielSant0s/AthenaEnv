@@ -41,6 +41,9 @@ extern unsigned int size_SMAP_irx;
 extern unsigned char NETMAN_irx[];
 extern unsigned int size_NETMAN_irx;
 
+extern unsigned char ps2kbd_irx[];
+extern unsigned int size_ps2kbd_irx;
+
 char boot_path[255];
 
 static void prepare_IOP() {
@@ -119,6 +122,7 @@ static void init_drivers() {
     init_hdd_driver(false, false);
     SifExecModuleBuffer(&NETMAN_irx, size_NETMAN_irx, 0, NULL, NULL);
     SifExecModuleBuffer(&SMAP_irx, size_SMAP_irx, 0, NULL, NULL);
+    SifExecModuleBuffer(&ps2kbd_irx, size_ps2kbd_irx, 0, NULL, NULL);
 
     init_joystick_driver(true);
     init_audio_driver();

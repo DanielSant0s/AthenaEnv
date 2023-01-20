@@ -2,6 +2,9 @@ console.log('Hello, QuickJS!');
 let s = Date.now();
 let ti = Date.now();
 
+Keyboard.init();
+Keyboard.setRepeatRate(15);
+
 Screen.setMode(NTSC, 640, 448, CT24, INTERLACED, FIELD, true, Z16S);
 Render.init(4/3);
 
@@ -27,6 +30,8 @@ let c_y = 300;
 var mine_font = new Font("minecraft.ttf");
 mine_font.scale = 2;
 mine_font.color = Color.new(255, 255, 0);
+
+var sce = new Font();
 
 Network.init();
 let netcfg = Network.getConfig();
@@ -64,11 +69,14 @@ circle.filter = LINEAR;
 
 let float_test = 15.6f;
 
+let char = "";
+let text = "";
+
 while (true){
     Screen.clear(test);
     oldpad = pad;
     pad = Pads.get();
-
+    
     if(Pads.check(pad, Pads.LEFT)){
         c_x--;
     }
@@ -87,6 +95,19 @@ while (true){
     Draw.circle(c_x, c_y, 25, Color.new(255, 0, 0));
 
     mine_font.print(20, 20, Screen.getFPS(360) + " FPS");
+
+    char = Keyboard.get();
+    if (char != 0){
+        console.log(char);
+        if (char == 7){
+            text = text.slice(0, -1);
+        } else if (char == 12) {
+            text += "\n";
+        } else {
+            text += String.fromCharCode(char);
+        }
+    }
+    sce.print(20, 350, text);
 
     circle.draw(200, 200);
 
