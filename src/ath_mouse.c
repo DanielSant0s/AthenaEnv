@@ -53,6 +53,15 @@ static JSValue athena_mouse_setaccel(JSContext *ctx, JSValue this_val, int argc,
 	return JS_NewInt32(ctx, PS2MouseSetAccel(accel));
 }
 
+static JSValue athena_mouse_setpos(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+    int x, y;
+    JS_ToInt32(ctx, &x, argv[0]);
+    JS_ToInt32(ctx, &y, argv[1]);
+	return JS_NewInt32(ctx, PS2MouseSetPosition(x, y));
+}
+
+
+
 static const JSCFunctionListEntry module_funcs[] = {
     JS_CFUNC_DEF("init", 0, athena_mouse_init_f),
     JS_CFUNC_DEF("get", 0, athena_mouse_get),
@@ -61,6 +70,7 @@ static const JSCFunctionListEntry module_funcs[] = {
     JS_CFUNC_DEF("setMode", 1, athena_mouse_setmode),
     JS_CFUNC_DEF("getAccel", 0, athena_mouse_getaccel),
     JS_CFUNC_DEF("setAccel", 1, athena_mouse_setaccel),
+    JS_CFUNC_DEF("setPosition", 1, athena_mouse_setpos),
 };
 
 static int module_init(JSContext *ctx, JSModuleDef *m)

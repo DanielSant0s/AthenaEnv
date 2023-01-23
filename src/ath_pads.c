@@ -74,7 +74,7 @@ static JSValue athena_getpressure(JSContext *ctx, JSValue this_val, int argc, JS
 	
 	struct padButtonStatus pad;
 
-	unsigned char pressure = 255;
+	int pressure = 255;
 
 	int state = padGetState(port, 0);
 
@@ -124,7 +124,7 @@ static JSValue athena_getpressure(JSContext *ctx, JSValue this_val, int argc, JS
 	        break;
     }
 
-	JS_NewInt32(ctx, (uint32_t)pressure);
+	JS_NewInt32(ctx, pressure);
 }
 
 static JSValue athena_rumble(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
@@ -206,8 +206,8 @@ static const JSCFunctionListEntry module_funcs[] = {
 	JS_PROP_INT32_DEF("R1", PAD_R1, JS_PROP_CONFIGURABLE ),
 	JS_PROP_INT32_DEF("L2", PAD_L2, JS_PROP_CONFIGURABLE ),
 	JS_PROP_INT32_DEF("R2", PAD_R2, JS_PROP_CONFIGURABLE ),
-	JS_PROP_INT32_DEF("L3", PAD_L2, JS_PROP_CONFIGURABLE ),
-	JS_PROP_INT32_DEF("R3", PAD_R2, JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("L3", PAD_L3, JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("R3", PAD_R3, JS_PROP_CONFIGURABLE ),
 	JS_PROP_INT32_DEF("DIGITAL", PAD_TYPE_DIGITAL, JS_PROP_CONFIGURABLE ),
 	JS_PROP_INT32_DEF("ANALOG", PAD_TYPE_ANALOG, JS_PROP_CONFIGURABLE ),
 	JS_PROP_INT32_DEF("DUALSHOCK", PAD_TYPE_DUALSHOCK, JS_PROP_CONFIGURABLE ),

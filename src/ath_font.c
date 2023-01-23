@@ -100,6 +100,23 @@ static JSValue athena_font_print(JSContext *ctx, JSValue this_val, int argc, JSV
 	return JS_UNDEFINED;
 }
 
+static JSValue athena_font_gettextsize(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
+    Coords size;
+    JSValue obj;
+
+    JSFontData *font = JS_GetOpaque2(ctx, this_val, js_font_class_id);
+
+    if (font->type == 2) {
+        size = fntGetTextSize(font->id, JS_ToCString(ctx, argv[0]));
+    }
+
+    obj = JS_NewObject(ctx);
+    JS_DefinePropertyValueStr(ctx, obj, "width", JS_NewUint32(ctx, size.width), JS_PROP_C_W_E);
+    JS_DefinePropertyValueStr(ctx, obj, "height", JS_NewUint32(ctx, size.height), JS_PROP_C_W_E);
+
+	return obj;
+}
+
 static JSValue athena_font_get_scale(JSContext *ctx, JSValueConst this_val)
 {
     JSFontData *s = JS_GetOpaque2(ctx, this_val, js_font_class_id);
@@ -154,6 +171,7 @@ static const JSCFunctionListEntry js_font_proto_funcs[] = {
     JS_CGETSET_DEF("scale", athena_font_get_scale, athena_font_set_scale),
     JS_CGETSET_DEF("color", athena_font_get_color, athena_font_set_color),
     JS_CFUNC_DEF("print", 3, athena_font_print),
+    JS_CFUNC_DEF("getTextSize", 1, athena_font_gettextsize),
 };
 
 static int font_init(JSContext *ctx, JSModuleDef *m) {

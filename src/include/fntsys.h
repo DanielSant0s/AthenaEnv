@@ -55,4 +55,11 @@ void fntSetPixelSize(int fontid, int width, int height);
 
 void fntSetCharSize(int fontid, int width, int height);
 
+typedef struct {
+    int width;
+    int height;
+} Coords;
+
+Coords fntGetTextSize(int id, const char* text);
+
 #endif

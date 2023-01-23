@@ -1,5 +1,5 @@
 var font = new Font("fonts/LEMONMILK-Regular.otf");
-font.setScale(2);
+font.scale = (2);
 
 const MAIN_MENU = 0;
 const RUN_GAME = 1;
@@ -21,8 +21,8 @@ function World2Screen(rect, camera){
 }
 
 function drawCell(coords, radius, color, hollow){
-    drawCircle(coords[0], coords[1], radius, color);
-    if(hollow) drawCircle(coords[0], coords[1], radius, Color.new(255, 255, 255), false);
+    Draw.circle(coords[0], coords[1], radius, color);
+    if(hollow) Draw.circle(coords[0], coords[1], radius, Color.new(255, 255, 255), false);
 }
 
 function circleCircleColl(c1, c2) {
@@ -48,25 +48,25 @@ var oldpad = Pads.get();
 var pad = oldpad;
 
 while(running){
-    Display.clear(Color.new(64, 0, 128));
+    Screen.clear(Color.new(64, 0, 128));
 
     oldpad = pad;
     pad = Pads.get();
 
     if(game_state == MAIN_MENU){
-        if(Pads.check(pad, PAD_UP) && !Pads.check(oldpad, PAD_UP)){
+        if(Pads.check(pad, Pads.UP) && !Pads.check(oldpad, Pads.UP)){
             if(main_menu_ptr > 0){
                 main_menu_ptr--;
             }
         }
 
-        if(Pads.check(pad, PAD_DOWN) && !Pads.check(oldpad, PAD_DOWN)){
+        if(Pads.check(pad, Pads.DOWN) && !Pads.check(oldpad, Pads.DOWN)){
             if(main_menu_ptr < 2){
                 main_menu_ptr++;
             }
         }
 
-        if(Pads.check(pad, PAD_CROSS) && !Pads.check(oldpad, PAD_CROSS)){
+        if(Pads.check(pad, Pads.CROSS) && !Pads.check(oldpad, Pads.CROSS)){
             switch(main_menu_ptr){
                 case 0:
                     game_state = RUN_GAME;
@@ -98,7 +98,7 @@ while(running){
                         }
                     }
 
-                    font.setScale(1);
+                    font.scale = (1);
 
                     break;
                 case 2:
@@ -125,29 +125,29 @@ while(running){
             s_lines = World2Screen({x:i, y:-1500}, camera);
             if(s_lines[0] > 0 && s_lines[0] < 640) {
                 e_lines = World2Screen({x:i, y:1500}, camera);
-                drawLine(s_lines[0], s_lines[1], e_lines[0], e_lines[1], Color.new(255, 255, 255, 40));
+                Draw.line(s_lines[0], s_lines[1], e_lines[0], e_lines[1], Color.new(255, 255, 255, 40));
             }
 
             s_lines = World2Screen({x:-1500, y:i}, camera);
             if(s_lines[1] > 0 && s_lines[1] < 448) {
                 e_lines = World2Screen({x: 1500, y:i}, camera);
-                drawLine(s_lines[0], s_lines[1], e_lines[0], e_lines[1], Color.new(255, 255, 255, 40));
+                Draw.line(s_lines[0], s_lines[1], e_lines[0], e_lines[1], Color.new(255, 255, 255, 40));
             }
         }
 
-        if(Pads.check(pad, PAD_LEFT) && player.x > -1500.0){
+        if(Pads.check(pad, Pads.LEFT) && player.x > -1500.0){
             player.x-=4;
             camera.x-=4;
         }
-        if(Pads.check(pad, PAD_RIGHT) && player.x < 1500.0){
+        if(Pads.check(pad, Pads.RIGHT) && player.x < 1500.0){
             player.x+=4;
             camera.x+=4;
         }
-        if(Pads.check(pad, PAD_UP) && player.y > -1500.0){
+        if(Pads.check(pad, Pads.UP) && player.y > -1500.0){
             player.y-=4;
             camera.y-=4;
         }
-        if(Pads.check(pad, PAD_DOWN) && player.y < 1500.0){
+        if(Pads.check(pad, Pads.DOWN) && player.y < 1500.0){
             player.y+=4;
             camera.y+=4;
         }
@@ -163,11 +163,11 @@ while(running){
                         enemies.splice(i, 1);
                         if (!enemies.length){
                             game_state = GAME_OVER;
-                            font.setScale(2);
+                            font.scale = (2);
                         }
                     } else if ((enemies[i].r > player.r)) {
                         game_state = GAME_OVER;
-                        font.setScale(2);
+                        font.scale = (2);
                     }
                 }
 
@@ -177,21 +177,20 @@ while(running){
     
         drawCell(World2Screen(player, camera), player.r, player.color, true);
 
-        font.print(10, 10, Display.getFPS(360) + " FPS");
+        font.print(10, 10, Screen.getFPS(360) + " FPS");
 
     } else if(game_state == GAME_OVER){
         font.color = Color.new(128, 128, 128);
         font.print(150, 200, ((!enemies.length)? "VICTORY!" : "GAME OVER"));
 
-        if(Pads.check(pad, PAD_CROSS) && !Pads.check(oldpad, PAD_CROSS)){
+        if(Pads.check(pad, Pads.CROSS) && !Pads.check(oldpad, Pads.CROSS)){
             game_state = MAIN_MENU;
             enemies = [];
         }
 
     }
 
-    Display.flip();
+    Screen.flip();
 }
 
 font = null;
-Duktape.gc();

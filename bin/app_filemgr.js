@@ -13,7 +13,7 @@ function range(end) {
 };
 
 function printCentered(x, y, scale, string){
-    font.setScale(scale);
+    font.scale = scale;
     font.print(x-(getStringSize(string, scale)/2), y, string);
 };
 
@@ -25,10 +25,10 @@ function process_list_commands(control_var, list){
     if (control_var < 0){
         control_var = list.length-1;
     }
-    if (Pads.check(pad, PAD_DOWN) && !Pads.check(oldpad, PAD_DOWN)){
+    if (Pads.check(pad, Pads.DOWN) && !Pads.check(oldpad, Pads.DOWN)){
         control_var++;
     }
-    if (Pads.check(pad, PAD_UP) && !Pads.check(oldpad, PAD_UP)){
+    if (Pads.check(pad, Pads.UP) && !Pads.check(oldpad, Pads.UP)){
         control_var--;
     }
     return control_var;
@@ -57,16 +57,16 @@ function process_matrix_commands(x_var, y_var, x_limit, y_limit){
         x_var = x_limit-1;
         y_var = y_limit-1;
     }
-    if (Pads.check(pad, PAD_RIGHT) && !Pads.check(oldpad, PAD_RIGHT)){
+    if (Pads.check(pad, Pads.RIGHT) && !Pads.check(oldpad, Pads.RIGHT)){
         x_var++;
     }
-    if (Pads.check(pad, PAD_LEFT) && !Pads.check(oldpad, PAD_LEFT)){
+    if (Pads.check(pad, Pads.LEFT) && !Pads.check(oldpad, Pads.LEFT)){
         x_var--;
     }
-    if (Pads.check(pad, PAD_DOWN) && !Pads.check(oldpad, PAD_DOWN)){
+    if (Pads.check(pad, Pads.DOWN) && !Pads.check(oldpad, Pads.DOWN)){
         y_var++;
     }
-    if (Pads.check(pad, PAD_UP) && !Pads.check(oldpad, PAD_UP)){
+    if (Pads.check(pad, Pads.UP) && !Pads.check(oldpad, Pads.UP)){
         y_var--;
     }
     return [x_var, y_var];
@@ -94,8 +94,8 @@ function Window(x, y, w, h, t) {
     };
 
     this.draw = function() {
-        drawRect(this.x, this.y, this.w, 20, Color.new(64, 0, 128, 128));
-        drawRect(this.x, this.y+20.0, this.w, this.h, Color.new(40, 40, 40, 128));
+        Draw.rect(this.x, this.y, this.w, 20, Color.new(64, 0, 128, 128));
+        Draw.rect(this.x, this.y+20.0, this.w, this.h, Color.new(40, 40, 40, 128));
         printCentered(this.x+(this.w/2), this.y+5.0, 0.5, this.t);
         for (var i = 0; i < this.elm_list.length; i++){
             this.elm_list[i]();
@@ -160,7 +160,7 @@ file_manager.process = function() {
             file_manager.comp = 0;
         }
     }
-    if ((Pads.check(pad, PAD_TRIANGLE) && !Pads.check(oldpad, PAD_TRIANGLE))){
+    if ((Pads.check(pad, Pads.TRIANGLE) && !Pads.check(oldpad, Pads.TRIANGLE))){
         var idxof = path.lastIndexOf("/");
         if(idxof != -1){
             path = path.slice(0, idxof);
@@ -170,7 +170,7 @@ file_manager.process = function() {
             file = root;
         };
     };
-    if ((Pads.check(pad, PAD_CROSS) && !Pads.check(oldpad, PAD_CROSS))){
+    if ((Pads.check(pad, Pads.CROSS) && !Pads.check(oldpad, Pads.CROSS))){
         if(file_manager.data[3] == 1){
             if(file[file_manager.data[0]].dir){
                 if(path == ""){
@@ -230,7 +230,7 @@ file_manager.process = function() {
             }
         }
     };
-    if (Pads.check(pad, PAD_R1) && !Pads.check(oldpad, PAD_R1)){
+    if (Pads.check(pad, Pads.R1) && !Pads.check(oldpad, Pads.R1)){
         file_manager.data[2] ^= 1;
         file_manager.data[3] ^= 1;
     };
@@ -240,12 +240,12 @@ file_manager.gfx = new Window();
 file_manager.gfx.t = "File Manager"
 
 render_filelist = function() {
-    drawRect(file_manager.gfx.x, file_manager.gfx.y+(20*(file_manager.data[0]+2+file_manager.comp)), file_manager.gfx.w, 20, Color.new(64, 0, 128, 64));
-    drawRect(file_manager.gfx.x, file_manager.gfx.y+(20), file_manager.gfx.w, 20, Color.new(64, 64, 64, 64));
+    Draw.rect(file_manager.gfx.x, file_manager.gfx.y+(20*(file_manager.data[0]+2+file_manager.comp)), file_manager.gfx.w, 20, Color.new(64, 0, 128, 64));
+    Draw.rect(file_manager.gfx.x, file_manager.gfx.y+(20), file_manager.gfx.w, 20, Color.new(64, 64, 64, 64));
     printCentered(file_manager.gfx.x+(file_manager.gfx.w/2), file_manager.gfx.y+(3+(20.0)), 0.55, path);
     for (var i = 0; i < file.length; i++) {
         if(i+file_manager.comp < 21 && i+file_manager.comp >= 0){
-            font.setScale(0.55);
+            font.scale = 0.55;
             font.print(file_manager.gfx.x+10, file_manager.gfx.y+(3+(20.0*(i+2+file_manager.comp))),
             file[i].name);
             if(!file[i].dir){
@@ -255,9 +255,9 @@ render_filelist = function() {
         }
     };
     if(file_manager.data[2] == 1) {
-        font.setScale(0.55);
-        drawRect(file_manager.gfx.x+file_manager.gfx.w-75, file_manager.gfx.y+40, 75, 20*5, Color.new(0, 0, 0, 100));
-        drawRect(file_manager.gfx.x+file_manager.gfx.w-75, file_manager.gfx.y+20+20*(file_manager.data[1]+1), 75, 20, Color.new(64, 0, 128, 64));
+        font.scale = 0.55;
+        Draw.rect(file_manager.gfx.x+file_manager.gfx.w-75, file_manager.gfx.y+40, 75, 20*5, Color.new(0, 0, 0, 100));
+        Draw.rect(file_manager.gfx.x+file_manager.gfx.w-75, file_manager.gfx.y+20+20*(file_manager.data[1]+1), 75, 20, Color.new(64, 0, 128, 64));
         font.print(file_manager.gfx.x+file_manager.gfx.w-75+5, file_manager.gfx.y+(23+(20.0*(1))), "Copy");
         font.print(file_manager.gfx.x+file_manager.gfx.w-75+5, file_manager.gfx.y+(23+(20.0*(2))), "Move");
         font.print(file_manager.gfx.x+file_manager.gfx.w-75+5, file_manager.gfx.y+(23+(20.0*(3))), "Paste");
@@ -274,9 +274,9 @@ var pad = Pads.get();
 while(true){
     oldpad = pad;
     pad = Pads.get();
-    Display.clear(Color.new(0, 0, 0));
+    Screen.clear(Color.new(0, 0, 0));
 
     file_manager.run();
     
-    Display.flip();
+    Screen.flip();
 };
