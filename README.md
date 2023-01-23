@@ -47,6 +47,8 @@ AthenaEnv is a project that seeks to facilitate and at the same time brings a co
 * Screen: The entire screen of your project (2D and 3D), being able to change the resolution, enable or disable parameters.
 * Font: Functions that control the texts that appear on the screen, loading texts, drawing and unloading from memory.
 * Pads: Above being able to draw and everything else, A human interface is important. Supports rumble and pressure sensitivity.
+* Keyboard: Basic USB keyboard support.
+* Mouse: Basic USB mouse support.
 * Timer: Control the time precisely in your code, it contains several timing functions.
 * Sound: Basic sound functions.
 * Network: Net basics and web requests :D.
@@ -239,7 +241,28 @@ Methods:
   • Pads.R2  
   • Pads.L3  
   • Pads.R3  
+  
+### Keyboard module
+* Keyboard.init()
+* var c = Keyboard.get()
+* Keyboard.setRepeatRate(msec)
+* Keyboard.setBlockingMode()
+* Keyboard.deinit()
 
+### Mouse module
+* Mouse.init()
+* var mouse = Mouse.get()
+  • mouse.x
+  • mouse.y
+  • mouse.wheel
+  • mouse.buttons
+* Mouse.setBoundary(minx, maxx, miny, maxy)
+* var mode = Mouse.getMode()
+* Mouse.setMode(mode)
+* var accel = Mouse.getAccel()
+* Mouse.setAccel(val)
+* Mouse.setPosition(x, y)
+  
 ### System module
 
 * var fd = System.openFile(path, type)
