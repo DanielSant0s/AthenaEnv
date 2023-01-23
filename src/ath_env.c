@@ -271,7 +271,12 @@ const char* runScript(const char* script, bool isBuffer)
 		strcpy(error, exception);
 		strcat(error, "\n");
 		strcat(error, stack);
+		JS_FreeContext(ctx);
+		JS_FreeRuntime(rt);
 		return error; 
 	}
+	
+	JS_FreeContext(ctx);
+	JS_FreeRuntime(rt);
     return NULL;
 }

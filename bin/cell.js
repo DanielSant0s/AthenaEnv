@@ -28,7 +28,7 @@ function drawCell(coords, radius, color, hollow){
 function circleCircleColl(c1, c2) {
     var distX = c1.x - c2.x;
     var distY = c1.y - c2.y;
-    var dist = Math.sqrt( (distX*distX) + (distY*distY) );
+    var dist = Math.sqrtf( (distX*distX) + (distY*distY) );
 
     if (dist <= c1.r + c2.r) {
         return true;
@@ -37,9 +37,9 @@ function circleCircleColl(c1, c2) {
 }
 
 function randint(min, max) {
-    min = Math.ceil(min);
-    max = Math.floor(max);
-    return Math.floor(Math.random() * (max - min + 1)) + min;
+    min = Math.ceilf(min);
+    max = Math.floorf(max);
+    return Math.floorf(Math.random() * (max - min + 1)) + min;
 }
 
 var main_menu_ptr = 0;
@@ -135,19 +135,19 @@ while(running){
             }
         }
 
-        if(Pads.check(pad, Pads.LEFT) && player.x > -1500.0){
+        if(Pads.check(pad, Pads.LEFT) && player.x > -1500){
             player.x-=4;
             camera.x-=4;
         }
-        if(Pads.check(pad, Pads.RIGHT) && player.x < 1500.0){
+        if(Pads.check(pad, Pads.RIGHT) && player.x < 1500){
             player.x+=4;
             camera.x+=4;
         }
-        if(Pads.check(pad, Pads.UP) && player.y > -1500.0){
+        if(Pads.check(pad, Pads.UP) && player.y > -1500){
             player.y-=4;
             camera.y-=4;
         }
-        if(Pads.check(pad, Pads.DOWN) && player.y < 1500.0){
+        if(Pads.check(pad, Pads.DOWN) && player.y < 1500){
             player.y+=4;
             camera.y+=4;
         }
@@ -159,7 +159,7 @@ while(running){
                 drawCell(enemy_coords, enemies[i].r, enemies[i].color, false);
                 if (circleCircleColl(enemies[i], player)) {
                     if (enemies[i].r < player.r) {
-                        player.r += enemies[i].r/2;
+                        player.r += enemies[i].r/2.0f;
                         enemies.splice(i, 1);
                         if (!enemies.length){
                             game_state = GAME_OVER;
