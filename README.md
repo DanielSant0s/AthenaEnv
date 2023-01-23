@@ -246,16 +246,16 @@ Methods:
 * Keyboard.init()
 * var c = Keyboard.get()
 * Keyboard.setRepeatRate(msec)
-* Keyboard.setBlockingMode()
+* Keyboard.setBlockingMode(mode)
 * Keyboard.deinit()
 
 ### Mouse module
 * Mouse.init()
-* var mouse = Mouse.get()
-  • mouse.x
-  • mouse.y
-  • mouse.wheel
-  • mouse.buttons
+* var mouse = Mouse.get()  
+  • mouse.x  
+  • mouse.y  
+  • mouse.wheel  
+  • mouse.buttons  
 * Mouse.setBoundary(minx, maxx, miny, maxy)
 * var mode = Mouse.getMode()
 * Mouse.setMode(mode)
