@@ -8,7 +8,6 @@
 #include "include/sound.h"
 
 static bool adpcm_started = false;
-static bool audsrv_started = false;
 
 /*static int fillbuffer(void *arg)
 {
@@ -72,20 +71,10 @@ static bool audsrv_started = false;
 
 
 void sound_setvolume(int volume) {
-    if(!audsrv_started) {
-        audsrv_init();
-        audsrv_started = true;
-    }
-
 	audsrv_set_volume(volume);
 }
 
 void sound_setformat(int bits, int freq, int channels){
-    if(!audsrv_started) {
-        audsrv_init();
-        audsrv_started = true;
-    }
-
 	struct audsrv_fmt_t format;
 
     format.bits = bits;

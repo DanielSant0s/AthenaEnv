@@ -95,8 +95,8 @@ function Window(x, y, w, h, t) {
 
     this.draw = function() {
         Draw.rect(this.x, this.y, this.w, 20, Color.new(64, 0, 128, 128));
-        Draw.rect(this.x, this.y+20.0, this.w, this.h, Color.new(40, 40, 40, 128));
-        printCentered(this.x+(this.w/2), this.y+5.0, 0.5, this.t);
+        Draw.rect(this.x, this.y+20, this.w, this.h, Color.new(40, 40, 40, 128));
+        printCentered(this.x+(this.w/2), this.y+5, 0.5, this.t);
         for (var i = 0; i < this.elm_list.length; i++){
             this.elm_list[i]();
         }
@@ -242,27 +242,27 @@ file_manager.gfx.t = "File Manager"
 render_filelist = function() {
     Draw.rect(file_manager.gfx.x, file_manager.gfx.y+(20*(file_manager.data[0]+2+file_manager.comp)), file_manager.gfx.w, 20, Color.new(64, 0, 128, 64));
     Draw.rect(file_manager.gfx.x, file_manager.gfx.y+(20), file_manager.gfx.w, 20, Color.new(64, 64, 64, 64));
-    printCentered(file_manager.gfx.x+(file_manager.gfx.w/2), file_manager.gfx.y+(3+(20.0)), 0.55, path);
+    printCentered(file_manager.gfx.x+(file_manager.gfx.w/2), file_manager.gfx.y+(3+(20)), 0.55f, path);
     for (var i = 0; i < file.length; i++) {
         if(i+file_manager.comp < 21 && i+file_manager.comp >= 0){
-            font.scale = 0.55;
-            font.print(file_manager.gfx.x+10, file_manager.gfx.y+(3+(20.0*(i+2+file_manager.comp))),
+            font.scale = 0.55f;
+            font.print(file_manager.gfx.x+10, file_manager.gfx.y+(3+(20*(i+2+file_manager.comp))),
             file[i].name);
             if(!file[i].dir){
-                font.print(file_manager.gfx.x+200, file_manager.gfx.y+(3+(20.0*(i+2+file_manager.comp))),
+                font.print(file_manager.gfx.x+200, file_manager.gfx.y+(3+(20*(i+2+file_manager.comp))),
                 String(file[i].size));
             }
         }
     };
     if(file_manager.data[2] == 1) {
-        font.scale = 0.55;
+        font.scale = 0.55f;
         Draw.rect(file_manager.gfx.x+file_manager.gfx.w-75, file_manager.gfx.y+40, 75, 20*5, Color.new(0, 0, 0, 100));
         Draw.rect(file_manager.gfx.x+file_manager.gfx.w-75, file_manager.gfx.y+20+20*(file_manager.data[1]+1), 75, 20, Color.new(64, 0, 128, 64));
-        font.print(file_manager.gfx.x+file_manager.gfx.w-75+5, file_manager.gfx.y+(23+(20.0*(1))), "Copy");
-        font.print(file_manager.gfx.x+file_manager.gfx.w-75+5, file_manager.gfx.y+(23+(20.0*(2))), "Move");
-        font.print(file_manager.gfx.x+file_manager.gfx.w-75+5, file_manager.gfx.y+(23+(20.0*(3))), "Paste");
-        font.print(file_manager.gfx.x+file_manager.gfx.w-75+5, file_manager.gfx.y+(23+(20.0*(4))), "Rename");
-        font.print(file_manager.gfx.x+file_manager.gfx.w-75+5, file_manager.gfx.y+(23+(20.0*(5))), "Delete");
+        font.print(file_manager.gfx.x+file_manager.gfx.w-75+5, file_manager.gfx.y+(23+(20*(1))), "Copy");
+        font.print(file_manager.gfx.x+file_manager.gfx.w-75+5, file_manager.gfx.y+(23+(20*(2))), "Move");
+        font.print(file_manager.gfx.x+file_manager.gfx.w-75+5, file_manager.gfx.y+(23+(20*(3))), "Paste");
+        font.print(file_manager.gfx.x+file_manager.gfx.w-75+5, file_manager.gfx.y+(23+(20*(4))), "Rename");
+        font.print(file_manager.gfx.x+file_manager.gfx.w-75+5, file_manager.gfx.y+(23+(20*(5))), "Delete");
     };
 };
 

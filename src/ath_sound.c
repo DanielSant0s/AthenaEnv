@@ -10,7 +10,7 @@ static JSValue athena_setformat(JSContext *ctx, JSValue this_val, int argc, JSVa
 	JS_ToInt32(ctx, &channels, argv[2]);
 
 	sound_setformat(bits, freq, channels);
-	return 0;
+	return JS_UNDEFINED;
 }
 
 static JSValue athena_setvolume(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
@@ -20,7 +20,7 @@ static JSValue athena_setvolume(JSContext *ctx, JSValue this_val, int argc, JSVa
 	JS_ToInt32(ctx, &volume, argv[0]);
 
 	sound_setvolume(volume);
-	return 0;
+	return JS_UNDEFINED;
 }
 
 static JSValue athena_setadpcmvolume(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
@@ -31,7 +31,7 @@ static JSValue athena_setadpcmvolume(JSContext *ctx, JSValue this_val, int argc,
 	JS_ToInt32(ctx, &volume, argv[1]);
 
 	sound_setadpcmvolume(slot, volume);
-	return 0;
+	return JS_UNDEFINED;
 }
 
 static JSValue athena_loadadpcm(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
@@ -48,7 +48,7 @@ static JSValue athena_playadpcm(JSContext *ctx, JSValue this_val, int argc, JSVa
 	JS_ToUint32(ctx, &sample, argv[1]);
 
 	sound_playadpcm(slot, (audsrv_adpcm_t *)sample);
-	return 0;
+	return JS_UNDEFINED;
 }
 
 static const JSCFunctionListEntry module_funcs[] = {

@@ -1,5 +1,6 @@
 Screen.setVSync(false);
-std.loadScript("pads.js");
+std.loadScript("sound.js");
+//std.loadScript("pads.js");
 //std.loadScript("cell.js");
 //std.loadScript("hello.js");
 //std.loadScript("app_filemgr.js");
