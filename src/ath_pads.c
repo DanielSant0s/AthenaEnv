@@ -74,7 +74,7 @@ static JSValue athena_getpressure(JSContext *ctx, JSValue this_val, int argc, JS
 	
 	struct padButtonStatus pad;
 
-	int pressure = 255;
+	unsigned char pressure = 255;
 
 	int state = padGetState(port, 0);
 
@@ -124,7 +124,7 @@ static JSValue athena_getpressure(JSContext *ctx, JSValue this_val, int argc, JS
 	        break;
     }
 
-	JS_NewInt32(ctx, pressure);
+	return JS_NewInt32(ctx, pressure);
 }
 
 static JSValue athena_rumble(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
@@ -145,7 +145,7 @@ static JSValue athena_rumble(JSContext *ctx, JSValue this_val, int argc, JSValue
 	if (ds34bt_get_status(port) & DS34BT_STATE_RUNNING) ds34bt_set_rumble(port, actAlign[1], actAlign[1]);
 	if (ds34usb_get_status(port) & DS34USB_STATE_RUNNING) ds34usb_set_rumble(port, actAlign[1], actAlign[1]);
 
-	return 0;
+	return JS_UNDEFINED;
 }
 
 static JSValue athena_check(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
@@ -182,7 +182,7 @@ static JSValue athena_set_led(JSContext *ctx, JSValue this_val, int argc, JSValu
 	if (ds34bt_get_status(port) & DS34BT_STATE_RUNNING) ds34bt_set_led(port, led);
 	if (ds34usb_get_status(port) & DS34USB_STATE_RUNNING) ds34usb_set_led(port, led);
 
-	return 0;
+	return JS_UNDEFINED;
 }
 
 static const JSCFunctionListEntry module_funcs[] = {
