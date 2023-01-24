@@ -71,7 +71,7 @@ int create_task(const char* title, void* func, int stack_size, int priority)
 	thread_param.gp_reg = &_gp;
     thread_param.func = func;
     thread_param.stack_size = stack_size;
-    thread_param.stack = malloc(stack_size);
+    thread_param.stack = memalign(128, stack_size);
     thread_param.initial_priority = priority;
 
 	int thread = CreateThread(&thread_param);
