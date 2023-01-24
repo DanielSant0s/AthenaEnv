@@ -57,7 +57,7 @@ static JSValue athena_loadplay(JSContext *ctx, JSValue this_val, int argc, JSVal
 }
 
 static JSValue athena_stop(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-	ogg_stop();
+	ogg_unload_stop();
 	return JS_UNDEFINED;
 }
 

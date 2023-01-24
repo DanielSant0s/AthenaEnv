@@ -373,7 +373,7 @@ static void oggShutdownDelayCallback(s32 alarm_id, u16 time, void *common)
     iWakeupThread((int)common);
 }
 
-void ogg_stop(void)
+void ogg_unload_stop(void)
 {
     int threadId;
 
