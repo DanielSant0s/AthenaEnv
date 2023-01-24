@@ -7,7 +7,9 @@ void sound_setformat(int bits, int freq, int channels);
 
 void sound_setadpcmvolume(int slot, int volume);
 audsrv_adpcm_t* sound_loadadpcm(const char* path);
+int sound_get_adpcm_duration(audsrv_adpcm_t *sample);
 void sound_playadpcm(int slot, audsrv_adpcm_t *sample);
+void sound_freeadpcm(audsrv_adpcm_t *sample);
 
 int ogg_load_play(const char* path);
 void ogg_unload_stop(void);

@@ -51,6 +51,21 @@ static JSValue athena_playadpcm(JSContext *ctx, JSValue this_val, int argc, JSVa
 	return JS_UNDEFINED;
 }
 
+static JSValue athena_getadpcmduration(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	audsrv_adpcm_t * sample;
+
+	JS_ToUint32(ctx, &sample, argv[0]);
+	return JS_NewInt32(ctx, sound_get_adpcm_duration(sample));
+}
+
+static JSValue athena_freeadpcm(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	audsrv_adpcm_t * sample;
+
+	JS_ToUint32(ctx, &sample, argv[0]);
+	sound_freeadpcm(sample);
+	return JS_UNDEFINED;
+}
+
 static JSValue athena_loadplay(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	ogg_load_play(JS_ToCString(ctx, argv[0]));
 	return JS_UNDEFINED;
@@ -86,6 +101,8 @@ static const JSCFunctionListEntry module_funcs[] = {
 	JS_CFUNC_DEF("setADPCMVolume", 2, athena_setadpcmvolume),
 	JS_CFUNC_DEF("loadADPCM", 1, athena_loadadpcm),
 	JS_CFUNC_DEF("playADPCM", 2, athena_playadpcm),
+	JS_CFUNC_DEF("getADPCMDuration", 1, athena_getadpcmduration),
+	JS_CFUNC_DEF("freeADPCM", 1, athena_freeadpcm),
 
 	JS_CFUNC_DEF("loadPlay", 1, athena_loadplay),
 	JS_CFUNC_DEF("stop", 1, athena_stop),

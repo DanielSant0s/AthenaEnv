@@ -1,8 +1,9 @@
 Sound.setVolume(100);
 Sound.setADPCMVolume(0, 100);
 let audio = Sound.loadADPCM("sfx/interface.adp");
+console.log("interface.adp duration:", Sound.getADPCMDuration(audio));
 let stop = Sound.loadADPCM("sfx/stop.adp");
-//let nokia = Sound.loadADPCM("sfx/nokia.adp");
+console.log("stop.adp duration:", Sound.getADPCMDuration(stop));
 Sound.loadPlay("sfx/gotye.ogg");
 
 let repeat = false;

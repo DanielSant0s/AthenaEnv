@@ -101,7 +101,7 @@ audsrv_adpcm_t* sound_loadadpcm(const char* path){
     }
 
 	FILE* adpcm;
-	audsrv_adpcm_t *sample = (audsrv_adpcm_t *)malloc(sizeof(audsrv_adpcm_t));
+	audsrv_adpcm_t *sample = malloc(sizeof(audsrv_adpcm_t));
 	int size;
 	u8* buffer;
 
@@ -118,8 +118,6 @@ audsrv_adpcm_t* sound_loadadpcm(const char* path){
 
 	audsrv_load_adpcm(sample, buffer, size);
 
-	free(buffer);
-
 	return sample;
 }
 
@@ -132,6 +130,31 @@ void sound_playadpcm(int slot, audsrv_adpcm_t *sample) {
 	audsrv_ch_play_adpcm(slot, sample);
 }
 
+void sound_freeadpcm(audsrv_adpcm_t *sample) {
+	free(sample->buffer);
+	sample->buffer = NULL;
+	free(sample);
+	sample = NULL;
+}
+
+static int get_sample_qt_duration(int nSamples)
+{
+    float sampleRate = 44100; // 44.1kHz
+
+    // Return duration in milliseconds
+    return (nSamples / sampleRate) * 1000;
+}
+
+int sound_get_adpcm_duration(audsrv_adpcm_t *sample)
+{
+    // Calculate duration based on number of samples
+    int duration_ms = get_sample_qt_duration(((u32 *)sample->buffer)[3]);
+    // Estimate duration based on filesize, if the ADPCM header was 0
+    if (duration_ms == 0)
+        duration_ms = sample->size / 47;
+
+    return duration_ms;
+}
 
 // OGG Support
 
