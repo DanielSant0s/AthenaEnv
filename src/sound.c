@@ -8,81 +8,191 @@
 
 #include "include/sound.h"
 
+extern void *_gp;
+
+static int master_volume;
+
+static unsigned char terminate_flag, stream_playing;
+
+static bool flag_start = true;
+static bool ogg_started = false;
+static bool wav_started = false;
 static bool adpcm_started = false;
 
-/*static int fillbuffer(void *arg)
+static bool stream_repeat = false;
+static bool stream_paused = false;
+
+static int oggThreadID, oggIoThreadID, wavThreadId;
+static int outSema, inSema;
+static unsigned char rdPtr, wrPtr;
+static char oggBuffer[STREAM_RING_BUFFER_COUNT][STREAM_RING_BUFFER_SIZE];
+static volatile unsigned char oggThreadRunning, oggIoThreadRunning, wav_thread_running;
+
+static Sound *cur_snd;
+
+static void wavThread(void *arg)
 {
-	iSignalSema((int)arg);
-	return 0;
-}*/
+    int ret;
+    wav_thread_running = 1;
+    while (!terminate_flag) {
+        //SleepThread();
 
-/*int main(int argc, char **argv)
-{
-	int ret;
-	int played;
-	int err;
-	int bytes;
-	char chunk[2048];
-	FILE *wav;
-	ee_sema_t sema;
-	int fillbuffer_sema;
-
-	sema.init_count = 0;
-	sema.max_count = 1;
-	sema.option = 0;
-	fillbuffer_sema = CreateSema(&sema);
-
-	audsrv_on_fillbuf(sizeof(chunk), fillbuffer, (void *)fillbuffer_sema);
-
-	wav = fopen("host:song_22k.wav", "rb");
-
-	fseek(wav, 0x30, SEEK_SET);
-
-	printf("starting play loop\n");
-	played = 0;
-	bytes = 0;
-	while (1)
-	{
-		ret = fread(chunk, 1, sizeof(chunk), wav);
+		ret = fread(oggBuffer[0], 1, sizeof(oggBuffer[0]), cur_snd->fp);
 		if (ret > 0)
 		{
-			WaitSema(fillbuffer_sema);
-			audsrv_play_audio(chunk, ret);
+			audsrv_wait_audio(STREAM_RING_BUFFER_SIZE);
+			audsrv_play_audio(oggBuffer[0], ret);
 		}
 
-		if (ret < sizeof(chunk))
+        if (ret < sizeof(oggBuffer[0]))
 		{
-			break;
+            if (!stream_repeat) {
+				terminate_flag = 1;
+				break;
+			}
+			fseek(cur_snd->fp, 0x30, SEEK_SET);
 		}
 
-		played++;
-		bytes = bytes + ret;
-
-		if (played % 8 == 0)
-		{
-			printf("\r%d bytes sent..", bytes);
+		if(stream_paused) {
+			audsrv_wait_audio(STREAM_RING_BUFFER_SIZE);
+			audsrv_stop_audio();
+            SleepThread();
+			flag_start = false;
+		} else if (!flag_start) {
+			flag_start = true;
 		}
+    }
 
-		if (played == 512) break;
+    audsrv_stop_audio();
+
+    stream_playing = 0;
+	stream_paused = false;
+    wav_thread_running = 0;
+}
+
+static int init_wav() {
+    int result;
+    ee_thread_t thread;
+
+    thread.func = &wavThread;
+    thread.stack = memalign(128, STREAM_THREAD_STACK_SIZE);
+    thread.stack_size = STREAM_THREAD_STACK_SIZE;
+    thread.gp_reg = &_gp;
+    thread.initial_priority = STREAM_THREAD_BASE_PRIO;
+    thread.attr = 0;
+    thread.option = 0;
+
+    // ogg thread will start in DORMANT state.
+    wavThreadId = CreateThread(&thread);
+
+    if (wavThreadId >= 0) {
+        result = 0;
+    } else {
+        DeleteThread(wavThreadId);
+        result = oggIoThreadID;
+    }
+
+    return result;
+}
+
+Sound * load_wav(const char* path) {
+    Sound *wav = malloc(sizeof(Sound));
+    t_wave header;
+
+    int ret;
+	int err;
+	int bytes;
+
+    wav->fp = fopen(path, "rb");
+    fread(&header, 1, sizeof(t_wave), wav->fp);
+    fseek(wav->fp, 0x30, SEEK_SET);
+
+    wav->fmt.bits = header.w_nbitspersample;
+	wav->fmt.freq = header.w_samplespersec;
+	wav->fmt.channels = header.w_nchannels;
+    wav->type = WAV_AUDIO;
+
+    if(!wav_started) {
+	    int ret = init_wav();
+        if (ret >= 0) {
+            wav_started = true;
+        }
 	}
 
-	fclose(wav);
+    return wav;
+}
 
-}*/
+void play_wav(Sound * wav) {
+    if(!stream_playing) {
+        audsrv_set_format(&wav->fmt);
 
+        stream_playing = 1;
+        cur_snd = wav;
+
+        stream_paused = false;
+        if(wav_thread_running) {
+            WakeupThread(wavThreadId);
+        } else {
+            StartThread(wavThreadId, NULL);
+        }
+    } 
+}
+
+void sound_free(Sound* snd) {
+    if (snd == cur_snd) {
+        terminate_flag = 1;
+    }
+
+    if (snd->type == OGG_AUDIO) {
+        ov_clear(snd->fp);
+        free(snd->fp);
+    } else if (snd->type == WAV_AUDIO) {
+        fclose(snd->fp);
+    } else if (snd->type == ADPCM_AUDIO) {
+        audsrv_adpcm_t* sample = snd->fp;
+        free(sample->buffer);
+	    sample->buffer = NULL;
+	    free(sample);
+    }
+    snd->fp = NULL;
+    free(snd);
+    snd = NULL;
+}
+
+int is_sound_playing(void)
+{
+    int ret = (int)stream_playing;
+
+    return ret;
+}
+
+void set_sound_repeat(bool repeat) {
+	stream_repeat = repeat;
+}
+
+void sound_pause() {
+	if(!stream_paused) {
+		stream_paused = true;
+		stream_playing = 0;
+	}
+}
+
+void sound_resume(Sound* snd) {
+	if(stream_paused) {
+        cur_snd = snd;
+        audsrv_set_format(&cur_snd->fmt);
+        
+        if (cur_snd->type == WAV_AUDIO)
+            WakeupThread(wavThreadId);
+
+		stream_paused = false;
+		stream_playing = 1;
+	}
+}
 
 void sound_setvolume(int volume) {
 	audsrv_set_volume(volume);
-}
-
-void sound_setformat(int bits, int freq, int channels){
-	struct audsrv_fmt_t format;
-
-    format.bits = bits;
-	format.freq = freq;
-	format.channels = channels;
-	
-	audsrv_set_format(&format);
+    master_volume = volume;
 }
 
 void sound_setadpcmvolume(int slot, int volume) {
@@ -122,19 +232,7 @@ audsrv_adpcm_t* sound_loadadpcm(const char* path){
 }
 
 void sound_playadpcm(int slot, audsrv_adpcm_t *sample) {
-    if(!adpcm_started) {
-        audsrv_adpcm_init();
-        adpcm_started = true;
-    }
-
 	audsrv_ch_play_adpcm(slot, sample);
-}
-
-void sound_freeadpcm(audsrv_adpcm_t *sample) {
-	free(sample->buffer);
-	sample->buffer = NULL;
-	free(sample);
-	sample = NULL;
 }
 
 static int get_sample_qt_duration(int nSamples)
@@ -145,7 +243,7 @@ static int get_sample_qt_duration(int nSamples)
     return (nSamples / sampleRate) * 1000;
 }
 
-int sound_get_adpcm_duration(audsrv_adpcm_t *sample)
+static int sound_get_adpcm_duration(audsrv_adpcm_t *sample)
 {
     // Calculate duration based on number of samples
     int duration_ms = get_sample_qt_duration(((u32 *)sample->buffer)[3]);
@@ -156,49 +254,54 @@ int sound_get_adpcm_duration(audsrv_adpcm_t *sample)
     return duration_ms;
 }
 
+int sound_get_duration(Sound* snd) {
+    uint32_t f_pos, f_sz;
+
+    if (snd->type == OGG_AUDIO) {
+        return (int)(ov_time_total(snd->fp, -1)*1000);
+    } else if (snd->type == WAV_AUDIO) {
+        t_wave tmp_header;
+        if (snd == cur_snd)
+            sound_pause();
+        f_pos = ftell(snd->fp);
+
+        fseek(snd->fp, 0, SEEK_SET);
+        fread(&tmp_header, 1, sizeof(t_wave), snd->fp);
+
+        fseek(snd->fp, 0, SEEK_END);
+        f_sz = ftell(snd->fp);
+
+        fseek(snd->fp, f_pos, SEEK_SET);
+        if (snd == cur_snd)
+            sound_resume(snd);
+
+        return (f_sz/tmp_header.w_navgbytespersec)*1000;
+    } else if (snd->type == ADPCM_AUDIO) {
+        return sound_get_adpcm_duration(snd->fp);
+    }
+
+    return -1;
+}
+
 // OGG Support
-
-#define ogg_RING_BUFFER_COUNT 16
-#define ogg_RING_BUFFER_SIZE  4096
-#define ogg_THREAD_BASE_PRIO  0x40
-#define ogg_THREAD_STACK_SIZE 0x1000
-
-extern void *_gp;
-
-static bool flag_start = true;
-static bool ogg_started = false;
-static bool ogg_repeat = false;
-static bool ogg_paused = false;
-
-static int oggThreadID, oggIoThreadID;
-static int outSema, inSema;
-static unsigned char terminateFlag, oggIsPlaying;
-static unsigned char rdPtr, wrPtr;
-static char oggBuffer[ogg_RING_BUFFER_COUNT][ogg_RING_BUFFER_SIZE];
-static volatile unsigned char oggThreadRunning, oggIoThreadRunning;
-
-static u8 oggThreadStack[ogg_THREAD_STACK_SIZE] __attribute__((aligned(16)));
-static u8 oggIoThreadStack[ogg_THREAD_STACK_SIZE] __attribute__((aligned(16)));
-
-static OggVorbis_File *vorbisFile;
 
 static void oggThread(void *arg)
 {
     oggThreadRunning = 1;
 
-    while (!terminateFlag) {
+    while (!terminate_flag) {
         SleepThread();
 
         while (PollSema(outSema) == outSema) {
-            audsrv_wait_audio(ogg_RING_BUFFER_SIZE);
-            audsrv_play_audio(oggBuffer[rdPtr], ogg_RING_BUFFER_SIZE);
-            rdPtr = (rdPtr + 1) % ogg_RING_BUFFER_COUNT;
+            audsrv_wait_audio(STREAM_RING_BUFFER_SIZE);
+            audsrv_play_audio(oggBuffer[rdPtr], STREAM_RING_BUFFER_SIZE);
+            rdPtr = (rdPtr + 1) % STREAM_RING_BUFFER_COUNT;
 
             SignalSema(inSema);
         }
 
-		if(ogg_paused) {
-			audsrv_wait_audio(ogg_RING_BUFFER_SIZE);
+		if(stream_paused) {
+			audsrv_wait_audio(STREAM_RING_BUFFER_SIZE);
 			audsrv_stop_audio();
 			flag_start = false;
 		} else if (!flag_start) {
@@ -212,8 +315,8 @@ static void oggThread(void *arg)
     wrPtr = 0;
 
     oggThreadRunning = 0;
-    oggIsPlaying = 0;
-	ogg_paused = false;
+    stream_playing = 0;
+	stream_paused = false;
 }
 
 static void oggIoThread(void *arg)
@@ -222,43 +325,43 @@ static void oggIoThread(void *arg)
 
     oggIoThreadRunning = 1;
     do {
-		if(!ogg_paused) {
+		if(!stream_paused && cur_snd->type == OGG_AUDIO) {
 			WaitSema(inSema);
         	partsToRead = 1;
 
-        	while ((wrPtr + partsToRead < ogg_RING_BUFFER_COUNT) && (PollSema(inSema) == inSema))
+        	while ((wrPtr + partsToRead < STREAM_RING_BUFFER_COUNT) && (PollSema(inSema) == inSema))
         	    partsToRead++;
 
-        	decodeTotal = ogg_RING_BUFFER_SIZE;
+        	decodeTotal = STREAM_RING_BUFFER_SIZE;
         	int bufferPtr = 0;
         	do {
-        	    int ret = ov_read(vorbisFile, oggBuffer[wrPtr] + bufferPtr, decodeTotal, 0, 2, 1, &bitStream);
+        	    int ret = ov_read(cur_snd->fp, oggBuffer[wrPtr] + bufferPtr, decodeTotal, 0, 2, 1, &bitStream);
         	    if (ret > 0) {
         	        bufferPtr += ret;
         	        decodeTotal -= ret;
         	    } else if (ret < 0) {
         	        printf("ogg: I/O error while reading.\n");
-        	        terminateFlag = 1;
+        	        terminate_flag = 1;
         	        break;
         	    } else if (ret == 0) {
-					if (!ogg_repeat) {
-						terminateFlag = 1;
+					if (!stream_repeat) {
+						terminate_flag = 1;
 						break;
 					}
-        	        ov_pcm_seek(vorbisFile, 0);
+        	        ov_pcm_seek(cur_snd->fp, 0);
 				}
 
         	} while (decodeTotal > 0);
 
-        	wrPtr = (wrPtr + partsToRead) % ogg_RING_BUFFER_COUNT;
+        	wrPtr = (wrPtr + partsToRead) % STREAM_RING_BUFFER_COUNT;
         	for (i = 0; i < partsToRead; i++)
         	    SignalSema(outSema);
         	WakeupThread(oggThreadID);
 		}
-    } while (!terminateFlag);
+    } while (!terminate_flag);
 
     oggIoThreadRunning = 0;
-    terminateFlag = 1;
+    terminate_flag = 1;
     WakeupThread(oggThreadID);
 }
 
@@ -268,20 +371,20 @@ static int oggInit(void)
     ee_sema_t sema;
     int result;
 
-    terminateFlag = 0;
+    terminate_flag = 0;
     rdPtr = 0;
     wrPtr = 0;
     oggThreadRunning = 0;
     oggIoThreadRunning = 0;
 
-    sema.max_count = ogg_RING_BUFFER_COUNT;
-    sema.init_count = ogg_RING_BUFFER_COUNT;
+    sema.max_count = STREAM_RING_BUFFER_COUNT;
+    sema.init_count = STREAM_RING_BUFFER_COUNT;
     sema.attr = 0;
     sema.option = (u32) "ogg-in-sema";
     inSema = CreateSema(&sema);
 
     if (inSema >= 0) {
-        sema.max_count = ogg_RING_BUFFER_COUNT;
+        sema.max_count = STREAM_RING_BUFFER_COUNT;
         sema.init_count = 0;
         sema.attr = 0;
         sema.option = (u32) "ogg-out-sema";
@@ -295,10 +398,10 @@ static int oggInit(void)
         return inSema;
 
     thread.func = &oggThread;
-    thread.stack = oggThreadStack;
-    thread.stack_size = sizeof(oggThreadStack);
+    thread.stack = memalign(128, STREAM_THREAD_STACK_SIZE);
+    thread.stack_size = STREAM_THREAD_STACK_SIZE;
     thread.gp_reg = &_gp;
-    thread.initial_priority = ogg_THREAD_BASE_PRIO;
+    thread.initial_priority = STREAM_THREAD_BASE_PRIO;
     thread.attr = 0;
     thread.option = 0;
 
@@ -307,10 +410,10 @@ static int oggInit(void)
 
     if (oggThreadID >= 0) {
         thread.func = &oggIoThread;
-        thread.stack = oggIoThreadStack;
-        thread.stack_size = sizeof(oggIoThreadStack);
+        thread.stack = memalign(128, STREAM_THREAD_STACK_SIZE);
+        thread.stack_size = STREAM_THREAD_STACK_SIZE;
         thread.gp_reg = &_gp;
-        thread.initial_priority = ogg_THREAD_BASE_PRIO + 1;
+        thread.initial_priority = STREAM_THREAD_BASE_PRIO + 1;
         thread.attr = 0;
         thread.option = 0;
 
@@ -341,16 +444,13 @@ static void oggDeinit(void)
     DeleteThread(oggIoThreadID);
 
     // Vorbisfile takes care of fclose.
-    ov_clear(vorbisFile);
-    free(vorbisFile);
-    vorbisFile = NULL;
-	ogg_started = false;
+    ov_clear(cur_snd->fp);
 }
 
-int ogg_load_play(const char* path)
+Sound* load_ogg(const char* path)
 {
     FILE *oggFile;
-	struct audsrv_fmt_t audsrvFmt;
+    Sound* ogg;
 
 	if(!ogg_started) {
 		int ret = oggInit();
@@ -359,7 +459,8 @@ int ogg_load_play(const char* path)
     	}
 	}
 
-    vorbisFile = calloc(1, sizeof(OggVorbis_File));
+    ogg = malloc(sizeof(Sound));
+    ogg->fp = calloc(1, sizeof(OggVorbis_File));
 
     oggFile = fopen(path, "rb");
     if (oggFile == NULL) {
@@ -368,27 +469,37 @@ int ogg_load_play(const char* path)
         return -ENOENT;
     }
 
-    if (ov_open_callbacks(oggFile, vorbisFile, NULL, 0, OV_CALLBACKS_DEFAULT) < 0) {
+    if (ov_open_callbacks(oggFile, ogg->fp, NULL, 0, OV_CALLBACKS_DEFAULT) < 0) {
         printf("ogg: Input does not appear to be an Ogg bitstream.\n");
 		oggDeinit();
         return -ENOENT;
     }
 
-	vorbis_info *vi = ov_info(vorbisFile, -1);
-    ov_pcm_seek(vorbisFile, 0);
+	vorbis_info *vi = ov_info(ogg->fp, -1);
+    ov_pcm_seek(ogg->fp, 0);
 
-    audsrvFmt.channels = vi->channels;
-    audsrvFmt.freq = vi->rate;
-    audsrvFmt.bits = 16;
+    ogg->fmt.channels = vi->channels;
+    ogg->fmt.freq = vi->rate;
+    ogg->fmt.bits = 16;
+    ogg->type = OGG_AUDIO;
 
-    audsrv_set_format(&audsrvFmt);
+    return ogg;
+}
 
-    oggIsPlaying = 1;
+void play_ogg(Sound* ogg) {
+    if(!stream_playing) {
+        audsrv_set_format(&ogg->fmt);
 
-    StartThread(oggIoThreadID, NULL);
-    StartThread(oggThreadID, NULL);
+        stream_playing = 1;
+        cur_snd = ogg;
 
-    return 0;
+        if(stream_paused) {
+            stream_paused = false;
+        } else if (!oggThreadRunning && !oggIoThreadRunning) {
+            StartThread(oggIoThreadID, NULL);
+            StartThread(oggThreadID, NULL);
+        }
+    } 
 }
 
 static void oggShutdownDelayCallback(s32 alarm_id, u16 time, void *common)
@@ -396,47 +507,49 @@ static void oggShutdownDelayCallback(s32 alarm_id, u16 time, void *common)
     iWakeupThread((int)common);
 }
 
-void ogg_unload_stop(void)
+void sound_deinit(void)
 {
     int threadId;
-
-    terminateFlag = 1;
-    WakeupThread(oggThreadID);
-
     threadId = GetThreadId();
-    while (oggIoThreadRunning) {
-        SetAlarm(200 * 16, &oggShutdownDelayCallback, (void *)threadId);
-        SleepThread();
+
+    terminate_flag = 1;
+
+    if(ogg_started) {
+        WakeupThread(oggThreadID);
+
+        while (oggIoThreadRunning) {
+            SetAlarm(200 * 16, &oggShutdownDelayCallback, (void *)threadId);
+            SleepThread();
+        }
+
+        while (oggThreadRunning) {
+            SetAlarm(200 * 16, &oggShutdownDelayCallback, (void *)threadId);
+            SleepThread();
+        }
+
+        oggDeinit();
+        if (cur_snd->type == OGG_AUDIO)
+            free(cur_snd->fp);
+        ogg_started = false;
     }
-    while (oggThreadRunning) {
-        SetAlarm(200 * 16, &oggShutdownDelayCallback, (void *)threadId);
-        SleepThread();
+
+    if(wav_started) {
+        if(stream_paused && cur_snd->type == WAV_AUDIO)
+            WakeupThread(wavThreadId);
+
+        while (wav_thread_running) {
+            SetAlarm(200 * 16, &oggShutdownDelayCallback, (void *)threadId);
+            SleepThread();
+        }
+
+        DeleteThread(wavThreadId);
+        if (cur_snd->type == WAV_AUDIO)
+            fclose(cur_snd->fp);
+        wav_started = false;
     }
 
-    oggDeinit();
-}
+    cur_snd->fp = NULL;
+    free(cur_snd);
+    cur_snd = NULL;
 
-int is_ogg_playing(void)
-{
-    int ret = (int)oggIsPlaying;
-
-    return ret;
-}
-
-void set_ogg_repeat(bool repeat) {
-	ogg_repeat = repeat;
-}
-
-void ogg_pause() {
-	if(!ogg_paused) {
-		ogg_paused = true;
-		oggIsPlaying = 0;
-	}
-}
-
-void ogg_resume() {
-	if(ogg_paused) {
-		ogg_paused = false;
-		oggIsPlaying = 1;
-	}
 }

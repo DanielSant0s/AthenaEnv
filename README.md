@@ -50,7 +50,7 @@ AthenaEnv is a project that seeks to facilitate and at the same time brings a co
 * Keyboard: Basic USB keyboard support.
 * Mouse: Basic USB mouse support.
 * Timer: Control the time precisely in your code, it contains several timing functions.
-* Sound: Basic sound functions.
+* Sound: Sound functions, supporting WAV, OGG and ADPCM.
 * Network: Net basics and web requests :D.
 * Socket: Well, sockets.
 
@@ -319,11 +319,16 @@ Asynchronous functions:
 
 ### Sound module
 
-* Sound.setFormat(bitrate, freq, channels)
-* Sound.setVolume(volume)
-* Sound.setADPCMVolume(channel, volume)
-* var audio = Sound.loadADPCM(path)
-* Sound.playADPCM(channel, audio)
+* Sound.setVolume(volume, *slot*) *If slot is specified, it will change ADPCM slot volume, else it will change master volume.
+* var audio = Sound.load(path)
+* Sound.play(audio, *slot*) *ADPCM: If slot isn't specified, it will use 0.
+* Sound.free(audio)
+* var playing = Sound.isPlaying() *Doesn't apply for ADPCM
+* var msec = Sound.duration()
+* Sound.repeat(false)  *Doesn't apply for ADPCM
+* Sound.pause(audio)  *Doesn't apply for ADPCM
+* Sound.resume(audio)  *Doesn't apply for ADPCM
+* Sound.deinit()
 
 ### Network module
 
