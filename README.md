@@ -180,10 +180,10 @@ Display.setMode(NTSC, 640, 448, CT24, INTERLACED, FIELD, true, Z16S);
   • Default NTSC mode(3D enabled):  Screen.setMode(NTSC, 640, 448, CT24, INTERLACED, FIELD, true, Z16S)  
   • Default PAL mode(3D disabled): Screen.setMode(PAL, 640, 512, CT24, INTERLACED, FIELD)  
   • Default PAL mode(3D enabled):  Screen.setMode(PAL, 640, 512, CT24, INTERLACED, FIELD, true, Z16S)  
-  • Available modes: NTSC, _480p, PAL, _576p, _720p, _1080i  
+  • Available modes: NTSC, DTV_480p, PAL, DTV_576p, DTV_720p, DTV_1080i  
   • Available colormodes: CT16, CT16S, CT24, CT32  
   • Available zbuffer colormodes: Z16, Z16S, Z24, Z32  
-  • Available interlaces: INTERLACED, NONINTERLACED  
+  • Available interlaces: INTERLACED, PROGRESSIVE  
   • Available fields: FIELD, FRAME  
 
 ### Font module

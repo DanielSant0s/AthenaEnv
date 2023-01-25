@@ -1,4 +1,3 @@
-Screen.setVSync(false);
 std.loadScript("sound.js");
 //std.loadScript("pads.js");
 //std.loadScript("cell.js");

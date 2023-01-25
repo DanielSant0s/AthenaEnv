@@ -140,6 +140,7 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"globalThis.DTV_480p = Screen.DTV_480p;\n"
 				"globalThis.PAL = Screen.PAL;\n"
 				"globalThis.DTV_576p = Screen.DTV_576p;\n"
+				"globalThis.DTV_720p = Screen.DTV_720p;\n"
 				"globalThis.DTV_1080i = Screen.DTV_1080i;\n"
 
 				"globalThis.INTERLACED = Screen.INTERLACED;\n"
