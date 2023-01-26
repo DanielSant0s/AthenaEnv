@@ -11,9 +11,13 @@
 
 #include "include/graphics.h"
 
-#define DEG2RAD(x) ((x)*0.01745329251)
+#define PI 3.14159265359
 
 static const u64 BLACK_RGBAQ   = GS_SETREG_RGBAQ(0x00,0x00,0x00,0x80,0x00);
+
+#define RENDER_QUEUE_PER_POOLSIZE 1024 * 256 // 256K of persistent renderqueue
+/* Size of Oneshot drawbuffer (Double Buffered, so it uses this size * 2) */
+#define RENDER_QUEUE_OS_POOLSIZE 1024 * 1024 * 2 // 2048K of oneshot renderqueue
 
 static GSGLOBAL *gsGlobal = NULL;
 static GSFONTM *gsFontM = NULL;
@@ -27,9 +31,8 @@ static int frames = 0;
 static int frame_interval = -1;
 
 //2D drawing functions
-GSTEXTURE* loadpng(FILE* File, bool delayed)
+int athena_load_png(GSTEXTURE* tex, FILE* File, bool delayed)
 {
-	GSTEXTURE* tex = (GSTEXTURE*)malloc(sizeof(GSTEXTURE));
 	tex->Delayed = delayed;
 
 	if (File == NULL)
@@ -312,12 +315,11 @@ GSTEXTURE* loadpng(FILE* File, bool delayed)
 		gsKit_setup_tbw(tex);
 	}
 
-	return tex;
+	return 0;
 
 }
 
-
-GSTEXTURE* loadbmp(FILE* File, bool delayed)
+int athena_load_bmp(GSTEXTURE* tex, FILE* File, bool delayed)
 {
 	GSBITMAP Bitmap;
 	int x, y;
@@ -326,7 +328,6 @@ GSTEXTURE* loadbmp(FILE* File, bool delayed)
 	u8  *image;
 	u8  *p;
 
-    GSTEXTURE* tex = (GSTEXTURE*)malloc(sizeof(GSTEXTURE));
 	tex->Delayed = delayed;
 
 	if (File == NULL)
@@ -619,7 +620,7 @@ GSTEXTURE* loadbmp(FILE* File, bool delayed)
 		gsKit_setup_tbw(tex);
 	}
 
-	return tex;
+	return 0;
 
 }
 
@@ -683,11 +684,8 @@ static void  _ps2_load_JPEG_generic(GSTEXTURE *Texture, struct jpeg_decompress_s
 	jpeg_finish_decompress(cinfo);
 }
 
-GSTEXTURE* loadjpeg(FILE* fp, bool scale_down, bool delayed)
+int athena_load_jpeg(GSTEXTURE* tex, FILE* fp, bool scale_down, bool delayed)
 {
-
-	
-    GSTEXTURE* tex = (GSTEXTURE*)malloc(sizeof(GSTEXTURE));
 	tex->Delayed = delayed;
 
 	struct jpeg_decompress_struct cinfo;
@@ -769,22 +767,21 @@ GSTEXTURE* loadjpeg(FILE* fp, bool scale_down, bool delayed)
 		gsKit_setup_tbw(tex);
 	}
 
-	return tex;
+	return 0;
 
 }
 
 
-GSTEXTURE* load_image(const char* path, bool delayed){
+int load_image(GSTEXTURE* image, const char* path, bool delayed){
 	FILE* file = fopen(path, "rb");
 	uint16_t magic;
 	fread(&magic, 1, 2, file);
 	fseek(file, 0, SEEK_SET);
-	GSTEXTURE* image = NULL;
-	if (magic == 0x4D42) image =      loadbmp(file, delayed);
-	else if (magic == 0xD8FF) image = loadjpeg(file, false, delayed);
-	else if (magic == 0x5089) image = loadpng(file, delayed);
+	if (magic == 0x4D42) athena_load_bmp(image, file, delayed);
+	else if (magic == 0xD8FF) athena_load_jpeg(image, file, false, delayed);
+	else if (magic == 0x5089) athena_load_png(image, file, delayed);
 
-	return image;
+	return 0;
 }
 
 
@@ -871,6 +868,7 @@ void unloadFont(GSFONT* font)
 		free(font->RawData);
 
 	free(font);
+	font = NULL;
 }
 
 int getFreeVRAM(){
@@ -980,12 +978,10 @@ void drawCircle(float x, float y, float radius, u64 color, u8 filled)
 {
 	float v[37*2];
 	int a;
-	float ra;
 
 	for (a = 0; a < 36; a++) {
-		ra = DEG2RAD(a*10);
-		v[a*2] = cos(ra) * radius + x;
-		v[a*2+1] = sin(ra) * radius + y;
+		v[a*2] = (cos(a * (PI*2)/36) * radius) + x;
+		v[a*2+1] = (sin(a * (PI*2)/36) * radius) + y;
 	}
 
 	if (!filled) {
@@ -1109,7 +1105,7 @@ void init_graphics()
     sema.option = 0;
     vsync_sema_id = CreateSema(&sema);
 
-	gsGlobal = gsKit_init_global();
+	gsGlobal = gsKit_init_global_custom(RENDER_QUEUE_OS_POOLSIZE, RENDER_QUEUE_PER_POOLSIZE);
 
 	gsGlobal->Mode = gsKit_check_rom();
 	if (gsGlobal->Mode == GS_MODE_PAL){

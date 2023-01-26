@@ -39,22 +39,27 @@
 
 AthenaEnv is a project that seeks to facilitate and at the same time brings a complete kit for users to create homebrew software for PlayStation 2 using the JavaScript language. It has dozens of built-in functions, both for creating games and apps. The main advantage over using AthenaEnv project instead of the pure PS2SDK is above all the practicality, you will use one of the simplest possible languages to create what you have in mind, besides not having to compile, just script and test, fast and simple.
 
-### Function types:
-* System: Everything that involves files, folders and system stuff.
-* Graphics: You can control the entire 2D part of your project, that is, draw images, shapes, lines, change their properties, etc.
-* Render: 3D! Basic support for rendering a 3D environment in your project.
-* Display: The entire screen of your project (2D and 3D), being able to change the resolution, enable or disable parameters.
+### Modules:
+* System: Files, folders and system stuff.
+* Image: Image drawing.
+* Draw: Shape drawing, triangles, circles etc.
+* Render: Basic 3D support.
+* Screen: The entire screen of your project (2D and 3D), being able to change the resolution, enable or disable parameters.
 * Font: Functions that control the texts that appear on the screen, loading texts, drawing and unloading from memory.
 * Pads: Above being able to draw and everything else, A human interface is important. Supports rumble and pressure sensitivity.
+* Keyboard: Basic USB keyboard support.
+* Mouse: Basic USB mouse support.
 * Timer: Control the time precisely in your code, it contains several timing functions.
-* Sound: Basic sound functions.
+* Sound: Sound functions, supporting WAV, OGG and ADPCM.
+* Network: Net basics and web requests :D.
+* Socket: Well, sockets.
 
 New types are always being added and this list can grow a lot over time, so stay tuned.
 
 ### Built With
 
 * [PS2DEV](https://github.com/ps2dev/ps2dev)
-* [Duktape](https://github.com/svaarala/duktape)
+* [QuickJS](https://bellard.org/quickjs/)
 
 ## Coding
 
@@ -68,102 +73,142 @@ Using AthenaEnv you only need one way to code and one way to test your code, tha
 * How to enable HostFS on PCSX2 1.7.0:  
 ![image](https://user-images.githubusercontent.com/47725160/145600021-b07dd873-137d-4364-91ec-7ace0b1936e2.png)
 
-* Android: [QuickEdit](https://play.google.com/store/apps/details?id=com.rhmsoft.edit&hl=pt_BR&gl=US) and a PS2 with uLE for test.
+* Android: [QuickEdit](https://play.google.com/store/apps/details?id=com.rhmsoft.edit&hl=pt_BR&gl=US) and AetherSX2(HostFS is required) or a PS2 with uLE for test.
 
 Oh, and I also have to mention that an essential prerequisite for using AthenaEnv is knowing how to code in JavaScript.
 
 ### Features
 
-AthenaEnv uses the Duktape 2.6.0 for JavaScript language, which means that it brings all ES5 JS features so far. Below is the list of usable functions of AthenaEnv project currently, this list is constantly being updated. Some custom modules are embedded, such as console, Node.js module loading and dofile/dostring from Lua.
+AthenaEnv uses a slightly modified version of the QuickJS interpreter for JavaScript language, which means that it brings almost modern JavaScript features so far.
 
-**Graphics functions:**
+**Float32**
 
-Primitive shapes:
-* Graphics.drawPixel(x, y, color)
-* Graphics.drawRect(x, y, width, height, color)
-* Graphics.drawLine(x, y, x2, y2, color)
-* Graphics.drawCircle(x, y, radius, color, filled) *filled isn't mandatory
-* Graphics.drawTriangle(x, y, x2, y2, x3, y3, color, color2, color3) *color2 and color3 are not mandatory
-* Graphics.drawQuad(x, y, x2, y2, x3, y3, x4, y4 color, color2, color3, color4) *color2, color3 and color4 are not mandatory
+This project introduces a (old)new data type for JavaScript: single floats. Despite being less accurate than the classic doubles for number semantics, they are important for performance on the PS2, as the console only processes 32-bit floats on its FPU.
 
-Image functions:
-* var image = Graphics.loadImage(path) *Supports BMP, JPG and PNG
-* Graphics.drawImage(image, x, y, color)
-* Graphics.drawRotateImage(image, x, y, angle, color)
-* Graphics.drawScaleImage(image, x, y, scale_x, scale_y, color)
-* Graphics.drawPartialImage(image, x, y, start_x, start_y, width, height, color)
-* Graphics.drawImageExtended(image, x, y, start_x, start_y, width, height, scale_x, scale_y, angle, color)
-* Graphics.setImageFilters(image, filter) *Choose between NEAREST and LINEAR filters
-* var width = Graphics.getImageWidth(image)
-* var height = Graphics.getImageHeight(image)
-* Graphics.freeImage(image)  
+You can write single floats on AthenaEnv following the syntax below:
+```js
+let test_float = 15.0f; // The 'f' suffix makes QuickJS recognizes it as a single float.
+```
+
+Below is the list of usable functions of AthenaEnv project currently, this list is constantly being updated.
+
+P.S.: *Italic* parameters refer to optional parameters
+
+### Image Module  
+
+Construction:  
+
+* var image = new Image(path, *mode*, *async_list*);  
+  path - Path to the file, E.g.: "images/test.png".  
+  *mode* - Choose between storing the image between **RAM** or **VRAM**, default value is RAM.  
+  *async_list* - Gets a ImageList object, which is a asynchronous image loading list, if you want to load images in the background.  
+```js
+var test = new Image("owl.png", VRAM); 
+``` 
+
+Properties:
+
+* width, height - Image drawing size, default value is the original image size.
+* startx, starty - Beginning of the area that will be drawn from the image, the default value is 0.0.
+* endx, endy - End of the area that will be drawn from the image, the default value is the original image size.
+* angle - Define image rotation angle, default value is 0.0.
+* color - Define image tinting, default value is Color.new(255, 255, 255, 128).
+* filter - Choose between **LINEAR** or **NEAREST**, default value is NEAREST.  
+
+Methods:
+
+* draw(x, y) - Draw loaded image onscreen(call it every frame). Example: image.draw(15.0, 100.0);
+* ready() - Returns true if an asynchronous image was successfully loaded in memory. 
+```js
+var loaded = image.ready();  
+```
+
+**ImageList**
+
+Construction:
+
+```js
+var async_list = new ImageList(); // This constructor creates a new thread and a queue to load images in background, avoid building multiple ImageList objects.
+```
+Methods:
+
+* process() - This method starts the thread and loads added images on the queue. 
+```js
+async_list.process();
+```
   
-Asynchronous functions:  
-* Graphics.threadLoadImage(path) *Supports BMP, JPG and PNG
-* var state = Graphics.getLoadState()
-* var image = Graphics.getLoadData()  
-   
-**Render functions:**
+  
+### Draw module
+* Draw.point(x, y, color)
+* Draw.rect(x, y, width, height, color)
+* Draw.line(x, y, x2, y2, color)
+* Draw.circle(x, y, radius, color, *filled*)
+* Draw.triangle(x, y, x2, y2, x3, y3, color, *color2*, *color3*)
+* Draw.quad(x, y, x2, y2, x3, y3, x4, y4 color, *color2*, *color3*, *color4*)
+
+### Render module
 
 • Remember to enable zbuffering on screen mode, put the line of code below  
-• Default NTSC mode(3D enabled): Display.setMode(NTSC, 640, 448, CT24, INTERLACED, FIELD, true, Z16S)  
+• Default NTSC mode(3D enabled): 
+```js
+Display.setMode(NTSC, 640, 448, CT24, INTERLACED, FIELD, true, Z16S);
+```
 
 * Render.init(aspect) *default aspect is 4/3, widescreen is 16/9
-* var model = Render.loadOBJ(path, texture) *texture isn't mandatory
+* var model = Render.loadOBJ(path, *texture*)
 * Render.drawOBJ(model, pos_x, pos_y, pos_z, rot_x, rot_y, rot_z)
 * Render.freeOBJ(model)  
 
-Camera functions:  
+**Camera**   
 * Camera.position(x, y, z)
 * Camera.rotation(x, y, z)
 
-Lights functions:
+**Lights**  
 * Lights.create(count)
 * Lights.set(light, dir_x, dir_y, dir_z, r, g, b, type)  
   • Avaiable light types: AMBIENT, DIRECTIONAL  
 
-**Display functions:**
-
-* Display.clear(color) *color isn't mandatory
-* Display.flip()
-* var freevram = Display.getFreeVRAM()
-* var fps = Display.getFPS(frame_interval)
-* Display.setVSync(bool)
-* Display.waitVblankStart()
-* Display.setMode(mode, width, height, colormode, interlace, field, zbuffering, zbuf_colormode)  
-  • Default NTSC mode(3D disabled): Display.setMode(NTSC, 640, 448, CT24, INTERLACED, FIELD)  
-  • Default NTSC mode(3D enabled):  Display.setMode(NTSC, 640, 448, CT24, INTERLACED, FIELD, true, Z16S)  
-  • Default PAL mode(3D disabled): Display.setMode(PAL, 640, 512, CT24, INTERLACED, FIELD)  
-  • Default PAL mode(3D enabled):  Display.setMode(PAL, 640, 512, CT24, INTERLACED, FIELD, true, Z16S)  
-  • Available modes: NTSC, _480p, PAL, _576p, _720p, _1080i  
+### Screen module
+* Screen.clear(*color*)
+* Screen.flip()
+* var freevram = Screen.getFreeVRAM()
+* var fps = Screen.getFPS(frame_interval)
+* Screen.setVSync(bool)
+* Screen.waitVblankStart()
+* Screen.setMode(mode, width, height, colormode, interlace, field, *zbuffering*, *zbuf_colormode*)  
+  • Default NTSC mode(3D disabled): Screen.setMode(NTSC, 640, 448, CT24, INTERLACED, FIELD)  
+  • Default NTSC mode(3D enabled):  Screen.setMode(NTSC, 640, 448, CT24, INTERLACED, FIELD, true, Z16S)  
+  • Default PAL mode(3D disabled): Screen.setMode(PAL, 640, 512, CT24, INTERLACED, FIELD)  
+  • Default PAL mode(3D enabled):  Screen.setMode(PAL, 640, 512, CT24, INTERLACED, FIELD, true, Z16S)  
+  • Available modes: NTSC, DTV_480p, PAL, DTV_576p, DTV_720p, DTV_1080i  
   • Available colormodes: CT16, CT16S, CT24, CT32  
   • Available zbuffer colormodes: Z16, Z16S, Z24, Z32  
-  • Available interlaces: INTERLACED, NONINTERLACED  
+  • Available interlaces: INTERLACED, PROGRESSIVE  
   • Available fields: FIELD, FRAME  
 
-**Font functions:**
+### Font module
 
-Freetype functions(TTF, OTF):
-* Font.ftInit()
-* var font = Font.ftLoad("font.ttf")
-* Font.ftPrint(font, x, y, align, width, height, text, color)
-* Font.ftSetPixelSize()
-* Font.ftUnload(font)
-* Font.ftEnd()
+Construction:  
 
-Image functions(FNT, PNG, BMP):
-* var font = Font.load("font.fnt/png/bmp")
-* Font.print(font, x, y, scale, text, color)
-* Font.unload(font)
+```js
+var font = new Font(path);  
+```
+  path - Path to a font file, E.g.: "images/atlas.png", "fonts/font.png".  
+```js
+var osdfnt = new Font();  //Load BIOS font  
+var font = new Font("Segoe UI.ttf"); //Load trueType font 
+``` 
 
-ROM font functions:
-* Font.fmLoad()
-* Font.fmPrint(x, y, scale, text, color) *color isn't mandatory
-* Font.fmUnload()
+Properties:
+* color - Define font tinting, default value is Color.new(255, 255, 255, 128).
 
-**Pads functions:**
+Methods:
+* print(x, y, text) - Draw text on screen(call it every frame). Example: font.print(10.0, 10.0, "Hello world!));
+* setScale(scale) - Set font scale;
 
-* var pad = Pads.get(port) *port isn't mandatory  
+### Pads module
+
+* var pad = Pads.get(*port*)
   • pad.btns - Buttons  
   • pad.lx - Left analog horizontal position (left = -127, default = 0, right = 128)  
   • pad.ly - Left analog vertical position (up = -127, default = 0, down = 128)  
@@ -172,51 +217,72 @@ ROM font functions:
     
   ![analog_graph](https://user-images.githubusercontent.com/47725160/154816009-99d7e5da-badf-409b-9a3b-3618fd372f09.png)
 
-* var type = Pads.getType(port) *port isn't mandatory  
-  • PAD_DIGITAL  
-  • PAD_ANALOG  
-  • PAD_DUALSHOCK  
-* var press = Pads.getPressure(port, button) *port isn't mandatory
-* Pads.rumble(port, big, small) *port isn't mandatory
+* var type = Pads.getType(*port*)
+  • Pads.DIGITAL  
+  • Pads.ANALOG  
+  • Pads.DUALSHOCK  
+* var press = Pads.getPressure(*port*, button)
+* Pads.rumble(port, big, small)
 * var ret = Pads.check(pad, button)
 * Buttons list:  
-  • PAD_SELECT  
-  • PAD_START  
-  • PAD_UP  
-  • PAD_RIGHT  
-  • PAD_DOWN  
-  • PAD_LEFT  
-  • PAD_TRIANGLE  
-  • PAD_CIRCLE  
-  • PAD_CROSS  
-  • PAD_SQUARE  
-  • PAD_L1  
-  • PAD_R1  
-  • PAD_L2  
-  • PAD_R2  
-  • PAD_L3  
-  • PAD_R3  
+  • Pads.SELECT  
+  • Pads.START  
+  • Pads.UP  
+  • Pads.RIGHT  
+  • Pads.DOWN  
+  • Pads.LEFT  
+  • Pads.TRIANGLE  
+  • Pads.CIRCLE  
+  • Pads.CROSS  
+  • Pads.SQUARE  
+  • Pads.L1  
+  • Pads.R1  
+  • Pads.L2  
+  • Pads.R2  
+  • Pads.L3  
+  • Pads.R3  
+  
+### Keyboard module
+* Keyboard.init()
+* var c = Keyboard.get()
+* Keyboard.setRepeatRate(msec)
+* Keyboard.setBlockingMode(mode)
+* Keyboard.deinit()
 
-**System functions:**
+### Mouse module
+* Mouse.init()
+* var mouse = Mouse.get()  
+  • mouse.x  
+  • mouse.y  
+  • mouse.wheel  
+  • mouse.buttons  
+* Mouse.setBoundary(minx, maxx, miny, maxy)
+* var mode = Mouse.getMode()
+* Mouse.setMode(mode)
+* var accel = Mouse.getAccel()
+* Mouse.setAccel(val)
+* Mouse.setPosition(x, y)
+  
+### System module
 
 * var fd = System.openFile(path, type)
 * Types list:  
-  • FREAD   
-  • FWRITE  
-  • FCREATE  
-  • FRDWR  
+  • System.FREAD   
+  • System.FWRITE  
+  • System.FCREATE  
+  • System.FRDWR  
 * var buffer = System.readFile(file, size)
 * System.writeFile(fd, data, size)
 * System.closeFile(fd)
 * System.seekFile(fd, pos, type)
 * Types list:  
-  • SET  
-  • CUR  
-  • END  
+  • System.SET  
+  • System.CUR  
+  • System.END  
 * var size = System.sizeFile(fd)
 * System.doesFileExist(path)
 * System.CurrentDirectory(path) *if path given, it sets the current dir, else it gets the current dir
-* var listdir = System.listDir(path) *path isn't mandatory  
+* var listdir = System.listDir(*path*)
   • listdir[index].name - return file name on indicated index(string)  
   • listdir[index].size - return file size on indicated index(integer)  
   • listdir[index].directory - return if indicated index is a file or a directory(bool)  
@@ -240,7 +306,7 @@ Asynchronous functions:
   • progress.current  
   • progress.final  
 
-**Timer functions:**
+### Timer module
 
 * var timer = Timer.new()
 * Timer.getTime(timer)
@@ -251,13 +317,53 @@ Asynchronous functions:
 * Timer.reset(timer)
 * Timer.isPlaying(timer)
 
-**Sound functions:**
+### Sound module
 
-* Sound.setFormat(bitrate, freq, channels)
-* Sound.setVolume(volume)
-* Sound.setADPCMVolume(channel, volume)
-* var audio = Sound.loadADPCM(path)
-* Sound.playADPCM(channel, audio)
+* Sound.setVolume(volume, *slot*) *If slot is specified, it will change ADPCM slot volume, else it will change master volume.
+* var audio = Sound.load(path)
+* Sound.play(audio, *slot*) *ADPCM: If slot isn't specified, it will use 0.
+* Sound.free(audio)
+* var playing = Sound.isPlaying() *Doesn't apply for ADPCM
+* var msec = Sound.duration()
+* Sound.repeat(false)  *Doesn't apply for ADPCM
+* Sound.pause(audio)  *Doesn't apply for ADPCM
+* Sound.resume(audio)  *Doesn't apply for ADPCM
+* Sound.deinit()
+
+### Network module
+
+* Network.init(*ip*, *netmask*, *gateway*, *dns*)  
+```js
+Network.init("192.168.0.10", "255.255.255.0", "192.168.0.1", "192.168.0.1"); //Static mode  
+Network.init(); //DHCP Mode, dynamic.  
+```
+
+* var conf = Network.getConfig()  
+  Returns conf.ip, conf.netmask, conf.gateway, conf.dns.
+  
+ * Network.get(address)
+ * Network.post(address, query)
+  
+* Network.deinit()  
+  Shutdown network module.
+  
+### Socket module
+
+Construction:  
+
+* var s = new Socket(domain, type)  
+```js
+var s = new Socket(AF_INET, SOCK_STREAM);
+```
+
+Methods:
+
+* connect(host, port)
+* bind(host, port)
+* listen()
+* send(data) - Send data with Buffer
+* recv(size) - Receive data to a buffer
+* close()
 
 ## Contributing
 

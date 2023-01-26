@@ -3,6 +3,16 @@
 
 #include <gsToolkit.h>
 
+/// Maximal count of atlases per font
+#define ATLAS_MAX    4
+/// Atlas width in pixels
+#define ATLAS_WIDTH  256
+/// Atlas height in pixels
+#define ATLAS_HEIGHT 256
+
+#define FNTSYS_CHAR_SIZE 26
+
+
 /// default (built-in) font id
 #define FNT_DEFAULT (0)
 /// Value returned on errors
@@ -44,5 +54,12 @@ int fntCalcDimensions(int id, const char *str);
 void fntSetPixelSize(int fontid, int width, int height);
 
 void fntSetCharSize(int fontid, int width, int height);
+
+typedef struct {
+    int width;
+    int height;
+} Coords;
+
+Coords fntGetTextSize(int id, const char* text);
 
 #endif
