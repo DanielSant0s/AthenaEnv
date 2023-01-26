@@ -378,15 +378,13 @@ static JSValue athena_readfile(JSContext *ctx, JSValue this_val, int argc, JSVal
 
 
 static JSValue athena_writefile(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-	if (argc != 3) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
-
 	int fd;
-	uint32_t size;
+	uint32_t size, len;
 
 	JS_ToInt32(ctx, &fd, argv[0]);
-	const char *text = JS_ToCString(ctx, argv[1]);
+	unsigned char *data = JS_GetArrayBuffer(ctx, &len, argv[1]);
 	JS_ToUint32(ctx, &size, argv[2]);
-	write(fd, text, size);
+	write(fd, data, size);
 	return JS_UNDEFINED;
 }
 

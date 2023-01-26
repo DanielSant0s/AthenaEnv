@@ -175,7 +175,7 @@ Display.setMode(NTSC, 640, 448, CT24, INTERLACED, FIELD, true, Z16S);
 * var fps = Screen.getFPS(frame_interval)
 * Screen.setVSync(bool)
 * Screen.waitVblankStart()
-* Screen.setMode(mode, width, height, colormode, interlace, field, zbuffering, zbuf_colormode)  
+* Screen.setMode(mode, width, height, colormode, interlace, field, *zbuffering*, *zbuf_colormode*)  
   • Default NTSC mode(3D disabled): Screen.setMode(NTSC, 640, 448, CT24, INTERLACED, FIELD)  
   • Default NTSC mode(3D enabled):  Screen.setMode(NTSC, 640, 448, CT24, INTERLACED, FIELD, true, Z16S)  
   • Default PAL mode(3D disabled): Screen.setMode(PAL, 640, 512, CT24, INTERLACED, FIELD)  

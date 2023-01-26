@@ -44,6 +44,7 @@ const char* runScript(const char* script, bool isBuffer );
 JSModuleDef *athena_push_module(JSContext* ctx, JSModuleInitFunc *func, const JSCFunctionListEntry *func_list, int len, const char* module_name);
 
 JSModuleDef *athena_system_init(JSContext* ctx);
+JSModuleDef *athena_archive_init(JSContext* ctx);
 JSModuleDef *athena_render_init(JSContext* ctx);
 JSModuleDef *athena_screen_init(JSContext* ctx);
 JSModuleDef *athena_color_init(JSContext* ctx);

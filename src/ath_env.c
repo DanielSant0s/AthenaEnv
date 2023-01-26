@@ -130,6 +130,7 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"import * as Camera from 'Camera';\n"
 				"import * as System from 'System';\n"
 				"import * as Sif from 'Sif';\n"
+				"import * as Archive from 'Archive';\n"
                 "globalThis.std = std;\n"
                 "globalThis.os = os;\n"
 				"globalThis.Color = Color;\n"
@@ -168,6 +169,7 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"globalThis.Mouse = Mouse;\n"
 				"globalThis.Network = Network;\n"
 				"globalThis.System = System;\n"
+				"globalThis.Archive = Archive;\n"
 
 				"globalThis.AF_INET = SocketConst.AF_INET;\n"
 				"globalThis.SOCK_STREAM = SocketConst.SOCK_STREAM;\n"
@@ -247,6 +249,7 @@ const char* runScript(const char* script, bool isBuffer)
     JSContext *ctx = JS_NewCustomContext(rt); if (!ctx) { return qjserr; }
 
 	athena_system_init(ctx);
+	athena_archive_init(ctx);
 	athena_color_init(ctx);
 	athena_screen_init(ctx);
 	athena_render_init(ctx);
