@@ -1,121 +1,52 @@
-#include "ath_env.h"
-
 #include <assert.h>
 #include <sys/fcntl.h>
 #include <malloc.h>
 #include <string.h>
 #include <errno.h>
 
-duk_context *ctx;
+#include "ath_env.h"
 
-void push_athena_module(duk_c_function func, const char *key){
-	printf("AthenaEnv: Pushing %s module...\n", key);
-	duk_push_c_function(ctx, func, 0);
-    duk_call(ctx, 0);
-    duk_put_global_string(ctx, key);
+#define TRUE 1
+
+JSModuleDef *athena_push_module(JSContext* ctx, JSModuleInitFunc *func, const JSCFunctionListEntry *func_list, int len, const char* module_name){
+    JSModuleDef *m;
+    m = JS_NewCModule(ctx, module_name, func);
+    if (!m)
+        return NULL;
+    JS_AddModuleExportList(ctx, m, func_list, len);
+
+	printf("AthenaEnv: %s module pushed at 0x%x\n", module_name, m);
+    return m;
 }
 
-static duk_ret_t wrapped_compile_execute(duk_context *ctx, void *udata) {
-	const char *src_data;
-	duk_size_t src_len;
-	duk_uint_t comp_flags;
+static int qjs_eval_buf(JSContext *ctx, const void *buf, int buf_len,
+                    const char *filename, int eval_flags)
+{
+    JSValue val;
+    int ret;
 
-	(void) udata;
-
-	/* XXX: Here it'd be nice to get some stats for the compilation result
-	 * when a suitable command line is given (e.g. code size, constant
-	 * count, function count.  These are available internally but not through
-	 * the public API.
-	 */
-
-	/* Use duk_compile_lstring_filename() variant which avoids interning
-	 * the source code.  This only really matters for low memory environments.
-	 */
-
-	/* [ ... bytecode_filename src_data src_len filename ] */
-
-	src_data = (const char *) duk_require_pointer(ctx, -3);
-	src_len = (duk_size_t) duk_require_uint(ctx, -2);
-
-	if (src_data != NULL && src_len >= 1 && src_data[0] == (char) 0xbf) {
-		/* Bytecode. */
-		void *buf;
-		buf = duk_push_fixed_buffer(ctx, src_len);
-		memcpy(buf, (const void *) src_data, src_len);
-		duk_load_function(ctx);
-
-	} else {
-		/* Source code. */
-		comp_flags = DUK_COMPILE_SHEBANG;
-		duk_compile_lstring_filename(ctx, comp_flags, src_data, src_len);
-	}
-
-	/* [ ... bytecode_filename src_data src_len function ] */
-
-	/* Optional bytecode dump. */
-	if (duk_is_string(ctx, -4)) {
-		FILE *f;
-		void *bc_ptr;
-		duk_size_t bc_len;
-		size_t wrote;
-		char fnbuf[256];
-		const char *filename;
-
-		duk_dup_top(ctx);
-		duk_dump_function(ctx);
-		bc_ptr = duk_require_buffer_data(ctx, -1, &bc_len);
-		filename = duk_require_string(ctx, -5);
-
-		snprintf(fnbuf, sizeof(fnbuf), "%s", filename);
-
-		fnbuf[sizeof(fnbuf) - 1] = (char) 0;
-
-		f = fopen(fnbuf, "wb");
-		if (!f) {
-			(void) duk_generic_error(ctx, "failed to open bytecode output file");
-		}
-		wrote = fwrite(bc_ptr, 1, (size_t) bc_len, f);  /* XXX: handle partial writes */
-		(void) fclose(f);
-		if (wrote != bc_len) {
-			(void) duk_generic_error(ctx, "failed to write all bytecode");
-		}
-
-		return 0;  /* duk_safe_call() cleans up */
-	}
-
-	duk_push_global_object(ctx);  /* 'this' binding */
-	duk_call_method(ctx, 0);
-
-	return 0;  /* duk_safe_call() cleans up */
+    if ((eval_flags & JS_EVAL_TYPE_MASK) == JS_EVAL_TYPE_MODULE) {
+        /* for the modules, we compile then run to be able to set
+           import.meta */
+        val = JS_Eval(ctx, buf, buf_len, filename,
+                      eval_flags | JS_EVAL_FLAG_COMPILE_ONLY);
+        if (!JS_IsException(val)) {
+            js_module_set_import_meta(ctx, val, TRUE, TRUE);
+            val = JS_EvalFunction(ctx, val);
+        }
+    } else {
+        val = JS_Eval(ctx, buf, buf_len, filename, eval_flags);
+    }
+    if (JS_IsException(val)) {
+        ret = -1;
+    } else {
+        ret = 0;
+    }
+    JS_FreeValue(ctx, val);
+    return ret;
 }
 
-
-static int handle_eval(duk_context *ctx, const char *code) {
-	int rc;
-	int retval = -1;
-	union {
-		void *ptr;
-		const void *constptr;
-	} u;
-
-	u.constptr = code;  /* Lose 'const' without warning. */
-	duk_push_pointer(ctx, u.ptr);
-	duk_push_uint(ctx, (duk_uint_t) strlen(code));
-	duk_push_string(ctx, "eval");
-
-	rc = duk_safe_call(ctx, wrapped_compile_execute, NULL /*udata*/, 3 /*nargs*/, 1 /*nret*/);
-
-	if (rc != DUK_EXEC_SUCCESS) {
-		return retval;
-	} else {
-		duk_pop(ctx);
-		retval = 0;
-	}
-
-	return retval;
-}
-
-static int handle_fh(duk_context *ctx, FILE *f, const char *filename, const char *bytecode_filename) {
+static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const char *bytecode_filename) {
 	char *buf = NULL;
 	size_t bufsz;
 	size_t bufoff;
@@ -173,39 +104,108 @@ static int handle_fh(duk_context *ctx, FILE *f, const char *filename, const char
 		bufoff += got;
 	}
 
-	duk_push_string(ctx, bytecode_filename);
-	duk_push_pointer(ctx, (void *) buf);
-	duk_push_uint(ctx, (duk_uint_t) bufoff);
-	duk_push_string(ctx, filename);
+	buf[bufoff++] = 0;
+        js_std_add_helpers(ctx, 0, NULL);
+        { // make 'std' and 'os' visible to non module code
+            const char *str = 
+				"import * as std from 'std';\n"
+                "import * as os from 'os';\n"
+				"import * as Color from 'Color';\n"
+				"import * as Screen from 'Screen';\n"
+				"import * as Draw from 'Draw';\n"
+				"import * as Sound from 'Sound';\n"
+				"import * as Timer from 'Timer';\n"
+				"import * as Tasks from 'Tasks';\n"
+				"import * as Pads from 'Pads';\n"
+				"import * as Keyboard from 'Keyboard';\n"
+				"import * as Mouse from 'Mouse';\n"
+				"import * as Network from 'Network';\n"
+				"import * as Socket from 'Socket';\n"
+				"import * as SocketConst from 'SocketConst';\n"
+				"import * as Font from 'Font';\n"
+				"import * as Image from 'Image';\n"
+				"import * as ImageList from 'ImageList';\n"
+				"import * as Render from 'Render';\n"
+				"import * as Lights from 'Lights';\n"
+				"import * as Camera from 'Camera';\n"
+				"import * as System from 'System';\n"
+				"import * as Sif from 'Sif';\n"
+				"import * as Archive from 'Archive';\n"
+                "globalThis.std = std;\n"
+                "globalThis.os = os;\n"
+				"globalThis.Color = Color;\n"
 
-	rc = duk_safe_call(ctx, wrapped_compile_execute, NULL /*udata*/, 4 /*nargs*/, 1 /*nret*/);
+				"globalThis.Screen = Screen;\n"
 
+				"globalThis.NTSC = Screen.NTSC;\n"
+				"globalThis.DTV_480p = Screen.DTV_480p;\n"
+				"globalThis.PAL = Screen.PAL;\n"
+				"globalThis.DTV_576p = Screen.DTV_576p;\n"
+				"globalThis.DTV_720p = Screen.DTV_720p;\n"
+				"globalThis.DTV_1080i = Screen.DTV_1080i;\n"
+
+				"globalThis.INTERLACED = Screen.INTERLACED;\n"
+				"globalThis.PROGRESSIVE = Screen.PROGRESSIVE;\n"
+
+				"globalThis.FIELD = Screen.FIELD;\n"
+				"globalThis.FRAME = Screen.FRAME;\n"
+
+				"globalThis.CT16 = Screen.CT16;\n"
+				"globalThis.CT16S = Screen.CT16S;\n"
+				"globalThis.CT24 = Screen.CT24;\n"
+				"globalThis.CT32 = Screen.CT32;\n"
+
+				"globalThis.Z16 = Screen.Z16;\n"
+				"globalThis.Z16S = Screen.Z16S;\n"
+				"globalThis.Z24 = Screen.Z24;\n"
+				"globalThis.Z32 = Screen.Z32;\n"
+
+				"globalThis.Draw = Draw;\n"
+				"globalThis.Sound = Sound;\n"
+				"globalThis.Timer = Timer;\n"
+				"globalThis.Tasks = Tasks;\n"
+				"globalThis.Pads = Pads;\n"
+				"globalThis.Keyboard = Keyboard;\n"
+				"globalThis.Mouse = Mouse;\n"
+				"globalThis.Network = Network;\n"
+				"globalThis.System = System;\n"
+				"globalThis.Archive = Archive;\n"
+
+				"globalThis.AF_INET = SocketConst.AF_INET;\n"
+				"globalThis.SOCK_STREAM = SocketConst.SOCK_STREAM;\n"
+				"globalThis.SOCK_DGRAM = SocketConst.SOCK_DGRAM;\n"
+				"globalThis.SOCK_RAW = SocketConst.SOCK_RAW;\n"
+				"globalThis.Socket = Socket.Socket;\n"
+
+				"globalThis.Font = Font.Font;\n"
+
+				"globalThis.NEAREST = 0;\n"
+				"globalThis.LINEAR = 1;\n"
+				"globalThis.VRAM = false;\n"
+				"globalThis.RAM = true;\n"
+				"globalThis.Image = Image.Image;\n"
+				"globalThis.ImageList = ImageList.ImageList;\n"
+
+				"globalThis.Sif = Sif;\n"
+
+				"globalThis.Render = Render;\n"
+
+				"globalThis.Lights = Lights;\n"
+				"globalThis.AMBIENT = Lights.AMBIENT;\n"
+				"globalThis.DIRECTIONAL = Lights.DIRECTIONAL;\n"
+
+				"globalThis.Camera = Camera;\n";
+            rc = qjs_eval_buf(ctx, str, strlen(str), "<input>", JS_EVAL_TYPE_MODULE);
+            if (rc != 0) { return retval; }
+        }
+	rc = qjs_eval_buf(ctx, (void *) buf, bufoff - 1, filename, JS_EVAL_TYPE_MODULE);
 	free(buf);
 	buf = NULL;
-
-	if (rc != DUK_EXEC_SUCCESS) {
-
-		if (buf) {
-			free(buf);
-			buf = NULL;
-		}
-		return retval;
-
-	} else {
-		duk_pop(ctx);
-		retval = 0;
-	}
-	/* fall thru */
-
-	if (buf) {
-		free(buf);
-		buf = NULL;
-	}
+	if (rc != 0) { return retval; } else { return 0; }
 	return retval;
 }
 
-
-static int handle_file(duk_context *ctx, const char *filename, const char *bytecode_filename) {
+static int qjs_handle_file(JSContext *ctx, const char *filename, const char *bytecode_filename) {
 	FILE *f = NULL;
 	int retval;
 	char fnbuf[256];
@@ -214,199 +214,73 @@ static int handle_file(duk_context *ctx, const char *filename, const char *bytec
 
 	fnbuf[sizeof(fnbuf) - 1] = (char) 0;
 
-	f = fopen(fnbuf, "rb");
+	f = fopen(fnbuf, "r");
 	if (!f) {
 		fprintf(stderr, "failed to open source file: %s\n", filename);
 		fflush(stderr);
 		return -1;
 	}
 
-	retval = handle_fh(ctx, f, filename, bytecode_filename);
+	retval = qjs_handle_fh(ctx, f, filename, bytecode_filename);
 
 	fclose(f);
 	return retval;
-	
 }
 
-static duk_ret_t cb_resolve_module(duk_context *ctx) {
-	const char *module_id;
-	const char *parent_id;
-
-	module_id = duk_require_string(ctx, 0);
-	parent_id = duk_require_string(ctx, 1);
-
-	duk_push_sprintf(ctx, "%s.js", module_id);
-	printf("resolve_cb: id:'%s', parent-id:'%s', resolve-to:'%s'\n",
-		module_id, parent_id, duk_get_string(ctx, -1));
-
-	return 1;
-}
-
-int module_read(const char* path, char** data) {
-    FILE* f;
-    int fd;
-    struct stat st;
-    size_t fsize;
-
-    *data = NULL;
-
-    f = fopen(path, "rb");
-    if (!f) {
-        return -errno;
-    }
-
-    fd = fileno(f);
-    assert(fd != -1);
-
-    if (fstat(fd, &st) < 0) {
-        fclose(f);
-        return -errno;
-    }
-
-    if (S_ISDIR(st.st_mode)) {
-        fclose(f);
-        return -EISDIR;
-    }
-
-    fsize = st.st_size;
-
-    *data = malloc(fsize);
-    if (!*data) {
-        fclose(f);
-        return -ENOMEM;
-    }
-
-    fread(*data, 1, fsize, f);
-    if (ferror(f)) {
-        fclose(f);
-        free(*data);
-        return -EIO;
-    }
-
-    if (strncmp(*data, "#!", 2) == 0) {
-        memcpy((void*) *data, "//", 2);
-    }
-
-    fclose(f);
-	return 0;
-}
-
-int EndsWith(const char *str, const char *suffix)
+static JSContext *JS_NewCustomContext(JSRuntime *rt)
 {
-    if (!str || !suffix)
-        return 0;
-    size_t lenstr = strlen(str);
-    size_t lensuffix = strlen(suffix);
-    if (lensuffix >  lenstr)
-        return 0;
-    return strncmp(str + lenstr - lensuffix, suffix, lensuffix) == 0;
-}
-
-static duk_ret_t cb_load_module(duk_context *ctx) {
-    const char* resolved_id = duk_require_string(ctx, 0);
-
-    if (EndsWith(resolved_id, ".js")) {
-        char* data;
-        int len;
-        module_read(resolved_id, &data);
-        if (len < 0) {
-            return duk_generic_error(ctx, "Module could not be loaded: %s", resolved_id);
-        }
-        if (strncmp(data, "#!", 2) == 0) {
-            memcpy((void*) data, "//", 2);
-        }
-        duk_push_string(ctx, data);
-        free(data);
-        return 1;
-    }
-
-	return 0;
-}
-
-static duk_ret_t athena_dofile(duk_context *ctx) {
-
-	const char* errMsg;
-
-	const char* script = duk_require_string(ctx, 0);
-
-	if (handle_file(ctx, script, NULL) != 0) {
-		errMsg = (const char*)malloc(strlen(duk_safe_to_stacktrace(ctx, -1)+1));
-		sprintf((char*)errMsg, "\n%s", duk_safe_to_stacktrace(ctx, -1));
-		return duk_generic_error(ctx, errMsg);
-	}
-
-	return 0;
-}
-
-static duk_ret_t athena_dostring(duk_context *ctx) {
-
-	const char* errMsg;
-
-	const char* script = duk_require_string(ctx, 0);
-
-	if (handle_eval(ctx, script) != 0) {
-		errMsg = (const char*)malloc(strlen(duk_safe_to_stacktrace(ctx, -1)));
-		sprintf((char*)errMsg, "\n%s", duk_safe_to_stacktrace(ctx, -1));
-		return duk_generic_error(ctx, errMsg);
-	}
-
-	return 0;
+    JSContext *ctx;
+    ctx = JS_NewContext(rt);
+    if (!ctx)
+        return NULL;
+    /* system modules */
+    js_init_module_std(ctx, "std");
+    js_init_module_os(ctx, "os");
+    return ctx;
 }
 
 const char* runScript(const char* script, bool isBuffer)
-{	
-
-    const char* errMsg;
-
+{
+    const char *qjserr = "[qjs error]";
     printf("\nStarting AthenaEnv...\n");
-
-  	ctx = duk_create_heap_default();
-
-	duk_console_init(ctx, DUK_CONSOLE_PROXY_WRAPPER /*flags*/);
-
-	duk_push_object(ctx);
-
-	duk_push_c_function(ctx, cb_resolve_module, DUK_VARARGS);
-	duk_put_prop_string(ctx, -2, "resolve");
-
-	duk_push_c_function(ctx, cb_load_module, DUK_VARARGS);
-	duk_put_prop_string(ctx, -2, "load");
-
-	duk_push_c_function(ctx, athena_dofile, DUK_VARARGS);
-	duk_put_global_string(ctx, "dofile");
-
-	duk_push_c_function(ctx, athena_dostring, DUK_VARARGS);
-	duk_put_global_string(ctx, "dostring");
-
-	duk_module_node_init(ctx);
+    JSRuntime *rt = JS_NewRuntime(); if (!rt) { return qjserr; }
+    js_std_set_worker_new_context_func(JS_NewCustomContext);
+    js_std_init_handlers(rt);
+    JSContext *ctx = JS_NewCustomContext(rt); if (!ctx) { return qjserr; }
 
 	athena_system_init(ctx);
-	athena_render_init(ctx);
+	athena_archive_init(ctx);
+	athena_color_init(ctx);
 	athena_screen_init(ctx);
-	athena_graphics_init(ctx);
-	athena_pads_init(ctx);
+	athena_render_init(ctx);
+	athena_shape_init(ctx);
 	athena_sound_init(ctx);
 	athena_timer_init(ctx);
 	athena_task_init(ctx);
+	athena_image_init(ctx);
+	athena_imagelist_init(ctx);
+	athena_keyboard_init(ctx);
+	athena_mouse_init(ctx);
+	athena_pads_init(ctx);
+	athena_network_init(ctx);
+	athena_socket_init(ctx);
+	athena_font_init(ctx);
 
-    printf("AthenaEnv: top after init - %ld\n\n", (long) duk_get_top(ctx));
-
-    // Run JavaScript
-    if(!isBuffer){
-
-		if (handle_file(ctx, script, NULL) != 0) {
-			errMsg = (const char*)malloc(strlen(duk_safe_to_stacktrace(ctx, -1)));
-	    	sprintf((char*)errMsg, "%s\n", duk_safe_to_stacktrace(ctx, -1));
-	    }
-
-    } else {
-	    if (handle_eval(ctx, script) != 0) {
-			errMsg = (const char*)malloc(strlen(duk_safe_to_stacktrace(ctx, -1)));
-	    	sprintf((char*)errMsg, "%s\n", duk_safe_to_stacktrace(ctx, -1));
-	    }
-    }
-
-	duk_destroy_heap(ctx);
+    int s = qjs_handle_file(ctx, script, NULL);
+    if (s < 0) { 
+		JSValue val = JS_GetException(ctx);
+		const char* exception = JS_ToCString(ctx, val);
+		const char* stack = JS_ToCString(ctx, JS_GetPropertyStr(ctx, val, "stack"));
+		const char* error = malloc(strlen(exception) + strlen(stack) + 2);
+		strcpy(error, exception);
+		strcat(error, "\n");
+		strcat(error, stack);
+		JS_FreeContext(ctx);
+		JS_FreeRuntime(rt);
+		return error; 
+	}
 	
-	return errMsg;
+	JS_FreeContext(ctx);
+	JS_FreeRuntime(rt);
+    return NULL;
 }

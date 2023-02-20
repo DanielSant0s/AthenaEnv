@@ -6,50 +6,44 @@
 
 #include "ath_env.h"
 
-duk_ret_t athena_killtask(duk_context *ctx) {
-	int argc = duk_get_top(ctx);
-  	if (argc != 1) return duk_generic_error(ctx, "wrong number of arguments.");
+static JSValue athena_killtask(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
+  	if (argc != 1) return JS_ThrowSyntaxError(ctx, "wrong number of arguments.");
+	int task ;
+	JS_ToInt32(ctx, &task, argv[0]) ;
 
-	kill_task(duk_get_int(ctx, 0));
+	kill_task(task);
 
 	return 0;
 }
 
-duk_ret_t athena_gettasklist(duk_context *ctx) {
-	int argc = duk_get_top(ctx);
-  	if (argc != 0) return duk_generic_error(ctx, "wrong number of arguments.");
-	
-	Tasklist* tasks = get_tasklist();
+static JSValue athena_gettasklist(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
+      if (argc != 0) return JS_ThrowSyntaxError(ctx, "wrong number of arguments.");
+    JSValue array, obj;
 
-	duk_idx_t arr_idx = duk_push_array(ctx);
+    Tasklist* tasks = get_tasklist();
 
-	for(int i = 0; tasks->size > i; i++){
-		duk_push_object(ctx);
-        duk_push_string(ctx, tasks->list[i]->title);
-		duk_put_prop_string(ctx, arr_idx+1, "name");
-		duk_push_int(ctx, tasks->list[i]->status);
-		duk_put_prop_string(ctx, arr_idx+1, "status");
-		duk_put_prop_index(ctx, arr_idx, i);
-	}
+    array = JS_NewArray(ctx);
 
-	return 1;
+    for(int i = 0; tasks->size > i; i++){
+        obj = JS_NewObject(ctx);
+        JS_DefinePropertyValueStr(ctx, obj, "name", JS_NewString(ctx, tasks->list[i]->title), JS_PROP_C_W_E);
+        JS_DefinePropertyValueStr(ctx, obj, "status", JS_NewInt32(ctx, tasks->list[i]->status), JS_PROP_C_W_E);
+        JS_DefinePropertyValueUint32(ctx, array, i, obj, JS_PROP_C_W_E);
+    }
+
+    return array;
 }
 
-DUK_EXTERNAL duk_ret_t dukopen_task(duk_context *ctx) {
+static const JSCFunctionListEntry module_funcs[] = {
+	JS_CFUNC_DEF("get", 0, athena_gettasklist),
+	JS_CFUNC_DEF("kill", 1, athena_killtask),
+};
 
-	const duk_function_list_entry module_funcs[] = {
-	    { "get",           		athena_gettasklist,	DUK_VARARGS },
-		{ "kill",           	athena_killtask,	DUK_VARARGS },
-	  	{NULL, NULL, 0}
-	};
-
-    duk_push_object(ctx);  /* module result */
-    duk_put_function_list(ctx, -1, module_funcs);
-
-  	return 1;  /* return module value */
+static int task_init(JSContext *ctx, JSModuleDef *m)
+{
+    return JS_SetModuleExportList(ctx, m, module_funcs, countof(module_funcs));
 }
 
-void athena_task_init(duk_context* ctx){
-	push_athena_module(dukopen_task,   	 "Tasks");
-
+JSModuleDef *athena_task_init(JSContext* ctx){
+    return athena_push_module(ctx, task_init, module_funcs, countof(module_funcs), "Tasks");
 }

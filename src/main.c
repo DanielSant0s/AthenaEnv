@@ -6,7 +6,6 @@
 #include <sifrpc.h>
 #include <loadfile.h>
 #include <libmc.h>
-#include <libcdvd.h>
 #include <iopheap.h>
 #include <iopcontrol.h>
 #include <smod.h>
@@ -17,63 +16,18 @@
 #include <sbv_patches.h>
 #include <smem.h>
 
+#include <ps2_all_drivers.h>
+#include <libpwroff.h>
+
 #include "ath_env.h"
 #include "include/graphics.h"
 #include "include/pad.h"
 
-#define NEWLIB_PORT_AWARE
-#include <fileXio_rpc.h>
-#include <fileio.h>
-
 #include <libds34bt.h>
 #include <libds34usb.h>
 
-extern unsigned char iomanX_irx[] __attribute__((aligned(16)));
-extern unsigned int size_iomanX_irx;
-
-extern unsigned char fileXio_irx[] __attribute__((aligned(16)));
-extern unsigned int size_fileXio_irx;
-
-extern unsigned char sio2man_irx[] __attribute__((aligned(16)));
-extern unsigned int size_sio2man_irx;
-
-extern unsigned char mcman_irx[] __attribute__((aligned(16)));
-extern unsigned int size_mcman_irx;
-
-extern unsigned char mcserv_irx[] __attribute__((aligned(16)));
-extern unsigned int size_mcserv_irx;
-
-extern unsigned char padman_irx[] __attribute__((aligned(16)));
-extern unsigned int size_padman_irx;
-
-extern unsigned char libsd_irx[] __attribute__((aligned(16)));
-extern unsigned int size_libsd_irx;
-
-extern unsigned char cdfs_irx[] __attribute__((aligned(16)));
-extern unsigned int size_cdfs_irx;
-
-extern unsigned char usbd_irx[] __attribute__((aligned(16)));
-extern unsigned int size_usbd_irx;
-
-#if defined(BDM)
-extern unsigned char bdm_irx[] __attribute__((aligned(16)));
-extern unsigned int size_bdm_irx;
-
-extern unsigned char bdmfs_vfat_irx[] __attribute__((aligned(16)));
-extern unsigned int size_bdmfs_vfat_irx;
-
-extern unsigned char usbmass_bd_irx[] __attribute__((aligned(16)));
-extern unsigned int size_usbmass_bd_irx;
-
-#else
-
-extern unsigned char usbhdfsd_irx[] __attribute__((aligned(16)));
-extern unsigned int size_usbhdfsd_irx;
-
-#endif
-
-extern unsigned char audsrv_irx[] __attribute__((aligned(16)));
-extern unsigned int size_audsrv_irx;
+#include <netman.h>
+#include <ps2ip.h>
 
 extern unsigned char ds34usb_irx[] __attribute__((aligned(16)));
 extern unsigned int size_ds34usb_irx;
@@ -81,42 +35,62 @@ extern unsigned int size_ds34usb_irx;
 extern unsigned char ds34bt_irx[] __attribute__((aligned(16)));
 extern unsigned int size_ds34bt_irx;
 
+extern unsigned char SMAP_irx[];
+extern unsigned int size_SMAP_irx;
+
+extern unsigned char NETMAN_irx[];
+extern unsigned int size_NETMAN_irx;
+
+extern unsigned char ps2kbd_irx[];
+extern unsigned int size_ps2kbd_irx;
+
+extern unsigned char ps2mouse_irx[];
+extern unsigned int size_ps2mouse_irx;
+
 char boot_path[255];
 
-void setBootPath(int argc, char ** argv, int idx)
-{
-    if (argc>=(idx+1))
-    {
-
-	char *p;
-	if ((p = strrchr(argv[idx], '/'))!=NULL) {
-	    snprintf(boot_path, sizeof(boot_path), "%s", argv[idx]);
-	    p = strrchr(boot_path, '/');
-	if (p!=NULL)
-	    p[1]='\0';
-	} else if ((p = strrchr(argv[idx], '\\'))!=NULL) {
-	   snprintf(boot_path, sizeof(boot_path), "%s", argv[idx]);
-	   p = strrchr(boot_path, '\\');
-	   if (p!=NULL)
-	     p[1]='\0';
-	} else if ((p = strchr(argv[idx], ':'))!=NULL) {
-	   snprintf(boot_path, sizeof(boot_path), "%s", argv[idx]);
-	   p = strchr(boot_path, ':');
-	   if (p!=NULL)
-	   p[1]='\0';
-	}
-
-    }
+static void prepare_IOP() {
+    printf("AthenaEnv: Starting IOP Reset...\n");
+    SifInitRpc(0);
+    #if defined(RESET_IOP)  
+    while (!SifIopReset("", 0)){};
+    #endif
+    while (!SifIopSync()){};
+    SifInitRpc(0);
+    printf("AthenaEnv: IOP reset done.\n");
     
-    // check if path needs patching
-    if( !strncmp( boot_path, "mass:/", 6) && (strlen (boot_path)>6))
-    {
-        strcpy((char *)&boot_path[5],(const char *)&boot_path[6]);
-    }
-         
+    // install sbv patch fix
+    printf("AthenaEnv: Installing SBV Patches...\n");
+    sbv_patch_enable_lmb();
+    sbv_patch_disable_prefix_check(); 
 }
 
-void initMC(void)
+static void deinit_drivers(bool deinit_powerOff) {
+    deinit_audio_driver();
+    deinit_joystick_driver(false);
+    deinit_hdd_driver(false);
+    deinit_cdfs_driver();
+    deinit_usb_driver();
+    deinit_memcard_driver(true);
+    deinit_fileXio_driver();
+    
+    if (deinit_powerOff)
+        deinit_poweroff_driver();
+}
+
+static void prepare_for_exit(bool deinit_powerOff) {
+    umount_current_hdd_partition();
+
+    deinit_drivers(deinit_powerOff);
+}
+
+static void poweroffHandler(void *arg)
+{
+   prepare_for_exit(false);
+   poweroffShutdown();
+}
+
+void initMC()
 {
    int ret;
    // mc variables
@@ -138,89 +112,52 @@ void initMC(void)
    mcSync(MC_WAIT, NULL, &ret);
 }
 
-int main(int argc, char **argv) {
-  
-    printf("AthenaEnv: Starting IOP Reset...\n");
-    SifInitRpc(0);
-    #if defined(RESET_IOP)  
-    while (!SifIopReset("", 0)){};
-    #endif
-    while (!SifIopSync()){};
-    SifInitRpc(0);
-    printf("AthenaEnv: IOP reset done.\n");
-    
-    // install sbv patch fix
-    printf("AthenaEnv: Installing SBV Patches...\n");
-    sbv_patch_enable_lmb();
-    sbv_patch_disable_prefix_check(); 
-    sbv_patch_fileio(); 
 
-    SifExecModuleBuffer(&iomanX_irx, size_iomanX_irx, 0, NULL, NULL);
-    SifExecModuleBuffer(&fileXio_irx, size_fileXio_irx, 0, NULL, NULL);
-    SifExecModuleBuffer(&sio2man_irx, size_sio2man_irx, 0, NULL, NULL);
-    fileXioInitSkipOverride();
-
-    // load pad & mc modules 
-    printf("AthenaEnv: Installing Pad & Memory Card modules...\n");
-
-    SifExecModuleBuffer(&mcman_irx, size_mcman_irx, 0, NULL, NULL);
-    SifExecModuleBuffer(&mcserv_irx, size_mcserv_irx, 0, NULL, NULL);
-    initMC();
-
-    // load USB modules  
-    SifExecModuleBuffer(&usbd_irx, size_usbd_irx, 0, NULL, NULL);
-
-    #if defined(BDM)  
-    SifExecModuleBuffer(&bdm_irx, size_bdm_irx, 0, NULL, NULL);
-    SifExecModuleBuffer(&bdmfs_vfat_irx, size_bdmfs_vfat_irx, 0, NULL, NULL);
-    SifExecModuleBuffer(&usbmass_bd_irx, size_usbmass_bd_irx, 0, NULL, NULL);
-    #else
-    SifExecModuleBuffer(&usbhdfsd_irx, size_usbhdfsd_irx, 0, NULL, NULL);
-    #endif
-    SifExecModuleBuffer(&cdfs_irx, size_cdfs_irx, 0, NULL, NULL);
-
-    SifExecModuleBuffer(&padman_irx, size_padman_irx, 0, NULL, NULL);
-
+static void init_drivers() {
     int ds3pads = 1;
+
+    //init_ps2_filesystem_driver();
+    init_poweroff_driver();
+    init_fileXio_driver();
+    init_memcard_driver(true);
+    init_usb_driver();
+    init_cdfs_driver();
+    init_hdd_driver(false, false);
+    SifExecModuleBuffer(&NETMAN_irx, size_NETMAN_irx, 0, NULL, NULL);
+    SifExecModuleBuffer(&SMAP_irx, size_SMAP_irx, 0, NULL, NULL);
+
+    init_joystick_driver(true);
+    init_audio_driver();
     SifExecModuleBuffer(&ds34usb_irx, size_ds34usb_irx, 4, (char *)&ds3pads, NULL);
     SifExecModuleBuffer(&ds34bt_irx, size_ds34bt_irx, 4, (char *)&ds3pads, NULL);
+
+    SifExecModuleBuffer(&ps2kbd_irx, size_ps2kbd_irx, 0, NULL, NULL);
+    SifExecModuleBuffer(&ps2mouse_irx, size_ps2mouse_irx, 0, NULL, NULL);
+
+    poweroffSetCallback(&poweroffHandler, NULL);
+    mount_current_hdd_partition();
+    pad_init();
     ds34usb_init();
     ds34bt_init();
+    initMC();
+}
 
-    SifExecModuleBuffer(&libsd_irx, size_libsd_irx, 0, NULL, NULL);
-    SifExecModuleBuffer(&audsrv_irx, size_audsrv_irx, 0, NULL, NULL);
-
-    //waitUntilDeviceIsReady by fjtrujy
+int main(int argc, char **argv) {
+    prepare_IOP();
+    init_drivers();
     
-    struct stat buffer;
-    int ret = -1;
-    int retries = 50;
-
-    while(ret != 0 && retries > 0)
-    {
-        ret = stat("mass:/", &buffer);
-        // Wait until the device is ready
-        nopdelay();
-
-        retries--;
-    }
-
-	setBootPath(argc, argv, 0);  
-
+    getcwd(boot_path, sizeof(boot_path));
+    waitUntilDeviceIsReady(boot_path);
+    
     init_taskman();
 	init_graphics();
-	pad_init();
-
-    chdir(boot_path); 
+    loadFontM();
 
 	const char* errMsg;
 
     while(true)
     {
-        
         errMsg = runScript("main.js", false);
-
-        loadFontM();
 
         gsKit_clear_screens();
 
@@ -236,9 +173,9 @@ int main(int argc, char **argv) {
 			}
         }
 
-		unloadFontM();
-
     }
+
+    prepare_for_exit(true);
 
 	// End program.
 	return 0;

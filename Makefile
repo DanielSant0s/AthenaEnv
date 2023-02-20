@@ -34,13 +34,13 @@ EE_BIN_PKD = athena_pkd.elf
 RESET_IOP ?= 1
 BDM ?= 0
 
-EE_LIBS = -L$(PS2SDK)/ports/lib -L$(PS2DEV)/gsKit/lib/ -Lmodules/ds34bt/ee/ -Lmodules/ds34usb/ee/ -lpatches -lfileXio -lcdvd -lpad -ldebug -lmath3d -ljpeg -lfreetype -lgskit_toolkit -lgskit -ldmakit -lpng -lz -lmc -laudsrv -lelf-loader -lds34bt -lds34usb
+EE_LIBS = -L$(PS2SDK)/ports/lib -L$(PS2DEV)/gsKit/lib/ -Lmodules/ds34bt/ee/ -Lmodules/ds34usb/ee/ -lps2_drivers -lmc -lpatches -ldebug -lmath3d -ljpeg -lfreetype -lgskit_toolkit -lgskit -ldmakit -lpng -lz -lelf-loader -lds34bt -lds34usb -lnetman -lps2ip -lcurl -lwolfssl -lkbd -lmouse -lvorbisfile -lvorbis -logg -llzma -lzip
 
 EE_INCS += -I$(PS2DEV)/gsKit/include -I$(PS2SDK)/ports/include -I$(PS2SDK)/ports/include/freetype2 -I$(PS2SDK)/ports/include/zlib
 
 EE_INCS += -Imodules/ds34bt/ee -Imodules/ds34usb/ee
 
-EE_CFLAGS += -Wno-sign-compare -fno-strict-aliasing -fno-exceptions -D_R5900
+EE_CFLAGS += -Wno-sign-compare -fno-strict-aliasing -fno-exceptions -DPS2IP_DNS -DCONFIG_VERSION=\"$(shell cat VERSION)\" -D__TM_GMTOFF=tm_gmtoff -DPATH_MAX=256 -DEMSCRIPTEN
 
 EE_SRC_DIR = src/
 EE_OBJS_DIR = obj/
@@ -48,10 +48,6 @@ EE_ASM_DIR = asm/
 
 ifeq ($(RESET_IOP),1)
 EE_CFLAGS += -DRESET_IOP
-endif
-
-ifeq ($(BDM),1)
-EE_CFLAGS += -DBDM
 endif
 
 ifeq ($(DEBUG),1)
@@ -90,6 +86,7 @@ all: $(EXT_LIBS) $(EE_BIN)
 
 debug: $(EXT_LIBS) $(EE_BIN)
 	echo "Building $(EE_BIN) with debug symbols..."
+	mv $(EE_BIN) bin/athena_debug.elf
 
 clean:
 	echo "\nCleaning $(EE_BIN)..."
@@ -106,6 +103,12 @@ clean:
 	rm -f src/ds34usb.s
 	$(MAKE) -C modules/ds34usb clean
 	$(MAKE) -C modules/ds34bt clean
+
+	echo "Cleaning Network Driver..."
+	rm -f src/NETMAN.s
+	rm -f src/SMAP.s
+	rm -f src/ps2kbd.s
+	rm -f src/ps2mouse.s
 
 rebuild: clean all
 
