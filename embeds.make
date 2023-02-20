@@ -79,4 +79,19 @@ src/ds34usb.s: modules/ds34usb/iop/ds34usb.irx
 	echo "Embedding DS3/4 USB Driver..."
 	$(BIN2S) $< $@ ds34usb_irx
 	
-#-------------------------- App Content ---------------------------#
+
+src/NETMAN.s: $(PS2SDK)/iop/irx/netman.irx
+	echo "Embedding NETMAN Driver..."
+	$(BIN2S) $< $@ NETMAN_irx
+
+src/SMAP.s: $(PS2SDK)/iop/irx/smap.irx
+	echo "Embedding SMAP Driver..."
+	$(BIN2S) $< $@ SMAP_irx
+
+src/ps2kbd.s: $(PS2SDK)/iop/irx/ps2kbd.irx
+	echo "Embedding Keyboard Driver..."
+	$(BIN2S) $< $@ ps2kbd_irx
+
+src/ps2mouse.s: $(PS2SDK)/iop/irx/ps2mouse.irx
+	echo "Embedding Mouse Driver..."
+	$(BIN2S) $< $@ ps2mouse_irx
