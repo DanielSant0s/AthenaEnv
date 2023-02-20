@@ -7,41 +7,42 @@
 #include "include/render.h"
 #include "ath_env.h"
 
-duk_ret_t athena_initrender(duk_context *ctx) {
-	int argc = duk_get_top(ctx);
-  	if (argc != 1) return duk_generic_error(ctx, "wrong number of arguments.");
-	float aspect = duk_get_number(ctx, 0);
+static JSValue athena_initrender(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
+  	if (argc != 1) return JS_ThrowSyntaxError(ctx, "wrong number of arguments.");
+	float aspect;
+	JS_ToFloat32(ctx, &aspect, argv[0]);
   	init3D(aspect);
-	return 0;
+	return JS_UNDEFINED;
 }
 
-duk_ret_t athena_loadobj(duk_context *ctx){
-	int argc = duk_get_top(ctx);
+static JSValue athena_loadobj(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	JSImageData *image;
+	model* res_m;
+
 	#ifndef SKIP_ERROR_HANDLING
-	if (argc != 2 && argc != 1) return duk_generic_error(ctx, "wrong number of arguments");
+	if (argc != 2 && argc != 1) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
 	#endif
-	const char *file_tbo = duk_get_string(ctx, 0); //Model filename
+	const char *file_tbo = JS_ToCString(ctx, argv[0]); //Model filename
 	
 	// Loading texture
-    GSTEXTURE* text = NULL;
-	if(argc == 2) text = (GSTEXTURE*)(duk_get_pointer(ctx, 1));
-	
-	model* res_m = loadOBJ(file_tbo, text);
+	if(argc == 2) {
+		image = JS_GetOpaque2(ctx, argv[1], get_img_class_id());
+		res_m = loadOBJ(file_tbo, &(image->tex));
+	} else {
+		res_m = loadOBJ(file_tbo, NULL);
+	}
 
-
-	// Push model object into Lua stack
-	duk_push_pointer(ctx, (void*)res_m);
-	return 1;
+	return JS_NewUint32(ctx, res_m);
 }
 
 
-duk_ret_t athena_freeobj(duk_context *ctx) {
-	int argc = duk_get_top(ctx);
+static JSValue athena_freeobj(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
 #ifndef SKIP_ERROR_HANDLING
-	if (argc != 1) return duk_generic_error(ctx, "wrong number of arguments");
+	if (argc != 1) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
 #endif
 	
-	model* m = (model*)(duk_get_pointer(ctx, 0));
+	model* m;
+	JS_ToUint32(ctx, &m, argv[0]);
 
     free(m->idxList);
 	m->idxList = NULL;
@@ -59,151 +60,145 @@ duk_ret_t athena_freeobj(duk_context *ctx) {
 	free(m);
 	m = NULL;
 
-	return 0;
+	return JS_UNDEFINED;
 }
 
-duk_ret_t athena_drawobj(duk_context *ctx){
-	int argc = duk_get_top(ctx);
-	if (argc != 7) return duk_generic_error(ctx, "wrong number of arguments");
-	model* m = (model*)duk_get_pointer(ctx, 0);
-	float pos_x = duk_get_number(ctx, 1);
-	float pos_y = duk_get_number(ctx, 2);
-	float pos_z = duk_get_number(ctx, 3);
-	float rot_x = duk_get_number(ctx, 4);
-	float rot_y = duk_get_number(ctx, 5);
-	float rot_z = duk_get_number(ctx, 6);
+static JSValue athena_drawobj(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	if (argc != 7) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
+
+	float pos_x, pos_y, pos_z, rot_x, rot_y, rot_z;
+	model* m;
+	JS_ToUint32(ctx, &m, argv[0]);
+
+	JS_ToFloat32(ctx, &pos_x, argv[1]);
+	JS_ToFloat32(ctx, &pos_y, argv[2]);
+	JS_ToFloat32(ctx, &pos_z, argv[3]);
+	JS_ToFloat32(ctx, &rot_x, argv[4]);
+	JS_ToFloat32(ctx, &rot_y, argv[5]);
+	JS_ToFloat32(ctx, &rot_z, argv[6]);
 	
 	drawOBJ(m, pos_x, pos_y, pos_z, rot_x, rot_y, rot_z);
 
-	return 0;
+	return JS_UNDEFINED;
 }
 
 
-duk_ret_t athena_drawbbox(duk_context *ctx){
-	int argc = duk_get_top(ctx);
-	if (argc != 8) return duk_generic_error(ctx, "wrong number of arguments");
-	model* m = (model*)duk_get_pointer(ctx, 0);
-	float pos_x = duk_get_number(ctx, 1);
-	float pos_y = duk_get_number(ctx, 2);
-	float pos_z = duk_get_number(ctx, 3);
-	float rot_x = duk_get_number(ctx, 4);
-	float rot_y = duk_get_number(ctx, 5);
-	float rot_z = duk_get_number(ctx, 6);
-	Color color = (Color)duk_get_uint(ctx, 7);
+static JSValue athena_drawbbox(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	if (argc != 8) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
+
+	float pos_x, pos_y, pos_z, rot_x, rot_y, rot_z;
+	Color color;
+	model* m;
+	JS_ToUint32(ctx, &m, argv[0]);
+
+	JS_ToFloat32(ctx, &pos_x, argv[1]);
+	JS_ToFloat32(ctx, &pos_y, argv[2]);
+	JS_ToFloat32(ctx, &pos_z, argv[3]);
+	JS_ToFloat32(ctx, &rot_x, argv[4]);
+	JS_ToFloat32(ctx, &rot_y, argv[5]);
+	JS_ToFloat32(ctx, &rot_z, argv[6]);
+	JS_ToUint32(ctx, &color, argv[7]);
 	
 	draw_bbox(m, pos_x, pos_y, pos_z, rot_x, rot_y, rot_z, color);
 
-	return 0;
+	return JS_UNDEFINED;
 }
 
-DUK_EXTERNAL duk_ret_t dukopen_render(duk_context *ctx) {
-	const duk_function_list_entry module_funcs[] = {
-	    { "init",           		athena_initrender,	DUK_VARARGS },
-	  	{ "loadOBJ",           		athena_loadobj,		DUK_VARARGS },
-	    { "drawOBJ",           		athena_drawobj,		DUK_VARARGS },
-		{ "drawBbox",           	athena_drawbbox,	DUK_VARARGS },
-	    { "freeOBJ",           		athena_freeobj,		DUK_VARARGS },
-	  {NULL, NULL, 0}
-	};
-
-  duk_push_object(ctx);  /* module result */
-  duk_put_function_list(ctx, -1, module_funcs);
-
-  return 1;  /* return module value */
-}
+static const JSCFunctionListEntry render_funcs[] = {
+    JS_CFUNC_DEF( "init",      1,     		 athena_initrender),
+  	JS_CFUNC_DEF( "loadOBJ",   2,        		athena_loadobj ),
+    JS_CFUNC_DEF( "drawOBJ",   7,        		athena_drawobj ),
+	JS_CFUNC_DEF( "drawBbox",  8,         	    athena_drawbbox),
+    JS_CFUNC_DEF( "freeOBJ",   1,        		athena_freeobj ),
+};
 
 
-duk_ret_t athena_lightnumber(duk_context *ctx){
-	int argc = duk_get_top(ctx);
-	if (argc != 1) return duk_generic_error(ctx, "wrong number of arguments");
+static JSValue athena_lightnumber(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	if (argc != 1) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
 
-	int lightcount = duk_get_int(ctx, 0);
+	int lightcount;
+	JS_ToInt32(ctx, &lightcount, argv[0]);
 
 	setLightQuantity(lightcount);
 
-	return 0;
+	return JS_UNDEFINED;
 }
 
-duk_ret_t athena_createlight(duk_context *ctx){
-	int argc = duk_get_top(ctx);
-	if (argc != 8) return duk_generic_error(ctx, "wrong number of arguments");
-	int id = duk_get_int(ctx, 0);
-	float dir_x = duk_get_number(ctx, 1);
-	float dir_y = duk_get_number(ctx, 2);
-	float dir_z = duk_get_number(ctx, 3);
-	float r = duk_get_number(ctx, 4);
-	float g = duk_get_number(ctx, 5);
-	float b = duk_get_number(ctx, 6);
-	int type = duk_get_number(ctx, 7);
-	
+static JSValue athena_createlight(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	if (argc != 8) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
+
+	float dir_x, dir_y, dir_z, r, g, b;
+	int id, type;
+
+	JS_ToInt32(ctx, &id, argv[0]);
+	JS_ToFloat32(ctx, &dir_x, argv[1]);
+	JS_ToFloat32(ctx, &dir_y, argv[2]);
+	JS_ToFloat32(ctx, &dir_z, argv[3]);
+	JS_ToFloat32(ctx, &r, argv[4]);
+	JS_ToFloat32(ctx, &g, argv[5]);
+	JS_ToFloat32(ctx, &b, argv[6]);
+	JS_ToInt32(ctx, &type, argv[7]);
 	
 	createLight(id, dir_x, dir_y, dir_z, type, r, g, b);
 
-	return 0;
+	return JS_UNDEFINED;
 }
 
-DUK_EXTERNAL duk_ret_t dukopen_lights(duk_context *ctx) {
-	const duk_function_list_entry module_funcs[] = {
-	  { "set",  	athena_createlight,		DUK_VARARGS },
-	  { "create", 	athena_lightnumber,		DUK_VARARGS },
-	  { NULL, NULL, 0 }
-	};
-
-  duk_push_object(ctx);  /* module result */
-  duk_put_function_list(ctx, -1, module_funcs);
-
-  return 1;  /* return module value */
-}
+static const JSCFunctionListEntry light_funcs[] = {
+  JS_CFUNC_DEF( "set",  	8, athena_createlight),
+  JS_CFUNC_DEF( "create", 	1, athena_lightnumber),
+  JS_PROP_INT32_DEF("AMBIENT", LIGHT_AMBIENT, JS_PROP_CONFIGURABLE ),
+  JS_PROP_INT32_DEF("DIRECTIONAL", LIGHT_DIRECTIONAL, JS_PROP_CONFIGURABLE ),
+};
 
 
-duk_ret_t athena_camposition(duk_context *ctx){
-	int argc = duk_get_top(ctx);
-	if (argc != 3) return duk_generic_error(ctx, "wrong number of arguments");
-	float x = duk_get_number(ctx, 0);
-	float y = duk_get_number(ctx, 1);
-	float z = duk_get_number(ctx, 2);
+static JSValue athena_camposition(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	if (argc != 3) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
+	float x, y, z;
+	JS_ToFloat32(ctx, &x, argv[0]);
+	JS_ToFloat32(ctx, &y, argv[1]);
+	JS_ToFloat32(ctx, &z, argv[2]);
 	
 	setCameraPosition(x, y, z);
 
-	return 0;
+	return JS_UNDEFINED;
 }
 
 
-duk_ret_t athena_camrotation(duk_context *ctx){
-	int argc = duk_get_top(ctx);
-	if (argc != 3) return duk_generic_error(ctx, "wrong number of arguments");
-	float x = duk_get_number(ctx, 0);
-	float y = duk_get_number(ctx, 1);
-	float z = duk_get_number(ctx, 2);
+static JSValue athena_camrotation(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	if (argc != 3) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
+	float x, y, z;
+	JS_ToFloat32(ctx, &x, argv[0]);
+	JS_ToFloat32(ctx, &y, argv[1]);
+	JS_ToFloat32(ctx, &z, argv[2]);
 	
 	setCameraRotation(x, y, z);
 
-	return 0;
+	return JS_UNDEFINED;
 }
 
-DUK_EXTERNAL duk_ret_t dukopen_camera(duk_context *ctx) {
-	const duk_function_list_entry module_funcs[] = {
-	  { "position",  	athena_camposition,		DUK_VARARGS },
-	  { "rotation", 	athena_camrotation,		DUK_VARARGS },
-	  { NULL, NULL, 0 }
-	};
+static const JSCFunctionListEntry camera_funcs[] = {
+  JS_CFUNC_DEF("position", 3, athena_camposition),
+  JS_CFUNC_DEF("rotation", 3, athena_camrotation),
+};
 
-  duk_push_object(ctx);  /* module result */
-  duk_put_function_list(ctx, -1, module_funcs);
-
-  return 1;  /* return module value */
+static int render_init(JSContext *ctx, JSModuleDef *m)
+{
+    return JS_SetModuleExportList(ctx, m, render_funcs, countof(render_funcs));
 }
 
+static int light_init(JSContext *ctx, JSModuleDef *m)
+{
+    return JS_SetModuleExportList(ctx, m, light_funcs, countof(light_funcs));
+}
 
-void athena_render_init(duk_context* ctx){
-	push_athena_module(dukopen_render,   	 "Render");
-	push_athena_module(dukopen_lights,   	 "Lights");
-	push_athena_module(dukopen_camera,   	 "Camera");
+static int camera_init(JSContext *ctx, JSModuleDef *m)
+{
+    return JS_SetModuleExportList(ctx, m, camera_funcs, countof(camera_funcs));
+}
 
-	duk_push_uint(ctx, LIGHT_AMBIENT);
-	duk_put_global_string(ctx, "AMBIENT");
-
-	duk_push_uint(ctx, LIGHT_DIRECTIONAL);
-	duk_put_global_string(ctx, "DIRECTIONAL");
-
+JSModuleDef *athena_render_init(JSContext* ctx){
+	athena_push_module(ctx, render_init, render_funcs, countof(render_funcs), "Render");
+	athena_push_module(ctx, light_init, light_funcs, countof(light_funcs), "Lights");
+    return athena_push_module(ctx, camera_init, camera_funcs, countof(camera_funcs), "Camera");
 }

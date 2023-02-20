@@ -1,59 +1,134 @@
 #include "ath_env.h"
 #include "include/sound.h"
 
-duk_ret_t athena_setformat(duk_context *ctx){
-	int argc = duk_get_top(ctx);
-	if (argc != 3) return duk_generic_error(ctx, "setFormat takes 3 arguments");
-	sound_setformat(duk_get_int(ctx, 0), duk_get_int(ctx, 1), duk_get_int(ctx, 2));
-	return 0;
+static JSValue athena_setvolume(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	int slot, volume;
+
+	JS_ToInt32(ctx, &volume, argv[0]);
+
+	if(argc == 2) {
+		JS_ToInt32(ctx, &slot, argv[1]);
+		sound_setadpcmvolume(slot, volume);
+	} else {
+		sound_setvolume(volume);
+	}
+	
+	return JS_UNDEFINED;
 }
 
-duk_ret_t athena_setvolume(duk_context *ctx){
-	int argc = duk_get_top(ctx);
-	if (argc != 1) return duk_generic_error(ctx, "setVolume takes only 1 argument");
-	sound_setvolume(duk_get_int(ctx, 0));
-	return 0;
+static JSValue athena_load(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	Sound* snd;
+	const char* path = JS_ToCString(ctx, argv[0]);
+
+	FILE* f = fopen(path, "rb");
+	uint32_t magic;
+	fread(&magic, 1, 4, f);	
+	fclose(f);
+
+	switch (magic) {
+		case 0x5367674F: /* OGG */
+			snd = load_ogg(path);
+			break;
+		case 0x46464952: /* WAV */
+			snd = load_wav(path);
+			break;
+		case 0x4D435041: /* ADPCM (with header) */  
+			snd = malloc(sizeof(Sound));
+			snd->fp = sound_loadadpcm(path);
+			snd->type = ADPCM_AUDIO;
+			break;
+		default:
+			return JS_UNDEFINED;
+	}
+
+	return JS_NewUint32(ctx, snd);
 }
 
-duk_ret_t athena_setadpcmvolume(duk_context *ctx){
-	int argc = duk_get_top(ctx);
-	if (argc != 2) return duk_generic_error(ctx, "setADPCMVolume takes 2 arguments");
-	sound_setadpcmvolume(duk_get_int(ctx, 0), duk_get_int(ctx, 1));
-	return 0;
+static JSValue athena_play(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	int slot = 0;
+	Sound* snd;
+
+	JS_ToUint32(ctx, &snd, argv[0]);
+
+	switch (snd->type) {
+		case WAV_AUDIO:
+			play_wav(snd);
+			break;
+		case OGG_AUDIO:
+			play_ogg(snd);
+			break;
+		case ADPCM_AUDIO:
+			if (argc == 2)
+				JS_ToInt32(ctx, &slot, argv[1]);
+			sound_playadpcm(slot, snd->fp);
+			break;
+	}
+	
+	return JS_UNDEFINED;
 }
 
-duk_ret_t athena_loadadpcm(duk_context *ctx){
-	int argc = duk_get_top(ctx);
-	if (argc != 1) return duk_generic_error(ctx, "loadADPCM takes only 1 argument");
-	duk_push_pointer(ctx, (void*)sound_loadadpcm(duk_get_string(ctx, 0)));
-	return 1;
+static JSValue athena_free(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	Sound* snd;
+	JS_ToUint32(ctx, &snd, argv[0]);
+	sound_free(snd);
+	return JS_UNDEFINED;
 }
 
-duk_ret_t athena_playadpcm(duk_context *ctx){
-	int argc = duk_get_top(ctx);
-	if (argc != 2) return duk_generic_error(ctx, "playADPCM takes 2 arguments");
-	sound_playadpcm(duk_get_int(ctx, 0), (audsrv_adpcm_t *)duk_get_pointer(ctx, 1));
-	return 0;
+static JSValue athena_deinit(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	sound_deinit();
+	return JS_UNDEFINED;
 }
 
-DUK_EXTERNAL duk_ret_t dukopen_sound(duk_context *ctx) {
-	const duk_function_list_entry module_funcs[] = {
-		{ "setFormat",      						athena_setformat,           3 },
-		{ "setVolume",      				   		athena_setvolume,           1 },
-		{ "setADPCMVolume",      				    athena_setadpcmvolume,      2 },
-		{ "loadADPCM",      					    athena_loadadpcm,           1 },
-		{ "playADPCM",      						athena_playadpcm,           2 },
-		{ NULL, NULL, 0 }
-	};
-
-  duk_push_object(ctx);  /* module result */
-  duk_put_function_list(ctx, -1, module_funcs);
-
-  return 1;  /* return module value */
+static JSValue athena_isplaying(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	return JS_NewBool(ctx, is_sound_playing());
 }
 
+static JSValue athena_duration(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	Sound* snd;
 
-void athena_sound_init(duk_context* ctx){
-	push_athena_module(dukopen_sound,   	  "Sound");
+	JS_ToUint32(ctx, &snd, argv[0]);
+	return JS_NewInt32(ctx, sound_get_duration(snd));
+}
+
+static JSValue athena_repeat(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	set_sound_repeat(JS_ToBool(ctx, argv[0]));
+	return JS_UNDEFINED;
+}
+
+static JSValue athena_pause(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	Sound* snd;
+	JS_ToUint32(ctx, &snd, argv[0]);
+	if (snd->type != ADPCM_AUDIO)
+		sound_pause();
+	return JS_UNDEFINED;
+}
+
+static JSValue athena_resume(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	Sound* snd;
+	JS_ToUint32(ctx, &snd, argv[0]);
+	if (snd->type != ADPCM_AUDIO)
+		sound_resume(snd);
+	return JS_UNDEFINED;
+}
+
+static const JSCFunctionListEntry module_funcs[] = {
+	JS_CFUNC_DEF("setVolume", 2, athena_setvolume),
+	JS_CFUNC_DEF("load", 1, athena_load),
+	JS_CFUNC_DEF("play", 2, athena_play),
+	JS_CFUNC_DEF("free", 1, athena_free),
+	JS_CFUNC_DEF("deinit", 0, athena_deinit),
+	JS_CFUNC_DEF("isPlaying", 0, athena_isplaying),
+	JS_CFUNC_DEF("duration", 1, athena_duration),
+	JS_CFUNC_DEF("repeat", 1, athena_repeat),
+	JS_CFUNC_DEF("pause", 1, athena_pause),
+	JS_CFUNC_DEF("resume", 1, athena_resume),
+};
+
+static int module_init(JSContext *ctx, JSModuleDef *m){
+    return JS_SetModuleExportList(ctx, m, module_funcs, countof(module_funcs));
+}
+
+JSModuleDef *athena_sound_init(JSContext* ctx){
+	return athena_push_module(ctx, module_init, module_funcs, countof(module_funcs), "Sound");
 
 }

@@ -19,15 +19,6 @@
 
 #include FT_FREETYPE_H
 
-/// Maximal count of atlases per font
-#define ATLAS_MAX    4
-/// Atlas width in pixels
-#define ATLAS_WIDTH  256
-/// Atlas height in pixels
-#define ATLAS_HEIGHT 256
-
-#define FNTSYS_CHAR_SIZE 17
-
 // freetype vars
 static FT_Library font_library;
 
@@ -638,6 +629,33 @@ int fntRenderString(int id, int x, int y, short aligned, size_t width, size_t he
     }
 
     return pen_x;
+}
+
+Coords fntGetTextSize(int id, const char* text) {
+    WaitSema(gFontSemaId);
+    font_t *font = &fonts[id];
+    SignalSema(gFontSemaId);
+
+	int num_chars = strlen(text);
+	FT_GlyphSlot slot = font->face->glyph;
+    int width = 0;
+    int height = num_chars > 0? FNTSYS_CHAR_SIZE : 0;
+    int maxHeight = 0;
+	for (int n = 0; n < num_chars; n++) {
+		FT_UInt glyph_index = FT_Get_Char_Index(font->face, text[n]);
+		int error = FT_Load_Glyph(font->face, glyph_index, FT_LOAD_DEFAULT );
+		if (error) continue;
+		error = FT_Render_Glyph(font->face->glyph, ft_render_mode_normal );
+		if (error) continue;
+		if (slot->bitmap.rows > maxHeight) maxHeight = slot->bitmap.rows;
+		width += slot->advance.x >> 6;
+	}
+
+    Coords size;
+    size.width = width;
+    size.height = FNTSYS_CHAR_SIZE;
+	
+	return size;
 }
 
 #else
