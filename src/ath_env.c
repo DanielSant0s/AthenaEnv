@@ -129,7 +129,7 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"import * as Lights from 'Lights';\n"
 				"import * as Camera from 'Camera';\n"
 				"import * as System from 'System';\n"
-				"import * as Sif from 'Sif';\n"
+				"import * as IOP from 'IOP';\n"
 				"import * as Archive from 'Archive';\n"
                 "globalThis.std = std;\n"
                 "globalThis.os = os;\n"
@@ -186,7 +186,7 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"globalThis.Image = Image.Image;\n"
 				"globalThis.ImageList = ImageList.ImageList;\n"
 
-				"globalThis.Sif = Sif;\n"
+				"globalThis.IOP = IOP;\n"
 
 				"globalThis.Render = Render;\n"
 

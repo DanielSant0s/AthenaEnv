@@ -2,6 +2,7 @@
 #include <netman.h>
 #include <ps2ip.h>
 #include <curl/curl.h>
+#include <loadfile.h>
 
 struct MemoryStruct {
     char *memory;
@@ -149,11 +150,6 @@ static JSValue athena_nw_init(JSContext *ctx, JSValue this_val, int argc, JSValu
 	
     struct ip4_addr IP, NM, GW, DNS;
 
-    ip4_addr_set_zero(&IP);
-	ip4_addr_set_zero(&NM);
-	ip4_addr_set_zero(&GW);
-	ip4_addr_set_zero(&DNS);
-
     NetManInit();
 
 	if(ethApplyNetIFConfig(NETMAN_NETIF_ETH_LINK_MODE_AUTO) != 0) {
@@ -165,21 +161,30 @@ static JSValue athena_nw_init(JSContext *ctx, JSValue this_val, int argc, JSValu
         NM.addr = ipaddr_addr(JS_ToCString(ctx, argv[1]));
         GW.addr = ipaddr_addr(JS_ToCString(ctx, argv[2]));
         DNS.addr = ipaddr_addr(JS_ToCString(ctx, argv[3]));
+    } else {
+        ip4_addr_set_zero(&IP);
+	    ip4_addr_set_zero(&NM);
+	    ip4_addr_set_zero(&GW);
+	    ip4_addr_set_zero(&DNS);
     }
 
     ps2ipInit(&IP, &NM, &GW);
     ethApplyIPConfig((argc == 4? 0 : 1), &IP, &NM, &GW, &DNS);
 
+    printf("Waiting for connection...\n");
     if(ethWaitValidNetIFLinkState() != 0) {
 	    return JS_ThrowSyntaxError(ctx, "Error: failed to get valid link status.\n");
 	}
 
     if(argc == 4) return JS_UNDEFINED;
 
+    printf("Waiting for DHCP lease...\n");
 	if (ethWaitValidDHCPState() != 0)
 	{
-		return JS_ThrowSyntaxError(ctx, "DHCP failed\n.");
+		return JS_ThrowSyntaxError(ctx, "DHCP failed.\n");
 	}
+
+    printf("DHCP Connected.\n");
 
 	return JS_UNDEFINED;
 }

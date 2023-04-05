@@ -8,8 +8,6 @@
 
 #include "include/system.h"
 
-void IOP_Reset(void);
-
 /* Normalize a pathname by removing
   . and .. components, duplicated /, etc. */
 char* __ps2_normalize_path(char *path_name)

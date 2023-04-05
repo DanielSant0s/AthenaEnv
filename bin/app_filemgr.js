@@ -182,7 +182,7 @@ file_manager.process = function() {
 
             } else if(file[file_manager.data[0]].name.endsWith(".js")){
                 System.currentDir(path + "/");
-                dofile(file[file_manager.data[0]].name);
+                std.loadScript(file[file_manager.data[0]].name);
             } else if(file[file_manager.data[0]].name.endsWith(".elf")){
                 System.loadELF(path + "/"+ file[file_manager.data[0]].name);
             }

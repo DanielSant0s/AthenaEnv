@@ -201,7 +201,7 @@ void sound_setadpcmvolume(int slot, int volume) {
         adpcm_started = true;
     }
 
-	audsrv_adpcm_set_volume(slot, volume);
+    audsrv_adpcm_set_volume_and_pan(slot, volume, 0);
 }
 
 audsrv_adpcm_t* sound_loadadpcm(const char* path){

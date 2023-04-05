@@ -27,3 +27,11 @@ src/NETMAN.s
 src/SMAP.s
 src/ps2kbd.s
 src/ps2mouse.s
+src/bdmfs_fatfs.s
+src/mtapman.s
+src/poweroff.s
+src/ps2atad.s
+src/ps2dev9.s
+src/ps2fs.s
+src/ps2hdd.s
+src/freeram.s

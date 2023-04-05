@@ -45,13 +45,13 @@ while(true){
 
     oldpad = pad;
     pad = Pads.get();
-    lx = pad.lx / 1024.0f;
-    ly = pad.ly / 1024.0f;
+    lx = ((pad.lx > 25 || pad.lx < -25)? pad.lx : 0) / 1024.0f;
+    ly = ((pad.ly > 25 || pad.ly < -25)? pad.ly : 0) / 1024.0f;
     savedlx = savedlx - lx;
     savedly = savedly - ly;
 
-    rx = pad.rx / 1024.0f;
-    ry = pad.ry / 1024.0f;
+    rx = ((pad.rx > 25 || pad.rx < -25)? pad.rx : 0) / 1024.0f;
+    ry = ((pad.ry > 25 || pad.ry < -25)? pad.ry : 0) / 1024.0f;
     savedrx = savedrx - rx;
     savedry = savedry - ry;
 

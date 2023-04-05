@@ -1,5 +1,4 @@
 #include <unistd.h>
-#include <libmc.h>
 #include <malloc.h>
 #include <sys/fcntl.h>
 #include <dirent.h>
@@ -10,6 +9,8 @@
 #include "include/graphics.h"
 
 #include "include/system.h"
+
+#include "include/def_mods.h"
 
 #define MAX_DIR_FILES 512
 
@@ -672,9 +673,224 @@ static JSValue athena_sifloadmodulebuffer(JSContext *ctx, JSValue this_val, int 
 	return JS_NewInt32(ctx, result);
 }
 
+#define KEYBOARD_MODULE 0
+#define MOUSE_MODULE 1
+#define FREERAM_MODULE 2
+#define DS34BT_MODULE 3
+#define DS34USB_MODULE 4
+#define NETWORK_MODULE 5
+#define USB_MASS_MODULE 6
+#define PADS_MODULE 7
+#define AUDIO_MODULE 8
+#define CDFS_MODULE 9
+#define MC_MODULE 10
+#define HDD_MODULE 11
+
+bool kbd_started = false;
+bool mouse_started = false;
+bool freeram_started = false;
+bool ds34bt_started = false;
+bool ds34usb_started = false;
+bool network_started = false;
+bool sio2man_started = false;
+bool usbd_started = false;
+bool usb_mass_started = false;
+bool pads_started = false;
+bool audio_started = false;
+bool cdfs_started = false;
+bool dev9_started = false;
+bool mc_started = false;
+bool hdd_started = false;
+
+static JSValue athena_sifloaddefaultmodule(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	if (argc != 1 && argc != 3) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
+	int mod_id = -1, result, arg_len = 0;
+	unsigned char* mod_data = NULL;
+	unsigned int mod_size = 0;
+
+	JS_ToInt32(ctx, &mod_id, argv[0]);
+
+	const char *args = NULL;
+
+	if(argc == 3){
+		JS_ToInt32(ctx, &arg_len, argv[1]);
+		args = JS_ToCString(ctx, argv[2]);
+	}
+
+	switch (mod_id) {
+		case KEYBOARD_MODULE:
+			if (!usbd_started) {
+				SifExecModuleBuffer(&usbd_irx, size_usbd_irx, 0, NULL, NULL);
+				usbd_started = true;
+			}
+			if (!kbd_started) {
+				SifExecModuleBuffer((void*)ps2kbd_irx, size_ps2kbd_irx, arg_len, args, NULL);
+				kbd_started = true;
+			}
+			break;
+		case MOUSE_MODULE:
+			if (!usbd_started) {
+				SifExecModuleBuffer(&usbd_irx, size_usbd_irx, 0, NULL, NULL);
+				usbd_started = true;
+			}
+			if (!mouse_started) {
+				SifExecModuleBuffer((void*)ps2mouse_irx, size_ps2mouse_irx, arg_len, args, NULL);
+				mouse_started = true;
+			}
+			break;
+		case FREERAM_MODULE:
+			if (!freeram_started) {
+				SifExecModuleBuffer((void*)freeram_irx, size_freeram_irx, arg_len, args, NULL);
+				freeram_started = true;
+			}
+			break;
+		case DS34BT_MODULE:
+			if (!usbd_started) {
+				SifExecModuleBuffer(&usbd_irx, size_usbd_irx, 0, NULL, NULL);
+				usbd_started = true;
+			}
+			if (!ds34bt_started) {
+				SifExecModuleBuffer((void*)ds34bt_irx, size_ds34bt_irx, arg_len, args, NULL);
+				ds34bt_init();
+				ds34bt_started = true;
+			}
+			break;
+		case DS34USB_MODULE:
+			if (!usbd_started) {
+				SifExecModuleBuffer(&usbd_irx, size_usbd_irx, 0, NULL, NULL);
+				usbd_started = true;
+			}
+			if (!ds34usb_started) {
+				SifExecModuleBuffer((void*)ds34usb_irx, size_ds34usb_irx, arg_len, args, NULL);
+				ds34usb_init();
+				ds34usb_started = true;
+			}
+			break;
+		case NETWORK_MODULE:
+			if (!dev9_started) {
+				SifExecModuleBuffer(&ps2dev9_irx, size_ps2dev9_irx, 0, NULL, NULL);
+				dev9_started = true;
+			}
+			if (!network_started) {
+				SifExecModuleBuffer((void*)NETMAN_irx, size_NETMAN_irx, arg_len, args, NULL);
+				SifExecModuleBuffer((void*)SMAP_irx, size_SMAP_irx, arg_len, args, NULL);
+				network_started = true;
+			}
+			break;
+		case PADS_MODULE:
+			if (!sio2man_started) {
+				SifExecModuleBuffer(&sio2man_irx, size_sio2man_irx, 0, NULL, NULL);
+				sio2man_started = true;
+			}
+			if (!pads_started) {
+				SifExecModuleBuffer(&padman_irx, size_padman_irx, 0, NULL, NULL);
+				pad_init();
+				pads_started = true;
+			}
+			break;
+		case MC_MODULE:
+			if (!sio2man_started) {
+				SifExecModuleBuffer(&sio2man_irx, size_sio2man_irx, 0, NULL, NULL);
+				sio2man_started = true;
+			}
+			if (!mc_started) {
+				SifExecModuleBuffer(&mcman_irx, size_mcman_irx, 0, NULL, NULL);
+    			SifExecModuleBuffer(&mcserv_irx, size_mcserv_irx, 0, NULL, NULL);
+				mc_started = true;
+			}
+			break;
+		case AUDIO_MODULE:
+			if (!audio_started) {
+				SifExecModuleBuffer(&libsd_irx, size_libsd_irx, 0, NULL, NULL);
+    			SifExecModuleBuffer(&audsrv_irx, size_audsrv_irx, 0, NULL, NULL);
+    			audsrv_init();
+				audio_started = true;
+			}
+			break;
+		case USB_MASS_MODULE:
+			if (!usbd_started) {
+				SifExecModuleBuffer(&usbd_irx, size_usbd_irx, 0, NULL, NULL);
+				usbd_started = true;
+			}
+			if (!usb_mass_started) {
+    			SifExecModuleBuffer(&bdm_irx, size_bdm_irx, 0, NULL, NULL);
+    			SifExecModuleBuffer(&bdmfs_fatfs_irx, size_bdmfs_fatfs_irx, 0, NULL, NULL);
+    			SifExecModuleBuffer(&usbmass_bd_irx, size_usbmass_bd_irx, 0, NULL, NULL);
+
+				usb_mass_started = true;
+			}
+			break;
+		case CDFS_MODULE:
+			if (!cdfs_started) {
+				SifExecModuleBuffer(&cdfs_irx, size_cdfs_irx, 0, NULL, NULL);
+				cdfs_started = true;
+			}
+
+			break;
+		case HDD_MODULE:
+			if (!dev9_started) {
+				SifExecModuleBuffer(&ps2dev9_irx, size_ps2dev9_irx, 0, NULL, NULL);
+				dev9_started = true;
+			}
+			if (!hdd_started) {
+				hdd_started = true;
+			}
+			break;
+	}
+
+	return JS_UNDEFINED;
+}
+
+static JSValue athena_resetiop(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	if (argc != 0) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
+	//ds34bt_deinit();
+	//ds34usb_deinit();
+	padEnd();
+	audsrv_quit();
+
+	prepare_IOP();
+
+	SifExecModuleBuffer(&iomanX_irx, size_iomanX_irx, 0, NULL, NULL);
+    SifExecModuleBuffer(&fileXio_irx, size_fileXio_irx, 0, NULL, NULL);
+
+	//init_poweroff_driver();
+	//poweroffSetCallback(&poweroffHandler, NULL);
+	return JS_UNDEFINED;
+}
+
+static JSValue athena_getmemory(JSContext *ctx, JSValue this_val, int argc, JSValueConst * argv){
+	if (argc != 0) return JS_ThrowSyntaxError(ctx, "Wrong number of arguments");
+	s32 freeram = 0;
+    s32 usedram = 0;
+
+    smem_read((void *)(1 * 1024 * 1024), &freeram, 4);
+    usedram = (2 * 1024 * 1024) - freeram;
+
+	JSValue obj = JS_NewObject(ctx);
+    JS_DefinePropertyValueStr(ctx, obj, "free", JS_NewUint32(ctx, freeram), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "used", JS_NewUint32(ctx, usedram), JS_PROP_C_W_E);
+
+	return obj;
+}
+
 static const JSCFunctionListEntry sif_funcs[] = {
 	JS_CFUNC_DEF("loadModule",            3, 		 athena_sifloadmodule),
 	JS_CFUNC_DEF("loadModuleBuffer",      3,       athena_sifloadmodulebuffer),
+	JS_CFUNC_DEF("loadDefaultModule",     3,       athena_sifloaddefaultmodule),
+	JS_CFUNC_DEF("reset",      			  0,     	athena_resetiop),
+	JS_CFUNC_DEF("getMemoryStats",        0,     	athena_getmemory),
+	JS_PROP_INT32_DEF("keyboard", KEYBOARD_MODULE, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("mouse", MOUSE_MODULE, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("freeram", FREERAM_MODULE, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("ds34bt", DS34BT_MODULE, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("ds34usb", DS34USB_MODULE, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("network", NETWORK_MODULE, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("pads", PADS_MODULE, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("memcard", MC_MODULE, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("audio", AUDIO_MODULE, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("usb_mass", USB_MASS_MODULE, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("cdfs", CDFS_MODULE, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("hdd", HDD_MODULE, JS_PROP_CONFIGURABLE),
 };
 
 static int system_init(JSContext *ctx, JSModuleDef *m)
@@ -690,6 +906,6 @@ static int sif_init(JSContext *ctx, JSModuleDef *m)
 JSModuleDef *athena_system_init(JSContext* ctx){
 	setModulePath();
 	athena_push_module(ctx, system_init, system_funcs, countof(system_funcs), "System");
-	return athena_push_module(ctx, sif_init, sif_funcs, countof(sif_funcs), "Sif");
+	return athena_push_module(ctx, sif_init, sif_funcs, countof(sif_funcs), "IOP");
 }
 
