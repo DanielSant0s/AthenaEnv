@@ -2,6 +2,7 @@ Screen.log("Athena network system\n");
 
 IOP.reset();
 
+IOP.loadDefaultModule(IOP.hdd);
 IOP.loadDefaultModule(IOP.cdfs);
 IOP.loadDefaultModule(IOP.memcard);
 IOP.loadDefaultModule(IOP.usb_mass);
