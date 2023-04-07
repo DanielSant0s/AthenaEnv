@@ -9,7 +9,6 @@
 #include <sbv_patches.h>
 #include <smem.h>
 
-#include <ps2_all_drivers.h>
 #include <libpwroff.h>
 
 #include <libds34bt.h>
@@ -19,6 +18,8 @@
 
 #include <netman.h>
 #include <ps2ip.h>
+
+#include <stdbool.h>
 
 #define irx_define(mod)               \
     extern unsigned char mod##_irx[] __attribute__((aligned(16))); \

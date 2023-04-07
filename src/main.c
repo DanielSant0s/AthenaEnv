@@ -53,6 +53,7 @@ static void init_drivers() {
     load_default_module(MC_MODULE);
     load_default_module(USB_MASS_MODULE);
     load_default_module(CDFS_MODULE);
+    load_default_module(HDD_MODULE);
     load_default_module(PADS_MODULE);
     load_default_module(DS34BT_MODULE);
     load_default_module(DS34USB_MODULE);
@@ -61,6 +62,22 @@ static void init_drivers() {
     // SifExecModuleBuffer(&mtapman_irx, size_mtapman_irx, 0, NULL, NULL);
     // mtapInit();
 
+}
+
+bool waitUntilDeviceIsReady(char *path) {
+    struct stat buffer;
+    int ret = -1;
+    int retries = 500;
+
+    while(ret != 0 && retries > 0) {
+        ret = stat(path, &buffer);
+        /* Wait untill the device is ready */
+        nopdelay();
+
+        retries--;
+    }
+
+    return ret == 0;
 }
 
 int main(int argc, char **argv) {
