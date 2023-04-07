@@ -13,6 +13,22 @@
 
 char boot_path[255];
 bool dark_mode;
+bool kbd_started = false;
+bool mouse_started = false;
+bool freeram_started = false;
+bool ds34bt_started = false;
+bool ds34usb_started = false;
+bool network_started = false;
+bool sio2man_started = false;
+bool usbd_started = false;
+bool usb_mass_started = false;
+bool pads_started = false;
+bool audio_started = false;
+bool cdfs_started = false;
+bool dev9_started = false;
+bool mc_started = false;
+bool hdd_started = false;
+bool filexio_started = false;
 
 void prepare_IOP() {
     printf("AthenaEnv: Starting IOP Reset...\n");
@@ -31,35 +47,20 @@ void prepare_IOP() {
 }
 
 static void init_drivers() {
-    int ds3pads = 1;
-
     SifExecModuleBuffer(&poweroff_irx, size_poweroff_irx, 0, NULL, NULL);
 
-    SifExecModuleBuffer(&iomanX_irx, size_iomanX_irx, 0, NULL, NULL);
-    SifExecModuleBuffer(&fileXio_irx, size_fileXio_irx, 0, NULL, NULL);
+    load_default_module(FILEXIO_MODULE);
+    load_default_module(MC_MODULE);
+    load_default_module(USB_MASS_MODULE);
+    load_default_module(CDFS_MODULE);
+    load_default_module(PADS_MODULE);
+    load_default_module(DS34BT_MODULE);
+    load_default_module(DS34USB_MODULE);
+    load_default_module(AUDIO_MODULE);
 
-    SifExecModuleBuffer(&sio2man_irx, size_sio2man_irx, 0, NULL, NULL);
-
-    SifExecModuleBuffer(&mcman_irx, size_mcman_irx, 0, NULL, NULL);
-    SifExecModuleBuffer(&mcserv_irx, size_mcserv_irx, 0, NULL, NULL);
-
-    SifExecModuleBuffer(&usbd_irx, size_usbd_irx, 0, NULL, NULL);
-    SifExecModuleBuffer(&bdm_irx, size_bdm_irx, 0, NULL, NULL);
-    SifExecModuleBuffer(&bdmfs_fatfs_irx, size_bdmfs_fatfs_irx, 0, NULL, NULL);
-    SifExecModuleBuffer(&usbmass_bd_irx, size_usbmass_bd_irx, 0, NULL, NULL);
-
-    SifExecModuleBuffer(&cdfs_irx, size_cdfs_irx, 0, NULL, NULL);
     // SifExecModuleBuffer(&mtapman_irx, size_mtapman_irx, 0, NULL, NULL);
-    SifExecModuleBuffer(&padman_irx, size_padman_irx, 0, NULL, NULL);
     // mtapInit();
 
-    SifExecModuleBuffer(&libsd_irx, size_libsd_irx, 0, NULL, NULL);
-    SifExecModuleBuffer(&audsrv_irx, size_audsrv_irx, 0, NULL, NULL);
-    audsrv_init();
-
-    pad_init();
-    //ds34usb_init();
-    //ds34bt_init();
 }
 
 int main(int argc, char **argv) {

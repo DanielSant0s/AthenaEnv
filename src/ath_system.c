@@ -679,186 +679,49 @@ static JSValue athena_sifloadmodulebuffer(JSContext *ctx, JSValue this_val, int 
 	return JS_NewInt32(ctx, result);
 }
 
-#define KEYBOARD_MODULE 0
-#define MOUSE_MODULE 1
-#define FREERAM_MODULE 2
-#define DS34BT_MODULE 3
-#define DS34USB_MODULE 4
-#define NETWORK_MODULE 5
-#define USB_MASS_MODULE 6
-#define PADS_MODULE 7
-#define AUDIO_MODULE 8
-#define CDFS_MODULE 9
-#define MC_MODULE 10
-#define HDD_MODULE 11
-
-bool kbd_started = false;
-bool mouse_started = false;
-bool freeram_started = false;
-bool ds34bt_started = false;
-bool ds34usb_started = false;
-bool network_started = false;
-bool sio2man_started = false;
-bool usbd_started = false;
-bool usb_mass_started = false;
-bool pads_started = false;
-bool audio_started = false;
-bool cdfs_started = false;
-bool dev9_started = false;
-bool mc_started = false;
-bool hdd_started = false;
-
 static JSValue athena_sifloaddefaultmodule(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-	if (argc != 1 && argc != 3) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
-	int mod_id = -1, result, arg_len = 0;
-	unsigned char* mod_data = NULL;
-	unsigned int mod_size = 0;
+	if (argc != 1) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
+	int mod_id = -1;
 
 	JS_ToInt32(ctx, &mod_id, argv[0]);
 
-	const char *args = NULL;
-
-	if(argc == 3){
-		JS_ToInt32(ctx, &arg_len, argv[1]);
-		args = JS_ToCString(ctx, argv[2]);
+	if (mod_id == BOOT_MODULE) {
+		mod_id = get_boot_device(boot_path);
 	}
 
-	switch (mod_id) {
-		case KEYBOARD_MODULE:
-			if (!usbd_started) {
-				SifExecModuleBuffer(&usbd_irx, size_usbd_irx, 0, NULL, NULL);
-				usbd_started = true;
-			}
-			if (!kbd_started) {
-				SifExecModuleBuffer((void*)ps2kbd_irx, size_ps2kbd_irx, arg_len, args, NULL);
-				kbd_started = true;
-			}
-			break;
-		case MOUSE_MODULE:
-			if (!usbd_started) {
-				SifExecModuleBuffer(&usbd_irx, size_usbd_irx, 0, NULL, NULL);
-				usbd_started = true;
-			}
-			if (!mouse_started) {
-				SifExecModuleBuffer((void*)ps2mouse_irx, size_ps2mouse_irx, arg_len, args, NULL);
-				mouse_started = true;
-			}
-			break;
-		case FREERAM_MODULE:
-			if (!freeram_started) {
-				SifExecModuleBuffer((void*)freeram_irx, size_freeram_irx, arg_len, args, NULL);
-				freeram_started = true;
-			}
-			break;
-		case DS34BT_MODULE:
-			if (!usbd_started) {
-				SifExecModuleBuffer(&usbd_irx, size_usbd_irx, 0, NULL, NULL);
-				usbd_started = true;
-			}
-			if (!ds34bt_started) {
-				SifExecModuleBuffer((void*)ds34bt_irx, size_ds34bt_irx, arg_len, args, NULL);
-				ds34bt_init();
-				ds34bt_started = true;
-			}
-			break;
-		case DS34USB_MODULE:
-			if (!usbd_started) {
-				SifExecModuleBuffer(&usbd_irx, size_usbd_irx, 0, NULL, NULL);
-				usbd_started = true;
-			}
-			if (!ds34usb_started) {
-				SifExecModuleBuffer((void*)ds34usb_irx, size_ds34usb_irx, arg_len, args, NULL);
-				ds34usb_init();
-				ds34usb_started = true;
-			}
-			break;
-		case NETWORK_MODULE:
-			if (!dev9_started) {
-				SifExecModuleBuffer(&ps2dev9_irx, size_ps2dev9_irx, 0, NULL, NULL);
-				dev9_started = true;
-			}
-			if (!network_started) {
-				SifExecModuleBuffer((void*)NETMAN_irx, size_NETMAN_irx, arg_len, args, NULL);
-				SifExecModuleBuffer((void*)SMAP_irx, size_SMAP_irx, arg_len, args, NULL);
-				network_started = true;
-			}
-			break;
-		case PADS_MODULE:
-			if (!sio2man_started) {
-				SifExecModuleBuffer(&sio2man_irx, size_sio2man_irx, 0, NULL, NULL);
-				sio2man_started = true;
-			}
-			if (!pads_started) {
-				SifExecModuleBuffer(&padman_irx, size_padman_irx, 0, NULL, NULL);
-				pad_init();
-				pads_started = true;
-			}
-			break;
-		case MC_MODULE:
-			if (!sio2man_started) {
-				SifExecModuleBuffer(&sio2man_irx, size_sio2man_irx, 0, NULL, NULL);
-				sio2man_started = true;
-			}
-			if (!mc_started) {
-				SifExecModuleBuffer(&mcman_irx, size_mcman_irx, 0, NULL, NULL);
-    			SifExecModuleBuffer(&mcserv_irx, size_mcserv_irx, 0, NULL, NULL);
-				mc_started = true;
-			}
-			break;
-		case AUDIO_MODULE:
-			if (!audio_started) {
-				SifExecModuleBuffer(&libsd_irx, size_libsd_irx, 0, NULL, NULL);
-    			SifExecModuleBuffer(&audsrv_irx, size_audsrv_irx, 0, NULL, NULL);
-    			audsrv_init();
-				audio_started = true;
-			}
-			break;
-		case USB_MASS_MODULE:
-			if (!usbd_started) {
-				SifExecModuleBuffer(&usbd_irx, size_usbd_irx, 0, NULL, NULL);
-				usbd_started = true;
-			}
-			if (!usb_mass_started) {
-    			SifExecModuleBuffer(&bdm_irx, size_bdm_irx, 0, NULL, NULL);
-    			SifExecModuleBuffer(&bdmfs_fatfs_irx, size_bdmfs_fatfs_irx, 0, NULL, NULL);
-    			SifExecModuleBuffer(&usbmass_bd_irx, size_usbmass_bd_irx, 0, NULL, NULL);
-
-				usb_mass_started = true;
-			}
-			break;
-		case CDFS_MODULE:
-			if (!cdfs_started) {
-				SifExecModuleBuffer(&cdfs_irx, size_cdfs_irx, 0, NULL, NULL);
-				cdfs_started = true;
-			}
-
-			break;
-		case HDD_MODULE:
-			if (!dev9_started) {
-				SifExecModuleBuffer(&ps2dev9_irx, size_ps2dev9_irx, 0, NULL, NULL);
-				dev9_started = true;
-			}
-			if (!hdd_started) {
-				hdd_started = true;
-			}
-			break;
-	}
+	load_default_module(mod_id);
 
 	return JS_UNDEFINED;
 }
 
 static JSValue athena_resetiop(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	if (argc != 0) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
-	//ds34bt_deinit();
-	//ds34usb_deinit();
-	padEnd();
-	audsrv_quit();
+	if(ds34bt_started) ds34bt_deinit();
+	if(ds34usb_started) ds34usb_deinit();
+	if(pads_started) padEnd();
+	if(audio_started) audsrv_quit();
 
 	prepare_IOP();
 
+	kbd_started = false;
+	mouse_started = false;
+	freeram_started = false;
+	ds34bt_started = false;
+	ds34usb_started = false;
+	network_started = false;
+	sio2man_started = false;
+	usbd_started = false;
+	usb_mass_started = false;
+	pads_started = false;
+	audio_started = false;
+	cdfs_started = false;
+	dev9_started = false;
+	mc_started = false;
+	hdd_started = false;
+	filexio_started = false;
+
 	SifExecModuleBuffer(&poweroff_irx, size_poweroff_irx, 0, NULL, NULL);
-	SifExecModuleBuffer(&iomanX_irx, size_iomanX_irx, 0, NULL, NULL);
-    SifExecModuleBuffer(&fileXio_irx, size_fileXio_irx, 0, NULL, NULL);
+	load_default_module(FILEXIO_MODULE);
 
 	//poweroffSetCallback(&poweroffHandler, NULL);
 	return JS_UNDEFINED;
