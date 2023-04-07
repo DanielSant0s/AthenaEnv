@@ -236,17 +236,6 @@ static JSContext *JS_NewCustomContext(JSRuntime *rt)
     /* system modules */
     js_init_module_std(ctx, "std");
     js_init_module_os(ctx, "os");
-    return ctx;
-}
-
-const char* runScript(const char* script, bool isBuffer)
-{
-    const char *qjserr = "[qjs error]";
-    printf("\nStarting AthenaEnv...\n");
-    JSRuntime *rt = JS_NewRuntime(); if (!rt) { return qjserr; }
-    js_std_set_worker_new_context_func(JS_NewCustomContext);
-    js_std_init_handlers(rt);
-    JSContext *ctx = JS_NewCustomContext(rt); if (!ctx) { return qjserr; }
 
 	athena_system_init(ctx);
 	athena_archive_init(ctx);
@@ -266,20 +255,40 @@ const char* runScript(const char* script, bool isBuffer)
 	athena_socket_init(ctx);
 	athena_font_init(ctx);
 
+    return ctx;
+}
+
+static char error_buf[1024];
+
+const char* runScript(const char* script, bool isBuffer)
+{
+    printf("\nStarting AthenaEnv...\n");
+    JSRuntime *rt = JS_NewRuntime(); if (!rt) { return "Runtime creation"; }
+    js_std_set_worker_new_context_func(JS_NewCustomContext);
+    js_std_init_handlers(rt);
+    JSContext *ctx = JS_NewCustomContext(rt); if (!ctx) { return "Context creation"; }
+
     int s = qjs_handle_file(ctx, script, NULL);
+
     if (s < 0) { 
-		JSValue val = JS_GetException(ctx);
-		const char* exception = JS_ToCString(ctx, val);
-		const char* stack = JS_ToCString(ctx, JS_GetPropertyStr(ctx, val, "stack"));
-		const char* error = malloc(strlen(exception) + strlen(stack) + 2);
-		strcpy(error, exception);
-		strcat(error, "\n");
-		strcat(error, stack);
+		JSValue exception_val = JS_GetException(ctx);
+		const char* exception = JS_ToCString(ctx, exception_val);
+		JSValue stack_val = JS_GetPropertyStr(ctx, exception_val, "stack");
+		const char* stack = JS_ToCString(ctx, stack_val);
+		JS_FreeValue(ctx, exception_val);
+		JS_FreeValue(ctx, stack_val);
+		
+		strcpy(error_buf, exception);
+		strcat(error_buf, "\n");
+		strcat(error_buf, stack);
+
+		js_std_free_handlers(rt);
 		JS_FreeContext(ctx);
 		JS_FreeRuntime(rt);
-		return error; 
+		return error_buf; 
 	}
 	
+	js_std_free_handlers(rt);
 	JS_FreeContext(ctx);
 	JS_FreeRuntime(rt);
     return NULL;
