@@ -10,6 +10,8 @@
 #include "include/taskman.h"
 #include "include/graphics.h"
 
+extern bool dark_mode;
+
 typedef struct {
 	const char* path;
     GSTEXTURE tex;

@@ -602,6 +602,11 @@ static JSValue athena_getfileprogress(JSContext *ctx, JSValue this_val, int argc
 	return obj;
 }
 
+static JSValue athena_darkmode(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
+	dark_mode = JS_ToBool(ctx, argv[0]);
+	return JS_UNDEFINED;
+}
+
 static const JSCFunctionListEntry system_funcs[] = {
 	JS_CFUNC_DEF( "openFile",           		  2,         athena_openfile),
 	JS_CFUNC_DEF( "readFile",          		  2,         athena_readfile		 ),
@@ -628,6 +633,7 @@ static const JSCFunctionListEntry system_funcs[] = {
 	JS_CFUNC_DEF( "checkValidDisc",     		  0,  		athena_checkValidDisc ),
 	JS_CFUNC_DEF( "getDiscType",        		  0,     	athena_getDiscType	 ),
 	JS_CFUNC_DEF( "checkDiscTray",      		  0,   		athena_checkDiscTray	 ),
+	JS_CFUNC_DEF( "setDarkMode",      		  1,   		athena_darkmode	 ),
 	JS_PROP_INT32_DEF("FREAD", O_RDONLY, JS_PROP_CONFIGURABLE ),
 	JS_PROP_INT32_DEF("FWRITE", O_WRONLY, JS_PROP_CONFIGURABLE ),
 	JS_PROP_INT32_DEF("FCREATE", O_CREAT | O_WRONLY, JS_PROP_CONFIGURABLE ),

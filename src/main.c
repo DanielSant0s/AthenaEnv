@@ -12,6 +12,7 @@
 #include "include/graphics.h"
 
 char boot_path[255];
+bool dark_mode;
 
 void prepare_IOP() {
     printf("AthenaEnv: Starting IOP Reset...\n");
@@ -74,6 +75,10 @@ int main(int argc, char **argv) {
 
 	const char* errMsg;
 
+    dark_mode = false;
+    uint64_t color = GS_SETREG_RGBAQ(0x20,0x20,0x20,0x80,0x00);
+    uint64_t color2 = GS_SETREG_RGBAQ(0x80,0x80,0x80,0x80,0x00);
+
     while(true)
     {
         errMsg = runScript("main.js", false);
@@ -83,11 +88,31 @@ int main(int argc, char **argv) {
         if (errMsg != NULL)
         {
             printf("AthenaEnv ERROR!\n%s", errMsg);
+
+            if (strstr(errMsg, "SyntaxError") != NULL) {
+                color = GS_SETREG_RGBAQ(0x20,0x60,0xB0,0x80,0x00);
+            } else if (strstr(errMsg, "TypeError") != NULL) {
+                color = GS_SETREG_RGBAQ(0x3b,0x81,0x32,0x80,0x00);
+            } else if (strstr(errMsg, "ReferenceError") != NULL) {
+                color = GS_SETREG_RGBAQ(0xE5,0xDE,0x00,0x80,0x00);
+            } else if (strstr(errMsg, "RangeError") != NULL) {
+                color = GS_SETREG_RGBAQ(0xFF,0x78,0x1F,0x80,0x00);
+            } else if (strstr(errMsg, "InternalError") != NULL) {
+                color = GS_SETREG_RGBAQ(0xD0,0x31,0x3D,0x80,0x00);
+            }
+
+            if(dark_mode) {
+                color2 = color;
+                color = GS_SETREG_RGBAQ(0x20,0x20,0x20,0x80,0x00);
+            } else {
+                color2 = GS_SETREG_RGBAQ(0x80,0x80,0x80,0x80,0x00);
+            }
+
         	while (!isButtonPressed(PAD_START)) {
-				clearScreen(GS_SETREG_RGBAQ(0x20,0x60,0xB0,0x80,0x00));
-				printFontMText("AthenaEnv ERROR!", 15.0f, 15.0f, 0.9f, 0x80808080);
-				printFontMText(errMsg, 15.0f, 80.0f, 0.6f, 0x80808080);
-		   		printFontMText("\nPress [start] to restart\n", 15.0f, 400.0f, 0.6f, 0x80808080);
+				clearScreen(color);
+				printFontMText("AthenaEnv ERROR!", 15.0f, 15.0f, 0.9f, color2);
+				printFontMText(errMsg, 15.0f, 80.0f, 0.6f, color2);
+		   		printFontMText("\nPress [start] to restart\n", 15.0f, 400.0f, 0.6f, color2);
 				flipScreen();
 			}
         }
