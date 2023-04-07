@@ -856,10 +856,10 @@ static JSValue athena_resetiop(JSContext *ctx, JSValue this_val, int argc, JSVal
 
 	prepare_IOP();
 
+	SifExecModuleBuffer(&poweroff_irx, size_poweroff_irx, 0, NULL, NULL);
 	SifExecModuleBuffer(&iomanX_irx, size_iomanX_irx, 0, NULL, NULL);
     SifExecModuleBuffer(&fileXio_irx, size_fileXio_irx, 0, NULL, NULL);
 
-	//init_poweroff_driver();
 	//poweroffSetCallback(&poweroffHandler, NULL);
 	return JS_UNDEFINED;
 }
