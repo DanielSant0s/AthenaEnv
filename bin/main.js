@@ -76,12 +76,8 @@ while(true) {
     if(Pads.check(new_pad, Pads.CROSS) && !Pads.check(old_pad, Pads.CROSS) && menu_ptr < js_table.length){
         std.gc();
         std.loadScript(app_table[0].file);
+        System.loadELF(System.currentDir() + "athena_pkd.elf"); // Doing this to reset all the stuff
     }
-
-    /*strings.forEach(string => {
-        console.log(string);
-      });*/
-
 
     font_medium.print(210, 125, app_table[0].name);
     app_table[0].icon.draw(85, 111);

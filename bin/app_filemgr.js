@@ -187,6 +187,12 @@ file_manager.process = function() {
                 std.loadScript(file[file_manager.data[0]].name);
             } else if(file[file_manager.data[0]].name.endsWith(".elf")){
                 System.loadELF(path + "/"+ file[file_manager.data[0]].name);
+            } else if(file[file_manager.data[0]].name.endsWith(".zip")){
+                Archive.extractAll(path + "/"+ file[file_manager.data[0]].name);
+                file = System.listDir(path); // Update file list
+            } else if(file[file_manager.data[0]].name.endsWith(".tar.gz")){
+                Archive.untar(path + "/"+ file[file_manager.data[0]].name);
+                file = System.listDir(path); // Update file list
             }
         }
         if(file_manager.data[2] == 1){
