@@ -1,3 +1,6 @@
+// {"name": "Render demo", "author": "Daniel Santos", "version": "04072023", "icon": "render_icon.png", "file": "render.js"}
+
+
 var fntcpy = new Font();
 fntcpy.scale = (0.4f);
 

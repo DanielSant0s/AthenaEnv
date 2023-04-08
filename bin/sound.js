@@ -1,3 +1,6 @@
+// {"name": "Audio player", "author": "Daniel Santos", "version": "04072023", "icon": "sap_icon.png", "file": "sound.js"}
+
+
 Sound.setVolume(100);
 Sound.setVolume(100, 0);
 let audio = Sound.load("sfx/interface.adp");

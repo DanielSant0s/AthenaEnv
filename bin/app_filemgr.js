@@ -1,3 +1,5 @@
+// {"name": "File manager", "author": "Daniel Santos", "version": "04072023", "icon": "lfm_icon.png", "file": "app_filemgr.js"}
+
 var font = new Font();
 
 function getStringSize(string, scale){

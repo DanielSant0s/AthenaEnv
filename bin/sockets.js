@@ -1,3 +1,4 @@
+// {"name": "Sockets demo", "author": "Daniel Santos", "version": "04072023","file": "sockets.js"}
 
 Network.init();
 

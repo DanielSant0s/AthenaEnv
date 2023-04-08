@@ -1,3 +1,6 @@
+// {"name": "Network demo", "author": "Daniel Santos", "version": "04072023", "file": "request.js"}
+
+
 Screen.log("Athena network system\n");
 
 IOP.reset();
