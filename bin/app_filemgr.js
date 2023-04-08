@@ -285,6 +285,10 @@ while(true){
     Screen.clear(Color.new(0, 0, 0));
 
     file_manager.run();
+
+    if(Pads.check(pad, Pads.CIRCLE) && !Pads.check(oldpad, Pads.CIRCLE)) {
+        break;
+    }
     
     Screen.flip();
 };

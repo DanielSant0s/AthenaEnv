@@ -12,7 +12,7 @@ msg = s.recv(1024);
 console.log(msg);
 s.close();
 
-for(var i = 0; i < 1000000; i++){
+for(var i = 0; i < 1250; i++){
     Screen.clear();
     lml_font.print(5, 250, "IP Address: " + nw_config.ip);
     lml_font.print(5, 265, "Netmask: " + nw_config.netmask);

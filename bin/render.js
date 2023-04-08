@@ -64,6 +64,10 @@ while(true){
         modeltodisplay ^= 1
     }
 
+    if(Pads.check(pad, Pads.TRIANGLE) && !Pads.check(oldpad, Pads.TRIANGLE)) {
+        break;
+    }
+
     Render.drawOBJ(model[modeltodisplay], 0.0f, 0.0f, 30.0f, savedly, savedlx, 0.0f);
 
     fntcpy.print(10, 10, Screen.getFPS(360) + " FPS | Free RAM: " + free_mem + "KB | Free VRAM: " + free_vram + "KB");

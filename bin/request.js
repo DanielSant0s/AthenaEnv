@@ -22,4 +22,4 @@ Screen.log(response.slice(0, 4096));
 
 Network.deinit();
 
-System.sleep(9999999999999);
+System.sleep(10);
