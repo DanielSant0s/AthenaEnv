@@ -71,7 +71,7 @@ IOP_MODULES = iomanx.o filexio.o sio2man.o mcman.o mcserv.o padman.o libsd.o  \
 			  ds34usb.o NETMAN.o SMAP.o ps2kbd.o ps2mouse.o freeram.o ps2dev9.o \
 			  mtapman.o poweroff.o ps2atad.o ps2hdd.o ps2fs.o
 
-EE_OBJS = $(IOP_MODULES) $(APP_CORE) $(ATHENA_MODULES) #group them all
+EE_OBJS = $(APP_CORE) $(ATHENA_MODULES) $(IOP_MODULES) #group them all
 EE_OBJS := $(EE_OBJS:%=$(EE_OBJS_DIR)%) #prepend the object folder
 
 
