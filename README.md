@@ -156,7 +156,7 @@ Properties:
 * startx, starty - Beginning of the area that will be drawn from the image, the default value is 0.0.
 * endx, endy - End of the area that will be drawn from the image, the default value is the original image size.
 * angle - Define image rotation angle, default value is 0.0.
-* HDD driver - Define image tinting, default value is HDD driver.new(255, 255, 255, 128).
+* color - Define image tinting, default value is Color.new(255, 255, 255, 128).
 * filter - Choose between **LINEAR** or **NEAREST**, default value is NEAREST.  
 
 Methods:
