@@ -93,6 +93,20 @@ You can write single floats on AthenaEnv following the syntax below:
 let test_float = 15.0f; // The 'f' suffix makes QuickJS recognizes it as a single float.
 ```
 
+**How to run it**
+
+Athena is basically a JavaScript loader, so it loads .js files. It runs "main.js" by default, but you can run other file names by passing it as the first argument when launching the ELF file.
+
+If you try to just download it on releases tab and run it, that's what you will see:
+![_50bda816_20230409025946](https://user-images.githubusercontent.com/47725160/230757268-5968d7e0-79df-4e98-9c02-4ec5252e056f.png)
+
+That's the default dashboard, coded in default main.js file. It searchs JavaScript files with the first line containing the following structure:
+```js
+// {"name": "App name", "author": "Who did it?", "version": "04012023", "icon": "app_icon.png", "file": "my_app.js"}
+// Now you can freely code below:
+```
+Once it was found, it will appear on the dashboard app list.
+
 **Error reporting system**
 
 Athena has a consistent error system, which is capable of pointing the error type, custom message, files, lines and it even has
