@@ -18,20 +18,9 @@ font_bold.scale = 0.7f
 font_medium.scale = 1.0f;
 font.scale = 0.44f;
 
-const apps_dirlist = System.listDir();
-const apps = apps_dirlist.map(file => file.name);
-const js_table = apps.filter(str => str.endsWith(".js"));
+let no_icon = new Image("no_icon.png");
 
-let menu_ptr = 0;
-
-let new_pad = Pads.get();
-let old_pad = new_pad;
-
-const no_icon = new Image("no_icon.png");
-
-let mouse = Mouse.get();
-
-let app_table = js_table.map( app => {
+let app_table = System.listDir().map(file => file.name).filter(str => str.endsWith(".js")).map( app => {
     const app_fd = std.open(app, "r");
     const metadata_str = app_fd.getline().replace("// ", "");
     app_fd.close();
@@ -50,6 +39,13 @@ let app_table = js_table.map( app => {
 
     return metadata;
 } ).filter(gen_app => gen_app.name != "%not_app%");
+
+let menu_ptr = 0;
+
+let new_pad = Pads.get();
+let old_pad = new_pad;
+
+let mouse = Mouse.get();
 
 while(true) {
     old_pad = new_pad;
@@ -74,8 +70,27 @@ while(true) {
     }
 
     if(Pads.check(new_pad, Pads.CROSS) && !Pads.check(old_pad, Pads.CROSS) && menu_ptr < js_table.length){
+        old_pad = null;
+        new_pad = null;
+        mouse = null;
+        bg = null;
+        cursor = null;
+        font = null;
+        font_medium = null;
+        font_bold = null;
+
+        app_table.forEach(app => {
+            app.icon = null;
+        });
+
+        app_table = null;
+
+        no_icon = null;
+
         std.gc();
+
         std.loadScript(app_table[0].file);
+
         System.loadELF(System.currentDir() + "athena_pkd.elf"); // Doing this to reset all the stuff
     }
 

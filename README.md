@@ -41,7 +41,10 @@ AthenaEnv is a project that seeks to facilitate and at the same time brings a co
 
 ### Modules:
 * System: Files, folders and system stuff.
+* Archive: A simple compressed file extractor and manager.
+* IOP: The PlayStation 2 has an I/O processor to deal with drivers and modules. Take control of it!
 * Image: Image drawing.
+* ImageList: Load and manage multiple images while your code is running, multithreaded loading!
 * Draw: Shape drawing, triangles, circles etc.
 * Render: Basic 3D support.
 * Screen: The entire screen of your project (2D and 3D), being able to change the resolution, enable or disable parameters.
@@ -90,9 +93,35 @@ You can write single floats on AthenaEnv following the syntax below:
 let test_float = 15.0f; // The 'f' suffix makes QuickJS recognizes it as a single float.
 ```
 
+**Error reporting system**
+
+Athena has a consistent error system, which is capable of pointing the error type, custom message, files, lines and it even has
+a color code.
+
+EvalError:  
+SyntaxError:  
+TypeError:  
+ReferenceError:  
+RangeError:  
+InternalError:  
+URIError:  
+AggregateError:  
+
+
 Below is the list of usable functions of AthenaEnv project currently, this list is constantly being updated.
 
 P.S.: *Italic* parameters refer to optional parameters
+
+### Color module
+* var col = Color.new(r, g, b, *a*)
+* var r = Color.getR(col)
+* var g = Color.getG(col)
+* var b = Color.getB(col)
+* var a = Color.getA(col)
+* Color.setR(col, r)
+* Color.setG(col, g)
+* Color.setB(col, g)
+* Color.setA(col, a)
 
 ### Image Module  
 
@@ -112,7 +141,7 @@ Properties:
 * startx, starty - Beginning of the area that will be drawn from the image, the default value is 0.0.
 * endx, endy - End of the area that will be drawn from the image, the default value is the original image size.
 * angle - Define image rotation angle, default value is 0.0.
-* color - Define image tinting, default value is Color.new(255, 255, 255, 128).
+* HDD driver - Define image tinting, default value is HDD driver.new(255, 255, 255, 128).
 * filter - Choose between **LINEAR** or **NEAREST**, default value is NEAREST.  
 
 Methods:
@@ -295,6 +324,7 @@ Methods:
 * System.sleep(sec)
 * var freemem = System.getFreeMemory()
 * System.exitToBrowser()
+* System.setDarkMode(value)
 * var info = System.getMCInfo(slot)  
   • info.type  
   • info.freemem  
@@ -329,6 +359,38 @@ Asynchronous functions:
 * Sound.pause(audio)  *Doesn't apply for ADPCM
 * Sound.resume(audio)  *Doesn't apply for ADPCM
 * Sound.deinit()
+
+### Archive module
+
+* var zip = Archive.open(fname)
+* var list = Archive.list(zip)
+* Archive.extractAll(fname)
+* Archive.close(zip)
+* Archive.untar(fname)
+
+### IOP module
+
+* var result = IOP.loadModule(fname, *arg_len*, *args*)
+* var result = IOP.loadModuleBuffer(mod_buf, *arg_len*, *args*)
+* IOP.loadDefaultModule(mod_id)  
+  • IOP.keyboard - USB Keyboard  
+  • IOP.mouse - USB Mouse  
+  • IOP.freeram - IOP RAM Info  
+  • IOP.ds34bt - Bluetooth DualShock 3/4 pads  
+  • IOP.ds34usb - USB DualShock 3/4 pads  
+  • IOP.network - Network drivers  
+  • IOP.pads - DualShock 1/2 pads  
+  • IOP.memcard - Memory Card  
+  • IOP.audio - Audio driver  
+  • IOP.usb_mass - USB Mass storage, supports FAT32 and exFAT  
+  • IOP.cdfs - Disc driver  
+  • IOP.hdd - Internal HDD driver  
+  • IOP.boot_device - Storage device used to boot Athena    
+  
+* IOP.reset()
+* var stats = IOP.getMemoryStats() - P.S.: Requires IOP.loadDefaultModule(IOP.freeram) first!
+  • stats.free  
+  • stats.used  
 
 ### Network module
 
