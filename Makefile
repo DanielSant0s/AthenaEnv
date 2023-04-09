@@ -97,7 +97,7 @@ clean:
 	echo Cleaning executables...
 	rm -f bin/$(EE_BIN) bin/$(EE_BIN_PKD)
 	rm -rf $(EE_OBJS_DIR)
-	rm -rd $(EE_ASM_DIR)
+	rm -rf $(EE_ASM_DIR)
 	$(MAKE) -C modules/ds34usb clean
 	$(MAKE) -C modules/ds34bt clean
 
