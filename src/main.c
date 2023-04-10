@@ -71,6 +71,7 @@ static void init_drivers() {
 }
 
 bool waitUntilDeviceIsReady(char *path) {
+    dbgprintf("waiting for '%s'\n", path);
     struct stat buffer;
     int ret = -1;
     int retries = 500;
@@ -92,7 +93,6 @@ int main(int argc, char **argv) {
     dbginit(); // if we are using serial port. initialize it here before the fun starts
     prepare_IOP();
     init_drivers();
-    
     getcwd(boot_path, sizeof(boot_path));
     if ((!strncmp(boot_path, "hdd0:", 5)) && (strstr(boot_path, ":pfs:") != NULL) && HDD_USABLE) // we booted from HDD and our modules are loaded and running...
     {
@@ -101,6 +101,7 @@ int main(int argc, char **argv) {
             if (mnt(MountPoint, 0, FIO_MT_RDWR)==0) // ...mount the partition...
             {
                 strcpy(boot_path, newCWD); // ...replace boot path with mounted pfs path.
+                chdir(newCWD);
 #ifdef RESERVE_PFS0
                 bootpath_is_on_HDD = 1;
 #endif

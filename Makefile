@@ -74,7 +74,6 @@ IOP_MODULES = iomanx.o filexio.o sio2man.o mcman.o mcserv.o padman.o libsd.o  \
 			  mtapman.o poweroff.o ps2atad.o ps2hdd.o ps2fs.o
 
 ifneq ($(EE_SIO), 0)
-  APP_CORE += sioprintf.o
   EE_CFLAGS += -D__EESIO_PRINTF
   EE_LIBS += -lsiocookie
 endif
