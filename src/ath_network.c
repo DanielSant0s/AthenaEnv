@@ -18,7 +18,7 @@ WriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp)
   mem->memory = realloc(mem->memory, mem->size + realsize + 1);
   if(mem->memory == NULL) {
     /* out of memory */
-    printf("not enough memory (realloc returned NULL)\n");
+    dbgprintf("not enough memory (realloc returned NULL)\n");
     return 0;
   }
 
@@ -171,20 +171,20 @@ static JSValue athena_nw_init(JSContext *ctx, JSValue this_val, int argc, JSValu
     ps2ipInit(&IP, &NM, &GW);
     ethApplyIPConfig((argc == 4? 0 : 1), &IP, &NM, &GW, &DNS);
 
-    printf("Waiting for connection...\n");
+    dbgprintf("Waiting for connection...\n");
     if(ethWaitValidNetIFLinkState() != 0) {
 	    return JS_ThrowSyntaxError(ctx, "Error: failed to get valid link status.\n");
 	}
 
     if(argc == 4) return JS_UNDEFINED;
 
-    printf("Waiting for DHCP lease...\n");
+    dbgprintf("Waiting for DHCP lease...\n");
 	if (ethWaitValidDHCPState() != 0)
 	{
 		return JS_ThrowSyntaxError(ctx, "DHCP failed.\n");
 	}
 
-    printf("DHCP Connected.\n");
+    dbgprintf("DHCP Connected.\n");
 
 	return JS_UNDEFINED;
 }

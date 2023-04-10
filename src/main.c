@@ -31,17 +31,17 @@ bool hdd_started = false;
 bool filexio_started = false;
 
 void prepare_IOP() {
-    printf("AthenaEnv: Starting IOP Reset...\n");
+    dbgprintf("AthenaEnv: Starting IOP Reset...\n");
     SifInitRpc(0);
     #if defined(RESET_IOP)  
     while (!SifIopReset("", 0)){};
     #endif
     while (!SifIopSync()){};
     SifInitRpc(0);
-    printf("AthenaEnv: IOP reset done.\n");
+    dbgprintf("AthenaEnv: IOP reset done.\n");
     
     // install sbv patch fix
-    printf("AthenaEnv: Installing SBV Patches...\n");
+    dbgprintf("AthenaEnv: Installing SBV Patches...\n");
     sbv_patch_enable_lmb();
     sbv_patch_disable_prefix_check(); 
 }
@@ -105,7 +105,7 @@ int main(int argc, char **argv) {
 
         if (errMsg != NULL)
         {
-            printf("AthenaEnv ERROR!\n%s", errMsg);
+            dbgprintf("AthenaEnv ERROR!\n%s", errMsg);
 
             if (strstr(errMsg, "EvalError") != NULL) {
                 color = GS_SETREG_RGBAQ(0x56,0x71,0x7D,0x80,0x00);

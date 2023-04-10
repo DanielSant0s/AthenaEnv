@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include "include/pad.h"
+#include "include/dbgprintf.h"
 
 static char padBuf[256] __attribute__((aligned(64)));
 
@@ -22,7 +23,7 @@ int waitPadReady(int port, int slot)
     while((state != PAD_STATE_STABLE) && (state != PAD_STATE_FINDCTP1)) {
         if (state != lastState) {
             padStateInt2String(state, stateString);
-            printf("Please wait, pad(%d,%d) is in state %s\n",
+            dbgprintf("Please wait, pad(%d,%d) is in state %s\n",
                        port, slot, stateString);
         }
         lastState = state;
@@ -30,7 +31,7 @@ int waitPadReady(int port, int slot)
     }
     // Were the pad ever 'out of sync'?
     if (lastState != -1) {
-        printf("Pad OK!\n");
+        dbgprintf("Pad OK!\n");
     }
     return 0;
 }
@@ -51,23 +52,23 @@ int initializePad(int port, int slot)
     // How many different modes can this device operate in?
     // i.e. get # entrys in the modetable
     modes = padInfoMode(port, slot, PAD_MODETABLE, -1);
-    printf("The device has %d modes\n", modes);
+    dbgprintf("The device has %d modes\n", modes);
 
     if (modes > 0) {
-        printf("( ");
+        dbgprintf("( ");
         for (i = 0; i < modes; i++) {
-            printf("%d ", padInfoMode(port, slot, PAD_MODETABLE, i));
+            dbgprintf("%d ", padInfoMode(port, slot, PAD_MODETABLE, i));
         }
-        printf(")");
+        dbgprintf(")");
     }
 
-    printf("It is currently using mode %d\n",
+    dbgprintf("It is currently using mode %d\n",
                padInfoMode(port, slot, PAD_MODECURID, 0));
 
     // If modes == 0, this is not a Dual shock controller
     // (it has no actuator engines)
     if (modes == 0) {
-        printf("This is a digital controller?\n");
+        dbgprintf("This is a digital controller?\n");
         return 1;
     }
 
@@ -79,7 +80,7 @@ int initializePad(int port, int slot)
         i++;
     } while (i < modes);
     if (i >= modes) {
-        printf("This is no Dual Shock controller\n");
+        dbgprintf("This is no Dual Shock controller\n");
         return 1;
     }
 
@@ -87,24 +88,24 @@ int initializePad(int port, int slot)
     // This check should always pass if the Dual Shock test above passed
     ret = padInfoMode(port, slot, PAD_MODECUREXID, 0);
     if (ret == 0) {
-        printf("This is no Dual Shock controller??\n");
+        dbgprintf("This is no Dual Shock controller??\n");
         return 1;
     }
 
-    printf("Enabling dual shock functions\n");
+    dbgprintf("Enabling dual shock functions\n");
 
     // When using MMODE_LOCK, user cant change mode with Select button
     padSetMainMode(port, slot, PAD_MMODE_DUALSHOCK, PAD_MMODE_LOCK);
 
     waitPadReady(port, slot);
-    printf("infoPressMode: %d\n", padInfoPressMode(port, slot));
+    dbgprintf("infoPressMode: %d\n", padInfoPressMode(port, slot));
 
     waitPadReady(port, slot);
-    printf("enterPressMode: %d\n", padEnterPressMode(port, slot));
+    dbgprintf("enterPressMode: %d\n", padEnterPressMode(port, slot));
 
     waitPadReady(port, slot);
     actuators = padInfoAct(port, slot, -1, 0);
-    printf("# of actuators: %d\n",actuators);
+    dbgprintf("# of actuators: %d\n",actuators);
 
     if (actuators != 0) {
         actAlign[0] = 0;   // Enable small engine
@@ -115,11 +116,11 @@ int initializePad(int port, int slot)
         actAlign[5] = 0xff;
 
         waitPadReady(port, slot);
-        printf("padSetActAlign: %d\n",
+        dbgprintf("padSetActAlign: %d\n",
                    padSetActAlign(port, slot, actAlign));
     }
     else {
-        printf("Did not find any actuators.\n");
+        dbgprintf("Did not find any actuators.\n");
     }
 
     waitPadReady(port, slot);
@@ -169,17 +170,17 @@ void pad_init()
     port = 0; // 0 -> Connector 1, 1 -> Connector 2
     slot = 0; // Always zero if not using multitap
 
-    printf("PortMax: %d\n", padGetPortMax());
-    printf("SlotMax: %d\n", padGetSlotMax(port));
+    dbgprintf("PortMax: %d\n", padGetPortMax());
+    dbgprintf("SlotMax: %d\n", padGetSlotMax(port));
 
 
     if((ret = padPortOpen(port, slot, padBuf)) == 0) {
-        printf("padOpenPort failed: %d\n", ret);
+        dbgprintf("padOpenPort failed: %d\n", ret);
         SleepThread();
     }
 
     if(!initializePad(port, slot)) {
-        printf("pad initalization failed!\n");
+        dbgprintf("pad initalization failed!\n");
         SleepThread();
     }
 }

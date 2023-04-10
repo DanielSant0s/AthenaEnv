@@ -62,7 +62,7 @@ static JSValue athena_setCurrentDirectory(JSContext *ctx, JSValueConst *argv)
 	   }
         }
         
-        printf("changing directory to %s\n",__ps2_normalize_path(temp_path));
+        dbgprintf("changing directory to %s\n",__ps2_normalize_path(temp_path));
         chdir(__ps2_normalize_path(temp_path));
        
 	return JS_UNDEFINED;
@@ -86,7 +86,7 @@ static JSValue athena_dir(JSContext *ctx, JSValue this_val, int argc, JSValueCon
 	char path[255];
 	
 	getcwd((char *)path, 256);
-	printf("current dir %s\n",(char *)path);
+	dbgprintf("current dir %s\n",(char *)path);
 	
 	if (argc != 0) 
 	{
@@ -104,7 +104,7 @@ static JSValue athena_dir(JSContext *ctx, JSValue this_val, int argc, JSValueCon
 	}
 	
 	strcpy(path,__ps2_normalize_path(path));
-	printf("\nchecking path : %s\n",path);
+	dbgprintf("\nchecking path : %s\n",path);
 		
 
         
@@ -508,7 +508,7 @@ static JSValue athena_checkValidDisc(JSContext *ctx, JSValue this_val, int argc,
 		case SCECdIllegalMedia:
 			result = 0;
 	}
-	printf("Valid Disc: %d\n",result);
+	dbgprintf("Valid Disc: %d\n",result);
 	return JS_NewInt32(ctx, result);
 }
 
@@ -534,7 +534,7 @@ static JSValue athena_getDiscType(JSContext *ctx, JSValue this_val, int argc, JS
         for (iz = 0; DiscTypes[iz].name[0]; iz++)
             if (DiscTypes[iz].type == discType)
                 DiscType_ix = iz;
-    printf("getDiscType: %d\n",DiscTypes[DiscType_ix].value);
+    dbgprintf("getDiscType: %d\n",DiscTypes[DiscType_ix].value);
     return JS_NewInt32(ctx, DiscTypes[DiscType_ix].value); //return the value itself to Lua stack
 }
 
