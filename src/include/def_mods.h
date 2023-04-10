@@ -42,19 +42,25 @@ extern bool mc_started;
 extern bool hdd_started;
 extern bool filexio_started;
 
-#define KEYBOARD_MODULE 0
-#define MOUSE_MODULE 1
-#define FREERAM_MODULE 2
-#define DS34BT_MODULE 3
-#define DS34USB_MODULE 4
-#define NETWORK_MODULE 5
-#define USB_MASS_MODULE 6
-#define PADS_MODULE 7
-#define AUDIO_MODULE 8
-#define CDFS_MODULE 9
-#define MC_MODULE 10
-#define HDD_MODULE 11
-#define FILEXIO_MODULE 12
+/// @brief list of modules ID to be used with `load_default_module` loads the mentioned module and manages their IRX dependencies
+/// @see load_default_module
+enum MODLIST {
+    USBD_MODULE = 0,
+    KEYBOARD_MODULE,
+    MOUSE_MODULE,
+    FREERAM_MODULE,
+    DS34BT_MODULE,
+    DS34USB_MODULE,
+    NETWORK_MODULE,
+    USB_MASS_MODULE,
+    PADS_MODULE,
+    AUDIO_MODULE,
+    CDFS_MODULE,
+    MC_MODULE,
+    HDD_MODULE,
+    FILEXIO_MODULE,
+    SIO2MAN_MODULE,
+}
 
 #define BOOT_MODULE 99
 

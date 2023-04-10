@@ -3,6 +3,9 @@
 
 #define started_from(device) (strstr(path, device) == path)
 
+static const char hddarg[] = "-o" "\0" "4" "\0" "-n" "\0" "20";
+static const char pfsarg[] = "-m" "\0" "4" "\0" "-o" "\0" "10" "\0" "-n" "\0" "40";
+
 int get_boot_device(const char* path) {
 	int device = -1;
 	if(started_from("host")) {
@@ -20,133 +23,161 @@ int get_boot_device(const char* path) {
 	return device;
 }
 
+#define REPORT(MODNAME) dbgprintf(" [%s]: ret=%d, ID=%d\n", MODNAME, ret, ID)
+
+/// @brief small macro to check if module loaded sucessfully
+/// @note this checks if ret is not 1 instead of checking if it is 0. this way we implicitly support value 2 (`MODULE_REMOVABLE_END`)
+#define LOAD_SUCCESS() (ID > 0 && ret != 1)
+
+
 int load_default_module(int id) {
 	int ds3pads = 1;
-
+	int ID, ret;
 	switch (id) {
-		case KEYBOARD_MODULE:
-			if (!usbd_started) {
-				SifExecModuleBuffer(&usbd_irx, size_usbd_irx, 0, NULL, NULL);
-				usbd_started = true;
+		case USBD_MODULE:
+		if (!usbd_started) {
+				ID = SifExecModuleBuffer(&usbd_irx, size_usbd_irx, 0, NULL, NULL);
+				REPORT("USBD");
+				usbd_started = LOAD_SUCCESS();
 			}
+			break;
+		case KEYBOARD_MODULE:
+			if (!usbd_started)
+				load_default_module(USBD_MODULE);
 			if (!kbd_started) {
-				SifExecModuleBuffer((void*)ps2kbd_irx, size_ps2kbd_irx, 0, NULL, NULL);
-				kbd_started = true;
+				ID = SifExecModuleBuffer((void*)ps2kbd_irx, size_ps2kbd_irx, 0, NULL, NULL);
+				REPORT("PS2KBD");
+				kbd_started = LOAD_SUCCESS();
 			}
 			break;
 		case MOUSE_MODULE:
-			if (!usbd_started) {
-				SifExecModuleBuffer(&usbd_irx, size_usbd_irx, 0, NULL, NULL);
-				usbd_started = true;
-			}
+			if (!usbd_started)
+				load_default_module(USBD_MODULE);
 			if (!mouse_started) {
-				SifExecModuleBuffer((void*)ps2mouse_irx, size_ps2mouse_irx, 0, NULL, NULL);
-				mouse_started = true;
+				ID = SifExecModuleBuffer((void*)ps2mouse_irx, size_ps2mouse_irx, 0, NULL, NULL);
+				REPORT("PS2MOUSE");
+				mouse_started = LOAD_SUCCESS();
 			}
 			break;
 		case FREERAM_MODULE:
 			if (!freeram_started) {
-				SifExecModuleBuffer((void*)freeram_irx, size_freeram_irx, 0, NULL, NULL);
-				freeram_started = true;
+				ID = SifExecModuleBuffer((void*)freeram_irx, size_freeram_irx, 0, NULL, NULL);
+				// freeram_started = true; // senseless... FreeRam always returns MODULE_NO_RESIDENT_END. so MODLOAD removes it alwyays...
 			}
 			break;
 		case DS34BT_MODULE:
-			if (!usbd_started) {
-				SifExecModuleBuffer(&usbd_irx, size_usbd_irx, 0, NULL, NULL);
-				usbd_started = true;
-			}
+			if (!usbd_started)
+				load_default_module(USBD_MODULE);
 			if (!ds34bt_started) {
-				SifExecModuleBuffer((void*)ds34bt_irx, size_ds34bt_irx, 4, (char*)&ds3pads, NULL);
+				ID = SifExecModuleBuffer((void*)ds34bt_irx, size_ds34bt_irx, 4, (char*)&ds3pads, NULL);
+				REPORT("DS34BT");
 				ds34bt_init();
-				ds34bt_started = true;
+				ds34bt_started = LOAD_SUCCESS();
 			}
 			break;
 		case DS34USB_MODULE:
-			if (!usbd_started) {
-				SifExecModuleBuffer(&usbd_irx, size_usbd_irx, 0, NULL, NULL);
-				usbd_started = true;
-			}
+			if (!usbd_started)
+				load_default_module(USBD_MODULE);
 			if (!ds34usb_started) {
-				SifExecModuleBuffer((void*)ds34usb_irx, size_ds34usb_irx, 4, (char*)&ds3pads, NULL);
+				ID = SifExecModuleBuffer((void*)ds34usb_irx, size_ds34usb_irx, 4, (char*)&ds3pads, NULL);
+				REPORT("DS34USB");
 				ds34usb_init();
-				ds34usb_started = true;
+				ds34usb_started = LOAD_SUCCESS();
 			}
 			break;
 		case NETWORK_MODULE:
 			if (!dev9_started) {
-				SifExecModuleBuffer(&ps2dev9_irx, size_ps2dev9_irx, 0, NULL, NULL);
-				dev9_started = true;
+				ID = SifExecModuleBuffer(&ps2dev9_irx, size_ps2dev9_irx, 0, NULL, NULL);
+				REPORT("DEV9");
+				dev9_started = LOAD_SUCCESS();
 			}
 			if (!network_started) {
-				SifExecModuleBuffer((void*)NETMAN_irx, size_NETMAN_irx, 0, NULL, NULL);
-				SifExecModuleBuffer((void*)SMAP_irx, size_SMAP_irx, 0, NULL, NULL);
-				network_started = true;
+				ID = SifExecModuleBuffer((void*)NETMAN_irx, size_NETMAN_irx, 0, NULL, NULL);
+				REPORT("NETMAN");
+				ID = SifExecModuleBuffer((void*)SMAP_irx, size_SMAP_irx, 0, NULL, NULL);
+				REPORT("SMAP");
+				network_started = LOAD_SUCCESS();
 			}
 			break;
-		case PADS_MODULE:
+		case SIO2MAN_MODULE:
 			if (!sio2man_started) {
-				SifExecModuleBuffer(&sio2man_irx, size_sio2man_irx, 0, NULL, NULL);
-				sio2man_started = true;
+				ID = SifExecModuleBuffer(&sio2man_irx, size_sio2man_irx, 0, NULL, NULL);
+				REPORT("SIO2MAN");
+				sio2man_started = LOAD_SUCCESS();
 			}
+		break;
+		case PADS_MODULE:
+			if (!sio2man_started)
+				load_default_module(SIO2MAN_MODULE);
+
 			if (!pads_started) {
-				SifExecModuleBuffer(&padman_irx, size_padman_irx, 0, NULL, NULL);
+				ID = SifExecModuleBuffer(&padman_irx, size_padman_irx, 0, NULL, NULL);
+				REPORT("PADMAN");
 				pad_init();
-				pads_started = true;
+				pads_started = LOAD_SUCCESS();
 			}
 			break;
 		case MC_MODULE:
-			if (!sio2man_started) {
-				SifExecModuleBuffer(&sio2man_irx, size_sio2man_irx, 0, NULL, NULL);
-				sio2man_started = true;
-			}
+			if (!sio2man_started)
+				load_default_module(SIO2MAN_MODULE);
 			if (!mc_started) {
-				SifExecModuleBuffer(&mcman_irx, size_mcman_irx, 0, NULL, NULL);
-    			SifExecModuleBuffer(&mcserv_irx, size_mcserv_irx, 0, NULL, NULL);
-				mc_started = true;
+				ID = SifExecModuleBuffer(&mcman_irx, size_mcman_irx, 0, NULL, NULL);
+				REPORT("MCMAN");
+    			ID = SifExecModuleBuffer(&mcserv_irx, size_mcserv_irx, 0, NULL, NULL);
+				REPORT("MCSERV");
+				mc_started = LOAD_SUCCESS();
 			}
 			break;
 		case AUDIO_MODULE:
 			if (!audio_started) {
-				SifExecModuleBuffer(&libsd_irx, size_libsd_irx, 0, NULL, NULL);
-    			SifExecModuleBuffer(&audsrv_irx, size_audsrv_irx, 0, NULL, NULL);
+				ID = SifExecModuleBuffer(&libsd_irx, size_libsd_irx, 0, NULL, NULL);
+				REPORT("LIBSD");
+    			ID = SifExecModuleBuffer(&audsrv_irx, size_audsrv_irx, 0, NULL, NULL);
+				REPORT("AUDSVR");
     			audsrv_init();
-				audio_started = true;
+				audio_started = LOAD_SUCCESS();
 			}
 			break;
 		case USB_MASS_MODULE:
-			if (!usbd_started) {
-				SifExecModuleBuffer(&usbd_irx, size_usbd_irx, 0, NULL, NULL);
-				usbd_started = true;
-			}
+			if (!usbd_started)
+				load_default_module(USBD_MODULE);
 			if (!usb_mass_started) {
-    			SifExecModuleBuffer(&bdm_irx, size_bdm_irx, 0, NULL, NULL);
-    			SifExecModuleBuffer(&bdmfs_fatfs_irx, size_bdmfs_fatfs_irx, 0, NULL, NULL);
-    			SifExecModuleBuffer(&usbmass_bd_irx, size_usbmass_bd_irx, 0, NULL, NULL);
+    			ID = SifExecModuleBuffer(&bdm_irx, size_bdm_irx, 0, NULL, NULL);
+				REPORT("BDM");
+    			ID = SifExecModuleBuffer(&bdmfs_fatfs_irx, size_bdmfs_fatfs_irx, 0, NULL, NULL);
+				REPORT("BDMFS_FATFS");
+    			ID = SifExecModuleBuffer(&usbmass_bd_irx, size_usbmass_bd_irx, 0, NULL, NULL);
+				REPORT("USMASS_BD");
 
-				usb_mass_started = true;
+				usb_mass_started = LOAD_SUCCESS();
 			}
 			break;
 		case CDFS_MODULE:
 			if (!cdfs_started) {
-				SifExecModuleBuffer(&cdfs_irx, size_cdfs_irx, 0, NULL, NULL);
-				cdfs_started = true;
+				ID = SifExecModuleBuffer(&cdfs_irx, size_cdfs_irx, 0, NULL, NULL);
+				REPORT("CDFS");
+				cdfs_started = LOAD_SUCCESS();
 			}
 
 			break;
 		case HDD_MODULE:
 			if (!dev9_started) {
-				SifExecModuleBuffer(&ps2dev9_irx, size_ps2dev9_irx, 0, NULL, NULL);
-				dev9_started = true;
+				ID = SifExecModuleBuffer(&ps2dev9_irx, size_ps2dev9_irx, 0, NULL, NULL);
+				REPORT("DEV9");
+				dev9_started = LOAD_SUCCESS();
 			}
 			if (!hdd_started) {
-				hdd_started = true;
+
+				hdd_started = LOAD_SUCCESS();
 			}
 			break;
 		case FILEXIO_MODULE:
 			if (!filexio_started) {
-				SifExecModuleBuffer(&iomanX_irx, size_iomanX_irx, 0, NULL, NULL);
-    			SifExecModuleBuffer(&fileXio_irx, size_fileXio_irx, 0, NULL, NULL);
-				filexio_started = true;
+				ID = SifExecModuleBuffer(&iomanX_irx, size_iomanX_irx, 0, NULL, NULL);
+				REPORT("IOMANX");
+    			ID = SifExecModuleBuffer(&fileXio_irx, size_fileXio_irx, 0, NULL, NULL);
+				REPORT("FILEXIO");
+				filexio_started = LOAD_SUCCESS();
 			}
 		default:
 			break;
