@@ -35,7 +35,9 @@ EE_SRC_DIR = src/
 EE_OBJS_DIR = obj/
 EE_ASM_DIR = asm/
 
-RESET_IOP = 1
+RESET_IOP ?= 1
+DEBUG ?= 1
+EE_SIO ?= 1
 
 EE_LIBS = -L$(PS2SDK)/ports/lib -L$(PS2DEV)/gsKit/lib/ -Lmodules/ds34bt/ee/ -Lmodules/ds34usb/ee/ -lmc -lpad -laudsrv -lpatches -ldebug -lmath3d -ljpeg -lfreetype -lgskit_toolkit -lgskit -ldmakit -lpng -lz -lelf-loader -lds34bt -lds34usb -lnetman -lps2ip -lcurl -lwolfssl -lkbd -lmouse -lvorbisfile -lvorbis -logg -llzma -lzip -lfileXio
 
@@ -46,11 +48,11 @@ EE_INCS += -Imodules/ds34bt/ee -Imodules/ds34usb/ee
 EE_CFLAGS += -Wno-sign-compare -fno-strict-aliasing -fno-exceptions -DPS2IP_DNS -DCONFIG_VERSION=\"$(shell cat VERSION)\" -D__TM_GMTOFF=tm_gmtoff -DPATH_MAX=256 -DEMSCRIPTEN
 
 ifeq ($(RESET_IOP),1)
-EE_CFLAGS += -DRESET_IOP
+  EE_CFLAGS += -DRESET_IOP
 endif
 
 ifeq ($(DEBUG),1)
-EE_CFLAGS += -DDEBUG
+  EE_CFLAGS += -DDEBUG
 endif
 
 BIN2S = $(PS2SDK)/bin/bin2s
@@ -58,7 +60,7 @@ BIN2S = $(PS2SDK)/bin/bin2s
 EXT_LIBS = modules/ds34usb/ee/libds34usb.a modules/ds34bt/ee/libds34bt.a
 
 APP_CORE = main.o module_system.o taskman.o pad.o graphics.o atlas.o fntsys.o sound.o \
-		   system.o render.o calc_3d.o
+		   system.o render.o calc_3d.o strUtils.o
 
 ATHENA_MODULES = quickjs/cutils.o quickjs/libbf.o quickjs/libregexp.o quickjs/libunicode.o \
 				 quickjs/realpath.o quickjs/quickjs.o quickjs/quickjs-libc.o \
@@ -70,6 +72,13 @@ IOP_MODULES = iomanx.o filexio.o sio2man.o mcman.o mcserv.o padman.o libsd.o  \
 			  usbd.o audsrv.o bdm.o bdmfs_fatfs.o usbmass_bd.o cdfs.o ds34bt.o \
 			  ds34usb.o NETMAN.o SMAP.o ps2kbd.o ps2mouse.o freeram.o ps2dev9.o \
 			  mtapman.o poweroff.o ps2atad.o ps2hdd.o ps2fs.o
+
+ifneq ($(EE_SIO), 0)
+  APP_CORE += sioprintf.o
+  EE_CFLAGS += -D__EESIO_PRINTF
+  EE_LIBS += -lsiocookie
+endif
+
 
 EE_OBJS = $(APP_CORE) $(ATHENA_MODULES) $(IOP_MODULES) #group them all
 EE_OBJS := $(EE_OBJS:%=$(EE_OBJS_DIR)%) #prepend the object folder
