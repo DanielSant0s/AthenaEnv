@@ -9,6 +9,7 @@
 
 #include "include/taskman.h"
 #include "include/graphics.h"
+#include "include/dbgprintf.h"
 
 extern bool dark_mode;
 

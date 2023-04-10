@@ -15,7 +15,7 @@ JSModuleDef *athena_push_module(JSContext* ctx, JSModuleInitFunc *func, const JS
         return NULL;
     JS_AddModuleExportList(ctx, m, func_list, len);
 
-	printf("AthenaEnv: %s module pushed at 0x%x\n", module_name, m);
+	dbgprintf("AthenaEnv: %s module pushed at 0x%x\n", module_name, m);
     return m;
 }
 
@@ -262,7 +262,7 @@ static char error_buf[1024];
 
 const char* runScript(const char* script, bool isBuffer)
 {
-    printf("\nStarting AthenaEnv...\n");
+    dbgprintf("\nStarting AthenaEnv...\n");
     JSRuntime *rt = JS_NewRuntime(); if (!rt) { return "Runtime creation"; }
     js_std_set_worker_new_context_func(JS_NewCustomContext);
     js_std_init_handlers(rt);

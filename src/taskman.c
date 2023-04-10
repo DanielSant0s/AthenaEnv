@@ -6,6 +6,7 @@
 #include <string.h>
 #include <stdbool.h>
 #include "include/taskman.h"
+#include "include/dbgprintf.h"
 
 Tasklist tasks;
 
@@ -48,14 +49,14 @@ void init_taskman()
         ReferThreadStatus(tasks.size, &info);
     } //A way to list already created threads
     
-    printf("Threads running during boot: %d\n", tasks.size);
+    dbgprintf("Threads running during boot: %d\n", tasks.size);
     tasks.list = malloc(sizeof(Task*)*tasks.size);
 
     new_task(0, 0, -1, "Kernel: Splash");
     new_task(1, 1, -1, "Main: AthenaVM");
     new_task(2, 2, -1, "Kernel: Thread patch");
 
-    printf("Task manager started successfully!\n");
+    dbgprintf("Task manager started successfully!\n");
 
 }
 
@@ -82,7 +83,7 @@ int create_task(const char* title, void* func, int stack_size, int priority)
 
     new_task(tasks.size, thread, -1, title);
 
-    printf("%s task created.\n",tasks.list[tasks.size]->title);
+    dbgprintf("%s task created.\n",tasks.list[tasks.size]->title);
 
     tasks.size++;
     

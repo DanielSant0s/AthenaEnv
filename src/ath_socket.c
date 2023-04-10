@@ -175,7 +175,7 @@ JSModuleDef *athena_socket_init(JSContext *ctx)
 
     athena_push_module(ctx, socket_consts_init, js_socket_consts, countof(js_socket_consts), "SocketConst");
 
-    printf("AthenaEnv: %s module pushed at 0x%x\n", "Socket", m);
+    dbgprintf("AthenaEnv: %s module pushed at 0x%x\n", "Socket", m);
     return m;
 }
 

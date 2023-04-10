@@ -7,9 +7,14 @@
 #include <stdbool.h>
 
 #include "include/def_mods.h"
+#include "include/strUtils.h"
 
 #include "ath_env.h"
 #include "include/graphics.h"
+
+#define NEWLIB_PORT_AWARE
+#include <fileXio_rpc.h>
+#include <fileio.h>
 
 char boot_path[255];
 bool dark_mode;
@@ -29,19 +34,20 @@ bool dev9_started = false;
 bool mc_started = false;
 bool hdd_started = false;
 bool filexio_started = false;
+bool HDD_USABLE = false;
 
 void prepare_IOP() {
-    printf("AthenaEnv: Starting IOP Reset...\n");
+    dbgprintf("AthenaEnv: Starting IOP Reset...\n");
     SifInitRpc(0);
     #if defined(RESET_IOP)  
     while (!SifIopReset("", 0)){};
     #endif
     while (!SifIopSync()){};
     SifInitRpc(0);
-    printf("AthenaEnv: IOP reset done.\n");
+    dbgprintf("AthenaEnv: IOP reset done.\n");
     
     // install sbv patch fix
-    printf("AthenaEnv: Installing SBV Patches...\n");
+    dbgprintf("AthenaEnv: Installing SBV Patches...\n");
     sbv_patch_enable_lmb();
     sbv_patch_disable_prefix_check(); 
 }
@@ -65,6 +71,7 @@ static void init_drivers() {
 }
 
 bool waitUntilDeviceIsReady(char *path) {
+    dbgprintf("waiting for '%s'\n", path);
     struct stat buffer;
     int ret = -1;
     int retries = 500;
@@ -81,10 +88,27 @@ bool waitUntilDeviceIsReady(char *path) {
 }
 
 int main(int argc, char **argv) {
+    char MountPoint[32+6+1]; // max partition name + 'hdd0:/' = '\0' 
+    char newCWD[255];
+    dbginit(); // if we are using serial port. initialize it here before the fun starts
     prepare_IOP();
     init_drivers();
-    
     getcwd(boot_path, sizeof(boot_path));
+    if ((!strncmp(boot_path, "hdd0:", 5)) && (strstr(boot_path, ":pfs:") != NULL) && HDD_USABLE) // we booted from HDD and our modules are loaded and running...
+    {
+        if (getMountInfo(boot_path, NULL, MountPoint, newCWD)) // ...if we can parse the boot path...
+        {
+            if (mnt(MountPoint, 0, FIO_MT_RDWR)==0) // ...mount the partition...
+            {
+                strcpy(boot_path, newCWD); // ...replace boot path with mounted pfs path.
+                chdir(newCWD);
+#ifdef RESERVE_PFS0
+                bootpath_is_on_HDD = 1;
+#endif
+            }
+
+        }
+    }
     waitUntilDeviceIsReady(boot_path);
     
     init_taskman();
@@ -105,7 +129,7 @@ int main(int argc, char **argv) {
 
         if (errMsg != NULL)
         {
-            printf("AthenaEnv ERROR!\n%s", errMsg);
+            dbgprintf("AthenaEnv ERROR!\n%s", errMsg);
 
             if (strstr(errMsg, "EvalError") != NULL) {
                 color = GS_SETREG_RGBAQ(0x56,0x71,0x7D,0x80,0x00);
@@ -146,4 +170,32 @@ int main(int argc, char **argv) {
 	// End program.
 	return 0;
 
+}
+
+
+int mnt(const char* path, int index, int openmod)
+{
+    char PFS[5+1] = "pfs0:";
+    if (index > 0)
+        PFS[3] = '0' + index;
+
+    dbgprintf("Mounting '%s' into pfs%d:\n", path, index);
+    if (fileXioMount(PFS, path, openmod) < 0) // mount
+    {
+        dbgprintf("Mount failed. unmounting & trying again...\n");
+        if (fileXioUmount(PFS) < 0) //try to unmount then mount again in case it got mounted by something else
+        {
+            dbgprintf("Unmount failed!!!\n");
+        }
+        if (fileXioMount(PFS, path, openmod) < 0)
+        {
+            dbgprintf("mount failed again!\n");
+            return -1;
+        } else {
+            dbgprintf("Second mount succed!\n");
+        }
+    } else {
+        dbgprintf("mount successfull on first attemp\n");
+    }
+    return 0;
 }
