@@ -146,14 +146,14 @@ static int ethApplyIPConfig(int use_dhcp, const struct ip4_addr *ip, const struc
 }
 
 static JSValue athena_nw_init(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-	if (argc != 0 && argc != 4) return JS_ThrowSyntaxError(ctx, "wrong number of arguments.");
+	if (argc != 0 && argc != 4) return JS_ThrowInternalError(ctx, "wrong number of arguments.");
 	
     struct ip4_addr IP, NM, GW, DNS;
 
     NetManInit();
 
 	if(ethApplyNetIFConfig(NETMAN_NETIF_ETH_LINK_MODE_AUTO) != 0) {
-		return JS_ThrowSyntaxError(ctx, "Error: failed to set link mode.");
+		return JS_ThrowInternalError(ctx, "Error: failed to set link mode.");
 	}
 
     if (argc == 4){
@@ -173,7 +173,7 @@ static JSValue athena_nw_init(JSContext *ctx, JSValue this_val, int argc, JSValu
 
     dbgprintf("Waiting for connection...\n");
     if(ethWaitValidNetIFLinkState() != 0) {
-	    return JS_ThrowSyntaxError(ctx, "Error: failed to get valid link status.\n");
+	    return JS_ThrowInternalError(ctx, "Error: failed to get valid link status.\n");
 	}
 
     if(argc == 4) return JS_UNDEFINED;
@@ -181,7 +181,7 @@ static JSValue athena_nw_init(JSContext *ctx, JSValue this_val, int argc, JSValu
     dbgprintf("Waiting for DHCP lease...\n");
 	if (ethWaitValidDHCPState() != 0)
 	{
-		return JS_ThrowSyntaxError(ctx, "DHCP failed.\n");
+		return JS_ThrowInternalError(ctx, "DHCP failed.\n");
 	}
 
     dbgprintf("DHCP Connected.\n");
@@ -202,7 +202,7 @@ static JSValue athena_nw_get_config(JSContext *ctx, JSValue this_val, int argc, 
         JS_DefinePropertyValueStr(ctx, obj, "gateway", JS_NewString(ctx, inet_ntoa(ip_info.gw)), JS_PROP_C_W_E);
         JS_DefinePropertyValueStr(ctx, obj, "dns", JS_NewString(ctx, inet_ntoa(*dns_getserver(0))), JS_PROP_C_W_E);
 	} else {
-		obj = JS_ThrowSyntaxError(ctx, "Unable to read IP address.\n");
+		obj = JS_ThrowInternalError(ctx, "Unable to read IP address.\n");
 	}
 
     return obj;
@@ -222,9 +222,47 @@ static JSValue athena_nw_gethostbyname(JSContext *ctx, JSValue this_val, int arg
     struct hostent *host_address = lwip_gethostbyname(host);
     
     if (host_address == NULL)
-        return JS_ThrowSyntaxError(ctx, "Unable to resolve address.\n");
+        return JS_ThrowInternalError(ctx, "Unable to resolve address.\n");
 
     return JS_NewString(ctx, inet_ntoa(*(struct in_addr*)host_address->h_addr));
+}
+
+
+static JSValue athena_nw_requests_download(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
+    CURL *curl;
+    FILE *fp;
+    CURLcode res;
+
+    const char* filename = JS_ToCString(ctx, argv[0]);
+    const char* url = JS_ToCString(ctx, argv[1]);
+
+    curl_global_init(CURL_GLOBAL_ALL);
+
+    curl = curl_easy_init();
+    if (curl) {
+        fp = fopen(filename, "wb");
+        if (fp) {
+            curl_easy_setopt(curl, CURLOPT_URL, url);
+            curl_easy_setopt(curl, CURLOPT_WRITEDATA, fp);
+
+            res = curl_easy_perform(curl);
+            if (res != CURLE_OK) {
+                return JS_ThrowInternalError(ctx, "Error while downloading file: %s\n", curl_easy_strerror(res));
+            }
+
+            fclose(fp);
+        } else {
+            return JS_ThrowInternalError(ctx, "Error while creating file: %s\n", filename);
+        }
+
+        curl_easy_cleanup(curl);
+    } else {
+        return JS_ThrowInternalError(ctx, "Error while initializing curl library.\n");
+    }
+
+    curl_global_cleanup();
+
+    return JS_UNDEFINED;
 }
 
 static JSValue athena_nw_requests_get(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
@@ -259,7 +297,7 @@ static JSValue athena_nw_requests_get(JSContext *ctx, JSValue this_val, int argc
         res = curl_easy_perform(curl);
         /* Check for errors */
         if(res != CURLE_OK) {
-            JS_ThrowSyntaxError(ctx, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+            return JS_ThrowInternalError(ctx, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
         }
     
         /* always cleanup */
@@ -310,7 +348,7 @@ static JSValue athena_nw_requests_post(JSContext *ctx, JSValue this_val, int arg
         res = curl_easy_perform(curl);
         /* Check for errors */
         if(res != CURLE_OK)
-            JS_ThrowSyntaxError(ctx, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+            return JS_ThrowInternalError(ctx, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
 
         /* always cleanup */
         curl_easy_cleanup(curl);
@@ -328,6 +366,7 @@ static const JSCFunctionListEntry module_funcs[] = {
     JS_CFUNC_DEF("getHostbyName", 1, athena_nw_gethostbyname),
     JS_CFUNC_DEF("get", 1, athena_nw_requests_get),
     JS_CFUNC_DEF("post", 2, athena_nw_requests_post),
+    JS_CFUNC_DEF("download", 2, athena_nw_requests_download),
     JS_CFUNC_DEF("deinit", 0, athena_nw_deinit),
 };
 
