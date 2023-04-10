@@ -29,6 +29,7 @@ bool dev9_started = false;
 bool mc_started = false;
 bool hdd_started = false;
 bool filexio_started = false;
+bool HDD_USABLE = false;
 
 void prepare_IOP() {
     dbgprintf("AthenaEnv: Starting IOP Reset...\n");

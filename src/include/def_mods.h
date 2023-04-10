@@ -41,6 +41,7 @@ extern bool dev9_started;
 extern bool mc_started;
 extern bool hdd_started;
 extern bool filexio_started;
+extern bool HDD_USABLE;
 
 /// @brief list of modules ID to be used with `load_default_module` loads the mentioned module and manages their IRX dependencies
 /// @see load_default_module
@@ -60,7 +61,8 @@ enum MODLIST {
     HDD_MODULE,
     FILEXIO_MODULE,
     SIO2MAN_MODULE,
-}
+    DEV9_MODULE,
+};
 
 #define BOOT_MODULE 99
 

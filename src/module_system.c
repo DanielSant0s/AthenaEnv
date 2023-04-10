@@ -1,5 +1,11 @@
 #include "include/def_mods.h"
+#include "include/dbgprintf.h"
 #include <string.h>
+
+#define NEWLIB_PORT_AWARE
+#include <fileXio_rpc.h>
+#include <fileio.h>
+#include <hdd-ioctl.h>
 
 #define started_from(device) (strstr(path, device) == path)
 
@@ -33,6 +39,7 @@ int get_boot_device(const char* path) {
 int load_default_module(int id) {
 	int ds3pads = 1;
 	int ID, ret;
+	int HDDSTAT; // IOCTL...
 	switch (id) {
 		case USBD_MODULE:
 		if (!usbd_started) {
@@ -86,11 +93,8 @@ int load_default_module(int id) {
 			}
 			break;
 		case NETWORK_MODULE:
-			if (!dev9_started) {
-				ID = SifExecModuleBuffer(&ps2dev9_irx, size_ps2dev9_irx, 0, NULL, &ret);
-				REPORT("DEV9");
-				dev9_started = LOAD_SUCCESS();
-			}
+			if (!dev9_started)
+				load_default_module(DEV9_MODULE);
 			if (!network_started) {
 				ID = SifExecModuleBuffer((void*)NETMAN_irx, size_NETMAN_irx, 0, NULL, &ret);
 				REPORT("NETMAN");
@@ -160,15 +164,39 @@ int load_default_module(int id) {
 			}
 
 			break;
-		case HDD_MODULE:
+		case DEV9_MODULE:
 			if (!dev9_started) {
 				ID = SifExecModuleBuffer(&ps2dev9_irx, size_ps2dev9_irx, 0, NULL, &ret);
 				REPORT("DEV9");
 				dev9_started = LOAD_SUCCESS();
 			}
-			if (!hdd_started) {
+		break;
+		case HDD_MODULE:
+			if (!filexio_started)
+				load_default_module(FILEXIO_MODULE);
+			if (!dev9_started)
+				load_default_module(DEV9_MODULE);
+			if ((!hdd_started) && filexio_started) {
 
-				hdd_started = LOAD_SUCCESS();
+    			ID = SifExecModuleBuffer(&ps2atad_irx, size_ps2atad_irx, 0, NULL, &ret);
+				REPORT("ATAD");
+
+    			ID = SifExecModuleBuffer(&ps2hdd_irx, size_ps2hdd_irx, sizeof(hddarg), hddarg, &ret);
+				REPORT("PS2HDD");
+
+    			HDDSTAT = fileXioDevctl("hdd0:", HDIOC_STATUS, NULL, 0, NULL, 0); /* 0 = HDD connected and formatted, 1 = not formatted, 2 = HDD not usable, 3 = HDD not connected. */
+				dbgprintf("%s: HDD status is %d\n", __func__, HDDSTAT); 
+    			HDD_USABLE = (HDDSTAT == 0 || HDDSTAT == 1); // ONLY if HDD is usable. as we will offer HDD Formatting operation
+
+    			if (HDD_USABLE)
+    			{
+    			    ID = SifExecModuleBuffer(&ps2fs_irx, size_ps2fs_irx, sizeof(pfsarg), pfsarg,  &ret);
+    			    REPORT("PS2FS");
+					hdd_started = LOAD_SUCCESS();
+    			} else {
+					hdd_started = false;
+				}
+				
 			}
 			break;
 		case FILEXIO_MODULE:
