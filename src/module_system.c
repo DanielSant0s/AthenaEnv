@@ -36,7 +36,7 @@ int load_default_module(int id) {
 	switch (id) {
 		case USBD_MODULE:
 		if (!usbd_started) {
-				ID = SifExecModuleBuffer(&usbd_irx, size_usbd_irx, 0, NULL, NULL);
+				ID = SifExecModuleBuffer(&usbd_irx, size_usbd_irx, 0, NULL, &ret);
 				REPORT("USBD");
 				usbd_started = LOAD_SUCCESS();
 			}
@@ -45,7 +45,7 @@ int load_default_module(int id) {
 			if (!usbd_started)
 				load_default_module(USBD_MODULE);
 			if (!kbd_started) {
-				ID = SifExecModuleBuffer((void*)ps2kbd_irx, size_ps2kbd_irx, 0, NULL, NULL);
+				ID = SifExecModuleBuffer((void*)ps2kbd_irx, size_ps2kbd_irx, 0, NULL, &ret);
 				REPORT("PS2KBD");
 				kbd_started = LOAD_SUCCESS();
 			}
@@ -54,14 +54,14 @@ int load_default_module(int id) {
 			if (!usbd_started)
 				load_default_module(USBD_MODULE);
 			if (!mouse_started) {
-				ID = SifExecModuleBuffer((void*)ps2mouse_irx, size_ps2mouse_irx, 0, NULL, NULL);
+				ID = SifExecModuleBuffer((void*)ps2mouse_irx, size_ps2mouse_irx, 0, NULL, &ret);
 				REPORT("PS2MOUSE");
 				mouse_started = LOAD_SUCCESS();
 			}
 			break;
 		case FREERAM_MODULE:
 			if (!freeram_started) {
-				ID = SifExecModuleBuffer((void*)freeram_irx, size_freeram_irx, 0, NULL, NULL);
+				ID = SifExecModuleBuffer((void*)freeram_irx, size_freeram_irx, 0, NULL, &ret);
 				// freeram_started = true; // senseless... FreeRam always returns MODULE_NO_RESIDENT_END. so MODLOAD removes it alwyays...
 			}
 			break;
@@ -69,7 +69,7 @@ int load_default_module(int id) {
 			if (!usbd_started)
 				load_default_module(USBD_MODULE);
 			if (!ds34bt_started) {
-				ID = SifExecModuleBuffer((void*)ds34bt_irx, size_ds34bt_irx, 4, (char*)&ds3pads, NULL);
+				ID = SifExecModuleBuffer((void*)ds34bt_irx, size_ds34bt_irx, 4, (char*)&ds3pads, &ret);
 				REPORT("DS34BT");
 				ds34bt_init();
 				ds34bt_started = LOAD_SUCCESS();
@@ -79,7 +79,7 @@ int load_default_module(int id) {
 			if (!usbd_started)
 				load_default_module(USBD_MODULE);
 			if (!ds34usb_started) {
-				ID = SifExecModuleBuffer((void*)ds34usb_irx, size_ds34usb_irx, 4, (char*)&ds3pads, NULL);
+				ID = SifExecModuleBuffer((void*)ds34usb_irx, size_ds34usb_irx, 4, (char*)&ds3pads, &ret);
 				REPORT("DS34USB");
 				ds34usb_init();
 				ds34usb_started = LOAD_SUCCESS();
@@ -87,21 +87,21 @@ int load_default_module(int id) {
 			break;
 		case NETWORK_MODULE:
 			if (!dev9_started) {
-				ID = SifExecModuleBuffer(&ps2dev9_irx, size_ps2dev9_irx, 0, NULL, NULL);
+				ID = SifExecModuleBuffer(&ps2dev9_irx, size_ps2dev9_irx, 0, NULL, &ret);
 				REPORT("DEV9");
 				dev9_started = LOAD_SUCCESS();
 			}
 			if (!network_started) {
-				ID = SifExecModuleBuffer((void*)NETMAN_irx, size_NETMAN_irx, 0, NULL, NULL);
+				ID = SifExecModuleBuffer((void*)NETMAN_irx, size_NETMAN_irx, 0, NULL, &ret);
 				REPORT("NETMAN");
-				ID = SifExecModuleBuffer((void*)SMAP_irx, size_SMAP_irx, 0, NULL, NULL);
+				ID = SifExecModuleBuffer((void*)SMAP_irx, size_SMAP_irx, 0, NULL, &ret);
 				REPORT("SMAP");
 				network_started = LOAD_SUCCESS();
 			}
 			break;
 		case SIO2MAN_MODULE:
 			if (!sio2man_started) {
-				ID = SifExecModuleBuffer(&sio2man_irx, size_sio2man_irx, 0, NULL, NULL);
+				ID = SifExecModuleBuffer(&sio2man_irx, size_sio2man_irx, 0, NULL, &ret);
 				REPORT("SIO2MAN");
 				sio2man_started = LOAD_SUCCESS();
 			}
@@ -111,7 +111,7 @@ int load_default_module(int id) {
 				load_default_module(SIO2MAN_MODULE);
 
 			if (!pads_started) {
-				ID = SifExecModuleBuffer(&padman_irx, size_padman_irx, 0, NULL, NULL);
+				ID = SifExecModuleBuffer(&padman_irx, size_padman_irx, 0, NULL, &ret);
 				REPORT("PADMAN");
 				pad_init();
 				pads_started = LOAD_SUCCESS();
@@ -121,18 +121,18 @@ int load_default_module(int id) {
 			if (!sio2man_started)
 				load_default_module(SIO2MAN_MODULE);
 			if (!mc_started) {
-				ID = SifExecModuleBuffer(&mcman_irx, size_mcman_irx, 0, NULL, NULL);
+				ID = SifExecModuleBuffer(&mcman_irx, size_mcman_irx, 0, NULL, &ret);
 				REPORT("MCMAN");
-    			ID = SifExecModuleBuffer(&mcserv_irx, size_mcserv_irx, 0, NULL, NULL);
+    			ID = SifExecModuleBuffer(&mcserv_irx, size_mcserv_irx, 0, NULL, &ret);
 				REPORT("MCSERV");
 				mc_started = LOAD_SUCCESS();
 			}
 			break;
 		case AUDIO_MODULE:
 			if (!audio_started) {
-				ID = SifExecModuleBuffer(&libsd_irx, size_libsd_irx, 0, NULL, NULL);
+				ID = SifExecModuleBuffer(&libsd_irx, size_libsd_irx, 0, NULL, &ret);
 				REPORT("LIBSD");
-    			ID = SifExecModuleBuffer(&audsrv_irx, size_audsrv_irx, 0, NULL, NULL);
+    			ID = SifExecModuleBuffer(&audsrv_irx, size_audsrv_irx, 0, NULL, &ret);
 				REPORT("AUDSVR");
     			audsrv_init();
 				audio_started = LOAD_SUCCESS();
@@ -142,11 +142,11 @@ int load_default_module(int id) {
 			if (!usbd_started)
 				load_default_module(USBD_MODULE);
 			if (!usb_mass_started) {
-    			ID = SifExecModuleBuffer(&bdm_irx, size_bdm_irx, 0, NULL, NULL);
+    			ID = SifExecModuleBuffer(&bdm_irx, size_bdm_irx, 0, NULL, &ret);
 				REPORT("BDM");
-    			ID = SifExecModuleBuffer(&bdmfs_fatfs_irx, size_bdmfs_fatfs_irx, 0, NULL, NULL);
+    			ID = SifExecModuleBuffer(&bdmfs_fatfs_irx, size_bdmfs_fatfs_irx, 0, NULL, &ret);
 				REPORT("BDMFS_FATFS");
-    			ID = SifExecModuleBuffer(&usbmass_bd_irx, size_usbmass_bd_irx, 0, NULL, NULL);
+    			ID = SifExecModuleBuffer(&usbmass_bd_irx, size_usbmass_bd_irx, 0, NULL, &ret);
 				REPORT("USMASS_BD");
 
 				usb_mass_started = LOAD_SUCCESS();
@@ -154,7 +154,7 @@ int load_default_module(int id) {
 			break;
 		case CDFS_MODULE:
 			if (!cdfs_started) {
-				ID = SifExecModuleBuffer(&cdfs_irx, size_cdfs_irx, 0, NULL, NULL);
+				ID = SifExecModuleBuffer(&cdfs_irx, size_cdfs_irx, 0, NULL, &ret);
 				REPORT("CDFS");
 				cdfs_started = LOAD_SUCCESS();
 			}
@@ -162,7 +162,7 @@ int load_default_module(int id) {
 			break;
 		case HDD_MODULE:
 			if (!dev9_started) {
-				ID = SifExecModuleBuffer(&ps2dev9_irx, size_ps2dev9_irx, 0, NULL, NULL);
+				ID = SifExecModuleBuffer(&ps2dev9_irx, size_ps2dev9_irx, 0, NULL, &ret);
 				REPORT("DEV9");
 				dev9_started = LOAD_SUCCESS();
 			}
@@ -173,9 +173,9 @@ int load_default_module(int id) {
 			break;
 		case FILEXIO_MODULE:
 			if (!filexio_started) {
-				ID = SifExecModuleBuffer(&iomanX_irx, size_iomanX_irx, 0, NULL, NULL);
+				ID = SifExecModuleBuffer(&iomanX_irx, size_iomanX_irx, 0, NULL, &ret);
 				REPORT("IOMANX");
-    			ID = SifExecModuleBuffer(&fileXio_irx, size_fileXio_irx, 0, NULL, NULL);
+    			ID = SifExecModuleBuffer(&fileXio_irx, size_fileXio_irx, 0, NULL, &ret);
 				REPORT("FILEXIO");
 				filexio_started = LOAD_SUCCESS();
 			}
