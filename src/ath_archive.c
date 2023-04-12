@@ -67,7 +67,7 @@ create_dir(char *pathname, int mode)
 		}
 	}
 	if (r != 0)
-		printf( "Could not create directory %s\n", pathname);
+		dbgprintf( "Could not create directory %s\n", pathname);
 }
 
 /* Create a file, including parent directory as necessary. */
@@ -115,21 +115,21 @@ untar(FILE *a, const char *path)
 	size_t bytes_read;
 	int filesize;
 
-	printf("Extracting from %s\n", path);
+	dbgprintf("Extracting from %s\n", path);
 	for (;;) {
 		bytes_read = fread(buff, 1, 512, a);
 		if (bytes_read < 512) {
-			printf(
+			dbgprintf(
 			    "Short read on %s: expected 512, got %d\n",
 			    path, (int)bytes_read);
 			return;
 		}
 		if (is_end_of_archive(buff)) {
-			printf("End of %s\n", path);
+			dbgprintf("End of %s\n", path);
 			return;
 		}
 		if (!verify_checksum(buff)) {
-			printf( "Checksum failure\n");
+			dbgprintf( "Checksum failure\n");
 			return;
 		}
 		filesize = parseoct(buff + 124, 12);
@@ -140,7 +140,7 @@ untar(FILE *a, const char *path)
 		case '4':
 			break;
 		case '5':
-			printf(" Extracting dir %s\n", buff);
+			dbgprintf(" Extracting dir %s\n", buff);
             strcpy(out_buff, path);
             strcat(out_buff, buff);
 			create_dir(out_buff, parseoct(buff + 100, 8));
@@ -149,14 +149,14 @@ untar(FILE *a, const char *path)
 		case '6':
 			break;
 		default:
-			printf(" Extracting file %s\n", buff);
+			dbgprintf(" Extracting file %s\n", buff);
 			f = create_file(buff, parseoct(buff + 100, 8));
 			break;
 		}
 		while (filesize > 0) {
 			bytes_read = fread(buff, 1, 512, a);
 			if (bytes_read < 512) {
-				printf(
+				dbgprintf(
 				    "Short read on %s: Expected 512, got %d\n",
 				    path, (int)bytes_read);
 				return;
@@ -167,7 +167,7 @@ untar(FILE *a, const char *path)
 				if (fwrite(buff, 1, bytes_read, f)
 				    != bytes_read)
 				{
-					printf( "Failed write\n");
+					dbgprintf( "Failed write\n");
 					fclose(f);
 					f = NULL;
 				}
@@ -200,7 +200,7 @@ static JSValue athena_archiveopen(JSContext *ctx, JSValue this_val, int argc, JS
         strcat(path_buf, path);
 	    if ((za->fp = zip_open(path_buf, 0, &err)) == NULL) {
             zip_error_to_str(buf, sizeof(buf), err, errno);
-            printf("AthenaZip: can't open zip archive `%s': %s\n",
+            dbgprintf("AthenaZip: can't open zip archive `%s': %s\n",
                 path, buf);
             return JS_UNDEFINED;
         }
@@ -232,7 +232,7 @@ static JSValue athena_archiveget(JSContext *ctx, JSValue this_val, int argc, JSV
 
 			JS_DefinePropertyValueUint32(ctx, arr, i, obj, JS_PROP_C_W_E);
         } else {
-            printf("File[%s] Line[%d]\n", __FILE__, __LINE__);
+            dbgprintf("File[%s] Line[%d]\n", __FILE__, __LINE__);
         }
     }
     
@@ -244,7 +244,7 @@ static JSValue athena_archiveclose(JSContext *ctx, JSValue this_val, int argc, J
 	JS_ToUint32(ctx, &za, argv[0]);
 
 	if (zip_close(za->fp) == -1) {
-        printf("AthenaZip: can't close zip archive\n");
+        dbgprintf("AthenaZip: can't close zip archive\n");
     }
 
 	return JS_UNDEFINED;
@@ -273,7 +273,7 @@ static JSValue athena_untar(JSContext *ctx, JSValue this_val, int argc, JSValueC
             memcpy((out+total_bytes-bytes_read), f_buf, bytes_read);
             if (bytes_read < 8192 && gzeof(gzFp)) {
                 fclose(fp);
-                printf("Total size : %d\n", total_bytes);
+                dbgprintf("Total size : %d\n", total_bytes);
 
                 size_t tar_name = strrchr(path, '.') - path;
                 memcpy(buf, path, tar_name);
@@ -345,7 +345,7 @@ static JSValue athena_extractall(JSContext *ctx, JSValue this_val, int argc, JSV
                     zip_fclose(zf);
                 }
             } else {
-                printf("File[%s] Line[%d]/n", __FILE__, __LINE__);
+                dbgprintf("File[%s] Line[%d]/n", __FILE__, __LINE__);
             }
         }   
     }

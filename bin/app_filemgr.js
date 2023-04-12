@@ -1,3 +1,5 @@
+// {"name": "File manager", "author": "Daniel Santos", "version": "04072023", "icon": "lfm_icon.png", "file": "app_filemgr.js"}
+
 var font = new Font();
 
 function getStringSize(string, scale){
@@ -182,9 +184,15 @@ file_manager.process = function() {
 
             } else if(file[file_manager.data[0]].name.endsWith(".js")){
                 System.currentDir(path + "/");
-                dofile(file[file_manager.data[0]].name);
+                std.loadScript(file[file_manager.data[0]].name);
             } else if(file[file_manager.data[0]].name.endsWith(".elf")){
                 System.loadELF(path + "/"+ file[file_manager.data[0]].name);
+            } else if(file[file_manager.data[0]].name.endsWith(".zip")){
+                Archive.extractAll(path + "/"+ file[file_manager.data[0]].name);
+                file = System.listDir(path); // Update file list
+            } else if(file[file_manager.data[0]].name.endsWith(".tar.gz")){
+                Archive.untar(path + "/"+ file[file_manager.data[0]].name);
+                file = System.listDir(path); // Update file list
             }
         }
         if(file_manager.data[2] == 1){
@@ -277,6 +285,10 @@ while(true){
     Screen.clear(Color.new(0, 0, 0));
 
     file_manager.run();
+
+    if(Pads.check(pad, Pads.CIRCLE) && !Pads.check(oldpad, Pads.CIRCLE)) {
+        break;
+    }
     
     Screen.flip();
 };

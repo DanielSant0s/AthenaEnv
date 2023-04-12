@@ -1,3 +1,5 @@
+// {"name": "Cell.io", "author": "Daniel Santos", "version": "04072023", "icon": "cell_icon.png", "file": "cell.js"}
+
 var font = new Font("fonts/LEMONMILK-Regular.otf");
 font.scale = (2);
 

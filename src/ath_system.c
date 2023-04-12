@@ -1,5 +1,4 @@
 #include <unistd.h>
-#include <libmc.h>
 #include <malloc.h>
 #include <sys/fcntl.h>
 #include <dirent.h>
@@ -10,6 +9,8 @@
 #include "include/graphics.h"
 
 #include "include/system.h"
+
+#include "include/def_mods.h"
 
 #define MAX_DIR_FILES 512
 
@@ -61,7 +62,7 @@ static JSValue athena_setCurrentDirectory(JSContext *ctx, JSValueConst *argv)
 	   }
         }
         
-        printf("changing directory to %s\n",__ps2_normalize_path(temp_path));
+        dbgprintf("changing directory to %s\n",__ps2_normalize_path(temp_path));
         chdir(__ps2_normalize_path(temp_path));
        
 	return JS_UNDEFINED;
@@ -85,7 +86,7 @@ static JSValue athena_dir(JSContext *ctx, JSValue this_val, int argc, JSValueCon
 	char path[255];
 	
 	getcwd((char *)path, 256);
-	printf("current dir %s\n",(char *)path);
+	dbgprintf("current dir %s\n",(char *)path);
 	
 	if (argc != 0) 
 	{
@@ -103,7 +104,7 @@ static JSValue athena_dir(JSContext *ctx, JSValue this_val, int argc, JSValueCon
 	}
 	
 	strcpy(path,__ps2_normalize_path(path));
-	printf("\nchecking path : %s\n",path);
+	dbgprintf("\nchecking path : %s\n",path);
 		
 
         
@@ -507,7 +508,7 @@ static JSValue athena_checkValidDisc(JSContext *ctx, JSValue this_val, int argc,
 		case SCECdIllegalMedia:
 			result = 0;
 	}
-	printf("Valid Disc: %d\n",result);
+	dbgprintf("Valid Disc: %d\n",result);
 	return JS_NewInt32(ctx, result);
 }
 
@@ -533,7 +534,7 @@ static JSValue athena_getDiscType(JSContext *ctx, JSValue this_val, int argc, JS
         for (iz = 0; DiscTypes[iz].name[0]; iz++)
             if (DiscTypes[iz].type == discType)
                 DiscType_ix = iz;
-    printf("getDiscType: %d\n",DiscTypes[DiscType_ix].value);
+    dbgprintf("getDiscType: %d\n",DiscTypes[DiscType_ix].value);
     return JS_NewInt32(ctx, DiscTypes[DiscType_ix].value); //return the value itself to Lua stack
 }
 
@@ -601,6 +602,11 @@ static JSValue athena_getfileprogress(JSContext *ctx, JSValue this_val, int argc
 	return obj;
 }
 
+static JSValue athena_darkmode(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
+	dark_mode = JS_ToBool(ctx, argv[0]);
+	return JS_UNDEFINED;
+}
+
 static const JSCFunctionListEntry system_funcs[] = {
 	JS_CFUNC_DEF( "openFile",           		  2,         athena_openfile),
 	JS_CFUNC_DEF( "readFile",          		  2,         athena_readfile		 ),
@@ -627,6 +633,7 @@ static const JSCFunctionListEntry system_funcs[] = {
 	JS_CFUNC_DEF( "checkValidDisc",     		  0,  		athena_checkValidDisc ),
 	JS_CFUNC_DEF( "getDiscType",        		  0,     	athena_getDiscType	 ),
 	JS_CFUNC_DEF( "checkDiscTray",      		  0,   		athena_checkDiscTray	 ),
+	JS_CFUNC_DEF( "setDarkMode",      		  1,   		athena_darkmode	 ),
 	JS_PROP_INT32_DEF("FREAD", O_RDONLY, JS_PROP_CONFIGURABLE ),
 	JS_PROP_INT32_DEF("FWRITE", O_WRONLY, JS_PROP_CONFIGURABLE ),
 	JS_PROP_INT32_DEF("FCREATE", O_CREAT | O_WRONLY, JS_PROP_CONFIGURABLE ),
@@ -672,9 +679,88 @@ static JSValue athena_sifloadmodulebuffer(JSContext *ctx, JSValue this_val, int 
 	return JS_NewInt32(ctx, result);
 }
 
+static JSValue athena_sifloaddefaultmodule(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	if (argc != 1) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
+	int mod_id = -1;
+
+	JS_ToInt32(ctx, &mod_id, argv[0]);
+
+	if (mod_id == BOOT_MODULE) {
+		mod_id = get_boot_device(boot_path);
+	}
+
+	load_default_module(mod_id);
+
+	return JS_UNDEFINED;
+}
+
+static JSValue athena_resetiop(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	if (argc != 0) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
+	if(ds34bt_started) ds34bt_deinit();
+	if(ds34usb_started) ds34usb_deinit();
+	if(pads_started) padEnd();
+	if(audio_started) audsrv_quit();
+
+	prepare_IOP();
+
+	kbd_started = false;
+	mouse_started = false;
+	freeram_started = false;
+	ds34bt_started = false;
+	ds34usb_started = false;
+	network_started = false;
+	sio2man_started = false;
+	usbd_started = false;
+	usb_mass_started = false;
+	pads_started = false;
+	audio_started = false;
+	cdfs_started = false;
+	dev9_started = false;
+	mc_started = false;
+	hdd_started = false;
+	filexio_started = false;
+
+	SifExecModuleBuffer(&poweroff_irx, size_poweroff_irx, 0, NULL, NULL);
+	load_default_module(FILEXIO_MODULE);
+
+	//poweroffSetCallback(&poweroffHandler, NULL);
+	return JS_UNDEFINED;
+}
+
+static JSValue athena_getmemory(JSContext *ctx, JSValue this_val, int argc, JSValueConst * argv){
+	if (argc != 0) return JS_ThrowSyntaxError(ctx, "Wrong number of arguments");
+	s32 freeram = 0;
+    s32 usedram = 0;
+
+    smem_read((void *)(1 * 1024 * 1024), &freeram, 4);
+    usedram = (2 * 1024 * 1024) - freeram;
+
+	JSValue obj = JS_NewObject(ctx);
+    JS_DefinePropertyValueStr(ctx, obj, "free", JS_NewUint32(ctx, freeram), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "used", JS_NewUint32(ctx, usedram), JS_PROP_C_W_E);
+
+	return obj;
+}
+
 static const JSCFunctionListEntry sif_funcs[] = {
 	JS_CFUNC_DEF("loadModule",            3, 		 athena_sifloadmodule),
 	JS_CFUNC_DEF("loadModuleBuffer",      3,       athena_sifloadmodulebuffer),
+	JS_CFUNC_DEF("loadDefaultModule",     3,       athena_sifloaddefaultmodule),
+	JS_CFUNC_DEF("reset",      			  0,     	athena_resetiop),
+	JS_CFUNC_DEF("getMemoryStats",        0,     	athena_getmemory),
+	JS_PROP_INT32_DEF("keyboard", KEYBOARD_MODULE, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("mouse", MOUSE_MODULE, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("freeram", FREERAM_MODULE, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("ds34bt", DS34BT_MODULE, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("ds34usb", DS34USB_MODULE, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("network", NETWORK_MODULE, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("pads", PADS_MODULE, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("memcard", MC_MODULE, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("audio", AUDIO_MODULE, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("usb_mass", USB_MASS_MODULE, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("cdfs", CDFS_MODULE, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("hdd", HDD_MODULE, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("boot_device", BOOT_MODULE, JS_PROP_CONFIGURABLE),
 };
 
 static int system_init(JSContext *ctx, JSModuleDef *m)
@@ -690,6 +776,6 @@ static int sif_init(JSContext *ctx, JSModuleDef *m)
 JSModuleDef *athena_system_init(JSContext* ctx){
 	setModulePath();
 	athena_push_module(ctx, system_init, system_funcs, countof(system_funcs), "System");
-	return athena_push_module(ctx, sif_init, sif_funcs, countof(sif_funcs), "Sif");
+	return athena_push_module(ctx, sif_init, sif_funcs, countof(sif_funcs), "IOP");
 }
 

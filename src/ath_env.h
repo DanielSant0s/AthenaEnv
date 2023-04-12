@@ -9,6 +9,9 @@
 
 #include "include/taskman.h"
 #include "include/graphics.h"
+#include "include/dbgprintf.h"
+
+extern bool dark_mode;
 
 typedef struct {
 	const char* path;
@@ -39,6 +42,10 @@ JSClassID get_imglist_class_id();
 
 extern char boot_path[255];
 
+void poweroffHandler(void *arg);
+void initMC();
+void prepare_IOP();
+
 const char* runScript(const char* script, bool isBuffer );
 
 JSModuleDef *athena_push_module(JSContext* ctx, JSModuleInitFunc *func, const JSCFunctionListEntry *func_list, int len, const char* module_name);
@@ -54,6 +61,7 @@ JSModuleDef *athena_image_init(JSContext* ctx);
 JSModuleDef *athena_imagelist_init(JSContext* ctx);
 JSModuleDef *athena_socket_init(JSContext* ctx);
 JSModuleDef *athena_network_init(JSContext* ctx);
+JSModuleDef *athena_request_init(JSContext *ctx);
 JSModuleDef *athena_keyboard_init(JSContext* ctx);
 JSModuleDef *athena_mouse_init(JSContext* ctx);
 JSModuleDef *athena_pads_init(JSContext* ctx);

@@ -15,7 +15,7 @@ JSModuleDef *athena_push_module(JSContext* ctx, JSModuleInitFunc *func, const JS
         return NULL;
     JS_AddModuleExportList(ctx, m, func_list, len);
 
-	printf("AthenaEnv: %s module pushed at 0x%x\n", module_name, m);
+	dbgprintf("AthenaEnv: %s module pushed at 0x%x\n", module_name, m);
     return m;
 }
 
@@ -120,6 +120,7 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"import * as Keyboard from 'Keyboard';\n"
 				"import * as Mouse from 'Mouse';\n"
 				"import * as Network from 'Network';\n"
+				"import * as Request from 'Request';\n"
 				"import * as Socket from 'Socket';\n"
 				"import * as SocketConst from 'SocketConst';\n"
 				"import * as Font from 'Font';\n"
@@ -129,7 +130,7 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"import * as Lights from 'Lights';\n"
 				"import * as Camera from 'Camera';\n"
 				"import * as System from 'System';\n"
-				"import * as Sif from 'Sif';\n"
+				"import * as IOP from 'IOP';\n"
 				"import * as Archive from 'Archive';\n"
                 "globalThis.std = std;\n"
                 "globalThis.os = os;\n"
@@ -177,6 +178,8 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"globalThis.SOCK_RAW = SocketConst.SOCK_RAW;\n"
 				"globalThis.Socket = Socket.Socket;\n"
 
+				"globalThis.Request = Request.Request;\n"
+
 				"globalThis.Font = Font.Font;\n"
 
 				"globalThis.NEAREST = 0;\n"
@@ -186,7 +189,7 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"globalThis.Image = Image.Image;\n"
 				"globalThis.ImageList = ImageList.ImageList;\n"
 
-				"globalThis.Sif = Sif;\n"
+				"globalThis.IOP = IOP;\n"
 
 				"globalThis.Render = Render;\n"
 
@@ -236,17 +239,6 @@ static JSContext *JS_NewCustomContext(JSRuntime *rt)
     /* system modules */
     js_init_module_std(ctx, "std");
     js_init_module_os(ctx, "os");
-    return ctx;
-}
-
-const char* runScript(const char* script, bool isBuffer)
-{
-    const char *qjserr = "[qjs error]";
-    printf("\nStarting AthenaEnv...\n");
-    JSRuntime *rt = JS_NewRuntime(); if (!rt) { return qjserr; }
-    js_std_set_worker_new_context_func(JS_NewCustomContext);
-    js_std_init_handlers(rt);
-    JSContext *ctx = JS_NewCustomContext(rt); if (!ctx) { return qjserr; }
 
 	athena_system_init(ctx);
 	athena_archive_init(ctx);
@@ -263,23 +255,46 @@ const char* runScript(const char* script, bool isBuffer)
 	athena_mouse_init(ctx);
 	athena_pads_init(ctx);
 	athena_network_init(ctx);
+	athena_request_init(ctx);
 	athena_socket_init(ctx);
 	athena_font_init(ctx);
 
+    return ctx;
+}
+
+static char error_buf[1024];
+
+const char* runScript(const char* script, bool isBuffer)
+{
+    dbgprintf("\nStarting AthenaEnv...\n");
+    JSRuntime *rt = JS_NewRuntime(); if (!rt) { return "Runtime creation"; }
+    js_std_set_worker_new_context_func(JS_NewCustomContext);
+    js_std_init_handlers(rt);
+    JSContext *ctx = JS_NewCustomContext(rt); if (!ctx) { return "Context creation"; }
+
     int s = qjs_handle_file(ctx, script, NULL);
+
     if (s < 0) { 
-		JSValue val = JS_GetException(ctx);
-		const char* exception = JS_ToCString(ctx, val);
-		const char* stack = JS_ToCString(ctx, JS_GetPropertyStr(ctx, val, "stack"));
-		const char* error = malloc(strlen(exception) + strlen(stack) + 2);
-		strcpy(error, exception);
-		strcat(error, "\n");
-		strcat(error, stack);
+		JSValue exception_val = JS_GetException(ctx);
+		const char* exception = JS_ToCString(ctx, exception_val);
+		JSValue stack_val = JS_GetPropertyStr(ctx, exception_val, "stack");
+		const char* stack = JS_ToCString(ctx, stack_val);
+		JS_FreeValue(ctx, exception_val);
+		JS_FreeValue(ctx, stack_val);
+		
+		strcpy(error_buf, exception);
+		strcat(error_buf, "\n");
+		strcat(error_buf, stack);
+
+		js_std_free_handlers(rt);
 		JS_FreeContext(ctx);
 		JS_FreeRuntime(rt);
-		return error; 
+
+		printf("%s\n", error_buf);
+		return error_buf; 
 	}
 	
+	js_std_free_handlers(rt);
 	JS_FreeContext(ctx);
 	JS_FreeRuntime(rt);
     return NULL;

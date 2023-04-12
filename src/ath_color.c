@@ -70,7 +70,7 @@ static JSValue athena_setA(JSContext *ctx, JSValue this_val, int argc, JSValueCo
 }
 
 static const JSCFunctionListEntry color_funcs[] = {
-	JS_CFUNC_DEF("new", -1, athena_color_ctor),
+	JS_CFUNC_DEF("new",  4, athena_color_ctor),
 	JS_CFUNC_DEF("getR", 1, athena_getR),
 	JS_CFUNC_DEF("getG", 1, athena_getG),
 	JS_CFUNC_DEF("getB", 1, athena_getB),

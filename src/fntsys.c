@@ -13,6 +13,7 @@
 #include "include/utf8.h"
 #include "include/atlas.h"
 #include "include/graphics.h"
+#include "include/dbgprintf.h"
 
 #include <sys/types.h>
 #include <ft2build.h>
@@ -121,7 +122,7 @@ void *readFile(const char* path, int align, int *size)
         lseek(fd, 0, SEEK_SET);
 
         if ((*size > 0) && (*size != realSize)) {
-            printf("UTIL Invalid filesize, expected: %d, got: %d\n", *size, realSize);
+            dbgprintf("UTIL Invalid filesize, expected: %d, got: %d\n", *size, realSize);
             close(fd);
             return NULL;
         }
@@ -132,7 +133,7 @@ void *readFile(const char* path, int align, int *size)
             buffer = malloc(realSize);
 
         if (!buffer) {
-            printf("UTIL ReadFile: Failed allocation of %d bytes", realSize);
+            dbgprintf("UTIL ReadFile: Failed allocation of %d bytes", realSize);
             *size = 0;
         } else {
             read(fd, buffer, realSize);
@@ -283,7 +284,7 @@ static int fntLoadSlot(font_t *font, const char* path)
    
         buffer = readFile(path, -1, &bufferSize);
         if (!buffer) {
-            printf("FNTSYS Font file loading failed: %s\n", path);
+            dbgprintf("FNTSYS Font file loading failed: %s\n", path);
             return FNT_ERROR;
         }
         font->dataPtr = buffer;
@@ -293,7 +294,7 @@ static int fntLoadSlot(font_t *font, const char* path)
     // load the font via memory handle
     int error = FT_New_Memory_Face(font_library, (FT_Byte *)buffer, bufferSize, 0, &font->face);
     if (error) {
-        printf("FNTSYS Freetype font loading failed with %x!\n", error);
+        dbgprintf("FNTSYS Freetype font loading failed with %x!\n", error);
         fntDeleteSlot(font);
         return FNT_ERROR;
     }
@@ -306,11 +307,11 @@ static int fntLoadSlot(font_t *font, const char* path)
 
 void fntInit()
 {
-    printf("FNTSYS Init\n");
+    dbgprintf("FNTSYS Init\n");
     int error = FT_Init_FreeType(&font_library);
     if (error) {
         // just report over the ps2link
-        printf("FNTSYS Freetype init failed with %x!\n", error);
+        dbgprintf("FNTSYS Freetype init failed with %x!\n", error);
         return;
     }
 
@@ -364,7 +365,7 @@ int fntLoadDefault(const char* path)
 
 void fntEnd()
 {
-    printf("FNTSYS End\n");
+    dbgprintf("FNTSYS End\n");
     // release all the fonts
     int id;
     for (id = 0; id < FNT_MAX_COUNT; ++id)
@@ -392,7 +393,7 @@ static int fntGlyphAtlasPlace(font_t *font, fnt_glyph_cache_entry_t *glyph)
 {
     FT_GlyphSlot slot = font->face->glyph;
 
-    // printf("FNTSYS GlyphAtlasPlace: Placing the glyph... %d x %d\n", slot->bitmap.width, slot->bitmap.rows);
+    // dbgprintf("FNTSYS GlyphAtlasPlace: Placing the glyph... %d x %d\n", slot->bitmap.width, slot->bitmap.rows);
 
     if (slot->bitmap.width == 0 || slot->bitmap.rows == 0) {
         // no bitmap glyph, just skip
@@ -401,23 +402,23 @@ static int fntGlyphAtlasPlace(font_t *font, fnt_glyph_cache_entry_t *glyph)
 
     int aid = 0;
     for (; aid < ATLAS_MAX; aid++) {
-        // printf("FNTSYS Placing aid %d...\n", aid);
+        // dbgprintf("FNTSYS Placing aid %d...\n", aid);
         atlas_t **atl = &font->atlases[aid];
         if (!*atl) { // atlas slot not yet used
-            // printf("FNTSYS aid %d is new...\n", aid);
+            // dbgprintf("FNTSYS aid %d is new...\n", aid);
             *atl = fntNewAtlas();
         }
 
         glyph->allocation = atlasPlace(*atl, slot->bitmap.width, slot->bitmap.rows, slot->bitmap.buffer);
         if (glyph->allocation) {
-            // printf("FNTSYS Found placement\n", aid);
+            // dbgprintf("FNTSYS Found placement\n", aid);
             glyph->atlas = *atl;
 
             return 1;
         }
     }
 
-    printf("FNTSYS No atlas free\n");
+    dbgprintf("FNTSYS No atlas free\n");
     return 0;
 }
 
@@ -445,12 +446,12 @@ static fnt_glyph_cache_entry_t *fntCacheGlyph(font_t *font, uint32_t gid)
 
     // not cached but valid. Cache
     if (!font->face) {
-        printf("FNTSYS Face is NULL!\n");
+        dbgprintf("FNTSYS Face is NULL!\n");
     }
 
     int error = FT_Load_Char(font->face, gid, FT_LOAD_RENDER);
     if (error) {
-        printf("FNTSYS Error loading glyph - %d\n", error);
+        dbgprintf("FNTSYS Error loading glyph - %d\n", error);
         return NULL;
     }
 

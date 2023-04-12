@@ -7,6 +7,7 @@
 #include <errno.h>
 
 #include "include/sound.h"
+#include "include/dbgprintf.h"
 
 extern void *_gp;
 
@@ -201,7 +202,7 @@ void sound_setadpcmvolume(int slot, int volume) {
         adpcm_started = true;
     }
 
-	audsrv_adpcm_set_volume(slot, volume);
+    audsrv_adpcm_set_volume_and_pan(slot, volume, 0);
 }
 
 audsrv_adpcm_t* sound_loadadpcm(const char* path){
@@ -340,7 +341,7 @@ static void oggIoThread(void *arg)
         	        bufferPtr += ret;
         	        decodeTotal -= ret;
         	    } else if (ret < 0) {
-        	        printf("ogg: I/O error while reading.\n");
+        	        dbgprintf("ogg: I/O error while reading.\n");
         	        terminate_flag = 1;
         	        break;
         	    } else if (ret == 0) {
@@ -464,13 +465,13 @@ Sound* load_ogg(const char* path)
 
     oggFile = fopen(path, "rb");
     if (oggFile == NULL) {
-        printf("ogg: Failed to open Ogg file %s\n", path);
+        dbgprintf("ogg: Failed to open Ogg file %s\n", path);
 		oggDeinit();
         return -ENOENT;
     }
 
     if (ov_open_callbacks(oggFile, ogg->fp, NULL, 0, OV_CALLBACKS_DEFAULT) < 0) {
-        printf("ogg: Input does not appear to be an Ogg bitstream.\n");
+        dbgprintf("ogg: Input does not appear to be an Ogg bitstream.\n");
 		oggDeinit();
         return -ENOENT;
     }

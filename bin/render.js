@@ -1,3 +1,6 @@
+// {"name": "Render demo", "author": "Daniel Santos", "version": "04072023", "icon": "render_icon.png", "file": "render.js"}
+
+
 var fntcpy = new Font();
 fntcpy.scale = (0.4f);
 
@@ -45,13 +48,13 @@ while(true){
 
     oldpad = pad;
     pad = Pads.get();
-    lx = pad.lx / 1024.0f;
-    ly = pad.ly / 1024.0f;
+    lx = ((pad.lx > 25 || pad.lx < -25)? pad.lx : 0) / 1024.0f;
+    ly = ((pad.ly > 25 || pad.ly < -25)? pad.ly : 0) / 1024.0f;
     savedlx = savedlx - lx;
     savedly = savedly - ly;
 
-    rx = pad.rx / 1024.0f;
-    ry = pad.ry / 1024.0f;
+    rx = ((pad.rx > 25 || pad.rx < -25)? pad.rx : 0) / 1024.0f;
+    ry = ((pad.ry > 25 || pad.ry < -25)? pad.ry : 0) / 1024.0f;
     savedrx = savedrx - rx;
     savedry = savedry - ry;
 
@@ -59,6 +62,10 @@ while(true){
 
     if((Pads.check(pad, Pads.LEFT) && !Pads.check(oldpad, Pads.LEFT)) || (Pads.check(pad, Pads.RIGHT) && !Pads.check(oldpad, Pads.RIGHT))){
         modeltodisplay ^= 1
+    }
+
+    if(Pads.check(pad, Pads.TRIANGLE) && !Pads.check(oldpad, Pads.TRIANGLE)) {
+        break;
     }
 
     Render.drawOBJ(model[modeltodisplay], 0.0f, 0.0f, 30.0f, savedly, savedlx, 0.0f);
