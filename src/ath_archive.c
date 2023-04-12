@@ -254,6 +254,7 @@ static JSValue athena_untar(JSContext *ctx, JSValue this_val, int argc, JSValueC
     FILE* fp;
     gzFile gzFp;
     char buf[256];
+	char tar_path[512];
     unsigned char f_buf[8192];
     unsigned char* out = NULL;
     size_t total_bytes = 0, bytes_read;
@@ -291,7 +292,8 @@ static JSValue athena_untar(JSContext *ctx, JSValue this_val, int argc, JSValueC
         gzclose(gzFp);
     }
 
-	untar(fp, boot_path);
+	getcwd(tar_path, 512);
+	untar(fp, tar_path);
 	fclose(fp);
 
 	return JS_UNDEFINED;

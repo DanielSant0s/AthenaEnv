@@ -313,6 +313,8 @@ let dl_state = DETAILS;
 let dling_text = "";
 let terminate = false;
 
+let boot_path = System.currentDir();
+
 while(true) {
     pad[1] = pad[0];
     pad[0] = Pads.get();
@@ -346,12 +348,10 @@ while(true) {
                     loading_state++;
                     break;
                 case LD_PKGQNTD:
-                    if(Math.floor(Timer.getTime(ui.timer)/1000) > 5) {
-                        loading_state++;
-                        explore_menu = new IconMenu(120, 110, ui.font, app_list);
-                        explore_menu.padding = -5;
-                        explore_menu.icon_padding = 20;
-                    }
+                    loading_state++;
+                    explore_menu = new IconMenu(120, 110, ui.font, app_list);
+                    explore_menu.padding = -5;
+                    explore_menu.icon_padding = 20;
                     break;
                 case LD_FADE:
                     ui.fade_text(FADE_IN);
@@ -403,7 +403,7 @@ while(true) {
                 case DETAILS:
                     if(pressed(pad, Pads.CROSS)) {
                         dling_text += "Downloading package...\n";
-                        dling_text += "This is an alpha version, it will take a long time"
+                        dling_text += "This is an alpha version, it will take a long time\n";
                         dl_state++;
                     }
                     if(pressed(pad, Pads.TRIANGLE)) {
@@ -411,8 +411,8 @@ while(true) {
                     }
                     break;
                 case DOWNLOADING:
+                    System.currentDir(boot_path + "\\downloads");
                     req.download(app_list[explore_menu.num].link, app_list[explore_menu.num].fname);
-                    System.moveFile(app_list[explore_menu.num].fname, "downloads/" + app_list[explore_menu.num].fname);
                     dl_state++;
                     break;
                 case DOWNLOADED:
@@ -425,13 +425,14 @@ while(true) {
                     break;
                 case EXTRACTING:
                     if (app_list[explore_menu.num].fname.endsWith(".tar.gz")) {
-                        Archive.untar("downloads/" + app_list[explore_menu.num].fname);
+                        Archive.untar(app_list[explore_menu.num].fname);
                     } else if (app_list[explore_menu.num].fname.endsWith(".zip")) {
-                        Archive.extractAll("downloads/" + app_list[explore_menu.num].fname);
+                        Archive.extractAll(app_list[explore_menu.num].fname);
                     }
                     dl_state++;
                     break;
                 case EXTRACTED:
+                    System.currentDir(boot_path);
                     app_state = MAIN_MENU;
                     dling_text = "";
                     break;
