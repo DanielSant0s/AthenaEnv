@@ -42,8 +42,6 @@ req.followlocation = true;
 req.noprogress = false;
 req.keepalive = true;
 
-// req.download("https://github.com/DanielSant0s/brewstore-db/raw/main/brew_data.json", "brew_data.json");
-
 const LOADING = 0;
 const MAIN_MENU = 1;
 const OPTIONS_MENU = 2;
@@ -304,6 +302,17 @@ main_menu.center_x();
 
 let explore_menu = undefined;
 
+const DETAILS = 0;
+const DOWNLOADING = 1;
+const DOWNLOADED = 2;
+const EXTRACTING = 3;
+const EXTRACTED = 4;
+const LEAVING = 5;
+
+let dl_state = DETAILS;
+let dling_text = "";
+let terminate = false;
+
 while(true) {
     pad[1] = pad[0];
     pad[0] = Pads.get();
@@ -372,6 +381,10 @@ while(true) {
                 app_state = DLING_MENU;
             }
 
+            if(pressed(pad, Pads.TRIANGLE)) {
+                terminate = true;
+            }
+
             ui.render_belt(0.0025f);
             main_menu.draw(pad);
             explore_menu.draw(pad);
@@ -386,17 +399,46 @@ while(true) {
             ui.println("Package: " + app_list[explore_menu.num].fname);
             ui.println("Link: " + app_list[explore_menu.num].link);
 
-
-            if(pressed(pad, Pads.CROSS)) {
-                ui.println("Downloading file...");
-                ui.update();
-                req.download(app_list[explore_menu.num].link, app_list[explore_menu.num].fname);
-                app_state = DLING_MENU;
+            switch (dl_state) {
+                case DETAILS:
+                    if(pressed(pad, Pads.CROSS)) {
+                        dling_text += "Downloading package...\n";
+                        dling_text += "This is an alpha version, it will take a long time"
+                        dl_state++;
+                    }
+                    if(pressed(pad, Pads.TRIANGLE)) {
+                        app_state = MAIN_MENU;
+                    }
+                    break;
+                case DOWNLOADING:
+                    req.download(app_list[explore_menu.num].link, app_list[explore_menu.num].fname);
+                    System.moveFile(app_list[explore_menu.num].fname, "downloads/" + app_list[explore_menu.num].fname);
+                    dl_state++;
+                    break;
+                case DOWNLOADED:
+                    if(!app_list[explore_menu.num].fname.endsWith(".elf") && !app_list[explore_menu.num].fname.endsWith(".ELF")) {
+                        dl_state++;
+                        dling_text += "Extracting files...\n";
+                    } else {
+                        dl_state = EXTRACTED;
+                    }
+                    break;
+                case EXTRACTING:
+                    if (app_list[explore_menu.num].fname.endsWith(".tar.gz")) {
+                        Archive.untar("downloads/" + app_list[explore_menu.num].fname);
+                    } else if (app_list[explore_menu.num].fname.endsWith(".zip")) {
+                        Archive.extractAll("downloads/" + app_list[explore_menu.num].fname);
+                    }
+                    dl_state++;
+                    break;
+                case EXTRACTED:
+                    app_state = MAIN_MENU;
+                    dling_text = "";
+                    break;
             }
 
-            if(pressed(pad, Pads.TRIANGLE)) {
-                app_state = MAIN_MENU;
-            }
+            ui.render_belt(0.005f);
+            ui.println(dling_text);
 
             break;
         default:
@@ -404,6 +446,10 @@ while(true) {
     }
 
     ui.update();
+
+    if(terminate){
+        break;
+    }
 }
 
 
