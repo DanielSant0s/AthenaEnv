@@ -432,12 +432,37 @@ Network.init(); //DHCP Mode, dynamic.
 * var conf = Network.getConfig()  
   Returns conf.ip, conf.netmask, conf.gateway, conf.dns.
   
- * Network.get(address)
- * Network.post(address, query)
-  
 * Network.deinit()  
-  Shutdown network module.
+  Shutdown network module.  
   
+  
+### Request module
+
+Construction:  
+
+* var r = new Request()  
+```js
+var r = new Request();
+```
+
+Properties:
+
+* followlocation - bool
+* forbid_reuse - bool
+* keepalive - bool
+* noprogress - bool
+* maxredirs - int
+* timeout - int
+* useragent - string
+* userpwd - string
+
+Methods:
+
+* get(url)
+* post(url, data)
+* download(url, fname)
+
+
 ### Socket module
 
 Construction:  
