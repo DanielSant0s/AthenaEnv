@@ -69,7 +69,7 @@ while(true) {
         app_table.push(app_table.shift());
     }
 
-    if(Pads.check(new_pad, Pads.CROSS) && !Pads.check(old_pad, Pads.CROSS) && menu_ptr < js_table.length){
+    if(Pads.check(new_pad, Pads.CROSS) && !Pads.check(old_pad, Pads.CROSS)){
         old_pad = null;
         new_pad = null;
         mouse = null;
@@ -78,6 +78,8 @@ while(true) {
         font = null;
         font_medium = null;
         font_bold = null;
+
+        let app_file = app_table[0].file;
 
         app_table.forEach(app => {
             app.icon = null;
@@ -89,7 +91,7 @@ while(true) {
 
         std.gc();
 
-        std.loadScript(app_table[0].file);
+        std.loadScript(app_file);
 
         System.loadELF(System.currentDir() + "athena_pkd.elf"); // Doing this to reset all the stuff
     }

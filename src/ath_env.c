@@ -120,6 +120,7 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"import * as Keyboard from 'Keyboard';\n"
 				"import * as Mouse from 'Mouse';\n"
 				"import * as Network from 'Network';\n"
+				"import * as Request from 'Request';\n"
 				"import * as Socket from 'Socket';\n"
 				"import * as SocketConst from 'SocketConst';\n"
 				"import * as Font from 'Font';\n"
@@ -176,6 +177,8 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"globalThis.SOCK_DGRAM = SocketConst.SOCK_DGRAM;\n"
 				"globalThis.SOCK_RAW = SocketConst.SOCK_RAW;\n"
 				"globalThis.Socket = Socket.Socket;\n"
+
+				"globalThis.Request = Request.Request;\n"
 
 				"globalThis.Font = Font.Font;\n"
 
@@ -252,6 +255,7 @@ static JSContext *JS_NewCustomContext(JSRuntime *rt)
 	athena_mouse_init(ctx);
 	athena_pads_init(ctx);
 	athena_network_init(ctx);
+	athena_request_init(ctx);
 	athena_socket_init(ctx);
 	athena_font_init(ctx);
 
@@ -285,6 +289,8 @@ const char* runScript(const char* script, bool isBuffer)
 		js_std_free_handlers(rt);
 		JS_FreeContext(ctx);
 		JS_FreeRuntime(rt);
+
+		printf("%s\n", error_buf);
 		return error_buf; 
 	}
 	
