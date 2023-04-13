@@ -85,6 +85,7 @@ irx_define(ps2hdd);
 irx_define(ps2fs);
 irx_define(SMAP);
 irx_define(NETMAN);
+irx_define(ps2ips);
 irx_define(audsrv);
 irx_define(ps2kbd);
 irx_define(ps2mouse);

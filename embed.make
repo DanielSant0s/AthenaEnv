@@ -86,6 +86,9 @@ $(EE_ASM_DIR)NETMAN.s: $(PS2SDK)/iop/irx/netman.irx | $(EE_ASM_DIR)
 $(EE_ASM_DIR)SMAP.s: $(PS2SDK)/iop/irx/smap.irx | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ SMAP_irx
 
+$(EE_ASM_DIR)ps2ips.s: $(PS2SDK)/iop/irx/ps2ips.irx | $(EE_ASM_DIR)
+	$(BIN2S) $< $@ ps2ips_irx
+
 $(EE_ASM_DIR)ps2kbd.s: $(PS2SDK)/iop/irx/ps2kbd.irx | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ ps2kbd_irx
 

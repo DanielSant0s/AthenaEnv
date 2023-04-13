@@ -315,6 +315,8 @@ let terminate = false;
 
 let boot_path = System.currentDir();
 
+console.log(boot_path);
+
 while(true) {
     pad[1] = pad[0];
     pad[0] = Pads.get();
@@ -411,7 +413,7 @@ while(true) {
                     }
                     break;
                 case DOWNLOADING:
-                    System.currentDir(boot_path + "\\downloads");
+                    System.currentDir(boot_path + "downloads\\");
                     req.download(app_list[explore_menu.num].link, app_list[explore_menu.num].fname);
                     dl_state++;
                     break;
@@ -452,6 +454,5 @@ while(true) {
         break;
     }
 }
-
 
 Network.deinit();

@@ -70,8 +70,8 @@ ATHENA_MODULES = quickjs/cutils.o quickjs/libbf.o quickjs/libregexp.o quickjs/li
 
 IOP_MODULES = iomanx.o filexio.o sio2man.o mcman.o mcserv.o padman.o libsd.o  \
 			  usbd.o audsrv.o bdm.o bdmfs_fatfs.o usbmass_bd.o cdfs.o ds34bt.o \
-			  ds34usb.o NETMAN.o SMAP.o ps2kbd.o ps2mouse.o freeram.o ps2dev9.o \
-			  mtapman.o poweroff.o ps2atad.o ps2hdd.o ps2fs.o
+			  ds34usb.o NETMAN.o SMAP.o ps2ips.o ps2kbd.o ps2mouse.o  \
+			  freeram.o ps2dev9.o mtapman.o poweroff.o ps2atad.o ps2hdd.o ps2fs.o
 
 ifneq ($(EE_SIO), 0)
   EE_CFLAGS += -D__EESIO_PRINTF
