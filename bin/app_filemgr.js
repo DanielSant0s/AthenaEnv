@@ -2,6 +2,8 @@
 
 var font = new Font();
 
+let boot_path = System.currentDir();
+
 function getStringSize(string, scale){
     return string.length * (scale*15);
 };
@@ -132,7 +134,7 @@ function App(){
     };
 }
 
-file_manager = new App();
+var file_manager = new App();
 file_manager.data = [0, 0, 0, 1];
 file_manager.comp = 0;
 
@@ -185,7 +187,7 @@ file_manager.process = function() {
             } else if(file[file_manager.data[0]].name.endsWith(".js")){
                 System.currentDir(path + "/");
                 std.loadScript(file[file_manager.data[0]].name);
-            } else if(file[file_manager.data[0]].name.endsWith(".elf")){
+            } else if(file[file_manager.data[0]].name.endsWith(".elf") || file[file_manager.data[0]].name.endsWith(".ELF")){
                 System.loadELF(path + "/"+ file[file_manager.data[0]].name);
             } else if(file[file_manager.data[0]].name.endsWith(".zip")){
                 Archive.extractAll(path + "/"+ file[file_manager.data[0]].name);
@@ -247,7 +249,7 @@ file_manager.process = function() {
 file_manager.gfx = new Window();
 file_manager.gfx.t = "File Manager"
 
-render_filelist = function() {
+let render_filelist = function() {
     Draw.rect(file_manager.gfx.x, file_manager.gfx.y+(20*(file_manager.data[0]+2+file_manager.comp)), file_manager.gfx.w, 20, Color.new(64, 0, 128, 64));
     Draw.rect(file_manager.gfx.x, file_manager.gfx.y+(20), file_manager.gfx.w, 20, Color.new(64, 64, 64, 64));
     printCentered(file_manager.gfx.x+(file_manager.gfx.w/2), file_manager.gfx.y+(3+(20)), 0.55f, path);
@@ -292,3 +294,5 @@ while(true){
     
     Screen.flip();
 };
+
+System.loadELF(boot_path + "athena_pkd.elf");

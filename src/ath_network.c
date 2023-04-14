@@ -1,16 +1,32 @@
-#include "ath_env.h"
-#include <netman.h>
-#include <ps2ip.h>
-#include <curl/curl.h>
-#include <loadfile.h>
+#include "include/network.h"
+#include <time.h>
 
-struct MemoryStruct {
-    char *memory;
-    size_t size;
-};
+static JSClassID js_request_class_id;
 
-static size_t
-WriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp)
+typedef struct
+{
+    bool ready;
+    const char* url;
+    const char* fname;
+    const char* error;
+    long noprogress;
+    long maxredirs;
+    long followlocation;
+    long keepalive;
+    long timeout;
+    long forbid_reuse;
+    const char* userpwd;
+    const char* useragent;
+    void* async_data;
+    struct MemoryStruct chunk;
+    long response_code;
+    double elapsed;
+    char* real_url;
+    char* headers[16];
+    int headers_len;
+} JSRequestData;
+
+size_t AsyncWriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp)
 {
   size_t realsize = size * nmemb;
   struct MemoryStruct *mem = (struct MemoryStruct *)userp;
@@ -22,127 +38,160 @@ WriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp)
     return 0;
   }
 
+  printf("AsyncGet: %ld bytes transfered.\n", realsize);
+
   memcpy(&(mem->memory[mem->size]), contents, realsize);
   mem->size += realsize;
   mem->memory[mem->size] = 0;
 
+  mem->timer = clock();
+
   return realsize;
 }
 
-static int ethApplyNetIFConfig(int mode)
+size_t AsyncWriteFileCallback(void *contents, size_t size, size_t nmemb, void *userp)
 {
-	int result;
-	//By default, auto-negotiation is used.
-	static int CurrentMode = NETMAN_NETIF_ETH_LINK_MODE_AUTO;
+  struct MemoryStruct *mem = (struct MemoryStruct *)userp;
 
-	if(CurrentMode != mode)
-	{	//Change the setting, only if different.
-		if((result = NetManSetLinkMode(mode)) == 0)
-			CurrentMode = mode;
-	}else
-		result = 0;
+  size_t written = fwrite(contents, size, nmemb, mem->fp);
 
-	return result;
+  mem->size += written;
+  mem->timer = clock();
+
+  return written;
 }
 
-static void EthStatusCheckCb(s32 alarm_id, u16 time, void *common)
-{
-	iWakeupThread(*(int*)common);
+static void *async_download(void* data) {
+    CURL *curl;
+    CURLcode res;
+
+    JSRequestData *s = data;
+
+    curl_global_init(CURL_GLOBAL_ALL);
+
+    curl = curl_easy_init();
+    if (curl) {
+        s->chunk.fp = fopen(s->fname, "wb");
+        if (s->chunk.fp) {
+            struct curl_slist *chunk = NULL;
+
+            for(int i = 0; i < s->headers_len; i++) {
+                chunk = curl_slist_append(chunk, s->headers[i]);
+            }
+
+            curl_easy_setopt(curl, CURLOPT_HTTPHEADER, chunk);
+
+            curl_easy_setopt(curl, CURLOPT_URL, s->url);
+
+            curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, AsyncWriteFileCallback);
+            curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&(s->chunk));
+
+            curl_easy_setopt(curl, CURLOPT_NOPROGRESS, s->noprogress);
+            curl_easy_setopt(curl, CURLOPT_MAXREDIRS, s->maxredirs);
+
+            curl_easy_setopt(curl, CURLOPT_TIMEOUT, s->timeout);
+
+            curl_easy_setopt(curl, CURLOPT_USERPWD, s->userpwd);
+            curl_easy_setopt(curl, CURLOPT_USERAGENT, s->useragent);
+
+            curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, s->followlocation);
+            curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, s->keepalive);
+
+            curl_easy_setopt(curl, CURLOPT_FORBID_REUSE, s->forbid_reuse);
+
+            curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+            curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
+
+            res = curl_easy_perform(curl);
+            if (res != CURLE_OK) {
+                s->error = "Error while downloading file\n"; //, curl_easy_strerror(res));
+            }
+
+            fclose(s->chunk.fp);
+        } else {
+            s->error = "Error while creating file\n";
+        }
+
+        curl_easy_cleanup(curl);
+    } else {
+        s->error = "Error while initializing curl library.\n";
+    }
+
+    curl_global_cleanup();
+
+    s->ready = true;
+
+	return NULL;
 }
 
-static int WaitValidNetState(int (*checkingFunction)(void))
+static void *async_get(void* data)
 {
-	int ThreadID, retry_cycles;
+    CURL *curl;
+    CURLcode res;
 
-	// Wait for a valid network status;
-	ThreadID = GetThreadId();
-	for(retry_cycles = 0; checkingFunction() == 0; retry_cycles++)
-	{	//Sleep for 1000ms.
-		SetAlarm(1000 * 16, &EthStatusCheckCb, &ThreadID);
-		SleepThread();
+    JSRequestData* req = data;
 
-		if(retry_cycles >= 10)	//10s = 10*1000ms
-			return -1;
-	}
+    req->chunk.memory = malloc(1);  /* will be grown as needed by the realloc above */
+    req->chunk.size = 0;    /* no data at this point */
 
-	return 0;
-}
+    curl_global_init(CURL_GLOBAL_ALL);
 
-static int ethGetNetIFLinkStatus(void)
-{
-	return(NetManIoctl(NETMAN_NETIF_IOCTL_GET_LINK_STATUS, NULL, 0, NULL, 0) == NETMAN_NETIF_ETH_LINK_STATE_UP);
-}
+    curl = curl_easy_init();
+    if(curl) {
+        struct curl_slist *chunk = NULL;
+        
+        for(int i = 0; i < req->headers_len; i++) {
+            chunk = curl_slist_append(chunk, req->headers[i]);
+        }
 
-static int ethWaitValidNetIFLinkState(void)
-{
-	return WaitValidNetState(&ethGetNetIFLinkStatus);
-}
+        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, chunk);
 
-static int ethGetDHCPStatus(void)
-{
-	t_ip_info ip_info;
-	int result;
+        curl_easy_setopt(curl, CURLOPT_URL, req->url);
 
-	if ((result = ps2ip_getconfig("sm0", &ip_info)) >= 0)
-	{	//Check for a successful state if DHCP is enabled.
-		if (ip_info.dhcp_enabled)
-			result = (ip_info.dhcp_status == DHCP_STATE_BOUND || (ip_info.dhcp_status == DHCP_STATE_OFF));
-		else
-			result = -1;
-	}
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT, req->timeout);
 
-	return result;
-}
+        curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
+        curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
 
-static int ethWaitValidDHCPState(void)
-{
-	return WaitValidNetState(&ethGetDHCPStatus);
-}
+        curl_easy_setopt(curl, CURLOPT_NOPROGRESS, req->noprogress);
+        curl_easy_setopt(curl, CURLOPT_MAXREDIRS, req->maxredirs);
 
-static int ethApplyIPConfig(int use_dhcp, const struct ip4_addr *ip, const struct ip4_addr *netmask, const struct ip4_addr *gateway, const struct ip4_addr *dns)
-{
-	t_ip_info ip_info;
-	int result;
+        curl_easy_setopt(curl, CURLOPT_USERPWD, req->userpwd);
+        curl_easy_setopt(curl, CURLOPT_USERAGENT, req->useragent);
 
-	//SMAP is registered as the "sm0" device to the TCP/IP stack.
-	if ((result = ps2ip_getconfig("sm0", &ip_info)) >= 0)
-	{
-		const ip_addr_t *dns_curr;
+        curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, req->followlocation);
+        curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, req->keepalive);
 
-		//Obtain the current DNS server settings.
-		dns_curr = dns_getserver(0);
+        curl_easy_setopt(curl, CURLOPT_FORBID_REUSE, req->forbid_reuse);
 
-		//Check if it's the same. Otherwise, apply the new configuration.
-		if ((use_dhcp != ip_info.dhcp_enabled)
-		    ||	(!use_dhcp &&
-			 (!ip_addr_cmp(ip, (struct ip4_addr *)&ip_info.ipaddr) ||
-			 !ip_addr_cmp(netmask, (struct ip4_addr *)&ip_info.netmask) ||
-			 !ip_addr_cmp(gateway, (struct ip4_addr *)&ip_info.gw) ||
-			 !ip_addr_cmp(dns, dns_curr))))
-		{
-			if (use_dhcp)
-			{
-				ip_info.dhcp_enabled = 1;
-			}
-			else
-			{	//Copy over new settings if DHCP is not used.
-				ip_addr_set((struct ip4_addr *)&ip_info.ipaddr, ip);
-				ip_addr_set((struct ip4_addr *)&ip_info.netmask, netmask);
-				ip_addr_set((struct ip4_addr *)&ip_info.gw, gateway);
+        /* send all data to this function  */
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, AsyncWriteMemoryCallback);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&(req->chunk));
 
-				ip_info.dhcp_enabled = 0;
-			}
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
 
-			//Update settings.
-			result = ps2ip_setconfig(&ip_info);
-			if (!use_dhcp)
-				dns_setserver(0, dns);
-		}
-		else
-			result = 0;
-	}
+        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &(req->response_code));
+        curl_easy_getinfo(curl, CURLINFO_TOTAL_TIME, &(req->elapsed));
+        curl_easy_getinfo(curl, CURLINFO_EFFECTIVE_URL, &(req->real_url));
+ 
+        /* Perform the request, res will get the return code */
+        req->chunk.timer = clock();
+        res = curl_easy_perform(curl);
+        /* Check for errors */
+        if(res != CURLE_OK) {
+            req->error = "curl_easy_perform() failed: %s\n"; //, curl_easy_strerror(res);
+        }
+    
+        /* always cleanup */
+        curl_easy_cleanup(curl);
+  }
+ 
+    curl_global_cleanup();
 
-	return result;
+    req->ready = true;
+
+	return NULL;
 }
 
 static JSValue athena_nw_init(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
@@ -227,20 +276,6 @@ static JSValue athena_nw_gethostbyname(JSContext *ctx, JSValue this_val, int arg
     return JS_NewString(ctx, inet_ntoa(*(struct in_addr*)host_address->h_addr));
 }
 
-static JSClassID js_request_class_id;
-
-typedef struct
-{
-    long noprogress;
-    long maxredirs;
-    long followlocation;
-    long keepalive;
-    long timeout;
-    long forbid_reuse;
-    const char* userpwd;
-    const char* useragent;
-} JSRequestData;
-
 static void athena_nw_dtor(JSRuntime *rt, JSValue val)
 {
     JSRequestData *s = JS_GetOpaque(val, js_request_class_id);
@@ -266,8 +301,8 @@ static JSValue athena_nw_ctor(JSContext *ctx, JSValueConst new_target, int argc,
     req->noprogress = 1L;
     req->userpwd = "user:pass";
     req->useragent = "libcurl-agent/1.0";
-
-    
+    req->async_data = NULL;
+    req->headers_len = 0;
 
     proto = JS_GetPropertyStr(ctx, new_target, "prototype");
     if (JS_IsException(proto))
@@ -333,6 +368,8 @@ static JSValue athena_nw_get(JSContext *ctx, JSValueConst this_val, int magic)
     return JS_UNDEFINED;
 }
 
+
+
 static JSValue athena_nw_set(JSContext *ctx, JSValueConst this_val, JSValue val, int magic)
 {
     JSRequestData *s = JS_GetOpaque2(ctx, this_val, js_request_class_id);
@@ -389,6 +426,46 @@ static JSValue athena_nw_set(JSContext *ctx, JSValueConst this_val, JSValue val,
     return JS_UNDEFINED;
 }
 
+static JSValue athena_nw_get_headers(JSContext *ctx, JSValueConst this_val)
+{
+    JSRequestData *s = JS_GetOpaque2(ctx, this_val, js_request_class_id);
+
+    if (!s)
+        return JS_EXCEPTION;
+
+    JSValue arr = JS_NewArray(ctx);
+
+    for (int i = 0; i < s->headers_len; i++) {
+	    JS_DefinePropertyValueUint32(ctx, arr, i, JS_NewString(ctx, s->headers[i]), JS_PROP_C_W_E);
+    }
+
+    return arr;
+}
+
+static JSValue athena_nw_set_headers(JSContext *ctx, JSValueConst this_val, JSValue val)
+{
+    JSRequestData *s = JS_GetOpaque2(ctx, this_val, js_request_class_id);
+    int arr_len;
+
+	if (!JS_IsArray(ctx, val)) {
+	    return JS_ThrowTypeError(ctx, "You should use a string array.\n");
+	}
+
+	JSValue len = JS_GetPropertyStr(ctx, val, "length");
+	JS_ToInt32(ctx, &s->headers_len, len);
+
+    if (s->headers_len > 16) {
+        return JS_ThrowRangeError(ctx, "16 headers is the maximum quantity.\n");
+    }
+
+	for (int i = 0; i < s->headers_len; i++) {
+		len = JS_GetPropertyUint32(ctx, val, i);
+	    s->headers[i] = (char*)JS_ToCString(ctx, len);
+	} 
+
+    return JS_UNDEFINED;
+}
+
 static JSValue athena_nw_requests_download(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
     CURL *curl;
     FILE *fp;
@@ -407,6 +484,14 @@ static JSValue athena_nw_requests_download(JSContext *ctx, JSValue this_val, int
     if (curl) {
         fp = fopen(filename, "wb");
         if (fp) {
+            struct curl_slist *chunk = NULL;
+
+            for(int i = 0; i < s->headers_len; i++) {
+                chunk = curl_slist_append(chunk, s->headers[i]);
+            }
+
+            curl_easy_setopt(curl, CURLOPT_HTTPHEADER, chunk);
+
             curl_easy_setopt(curl, CURLOPT_URL, url);
             curl_easy_setopt(curl, CURLOPT_NOPROGRESS, s->noprogress);
             curl_easy_setopt(curl, CURLOPT_MAXREDIRS, s->maxredirs);
@@ -445,6 +530,30 @@ static JSValue athena_nw_requests_download(JSContext *ctx, JSValue this_val, int
     return JS_UNDEFINED;
 }
 
+static JSValue athena_nw_requests_async_dl(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
+{
+    pthread_t tid;
+    JSRequestData* s = JS_GetOpaque2(ctx, this_val, js_request_class_id);
+    if (!s)
+        return JS_EXCEPTION;
+
+    s->error = NULL;
+    s->ready = false;
+    s->url = JS_ToCString(ctx, argv[0]);
+    s->fname = JS_ToCString(ctx, argv[1]);
+    s->chunk.timer = 0;
+
+    int error = pthread_create(&tid, NULL, async_download, (void *)s);
+
+    if(0 != error)
+      printf("Couldn't run thread, errno %d\n", error);
+    else
+      printf("Thread gets %s\n", s->url);
+
+    return JS_UNDEFINED;
+
+}
+
 static JSValue athena_nw_requests_get(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
 {
     CURL *curl;
@@ -466,9 +575,20 @@ static JSValue athena_nw_requests_get(JSContext *ctx, JSValue this_val, int argc
 
     curl = curl_easy_init();
     if(curl) {
+        struct curl_slist *chunk = NULL;
+        
+        for(int i = 0; i < s->headers_len; i++) {
+            chunk = curl_slist_append(chunk, s->headers[i]);
+        }
+
+        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, chunk);
+
         curl_easy_setopt(curl, CURLOPT_URL, JS_ToCString(ctx, argv[0]));
 
         curl_easy_setopt(curl, CURLOPT_TIMEOUT, s->timeout);
+
+        curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
+        curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
 
         curl_easy_setopt(curl, CURLOPT_NOPROGRESS, s->noprogress);
         curl_easy_setopt(curl, CURLOPT_MAXREDIRS, s->maxredirs);
@@ -515,6 +635,83 @@ static JSValue athena_nw_requests_get(JSContext *ctx, JSValue this_val, int argc
 	return obj;
 }
 
+
+static JSValue athena_nw_requests_async_get(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
+{
+    pthread_t tid;
+    JSRequestData* s = JS_GetOpaque2(ctx, this_val, js_request_class_id);
+    if (!s)
+        return JS_EXCEPTION;
+
+    s->error = NULL;
+    s->ready = false;
+    s->url = JS_ToCString(ctx, argv[0]);
+    s->chunk.timer = 0;
+    s->fname = NULL;
+
+    int error = pthread_create(&tid, NULL, async_get, (void *)s);
+
+    if(0 != error)
+      printf("Couldn't run thread, errno %d\n", error);
+    else
+      printf("Thread gets %s\n", s->url);
+
+    return JS_UNDEFINED;
+
+}
+
+static JSValue athena_nw_requests_ready(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
+{
+    JSRequestData* s = JS_GetOpaque2(ctx, this_val, js_request_class_id);
+    int timeout = -1;
+
+    if (argc > 0) {
+        JS_ToInt32(ctx, &timeout, argv[0]);
+        if ((clock() - s->chunk.timer) / 1000 > timeout && s->chunk.timer != 0) {
+            s->ready = true;
+        }
+    }
+
+    if(s->fname != NULL && s->ready == true) {
+        fclose(s->chunk.fp);
+        
+        s->fname = NULL;
+        s->url = NULL;
+        s->chunk.memory = NULL;
+        s->chunk.fp = NULL;
+        s->chunk.size = 0;
+        s->chunk.timer = 0;
+    }
+
+    return JS_NewBool(ctx, s->ready);
+}
+
+static JSValue athena_nw_requests_getasyncdata(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
+{
+    JSRequestData* s = JS_GetOpaque2(ctx, this_val, js_request_class_id);
+    JSValue ret = JS_UNDEFINED;
+
+    if (s->ready) {
+        ret = JS_NewStringLen(ctx, s->chunk.memory, s->chunk.size);
+
+        s->fname = NULL;
+        s->url = NULL;
+        s->chunk.memory = NULL;
+        s->chunk.fp = NULL;
+        s->chunk.size = 0;
+        s->chunk.timer = 0;
+    }
+
+    return ret;
+}
+
+static JSValue athena_nw_requests_getasyncsize(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
+{
+    JSRequestData* s = JS_GetOpaque2(ctx, this_val, js_request_class_id);
+    return JS_NewUint32(ctx, s->chunk.size);
+}
+
+
 static JSValue athena_nw_requests_post(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
 {
     CURL *curl;
@@ -538,6 +735,14 @@ static JSValue athena_nw_requests_post(JSContext *ctx, JSValue this_val, int arg
     
     curl = curl_easy_init();
     if(curl) {
+        struct curl_slist *chunk = NULL;
+        
+        for(int i = 0; i < s->headers_len; i++) {
+            chunk = curl_slist_append(chunk, s->headers[i]);
+        }
+
+        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, chunk);
+
         curl_easy_setopt(curl, CURLOPT_URL, JS_ToCString(ctx, argv[0]));
         curl_easy_setopt(curl, CURLOPT_POSTFIELDS, JS_ToCStringLen(ctx, &len, argv[1]));
         curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, (long)len);
@@ -561,8 +766,6 @@ static JSValue athena_nw_requests_post(JSContext *ctx, JSValue this_val, int arg
 
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
-
-        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
 
         curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
         curl_easy_getinfo(curl, CURLINFO_TOTAL_TIME, &elapsed);
@@ -605,7 +808,13 @@ static const JSCFunctionListEntry athena_request_funcs[] = {
     JS_CGETSET_MAGIC_DEF("timeout",        athena_nw_get, athena_nw_set, 5),
     JS_CGETSET_MAGIC_DEF("useragent",      athena_nw_get, athena_nw_set, 6),
     JS_CGETSET_MAGIC_DEF("userpwd",        athena_nw_get, athena_nw_set, 7),
+    JS_CGETSET_DEF("headers", athena_nw_get_headers, athena_nw_set_headers),
     JS_CFUNC_DEF("get", 1, athena_nw_requests_get),
+    JS_CFUNC_DEF("asyncGet", 1, athena_nw_requests_async_get),
+    JS_CFUNC_DEF("asyncDownload", 2, athena_nw_requests_async_dl),
+    JS_CFUNC_DEF("getAsyncData", 0, athena_nw_requests_getasyncdata),
+    JS_CFUNC_DEF("getAsyncSize", 0, athena_nw_requests_getasyncsize),
+    JS_CFUNC_DEF("ready", 1, athena_nw_requests_ready),
     JS_CFUNC_DEF("post", 2, athena_nw_requests_post),
     JS_CFUNC_DEF("download", 2, athena_nw_requests_download),
 };

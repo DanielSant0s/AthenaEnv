@@ -105,9 +105,13 @@ static JSValue athena_font_gettextsize(JSContext *ctx, JSValue this_val, int arg
     JSValue obj;
 
     JSFontData *font = JS_GetOpaque2(ctx, this_val, js_font_class_id);
+    const char* str = JS_ToCString(ctx, argv[0]);
 
     if (font->type == 2) {
-        size = fntGetTextSize(font->id, JS_ToCString(ctx, argv[0]));
+        size = fntGetTextSize(font->id, str);
+    } else if (font->type == 0) {
+        size.width = strlen(str) * font->scale * 0.68f * 26.0f;
+        size.height = 26.0f * font->scale;
     }
 
     obj = JS_NewObject(ctx);

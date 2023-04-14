@@ -31,16 +31,23 @@ function load_network_driver() {
     IOP.loadDefaultModule(IOP.usb_mass);
     IOP.loadDefaultModule(IOP.pads);
     IOP.loadDefaultModule(IOP.network);
-    IOP.loadDefaultModule(IOP.audio);
     
     Network.init();
 }
 
 let req = new Request();
-req.useragent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/51.0.2704.103 Safari/537.36";
 req.followlocation = true;
-req.noprogress = false;
-req.keepalive = true;
+req.useragent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Ubuntu Chromium/37.0.2062.94 Chrome/37.0.2062.94 Safari/537.36";
+req.headers = ["upgrade-insecure-requests: 0",
+               "sec-fetch-dest: document",
+               "sec-fetch-mode: navigate",
+               "sec-fetch-user: ?1",
+               "sec-fetch-site: same-origin",
+               "sec-ch-ua-mobile: ?0",
+               "accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+               'sec-ch-ua-platform: ^\^"Linux^\^"',
+               "sec-ch-ua-mobile: ?0",
+               ];
 
 const LOADING = 0;
 const MAIN_MENU = 1;
@@ -87,7 +94,7 @@ class UI {
         this.belt_img.height = 750;
         this.belt_img.color = Color.new(0x80, 0x80, 0x80, 0x20);
 
-        this.font = new Font("fonts/CONSOLA.TTF");
+        this.font = new Font();
         this.text_alpha = 0x80;
 
         this.fading = false;
@@ -303,11 +310,12 @@ main_menu.center_x();
 let explore_menu = undefined;
 
 const DETAILS = 0;
-const DOWNLOADING = 1;
-const DOWNLOADED = 2;
-const EXTRACTING = 3;
-const EXTRACTED = 4;
-const LEAVING = 5;
+const TODOWNLOAD = 1;
+const DOWNLOADING = 2;
+const DOWNLOADED = 3;
+const EXTRACTING = 4;
+const EXTRACTED = 5;
+const LEAVING = 6;
 
 let dl_state = DETAILS;
 let dling_text = "";
@@ -315,7 +323,14 @@ let terminate = false;
 
 let boot_path = System.currentDir();
 
+let transfering = false;
+
 console.log(boot_path);
+
+const NOT_UPDATED = 0;
+const UPDATING = 1;
+const UPDATED = 2;
+let update_state = NOT_UPDATED;
 
 while(true) {
     pad[1] = pad[0];
@@ -341,13 +356,22 @@ while(true) {
                     loading_state++;
                     break;
                 case LD_PKGLIST:
-                    if (!System.doesFileExist("brew_data.json")) {
-                        req.download("https://raw.githubusercontent.com/DanielSant0s/brewstore-db/main/brew_data.json", "brew_data.json");
+                    if (update_state == NOT_UPDATED) {
+                        req.asyncDownload("https://raw.githubusercontent.com/DanielSant0s/brewstore-db/main/brew_data.json", "brew_data.json");
+                        update_state = UPDATING;
+                        transfering = true;
+                    } else if (update_state == UPDATING) {
+                        if(req.ready(5)) {
+                            transfering = false;
+                            update_state = UPDATED;
+                        }
+                    } else {
+                        app_list = load_app_db("brew_data.json");
+                        loading_text += "\n" + app_list.length + " packages found."
+                        Timer.reset(ui.timer);
+                        loading_state++;
                     }
-                    app_list = load_app_db("brew_data.json");
-                    loading_text += "\n" + app_list.length + " packages found."
-                    Timer.reset(ui.timer);
-                    loading_state++;
+
                     break;
                 case LD_PKGQNTD:
                     loading_state++;
@@ -388,7 +412,6 @@ while(true) {
             }
 
             ui.render_belt(0.0025f);
-            main_menu.draw(pad);
             explore_menu.draw(pad);
 
             break;
@@ -412,10 +435,17 @@ while(true) {
                         app_state = MAIN_MENU;
                     }
                     break;
-                case DOWNLOADING:
+                case TODOWNLOAD:
                     System.currentDir(boot_path + "downloads\\");
-                    req.download(app_list[explore_menu.num].link, app_list[explore_menu.num].fname);
+                    req.asyncDownload(app_list[explore_menu.num].link, app_list[explore_menu.num].fname);
+                    transfering = true;
                     dl_state++;
+                    break;
+                case DOWNLOADING:
+                    if(req.ready(5)) {
+                        transfering = false;
+                        dl_state++;
+                    }
                     break;
                 case DOWNLOADED:
                     if(!app_list[explore_menu.num].fname.endsWith(".elf") && !app_list[explore_menu.num].fname.endsWith(".ELF")) {
@@ -436,6 +466,7 @@ while(true) {
                 case EXTRACTED:
                     System.currentDir(boot_path);
                     app_state = MAIN_MENU;
+                    dl_state = DETAILS;
                     dling_text = "";
                     break;
             }
@@ -448,6 +479,10 @@ while(true) {
             break;
     }
 
+    if(transfering) {
+        ui.font.print(0, 400, req.getAsyncSize() + " bytes transfered");
+    }
+
     ui.update();
 
     if(terminate){
@@ -456,3 +491,5 @@ while(true) {
 }
 
 Network.deinit();
+
+System.loadELF(boot_path + "athena_pkd.elf");

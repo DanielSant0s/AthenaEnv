@@ -60,7 +60,7 @@ BIN2S = $(PS2SDK)/bin/bin2s
 EXT_LIBS = modules/ds34usb/ee/libds34usb.a modules/ds34bt/ee/libds34bt.a
 
 APP_CORE = main.o module_system.o taskman.o pad.o graphics.o atlas.o fntsys.o sound.o \
-		   system.o render.o calc_3d.o strUtils.o
+		   system.o render.o calc_3d.o network.o strUtils.o
 
 ATHENA_MODULES = quickjs/cutils.o quickjs/libbf.o quickjs/libregexp.o quickjs/libunicode.o \
 				 quickjs/realpath.o quickjs/quickjs.o quickjs/quickjs-libc.o \

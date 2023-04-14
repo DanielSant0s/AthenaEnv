@@ -70,30 +70,7 @@ while(true) {
     }
 
     if(Pads.check(new_pad, Pads.CROSS) && !Pads.check(old_pad, Pads.CROSS)){
-        old_pad = null;
-        new_pad = null;
-        mouse = null;
-        bg = null;
-        cursor = null;
-        font = null;
-        font_medium = null;
-        font_bold = null;
-
-        let app_file = app_table[0].file;
-
-        app_table.forEach(app => {
-            app.icon = null;
-        });
-
-        app_table = null;
-
-        no_icon = null;
-
-        std.gc();
-
-        std.loadScript(app_file);
-
-        System.loadELF(System.currentDir() + "athena_pkd.elf"); // Doing this to reset all the stuff
+        System.loadELF(System.currentDir() + "athena_pkd.elf", [System.currentDir() + app_table[0].file]); // Doing this to reset all the stuff
     }
 
     font_medium.print(210, 125, app_table[0].name);

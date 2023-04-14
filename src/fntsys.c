@@ -322,6 +322,10 @@ void fntInit()
     gFontSema.option = 0;
     gFontSemaId = CreateSema(&gFontSema);
 
+    int i = 0;
+    for (; i < FNT_MAX_COUNT; ++i)
+        fntInitSlot(&fonts[i]);
+
     fntUpdateAspectRatio();
 }
 

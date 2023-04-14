@@ -123,7 +123,11 @@ int main(int argc, char **argv) {
 
     while(true)
     {
-        errMsg = runScript("main.js", false);
+        if (argc < 2) {
+            errMsg = runScript("main.js", false);
+        } else {
+            errMsg = runScript(argv[1], false);
+        }   
 
         gsKit_clear_screens();
 
