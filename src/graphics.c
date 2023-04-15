@@ -12,6 +12,8 @@
 #include "include/graphics.h"
 #include "include/dbgprintf.h"
 
+#include "include/pad.h"
+
 #define PI 3.14159265359
 
 static const u64 BLACK_RGBAQ   = GS_SETREG_RGBAQ(0x00,0x00,0x00,0x80,0x00);
@@ -1096,6 +1098,51 @@ static void gsKit_flip(GSGLOBAL *gsGlobal)
    }
 
    gsKit_setactive(gsGlobal);
+}
+
+void athena_error_screen(const char* errMsg, bool dark_mode) {
+    gsKit_clear_screens();
+
+    uint64_t color = GS_SETREG_RGBAQ(0x20,0x20,0x20,0x80,0x00);
+    uint64_t color2 = GS_SETREG_RGBAQ(0x80,0x80,0x80,0x80,0x00);
+
+    if (errMsg != NULL)
+    {
+        dbgprintf("AthenaEnv ERROR!\n%s", errMsg);
+
+        if (strstr(errMsg, "EvalError") != NULL) {
+            color = GS_SETREG_RGBAQ(0x56,0x71,0x7D,0x80,0x00);
+        } else if (strstr(errMsg, "SyntaxError") != NULL) {
+            color = GS_SETREG_RGBAQ(0x20,0x60,0xB0,0x80,0x00);
+        } else if (strstr(errMsg, "TypeError") != NULL) {
+            color = GS_SETREG_RGBAQ(0x3b,0x81,0x32,0x80,0x00);
+        } else if (strstr(errMsg, "ReferenceError") != NULL) {
+            color = GS_SETREG_RGBAQ(0xE5,0xDE,0x00,0x80,0x00);
+        } else if (strstr(errMsg, "RangeError") != NULL) {
+            color = GS_SETREG_RGBAQ(0xD0,0x31,0x3D,0x80,0x00);
+        } else if (strstr(errMsg, "InternalError") != NULL) {
+            color = GS_SETREG_RGBAQ(0x8A,0x00,0xC2,0x80,0x00);
+        } else if(strstr(errMsg, "URIError") != NULL) {
+            color = GS_SETREG_RGBAQ(0xFF,0x78,0x1F,0x80,0x00);
+        } else if(strstr(errMsg, "AggregateError") != NULL) {
+            color = GS_SETREG_RGBAQ(0xE2,0x61,0x9F,0x80,0x00);
+        }
+
+        if(dark_mode) {
+            color2 = color;
+            color = GS_SETREG_RGBAQ(0x20,0x20,0x20,0x80,0x00);
+        } else {
+            color2 = GS_SETREG_RGBAQ(0x80,0x80,0x80,0x80,0x00);
+        }
+
+    	while (!isButtonPressed(PAD_START)) {
+			clearScreen(color);
+			printFontMText("AthenaEnv ERROR!", 15.0f, 15.0f, 0.9f, color2);
+			printFontMText(errMsg, 15.0f, 80.0f, 0.6f, color2);
+	   		printFontMText("\nPress [start] to restart\n", 15.0f, 400.0f, 0.6f, color2);
+			flipScreen();
+		} 
+    }
 }
 
 void init_graphics()

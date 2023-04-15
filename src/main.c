@@ -10,7 +10,63 @@
 #include "include/strUtils.h"
 
 #include "ath_env.h"
+
+#ifdef ATHENA_GRAPHICS
 #include "include/graphics.h"
+#endif
+
+#ifdef ATHENA_CLI
+#include <debug.h>
+
+void athena_error_screen(const char* errMsg, bool dark_mode) {
+    uint32_t color = 0xFF000000;
+    uint32_t color2 = 0xFFFFFFFF;
+
+    if (errMsg != NULL)
+    {
+        dbgprintf("AthenaEnv ERROR!\n%s", errMsg);
+
+        /*if (strstr(errMsg, "EvalError") != NULL) {
+            color = GS_SETREG_RGBAQ(0x56,0x71,0x7D,0x80,0x00);
+        } else if (strstr(errMsg, "SyntaxError") != NULL) {
+            color = GS_SETREG_RGBAQ(0x20,0x60,0xB0,0x80,0x00);
+        } else if (strstr(errMsg, "TypeError") != NULL) {
+            color = GS_SETREG_RGBAQ(0x3b,0x81,0x32,0x80,0x00);
+        } else if (strstr(errMsg, "ReferenceError") != NULL) {
+            color = GS_SETREG_RGBAQ(0xE5,0xDE,0x00,0x80,0x00);
+        } else if (strstr(errMsg, "RangeError") != NULL) {
+            color = GS_SETREG_RGBAQ(0xD0,0x31,0x3D,0x80,0x00);
+        } else if (strstr(errMsg, "InternalError") != NULL) {
+            color = GS_SETREG_RGBAQ(0x8A,0x00,0xC2,0x80,0x00);
+        } else if(strstr(errMsg, "URIError") != NULL) {
+            color = GS_SETREG_RGBAQ(0xFF,0x78,0x1F,0x80,0x00);
+        } else if(strstr(errMsg, "AggregateError") != NULL) {
+            color = GS_SETREG_RGBAQ(0xE2,0x61,0x9F,0x80,0x00);
+        }
+
+        if(dark_mode) {
+            color2 = color;
+            color = 0xFF000000;
+        } else {
+            color2 = 0xFFFFFFFF;
+        }*/
+
+        scr_clear();
+
+        scr_setbgcolor(color);
+        scr_setCursor(0);
+        scr_setfontcolor(color2);
+
+		scr_printf("AthenaEnv ERROR!\n");
+		scr_printf("%s\n", errMsg);
+	   	scr_printf("\n\nPress [start] to restart");
+
+    	while (!isButtonPressed(PAD_START)) {
+            nopdelay();
+		} 
+    }
+}
+#endif
 
 #define NEWLIB_PORT_AWARE
 #include <fileXio_rpc.h>
@@ -112,14 +168,19 @@ int main(int argc, char **argv) {
     waitUntilDeviceIsReady(boot_path);
     
     init_taskman();
+
+    #ifdef ATHENA_GRAPHICS
 	init_graphics();
     loadFontM();
+    #else
+    #ifdef ATHENA_CLI
+    init_scr();
+    #endif
+    #endif
 
 	const char* errMsg;
 
     dark_mode = true;
-    uint64_t color = GS_SETREG_RGBAQ(0x20,0x20,0x20,0x80,0x00);
-    uint64_t color2 = GS_SETREG_RGBAQ(0x80,0x80,0x80,0x80,0x00);
 
     while(true)
     {
@@ -127,47 +188,9 @@ int main(int argc, char **argv) {
             errMsg = runScript("main.js", false);
         } else {
             errMsg = runScript(argv[1], false);
-        }   
-
-        gsKit_clear_screens();
-
-        if (errMsg != NULL)
-        {
-            dbgprintf("AthenaEnv ERROR!\n%s", errMsg);
-
-            if (strstr(errMsg, "EvalError") != NULL) {
-                color = GS_SETREG_RGBAQ(0x56,0x71,0x7D,0x80,0x00);
-            } else if (strstr(errMsg, "SyntaxError") != NULL) {
-                color = GS_SETREG_RGBAQ(0x20,0x60,0xB0,0x80,0x00);
-            } else if (strstr(errMsg, "TypeError") != NULL) {
-                color = GS_SETREG_RGBAQ(0x3b,0x81,0x32,0x80,0x00);
-            } else if (strstr(errMsg, "ReferenceError") != NULL) {
-                color = GS_SETREG_RGBAQ(0xE5,0xDE,0x00,0x80,0x00);
-            } else if (strstr(errMsg, "RangeError") != NULL) {
-                color = GS_SETREG_RGBAQ(0xD0,0x31,0x3D,0x80,0x00);
-            } else if (strstr(errMsg, "InternalError") != NULL) {
-                color = GS_SETREG_RGBAQ(0x8A,0x00,0xC2,0x80,0x00);
-            } else if(strstr(errMsg, "URIError") != NULL) {
-                color = GS_SETREG_RGBAQ(0xFF,0x78,0x1F,0x80,0x00);
-            } else if(strstr(errMsg, "AggregateError") != NULL) {
-                color = GS_SETREG_RGBAQ(0xE2,0x61,0x9F,0x80,0x00);
-            }
-
-            if(dark_mode) {
-                color2 = color;
-                color = GS_SETREG_RGBAQ(0x20,0x20,0x20,0x80,0x00);
-            } else {
-                color2 = GS_SETREG_RGBAQ(0x80,0x80,0x80,0x80,0x00);
-            }
-
-        	while (!isButtonPressed(PAD_START)) {
-				clearScreen(color);
-				printFontMText("AthenaEnv ERROR!", 15.0f, 15.0f, 0.9f, color2);
-				printFontMText(errMsg, 15.0f, 80.0f, 0.6f, color2);
-		   		printFontMText("\nPress [start] to restart\n", 15.0f, 400.0f, 0.6f, color2);
-				flipScreen();
-			}
         }
+
+        athena_error_screen(errMsg, dark_mode);
 
     }
 

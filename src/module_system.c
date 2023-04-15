@@ -48,6 +48,8 @@ int load_default_module(int id) {
 				usbd_started = LOAD_SUCCESS();
 			}
 			break;
+
+		#ifdef ATHENA_KEYBOARD
 		case KEYBOARD_MODULE:
 			if (!usbd_started)
 				load_default_module(USBD_MODULE);
@@ -57,6 +59,9 @@ int load_default_module(int id) {
 				kbd_started = LOAD_SUCCESS();
 			}
 			break;
+		#endif
+
+		#ifdef ATHENA_MOUSE
 		case MOUSE_MODULE:
 			if (!usbd_started)
 				load_default_module(USBD_MODULE);
@@ -66,6 +71,8 @@ int load_default_module(int id) {
 				mouse_started = LOAD_SUCCESS();
 			}
 			break;
+		#endif
+
 		case FREERAM_MODULE:
 			if (!freeram_started) {
 				ID = SifExecModuleBuffer((void*)freeram_irx, size_freeram_irx, 0, NULL, &ret);
@@ -92,6 +99,8 @@ int load_default_module(int id) {
 				ds34usb_started = LOAD_SUCCESS();
 			}
 			break;
+
+		#ifdef ATHENA_NETWORK
 		case NETWORK_MODULE:
 			if (!dev9_started)
 				load_default_module(DEV9_MODULE);
@@ -107,6 +116,8 @@ int load_default_module(int id) {
 				network_started = LOAD_SUCCESS();
 			}
 			break;
+		#endif
+
 		case SIO2MAN_MODULE:
 			if (!sio2man_started) {
 				ID = SifExecModuleBuffer(&sio2man_irx, size_sio2man_irx, 0, NULL, &ret);
@@ -136,6 +147,8 @@ int load_default_module(int id) {
 				mc_started = LOAD_SUCCESS();
 			}
 			break;
+
+		#ifdef ATHENA_AUDIO
 		case AUDIO_MODULE:
 			if (!audio_started) {
 				ID = SifExecModuleBuffer(&libsd_irx, size_libsd_irx, 0, NULL, &ret);
@@ -146,6 +159,8 @@ int load_default_module(int id) {
 				audio_started = LOAD_SUCCESS();
 			}
 			break;
+		#endif
+		
 		case USB_MASS_MODULE:
 			if (!usbd_started)
 				load_default_module(USBD_MODULE);

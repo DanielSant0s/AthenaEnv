@@ -8,11 +8,16 @@
 #include "quickjs/quickjs-libc.h"
 
 #include "include/taskman.h"
+
+#ifdef ATHENA_GRAPHICS
 #include "include/graphics.h"
+#endif
+
 #include "include/dbgprintf.h"
 
 extern bool dark_mode;
 
+#ifdef ATHENA_GRAPHICS
 typedef struct {
 	const char* path;
     GSTEXTURE tex;
@@ -37,6 +42,7 @@ typedef struct JSImgList {
 
 JSClassID get_img_class_id();
 JSClassID get_imglist_class_id();
+#endif
 
 #define countof(x) (sizeof(x) / sizeof((x)[0]))
 
@@ -52,6 +58,11 @@ JSModuleDef *athena_push_module(JSContext* ctx, JSModuleInitFunc *func, const JS
 
 JSModuleDef *athena_system_init(JSContext* ctx);
 JSModuleDef *athena_archive_init(JSContext* ctx);
+JSModuleDef *athena_timer_init(JSContext* ctx);
+JSModuleDef *athena_task_init(JSContext* ctx);
+JSModuleDef *athena_pads_init(JSContext* ctx);
+
+#ifdef ATHENA_GRAPHICS
 JSModuleDef *athena_render_init(JSContext* ctx);
 JSModuleDef *athena_screen_init(JSContext* ctx);
 JSModuleDef *athena_color_init(JSContext* ctx);
@@ -59,12 +70,26 @@ JSModuleDef *athena_shape_init(JSContext* ctx);
 JSModuleDef *athena_font_init(JSContext* ctx);
 JSModuleDef *athena_image_init(JSContext* ctx);
 JSModuleDef *athena_imagelist_init(JSContext* ctx);
+#else
+#ifdef ATHENA_CLI
+JSModuleDef *athena_console_init(JSContext* ctx);
+#endif
+#endif
+
+#ifdef ATHENA_NETWORK
 JSModuleDef *athena_socket_init(JSContext* ctx);
 JSModuleDef *athena_network_init(JSContext* ctx);
 JSModuleDef *athena_request_init(JSContext *ctx);
+#endif
+
+#ifdef ATHENA_KEYBOARD
 JSModuleDef *athena_keyboard_init(JSContext* ctx);
+#endif
+
+#ifdef ATHENA_MOUSE
 JSModuleDef *athena_mouse_init(JSContext* ctx);
-JSModuleDef *athena_pads_init(JSContext* ctx);
+#endif
+
+#ifdef ATHENA_AUDIO
 JSModuleDef *athena_sound_init(JSContext* ctx);
-JSModuleDef *athena_timer_init(JSContext* ctx);
-JSModuleDef *athena_task_init(JSContext* ctx);
+#endif

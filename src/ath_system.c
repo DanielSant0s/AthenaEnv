@@ -6,10 +6,7 @@
 #include <elf-loader.h>
 
 #include "ath_env.h"
-#include "include/graphics.h"
-
 #include "include/system.h"
-
 #include "include/def_mods.h"
 
 #define MAX_DIR_FILES 512
@@ -699,7 +696,9 @@ static JSValue athena_resetiop(JSContext *ctx, JSValue this_val, int argc, JSVal
 	if(ds34bt_started) ds34bt_deinit();
 	if(ds34usb_started) ds34usb_deinit();
 	if(pads_started) padEnd();
+	#ifdef ATHENA_AUDIO
 	if(audio_started) audsrv_quit();
+	#endif
 
 	prepare_IOP();
 

@@ -94,7 +94,7 @@ class UI {
         this.belt_img.height = 750;
         this.belt_img.color = Color.new(0x80, 0x80, 0x80, 0x20);
 
-        this.font = new Font();
+        this.font = new Font("fonts/Karla-Regular.ttf");
         this.text_alpha = 0x80;
 
         this.fading = false;
@@ -357,18 +357,18 @@ while(true) {
                     break;
                 case LD_PKGLIST:
                     if (update_state == NOT_UPDATED) {
-                        req.asyncDownload("https://raw.githubusercontent.com/DanielSant0s/brewstore-db/main/brew_data.json", "brew_data.json");
+                        req.download("https://raw.githubusercontent.com/DanielSant0s/brewstore-db/main/brew_data.json", "brew_data.json");
                         update_state = UPDATING;
                         transfering = true;
                     } else if (update_state == UPDATING) {
-                        if(req.ready(5)) {
+                        //if(req.ready(5)) {
                             transfering = false;
                             update_state = UPDATED;
-                        }
+                        //}
                     } else {
                         app_list = load_app_db("brew_data.json");
                         loading_text += "\n" + app_list.length + " packages found."
-                        Timer.reset(ui.timer);
+                        //loading_text += "\n" + Math.floor(System.getFreeMemory()/1024) + "KB free for allocation.";
                         loading_state++;
                     }
 

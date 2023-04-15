@@ -55,6 +55,8 @@ size_t AsyncWriteFileCallback(void *contents, size_t size, size_t nmemb, void *u
 
   size_t written = fwrite(contents, size, nmemb, mem->fp);
 
+  printf("AsyncDownload: %ld bytes transfered.\n", written);
+
   mem->size += written;
   mem->timer = clock();
 

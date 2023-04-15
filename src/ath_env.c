@@ -108,78 +108,66 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
         js_std_add_helpers(ctx, 0, NULL);
         { // make 'std' and 'os' visible to non module code
             const char *str = 
-				"import * as std from 'std';\n"
-                "import * as os from 'os';\n"
-				"import * as Color from 'Color';\n"
-				"import * as Screen from 'Screen';\n"
-				"import * as Draw from 'Draw';\n"
+				#ifdef ATHENA_AUDIO
 				"import * as Sound from 'Sound';\n"
-				"import * as Timer from 'Timer';\n"
-				"import * as Tasks from 'Tasks';\n"
-				"import * as Pads from 'Pads';\n"
+				"globalThis.Sound = Sound;\n"
+				#endif
+
+				#ifdef ATHENA_KEYBOARD
 				"import * as Keyboard from 'Keyboard';\n"
+				"globalThis.Keyboard = Keyboard;\n"
+				#endif
+
+				#ifdef ATHENA_MOUSE
 				"import * as Mouse from 'Mouse';\n"
+				"globalThis.Mouse = Mouse;\n"
+				#endif
+
+				#ifdef ATHENA_NETWORK
 				"import * as Network from 'Network';\n"
 				"import * as Request from 'Request';\n"
 				"import * as Socket from 'Socket';\n"
 				"import * as SocketConst from 'SocketConst';\n"
+				"globalThis.Network = Network;\n"
+				"globalThis.AF_INET = SocketConst.AF_INET;\n"
+				"globalThis.SOCK_STREAM = SocketConst.SOCK_STREAM;\n"
+				"globalThis.SOCK_DGRAM = SocketConst.SOCK_DGRAM;\n"
+				"globalThis.SOCK_RAW = SocketConst.SOCK_RAW;\n"
+				"globalThis.Socket = Socket.Socket;\n"
+				"globalThis.Request = Request.Request;\n"
+				#endif
+
+				#ifdef ATHENA_GRAPHICS
+				"import * as Color from 'Color';\n"
+				"import * as Screen from 'Screen';\n"
+				"import * as Draw from 'Draw';\n"
 				"import * as Font from 'Font';\n"
 				"import * as Image from 'Image';\n"
 				"import * as ImageList from 'ImageList';\n"
 				"import * as Render from 'Render';\n"
 				"import * as Lights from 'Lights';\n"
 				"import * as Camera from 'Camera';\n"
-				"import * as System from 'System';\n"
-				"import * as IOP from 'IOP';\n"
-				"import * as Archive from 'Archive';\n"
-                "globalThis.std = std;\n"
-                "globalThis.os = os;\n"
 				"globalThis.Color = Color;\n"
-
 				"globalThis.Screen = Screen;\n"
-
 				"globalThis.NTSC = Screen.NTSC;\n"
 				"globalThis.DTV_480p = Screen.DTV_480p;\n"
 				"globalThis.PAL = Screen.PAL;\n"
 				"globalThis.DTV_576p = Screen.DTV_576p;\n"
 				"globalThis.DTV_720p = Screen.DTV_720p;\n"
 				"globalThis.DTV_1080i = Screen.DTV_1080i;\n"
-
 				"globalThis.INTERLACED = Screen.INTERLACED;\n"
 				"globalThis.PROGRESSIVE = Screen.PROGRESSIVE;\n"
-
 				"globalThis.FIELD = Screen.FIELD;\n"
 				"globalThis.FRAME = Screen.FRAME;\n"
-
 				"globalThis.CT16 = Screen.CT16;\n"
 				"globalThis.CT16S = Screen.CT16S;\n"
 				"globalThis.CT24 = Screen.CT24;\n"
 				"globalThis.CT32 = Screen.CT32;\n"
-
 				"globalThis.Z16 = Screen.Z16;\n"
 				"globalThis.Z16S = Screen.Z16S;\n"
 				"globalThis.Z24 = Screen.Z24;\n"
 				"globalThis.Z32 = Screen.Z32;\n"
-
 				"globalThis.Draw = Draw;\n"
-				"globalThis.Sound = Sound;\n"
-				"globalThis.Timer = Timer;\n"
-				"globalThis.Tasks = Tasks;\n"
-				"globalThis.Pads = Pads;\n"
-				"globalThis.Keyboard = Keyboard;\n"
-				"globalThis.Mouse = Mouse;\n"
-				"globalThis.Network = Network;\n"
-				"globalThis.System = System;\n"
-				"globalThis.Archive = Archive;\n"
-
-				"globalThis.AF_INET = SocketConst.AF_INET;\n"
-				"globalThis.SOCK_STREAM = SocketConst.SOCK_STREAM;\n"
-				"globalThis.SOCK_DGRAM = SocketConst.SOCK_DGRAM;\n"
-				"globalThis.SOCK_RAW = SocketConst.SOCK_RAW;\n"
-				"globalThis.Socket = Socket.Socket;\n"
-
-				"globalThis.Request = Request.Request;\n"
-
 				"globalThis.Font = Font.Font;\n"
 
 				"globalThis.NEAREST = 0;\n"
@@ -189,15 +177,40 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"globalThis.Image = Image.Image;\n"
 				"globalThis.ImageList = ImageList.ImageList;\n"
 
-				"globalThis.IOP = IOP;\n"
-
 				"globalThis.Render = Render;\n"
 
 				"globalThis.Lights = Lights;\n"
 				"globalThis.AMBIENT = Lights.AMBIENT;\n"
 				"globalThis.DIRECTIONAL = Lights.DIRECTIONAL;\n"
 
-				"globalThis.Camera = Camera;\n";
+				"globalThis.Camera = Camera;\n"
+
+				#else
+
+				#ifdef ATHENA_CLI
+				"import * as Console from 'Console';\n"
+				"globalThis.Console = Console;\n"
+				#endif
+				#endif
+
+				"import * as std from 'std';\n"
+                "import * as os from 'os';\n"
+				"import * as Timer from 'Timer';\n"
+				"import * as Tasks from 'Tasks';\n"
+				"import * as Pads from 'Pads';\n"
+				"import * as System from 'System';\n"
+				"import * as IOP from 'IOP';\n"
+				"import * as Archive from 'Archive';\n"
+
+                "globalThis.std = std;\n"
+                "globalThis.os = os;\n"
+				"globalThis.Timer = Timer;\n"
+				"globalThis.Tasks = Tasks;\n"
+				"globalThis.Pads = Pads;\n"
+				"globalThis.System = System;\n"
+				"globalThis.Archive = Archive;\n"
+				"globalThis.IOP = IOP;\n";
+				
             rc = qjs_eval_buf(ctx, str, strlen(str), "<input>", JS_EVAL_TYPE_MODULE);
             if (rc != 0) { return retval; }
         }
@@ -242,22 +255,41 @@ static JSContext *JS_NewCustomContext(JSRuntime *rt)
 
 	athena_system_init(ctx);
 	athena_archive_init(ctx);
-	athena_color_init(ctx);
-	athena_screen_init(ctx);
-	athena_render_init(ctx);
-	athena_shape_init(ctx);
-	athena_sound_init(ctx);
 	athena_timer_init(ctx);
 	athena_task_init(ctx);
+	athena_pads_init(ctx);
+
+	#ifdef ATHENA_AUDIO
+	athena_sound_init(ctx);
+	#endif
+
+	#ifdef ATHENA_GRAPHICS
+	athena_color_init(ctx);
 	athena_image_init(ctx);
 	athena_imagelist_init(ctx);
+	athena_font_init(ctx);
+	athena_shape_init(ctx);
+	athena_screen_init(ctx);
+	athena_render_init(ctx);
+	#else
+	#ifdef ATHENA_CLI
+	athena_console_init(ctx);
+	#endif
+	#endif
+
+	#ifdef ATHENA_KEYBOARD
 	athena_keyboard_init(ctx);
+	#endif
+
+	#ifdef ATHENA_MOUSE
 	athena_mouse_init(ctx);
-	athena_pads_init(ctx);
+	#endif
+
+	#ifdef ATHENA_NETWORK
 	athena_network_init(ctx);
 	athena_request_init(ctx);
 	athena_socket_init(ctx);
-	athena_font_init(ctx);
+	#endif
 
     return ctx;
 }

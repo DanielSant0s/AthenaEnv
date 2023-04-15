@@ -117,4 +117,6 @@ void drawOBJ(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float
 void draw_bbox(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z, Color color);
 
 
+void athena_error_screen(const char* errMsg, bool dark_mode);
+
 #endif

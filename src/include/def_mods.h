@@ -1,7 +1,6 @@
 #include <sifrpc.h>
 #include <loadfile.h>
 #include <libmc.h>
-#include <audsrv.h>
 #include <iopheap.h>
 #include <iopcontrol.h>
 #include <smod.h>
@@ -16,8 +15,14 @@
 
 #include "pad.h"
 
+#ifdef ATHENA_AUDIO
+#include <audsrv.h>
+#endif
+
+#ifdef ATHENA_NETWORK
 #include <netman.h>
 #include <ps2ip.h>
+#endif
 
 #include <stdbool.h>
 
@@ -73,7 +78,6 @@ irx_define(mcman);
 irx_define(mcserv);
 irx_define(padman);
 irx_define(mtapman);
-irx_define(libsd);
 irx_define(cdfs);
 irx_define(usbd);
 irx_define(bdm);
@@ -83,12 +87,26 @@ irx_define(ps2dev9);
 irx_define(ps2atad);
 irx_define(ps2hdd);
 irx_define(ps2fs);
+
+#ifdef ATHENA_NETWORK
 irx_define(SMAP);
 irx_define(NETMAN);
 irx_define(ps2ips);
+#endif
+
+#ifdef ATHENA_AUDIO
+irx_define(libsd);
 irx_define(audsrv);
+#endif
+
+#ifdef ATHENA_KEYBOARD
 irx_define(ps2kbd);
+#endif
+
+#ifdef ATHENA_MOUSE
 irx_define(ps2mouse);
+#endif
+
 irx_define(freeram);
 irx_define(ds34bt);
 irx_define(ds34usb);
