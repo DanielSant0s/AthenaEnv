@@ -42,22 +42,18 @@ static JSValue athena_setCurrentDirectory(JSContext *ctx, JSValueConst *argv)
 	        if ((temp_path[strlen(temp_path)-1] != ':'))
 	        {
 	           int idx = strlen(temp_path)-1;
-	           do
-	           {
-	                idx--;
+	           do {
+	            	idx--;
 	           } while (temp_path[idx] != '/');
 	           temp_path[idx] = '\0';
 	        }
 	        
-           }
-           // add given directory to the existing path
-           else
-           {
+    	} else {
 	      getcwd(temp_path, 256);
 	      strcat(temp_path,"/");
 	      strcat(temp_path,path);
-	   }
-        }
+	   	}
+    }
         
         dbgprintf("changing directory to %s\n",__ps2_normalize_path(temp_path));
         chdir(__ps2_normalize_path(temp_path));
@@ -631,6 +627,7 @@ static const JSCFunctionListEntry system_funcs[] = {
 	JS_CFUNC_DEF( "getDiscType",        		  0,     	athena_getDiscType	 ),
 	JS_CFUNC_DEF( "checkDiscTray",      		  0,   		athena_checkDiscTray	 ),
 	JS_CFUNC_DEF( "setDarkMode",      		  1,   		athena_darkmode	 ),
+	JS_PROP_STRING_DEF("boot_path", boot_path, JS_PROP_CONFIGURABLE ),
 	JS_PROP_INT32_DEF("FREAD", O_RDONLY, JS_PROP_CONFIGURABLE ),
 	JS_PROP_INT32_DEF("FWRITE", O_WRONLY, JS_PROP_CONFIGURABLE ),
 	JS_PROP_INT32_DEF("FCREATE", O_CREAT | O_WRONLY, JS_PROP_CONFIGURABLE ),

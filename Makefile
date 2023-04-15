@@ -28,8 +28,10 @@ define HEADER
 endef
 export HEADER
 
-EE_BIN = athena.elf
-EE_BIN_PKD = athena_pkd.elf
+EE_EXT = .elf
+
+EE_BIN = athena
+EE_BIN_PKD = athena_pkd
 
 EE_SRC_DIR = src/
 EE_OBJS_DIR = obj/
@@ -79,6 +81,8 @@ IOP_MODULES = iomanx.o filexio.o sio2man.o mcman.o mcserv.o padman.o  \
 			  ps2hdd.o ps2fs.o
 
 ifeq ($(CLI),1)
+  EE_BIN := $(EE_BIN)_cli
+  EE_BIN_PKD := $(EE_BIN_PKD)_cli
   EE_CFLAGS += -DATHENA_CLI
   ATHENA_MODULES += ath_cli.o
   GRAPHICS = 0
@@ -117,6 +121,8 @@ ifeq ($(MOUSE),1)
 endif
 
 ifneq ($(EE_SIO), 0)
+  EE_BIN := $(EE_BIN)_eesio
+  EE_BIN_PKD := $(EE_BIN_PKD)_eesio
   EE_CFLAGS += -D__EESIO_PRINTF
   EE_LIBS += -lsiocookie
 endif
@@ -124,6 +130,9 @@ endif
 
 EE_OBJS = $(APP_CORE) $(JS_CORE) $(ATHENA_MODULES) $(IOP_MODULES) #group them all
 EE_OBJS := $(EE_OBJS:%=$(EE_OBJS_DIR)%) #prepend the object folder
+
+EE_BIN := $(EE_BIN)$(EE_EXT)
+EE_BIN_PKD := $(EE_BIN_PKD)$(EE_EXT)
 
 
 #-------------------------- App Content ---------------------------#

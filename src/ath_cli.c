@@ -55,6 +55,14 @@ static JSValue athena_setcursor(JSContext *ctx, JSValue this_val, int argc, JSVa
 	return JS_UNDEFINED;
 }
 
+static JSValue athena_getx(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	return JS_NewInt32(ctx, scr_getX());
+}
+
+static JSValue athena_gety(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	return JS_NewInt32(ctx, scr_getY());
+}
+
 /*static JSValue athena_getcursor(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	return JS_NewBool(ctx, scr_getCursor());
 }*/
@@ -67,6 +75,8 @@ static const JSCFunctionListEntry console_funcs[] = {
 	JS_CFUNC_DEF("setFontColor", 1, athena_setfontcolor),
 	JS_CFUNC_DEF("setCursorColor", 1, athena_setcursorcolor),
 	JS_CFUNC_DEF("setCursor", 1, athena_setcursor),
+	JS_CFUNC_DEF("getX", 0, athena_getx),
+	JS_CFUNC_DEF("getY", 0, athena_gety),
 	//JS_CFUNC_DEF("getCursor", 0, athena_getcursor),
 };
 

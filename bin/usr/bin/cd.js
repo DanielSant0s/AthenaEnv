@@ -1,0 +1,1 @@
+System.currentDir(args[0] + "/");
