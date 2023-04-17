@@ -1,11 +1,7 @@
-IOP.loadDefaultModule(IOP.mouse);
-Mouse.init();
+IOP.loadDefaultModule(IOP.keyboard);
+Keyboard.init();
 
 let bg = new Image("dash/bg.png");
-
-let cursor = new Image("cursor/pointer.png");
-cursor.width /= 4;
-cursor.height /= 4;
 
 const unsel_color = Color.new(255, 255, 255, 64);
 const sel_color = Color.new(255, 255, 255);
@@ -45,31 +41,38 @@ let menu_ptr = 0;
 let new_pad = Pads.get();
 let old_pad = new_pad;
 
-let mouse = Mouse.get();
+let old_kbd_char = 0;
+let kbd_char = 0;
+
+const VK_OLD_UP = 27;
+const VK_NEW_UP = 44;
+const VK_OLD_DOWN = 27;
+const VK_NEW_DOWN = 43;
+const VK_RETURN = 10;
 
 while(true) {
     old_pad = new_pad;
     new_pad = Pads.get();
-    mouse = Mouse.get();
+
+    old_kbd_char = kbd_char;
+    kbd_char = Keyboard.get();
 
     Screen.clear();
 
     bg.draw(0, 0);
 
-    // cursor.draw(mouse.x, mouse.y);
-
     font_bold.print(15, 5, "Athena dash alpha v0.1");
 
-    if(Pads.check(new_pad, Pads.UP) && !Pads.check(old_pad, Pads.UP)) {
+    if(Pads.check(new_pad, Pads.UP) && !Pads.check(old_pad, Pads.UP) || old_kbd_char == VK_OLD_UP && kbd_char == VK_NEW_UP) {
         app_table.unshift(app_table.pop());
 
     }
 
-    if(Pads.check(new_pad, Pads.DOWN) && !Pads.check(old_pad, Pads.DOWN)){
+    if(Pads.check(new_pad, Pads.DOWN) && !Pads.check(old_pad, Pads.DOWN) || old_kbd_char == VK_OLD_DOWN && kbd_char == VK_NEW_DOWN){
         app_table.push(app_table.shift());
     }
 
-    if(Pads.check(new_pad, Pads.CROSS) && !Pads.check(old_pad, Pads.CROSS)){
+    if(Pads.check(new_pad, Pads.CROSS) && !Pads.check(old_pad, Pads.CROSS) || kbd_char == VK_RETURN){
         let bin = "athena_pkd.elf";
         if ("bin" in app_table[0]) {
             bin = app_table[0].bin;

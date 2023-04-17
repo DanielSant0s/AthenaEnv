@@ -7,12 +7,20 @@
 
 #include "ath_env.h"
 
-// void scr_putchar(int x, int y, u32 color, int ch);
-// int scr_getX(void);
-// int scr_getY(void);
-
 static JSValue athena_print(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	scr_printf(JS_ToCString(ctx, argv[0]));
+	return JS_UNDEFINED;
+}
+
+static JSValue athena_putchar(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	int x, y, ch;
+	uint32_t color;
+
+	JS_ToInt32(ctx, &x, argv[0]);
+	JS_ToInt32(ctx, &y, argv[1]);
+	JS_ToUint32(ctx, &color, argv[2]);
+	JS_ToInt32(ctx, &ch, argv[3]);
+	scr_putchar(x, y, color, ch);
 	return JS_UNDEFINED;
 }
 
@@ -69,6 +77,7 @@ static JSValue athena_gety(JSContext *ctx, JSValue this_val, int argc, JSValueCo
 
 static const JSCFunctionListEntry console_funcs[] = {
 	JS_CFUNC_DEF("print",  1, athena_print),
+	JS_CFUNC_DEF("putChar",  4, athena_putchar),
 	JS_CFUNC_DEF("setCoords", 2, athena_setxy),
 	JS_CFUNC_DEF("clear", 0, athena_clear),
 	JS_CFUNC_DEF("setBGColor", 1, athena_setbgcolor),

@@ -1,4 +1,12 @@
 // {"name": "Terminal", "author": "Daniel Santos", "version": "04102023", "file": "terminal.js", "bin": "athena_cli.elf"}
+
+function reset_cmd(str) {
+    for (let i = str.length; i > 0; i--) {
+        Console.setCoords(Console.getX()-1, Console.getY());
+        Console.print("");
+    }
+}
+
 IOP.reset();
 IOP.loadDefaultModule(IOP.hdd);
 IOP.loadDefaultModule(IOP.cdfs);
@@ -16,32 +24,106 @@ Keyboard.setBlockingMode(1);
 globalThis.user = "user";
 globalThis.device = "ps2";
 
-
+const VK_ARROWS = 27;
+const VK_RIGHT = 41;
+const VK_LEFT = 42;
+const VK_DOWN = 43;
+const VK_UP = 44;
 const BACKSPACE = 7;
 const RETURN = 10;
+
 let str = "";
+let str_ptr = 0;
+let old_char = 0;
 let cur_char = 0;
 
 let cmds = System.listDir("usr/bin").map(file => file.name.replace(".js", ""));
 let cmd_found = false;
 
+let cur_path = null;
+
 while(true) {
-    Console.setFontColor(0xFF00FF00);
-    Console.print(`${user}@${device}:~$ `);
+    cur_path = System.currentDir();
+    Console.setFontColor(0xFF0080);
+    Console.print(`${user}@${device}:${cur_path == System.boot_path? "~": cur_path.replace(System.boot_path, "")}$ `);
     Console.setFontColor(0xFFFFFFFF);
 
     while(cur_char != RETURN) {
-
+        old_char = cur_char;
         cur_char = Keyboard.get();
 
-        if(cur_char == RETURN) {
-            Console.setCursor(false);
-            Console.print(" ");
-        }
+        if (cur_char == VK_RIGHT && old_char == VK_ARROWS && str_ptr < str.length) {
+            Console.setCursorColor(0);
+            Console.print("");
 
-        let c = String.fromCharCode(cur_char);
-        str += c;
-        Console.print(c);
+            str_ptr++;
+
+            reset_cmd(str);
+
+            Console.print(str.slice(0, str_ptr));
+            let x_bak = Console.getX();
+            Console.print(str.slice(str_ptr, str.length));
+            let x_cur_bak = Console.getX();
+            Console.setCursorColor(0xFFFFFF);
+            Console.setCoords(x_bak, Console.getY());
+            Console.print("");
+            Console.setCursor(false);
+            Console.setCoords(x_cur_bak, Console.getY());
+            Console.print("");
+            Console.setCursor(true);
+
+        } else if (cur_char == VK_LEFT && old_char == VK_ARROWS && str_ptr > 0) {
+            Console.setCursorColor(0);
+            Console.print("");
+
+            str_ptr--;
+
+            for (let i = str.length; i > str_ptr; i--) {
+                Console.setCoords(Console.getX()-1, Console.getY());
+                Console.print("");
+            }
+
+            let x_bak = Console.getX();
+            Console.print(str.slice(str_ptr, str.length));
+            let x_cur_bak = Console.getX();
+            Console.setCursorColor(0xFFFFFF);
+            Console.setCoords(x_bak, Console.getY());
+            Console.print("");
+            Console.setCursor(false);
+            Console.setCoords(x_cur_bak, Console.getY());
+            Console.print("");
+            Console.setCursor(true);
+
+        } else if (cur_char == BACKSPACE && str.length > 0){
+            Console.setCursorColor(0);
+            Console.print("");
+            Console.setCoords(Console.getX()-1, Console.getY());
+            Console.setCursorColor(0xFFFFFF);
+            Console.print("");
+            str = str.slice(0, str.length-1);
+
+        } else if(cur_char == RETURN) {
+            Console.setCursor(false);
+            Console.print(" \n");
+        } else if(cur_char != VK_ARROWS && old_char != VK_ARROWS){
+            Console.setCursorColor(0);
+            Console.print("");
+
+            reset_cmd(str);
+            
+            let c = String.fromCharCode(cur_char);
+
+            Console.print(str.slice(0, str_ptr));
+            let x_bak = Console.getX();
+            Console.print(c + str.slice(str_ptr, str.length));
+            let x_cur_bak = Console.getX();
+            Console.setCursorColor(0xFFFFFF);
+            Console.print("");
+
+            str = str.slice(0, str_ptr) + c + str.slice(str_ptr, str.length);
+
+            str_ptr++;
+        }
     }
 
     if (Console.getY() > 27) {
@@ -60,7 +142,6 @@ while(true) {
             }
 
             std.loadScript(System.boot_path + "usr/bin/" + cmd + ".js");
-            std.gc();
             args = undefined;
         }
     });
@@ -70,9 +151,7 @@ while(true) {
     }
 
     Console.setCursor(true);
-    str = "";
+    cmd_found = false;
     cur_char = 0;
+    str = "";
 }
-
-
-System.sleep(999999999);

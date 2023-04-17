@@ -1,0 +1,1 @@
+Console.print(std.loadFile(args[0]));
