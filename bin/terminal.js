@@ -1,11 +1,19 @@
 // {"name": "Terminal", "author": "Daniel Santos", "version": "04102023", "file": "terminal.js", "bin": "athena_cli.elf"}
 
-function reset_cmd(str) {
+function resetCommandLine(str) {
     for (let i = str.length; i > 0; i--) {
         Console.setCoords(Console.getX()-1, Console.getY());
         Console.print("");
     }
 }
+
+
+function printPrompt(user, device, cur_path) {
+    Console.setFontColor(0xFF0080);
+    Console.print(`${user}@${device}:${cur_path}$ `);
+    Console.setFontColor(0xFFFFFFFF);
+}
+
 
 IOP.reset();
 IOP.loadDefaultModule(IOP.hdd);
@@ -32,8 +40,6 @@ const VK_UP = 44;
 const BACKSPACE = 7;
 const RETURN = 10;
 
-let str = "";
-let str_ptr = 0;
 let old_char = 0;
 let cur_char = 0;
 
@@ -42,151 +48,191 @@ let cmd_found = false;
 
 let cur_path = null;
 
-let cmd_history = [];
-let history_ptr = 0;
-let buf_backup = false;
+class CommandLineInterface {
+    constructor() {
+        this.str = "";
+        this.ptr = 0;
+        this.history = {cmds:[], ptr:0, backup:false};
+    }
+
+    handleArrowRight() {
+        Console.setCursorColor(0);
+        Console.print("");
+    
+        this.ptr++;
+    
+        resetCommandLine(this.str);
+    
+        Console.print(this.str.slice(0, this.ptr));
+        let x_bak = Console.getX();
+        Console.print(this.str.slice(this.ptr, this.str.length));
+        let x_cur_bak = Console.getX();
+        Console.setCursorColor(0xFFFFFF);
+        Console.setCoords(x_bak, Console.getY());
+        Console.print("");
+        Console.setCursor(false);
+        Console.setCoords(x_cur_bak, Console.getY());
+        Console.print("");
+        Console.setCursor(true);
+    }
+
+    handleArrowLeft() {
+        Console.setCursorColor(0);
+        Console.print("");
+    
+        this.ptr--;
+    
+        for (let i = this.str.length; i > this.ptr; i--) {
+            Console.setCoords(Console.getX() - 1, Console.getY());
+            Console.print("");
+        }
+    
+        let x_bak = Console.getX();
+        Console.print(this.str.slice(this.ptr, this.str.length));
+        let x_cur_bak = Console.getX();
+        Console.setCursorColor(0xFFFFFF);
+        Console.setCoords(x_bak, Console.getY());
+        Console.print("");
+        Console.setCursor(false);
+        Console.setCoords(x_cur_bak, Console.getY());
+        Console.print("");
+        Console.setCursor(true);
+    }
+
+    handleArrowUp() {
+        if (this.str != "" && this.history.ptr == this.history.cmds.length) {
+            this.history.cmds.push(this.str);
+        }
+    
+        this.history.ptr--;
+    
+        if (this.history.ptr < this.history.cmds.length) {
+            Console.setCursorColor(0);
+            Console.print("");
+            resetCommandLine(this.str);
+            Console.setCursorColor(0xFFFFFF);
+            Console.print(this.history.cmds[this.history.ptr]);
+            this.str = this.history.cmds[this.history.ptr];
+        }
+    }
+
+    handleArrowDown() {
+        this.history.ptr++;
+    
+        if (this.history.ptr < this.history.cmds.length) {
+            Console.setCursorColor(0);
+            Console.print("");
+            resetCommandLine(this.str);
+            Console.setCursorColor(0xFFFFFF);
+            Console.print(this.history.cmds[this.history.ptr]);
+            this.str = this.history.cmds[this.history.ptr];
+        } else if (!this.history.backup) {
+            Console.setCursorColor(0);
+            Console.print("");
+            resetCommandLine(this.str);
+            Console.setCursorColor(0xFFFFFF);
+            Console.print("");
+            this.str = "";
+        }
+    }
+
+    handleBackspace() {
+        if (this.str.length > 0) {
+            Console.setCursorColor(0);
+            Console.print("");
+    
+            resetCommandLine(this.str);
+    
+            Console.setCursorColor(0xFFFFFF);
+    
+            Console.setCursor(false);
+            Console.print(this.str.slice(0, this.ptr-1));
+            let x_bak = Console.getX();
+            Console.print(this.str.slice(this.ptr, this.str.length));
+            let x_cur_bak = Console.getX();
+            Console.setCursor(true);
+            Console.setCoords(x_bak, Console.getY());
+            Console.print("");
+            Console.setCursor(false);
+            Console.setCoords(x_cur_bak, Console.getY());
+            Console.print("");
+            Console.setCursor(true);
+    
+            this.str = this.str.slice(0, this.ptr-1) + this.str.slice(this.ptr, this.str.length);
+    
+            this.ptr--;
+        }
+    }
+
+    handleReturn() {
+        resetCommandLine(this.str);
+        Console.print(this.str);
+
+        Console.setCursor(false);
+        Console.print(" \n");
+    }
+
+    putChar(ch) {
+        resetCommandLine(this.str);
+            
+        let c = String.fromCharCode(ch);
+
+        Console.setCursor(false);
+        Console.print(this.str.slice(0, this.ptr));
+        Console.print(c);
+        let x_bak = Console.getX();
+        Console.print(this.str.slice(this.ptr, this.str.length));
+        let x_cur_bak = Console.getX();
+        Console.setCursor(true);
+        Console.setCoords(x_bak, Console.getY());
+        Console.print("");
+        Console.setCursor(false);
+        Console.setCoords(x_cur_bak, Console.getY());
+        Console.print("");
+        Console.setCursor(true);
+
+        this.str = this.str.slice(0, this.ptr) + c + this.str.slice(this.ptr, this.str.length);
+
+        this.ptr++;
+    }
+
+    resetParameters() {
+        Console.setCursor(true);
+        this.history.backup = false;
+        this.ptr = 0;
+        this.str = "";
+    }
+};
+
+const cli = new CommandLineInterface();
 
 while(true) {
     cur_path = System.currentDir();
-    Console.setFontColor(0xFF0080);
-    Console.print(`${user}@${device}:${cur_path}$ `);
-    Console.setFontColor(0xFFFFFFFF);
+    printPrompt(user, device, cur_path);
 
     while(cur_char != RETURN) {
         old_char = cur_char;
         cur_char = Keyboard.get();
 
-        if (cur_char == VK_RIGHT && old_char == VK_ACTION && str_ptr < str.length) {
-            Console.setCursorColor(0);
-            Console.print("");
+        if (cur_char == VK_RIGHT && old_char == VK_ACTION && cli.ptr < cli.str.length) {
+            cli.handleArrowRight();
 
-            str_ptr++;
+        } else if (cur_char == VK_LEFT && old_char == VK_ACTION && cli.ptr > 0) {
+            cli.handleArrowLeft();
 
-            reset_cmd(str);
+        }  else if (cur_char == VK_UP && old_char == VK_ACTION && cli.history.ptr > 0) {
+            cli.handleArrowUp();
 
-            Console.print(str.slice(0, str_ptr));
-            let x_bak = Console.getX();
-            Console.print(str.slice(str_ptr, str.length));
-            let x_cur_bak = Console.getX();
-            Console.setCursorColor(0xFFFFFF);
-            Console.setCoords(x_bak, Console.getY());
-            Console.print("");
-            Console.setCursor(false);
-            Console.setCoords(x_cur_bak, Console.getY());
-            Console.print("");
-            Console.setCursor(true);
-
-        } else if (cur_char == VK_LEFT && old_char == VK_ACTION && str_ptr > 0) {
-            Console.setCursorColor(0);
-            Console.print("");
-
-            str_ptr--;
-
-            for (let i = str.length; i > str_ptr; i--) {
-                Console.setCoords(Console.getX()-1, Console.getY());
-                Console.print("");
-            }
-
-            let x_bak = Console.getX();
-            Console.print(str.slice(str_ptr, str.length));
-            let x_cur_bak = Console.getX();
-            Console.setCursorColor(0xFFFFFF);
-            Console.setCoords(x_bak, Console.getY());
-            Console.print("");
-            Console.setCursor(false);
-            Console.setCoords(x_cur_bak, Console.getY());
-            Console.print("");
-            Console.setCursor(true);
-
-        }  else if (cur_char == VK_UP && old_char == VK_ACTION && history_ptr > 0) {
-            if(str != "" && history_ptr == cmd_history.length) {
-                cmd_history.push(str);
-                buf_backup = true;
-            }
-
-            history_ptr--;
-
-            if (history_ptr < cmd_history.length) {
-                Console.setCursorColor(0);
-                Console.print("");
-                reset_cmd(str);
-                Console.setCursorColor(0xFFFFFF);
-                Console.print(cmd_history[history_ptr]);
-                str = cmd_history[history_ptr];
-            }
-
-        } else if (cur_char == VK_DOWN && old_char == VK_ACTION && history_ptr < cmd_history.length) {
-            history_ptr++;
-            if (history_ptr < cmd_history.length) {
-                Console.setCursorColor(0);
-                Console.print("");
-                reset_cmd(str);
-                Console.setCursorColor(0xFFFFFF);
-                Console.print(cmd_history[history_ptr]);
-                str = cmd_history[history_ptr];
-            } else if (!buf_backup){
-                Console.setCursorColor(0);
-                Console.print("");
-                reset_cmd(str);
-                Console.setCursorColor(0xFFFFFF);
-                Console.print("");
-                str = "";
-            }
+        } else if (cur_char == VK_DOWN && old_char == VK_ACTION && cli.history.ptr < cli.history.cmds.length) {
+            cli.handleArrowDown();
 
         } else if (cur_char == BACKSPACE){
-            if (str.length > 0) {
-                Console.setCursorColor(0);
-                Console.print("");
+            cli.handleBackspace();
 
-                reset_cmd(str);
-
-                Console.setCursorColor(0xFFFFFF);
-
-                Console.setCursor(false);
-                Console.print(str.slice(0, str_ptr-1));
-                let x_bak = Console.getX();
-                Console.print(str.slice(str_ptr, str.length));
-                let x_cur_bak = Console.getX();
-                Console.setCursor(true);
-                Console.setCoords(x_bak, Console.getY());
-                Console.print("");
-                Console.setCursor(false);
-                Console.setCoords(x_cur_bak, Console.getY());
-                Console.print("");
-                Console.setCursor(true);
-
-                str = str.slice(0, str_ptr-1) + str.slice(str_ptr, str.length);
-
-                str_ptr--;
-            }
         } else if(cur_char == RETURN) {
-            reset_cmd(str);
-            Console.print(str);
-
-            Console.setCursor(false);
-            Console.print(" \n");
+            cli.handleReturn();
         } else if(cur_char != VK_ACTION && old_char != VK_ACTION){
-            reset_cmd(str);
-            
-            let c = String.fromCharCode(cur_char);
-
-            Console.setCursor(false);
-            Console.print(str.slice(0, str_ptr));
-            Console.print(c);
-            let x_bak = Console.getX();
-            Console.print(str.slice(str_ptr, str.length));
-            let x_cur_bak = Console.getX();
-            Console.setCursor(true);
-            Console.setCoords(x_bak, Console.getY());
-            Console.print("");
-            Console.setCursor(false);
-            Console.setCoords(x_cur_bak, Console.getY());
-            Console.print("");
-            Console.setCursor(true);
-
-            str = str.slice(0, str_ptr) + c + str.slice(str_ptr, str.length);
-
-            str_ptr++;
+            cli.putChar(cur_char);
         }
     }
 
@@ -195,9 +241,9 @@ while(true) {
     }
 
 
-    cmd_history.push(str);
-    history_ptr = cmd_history.length;
-    let command = str.replace("\n", "").split(" ");
+    cli.history.cmds.push(cli.str);
+    cli.history.ptr = cli.history.cmds.length;
+    let command = cli.str.replace("\n", "").split(" ");
 
     if(command[0].slice(0, 2) != "./") {
         cmds.forEach(cmd => {
@@ -236,10 +282,8 @@ while(true) {
         Console.print(`${command[0]}: command not found\n`);
     }
 
-    Console.setCursor(true);
+    cli.resetParameters();
     cmd_found = false;
-    buf_backup = false;
     cur_char = 0;
-    str_ptr = 0;
-    str = "";
 }
+
