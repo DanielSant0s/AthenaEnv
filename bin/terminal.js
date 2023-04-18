@@ -94,31 +94,36 @@ while(true) {
             Console.print("");
             Console.setCursor(true);
 
-        } else if (cur_char == BACKSPACE && str.length > 0){
-            Console.setCursorColor(0);
-            Console.print("");
-            Console.setCoords(Console.getX()-1, Console.getY());
-            Console.setCursorColor(0xFFFFFF);
-            Console.print("");
-            str = str.slice(0, str.length-1);
-
+        } else if (cur_char == BACKSPACE){
+            if (str.length > 0) {
+                Console.setCursorColor(0);
+                Console.print("");
+                Console.setCoords(Console.getX()-1, Console.getY());
+                Console.setCursorColor(0xFFFFFF);
+                Console.print("");
+                str = str.slice(0, str.length-1);
+            }
         } else if(cur_char == RETURN) {
             Console.setCursor(false);
             Console.print(" \n");
         } else if(cur_char != VK_ARROWS && old_char != VK_ARROWS){
-            Console.setCursorColor(0);
-            Console.print("");
-
             reset_cmd(str);
             
             let c = String.fromCharCode(cur_char);
 
+            Console.setCursor(false);
             Console.print(str.slice(0, str_ptr));
+            Console.print(c);
             let x_bak = Console.getX();
-            Console.print(c + str.slice(str_ptr, str.length));
+            Console.print(str.slice(str_ptr, str.length));
             let x_cur_bak = Console.getX();
-            Console.setCursorColor(0xFFFFFF);
+            Console.setCursor(true);
+            Console.setCoords(x_bak, Console.getY());
             Console.print("");
+            Console.setCursor(false);
+            Console.setCoords(x_cur_bak, Console.getY());
+            Console.print("");
+            Console.setCursor(true);
 
             str = str.slice(0, str_ptr) + c + str.slice(str_ptr, str.length);
 
@@ -153,5 +158,6 @@ while(true) {
     Console.setCursor(true);
     cmd_found = false;
     cur_char = 0;
+    str_ptr = 0;
     str = "";
 }
