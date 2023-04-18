@@ -24,7 +24,7 @@ Keyboard.setBlockingMode(1);
 globalThis.user = "user";
 globalThis.device = "ps2";
 
-const VK_ARROWS = 27;
+const VK_ACTION = 27;
 const VK_RIGHT = 41;
 const VK_LEFT = 42;
 const VK_DOWN = 43;
@@ -42,6 +42,10 @@ let cmd_found = false;
 
 let cur_path = null;
 
+let cmd_history = [];
+let history_ptr = 0;
+let buf_backup = false;
+
 while(true) {
     cur_path = System.currentDir();
     Console.setFontColor(0xFF0080);
@@ -52,7 +56,7 @@ while(true) {
         old_char = cur_char;
         cur_char = Keyboard.get();
 
-        if (cur_char == VK_RIGHT && old_char == VK_ARROWS && str_ptr < str.length) {
+        if (cur_char == VK_RIGHT && old_char == VK_ACTION && str_ptr < str.length) {
             Console.setCursorColor(0);
             Console.print("");
 
@@ -72,7 +76,7 @@ while(true) {
             Console.print("");
             Console.setCursor(true);
 
-        } else if (cur_char == VK_LEFT && old_char == VK_ARROWS && str_ptr > 0) {
+        } else if (cur_char == VK_LEFT && old_char == VK_ACTION && str_ptr > 0) {
             Console.setCursorColor(0);
             Console.print("");
 
@@ -93,6 +97,41 @@ while(true) {
             Console.setCoords(x_cur_bak, Console.getY());
             Console.print("");
             Console.setCursor(true);
+
+        }  else if (cur_char == VK_UP && old_char == VK_ACTION && history_ptr > 0) {
+            if(str != "" && history_ptr == cmd_history.length) {
+                cmd_history.push(str);
+                buf_backup = true;
+            }
+
+            history_ptr--;
+
+            if (history_ptr < cmd_history.length) {
+                Console.setCursorColor(0);
+                Console.print("");
+                reset_cmd(str);
+                Console.setCursorColor(0xFFFFFF);
+                Console.print(cmd_history[history_ptr]);
+                str = cmd_history[history_ptr];
+            }
+
+        } else if (cur_char == VK_DOWN && old_char == VK_ACTION && history_ptr < cmd_history.length) {
+            history_ptr++;
+            if (history_ptr < cmd_history.length) {
+                Console.setCursorColor(0);
+                Console.print("");
+                reset_cmd(str);
+                Console.setCursorColor(0xFFFFFF);
+                Console.print(cmd_history[history_ptr]);
+                str = cmd_history[history_ptr];
+            } else if (!buf_backup){
+                Console.setCursorColor(0);
+                Console.print("");
+                reset_cmd(str);
+                Console.setCursorColor(0xFFFFFF);
+                Console.print("");
+                str = "";
+            }
 
         } else if (cur_char == BACKSPACE){
             if (str.length > 0) {
@@ -126,7 +165,7 @@ while(true) {
 
             Console.setCursor(false);
             Console.print(" \n");
-        } else if(cur_char != VK_ARROWS && old_char != VK_ARROWS){
+        } else if(cur_char != VK_ACTION && old_char != VK_ACTION){
             reset_cmd(str);
             
             let c = String.fromCharCode(cur_char);
@@ -156,6 +195,8 @@ while(true) {
     }
 
 
+    cmd_history.push(str);
+    history_ptr = cmd_history.length;
     let command = str.replace("\n", "").split(" ");
 
     if(command[0].slice(0, 2) != "./") {
@@ -197,6 +238,7 @@ while(true) {
 
     Console.setCursor(true);
     cmd_found = false;
+    buf_backup = false;
     cur_char = 0;
     str_ptr = 0;
     str = "";
