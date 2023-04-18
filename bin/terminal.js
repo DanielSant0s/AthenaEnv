@@ -121,6 +121,9 @@ while(true) {
                 str_ptr--;
             }
         } else if(cur_char == RETURN) {
+            reset_cmd(str);
+            Console.print(str);
+            
             Console.setCursor(false);
             Console.print(" \n");
         } else if(cur_char != VK_ARROWS && old_char != VK_ARROWS){
