@@ -45,7 +45,7 @@ let cur_path = null;
 while(true) {
     cur_path = System.currentDir();
     Console.setFontColor(0xFF0080);
-    Console.print(`${user}@${device}:${cur_path == System.boot_path? "~": cur_path.replace(System.boot_path, "")}$ `);
+    Console.print(`${user}@${device}:${cur_path}$ `);
     Console.setFontColor(0xFFFFFFFF);
 
     while(cur_char != RETURN) {
@@ -123,7 +123,7 @@ while(true) {
         } else if(cur_char == RETURN) {
             reset_cmd(str);
             Console.print(str);
-            
+
             Console.setCursor(false);
             Console.print(" \n");
         } else if(cur_char != VK_ARROWS && old_char != VK_ARROWS){
@@ -158,18 +158,38 @@ while(true) {
 
     let command = str.replace("\n", "").split(" ");
 
-    cmds.forEach(cmd => {
-        globalThis.args = [];
-        if(cmd == command[0]) {
-            cmd_found = true;
-            for(let i = 1; i < command.length; i++) {
-                globalThis.args[i-1] = command[i];
+    if(command[0].slice(0, 2) != "./") {
+        cmds.forEach(cmd => {
+            globalThis.args = [];
+            if(cmd == command[0]) {
+                cmd_found = true;
+                command.shift();
+                args = command;
+                std.loadScript(System.boot_path + "usr/bin/" + cmd + ".js");
+                args = undefined;
             }
-
-            std.loadScript(System.boot_path + "usr/bin/" + cmd + ".js");
-            args = undefined;
+        });
+    } else if (command[0].endsWith(".elf") || command[0].endsWith(".ELF")) {
+        if (command.length < 2) {
+            System.loadELF(cur_path + command[0].slice(2, command[0].length));
+        } else {
+            let fst_cmd = command.shift();
+            System.loadELF(cur_path + fst_cmd.slice(2, fst_cmd.length), command);
         }
-    });
+        
+    } else if (command[0].endsWith(".irx") || command[0].endsWith(".IRX")) {
+        IOP.loadModule(cur_path + command[0].slice(2, command[0].length));
+        
+    } else if (command[0].endsWith(".js")) {
+        if (command.length < 2) {
+            std.loadScript(command[0].slice(2, command[0].length));
+        } else {
+            let fst_cmd = command.shift();
+            globalThis.args = command;
+            std.loadScript(fst_cmd.slice(2, fst_cmd.length));
+        }
+    }
+
 
     if(!cmd_found && command[0] != "") {
         Console.print(`${command[0]}: command not found\n`);
