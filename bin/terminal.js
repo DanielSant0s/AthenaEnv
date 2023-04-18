@@ -98,10 +98,27 @@ while(true) {
             if (str.length > 0) {
                 Console.setCursorColor(0);
                 Console.print("");
-                Console.setCoords(Console.getX()-1, Console.getY());
+
+                reset_cmd(str);
+
                 Console.setCursorColor(0xFFFFFF);
+
+                Console.setCursor(false);
+                Console.print(str.slice(0, str_ptr-1));
+                let x_bak = Console.getX();
+                Console.print(str.slice(str_ptr, str.length));
+                let x_cur_bak = Console.getX();
+                Console.setCursor(true);
+                Console.setCoords(x_bak, Console.getY());
                 Console.print("");
-                str = str.slice(0, str.length-1);
+                Console.setCursor(false);
+                Console.setCoords(x_cur_bak, Console.getY());
+                Console.print("");
+                Console.setCursor(true);
+
+                str = str.slice(0, str_ptr-1) + str.slice(str_ptr, str.length);
+
+                str_ptr--;
             }
         } else if(cur_char == RETURN) {
             Console.setCursor(false);
