@@ -8,103 +8,9 @@
 #include "include/taskman.h"
 #include "include/dbgprintf.h"
 
-Tasklist tasks;
-
 extern void *_gp;
 
-void new_task(int id, int internal_id, int c_sema, const char* title){
-    tasks.list[id] = malloc(sizeof(Task));
-    tasks.list[id]->id = id;
-    tasks.list[id]->internal_id = internal_id;
-    tasks.list[id]->cancel_sema = c_sema;
-    tasks.list[id]->title = title;
-}
-
-void del_task(int id){
-    for(int i = 0; i < tasks.size; i++){
-        if (tasks.list[i]->internal_id == id){
-            Task** aux = malloc((tasks.size-1)*sizeof(Task*));
-            memcpy(aux, tasks.list, i*sizeof(Task*));
-            memcpy(aux+(sizeof(Task*)*i), tasks.list+(sizeof(Task*)*i), (tasks.size-i)*sizeof(Task*));
-            free(tasks.list);
-            tasks.list = aux;
-        }
-    }
-
-    tasks.size--;
-
-    for(int i = 0; i < tasks.size; i++){ //BAAAD, I'll rewrite it later
-        tasks.list[i]->id = i;
-    }
-}
-
-void init_taskman()
-{
-    ee_thread_status_t info;
-    info.stack_size = -1;
-    tasks.size = -1;
-
-    while(info.stack_size != 0) {
-        tasks.size++;
-        ReferThreadStatus(tasks.size, &info);
-    } //A way to list already created threads
-    
-    dbgprintf("Threads running during boot: %d\n", tasks.size);
-    tasks.list = malloc(sizeof(Task*)*tasks.size);
-
-    new_task(0, 0, -1, "Kernel: Splash");
-    new_task(1, 1, -1, "Main: AthenaVM");
-    new_task(2, 2, -1, "Kernel: Thread patch");
-
-    dbgprintf("Task manager started successfully!\n");
-
-}
-
-int create_task(const char* title, void* func, int stack_size, int priority)
-{
-    Task** aux = malloc((tasks.size+1)*sizeof(Task*));
-    memcpy(aux, tasks.list, tasks.size*sizeof(Task*));
-    free(tasks.list);
-    tasks.list = aux;
-    
-    ee_thread_t thread_param;
-	
-	thread_param.gp_reg = &_gp;
-    thread_param.func = func;
-    thread_param.stack_size = stack_size;
-    thread_param.stack = memalign(128, stack_size);
-    thread_param.initial_priority = priority;
-
-	int thread = CreateThread(&thread_param);
-
-	if (thread < 0) {
-        free(thread_param.stack);
-    }
-
-    new_task(tasks.size, thread, -1, title);
-
-    dbgprintf("%s task created.\n",tasks.list[tasks.size]->title);
-
-    tasks.size++;
-    
-    return tasks.list[tasks.size-1]->id;
-
-}
-
-void init_task(int id, void* args){
-    StartThread(tasks.list[id]->internal_id, args);
-}
-
-void kill_task(int id){
-    TerminateThread(tasks.list[id]->internal_id);
-    DeleteThread(tasks.list[id]->internal_id);
-    del_task(tasks.list[id]->internal_id);
-}
-
-void exitkill_task(){
-    del_task(GetThreadId());
-    ExitDeleteThread();
-}
+/*
 
 void update_thread_status(){
     ee_thread_status_t thread_info;
@@ -117,4 +23,105 @@ void update_thread_status(){
 Tasklist* get_tasklist(){
     update_thread_status();
     return &tasks;
+}
+
+*/
+
+static Task tasks[MAX_THREADS];
+static int tasks_size = 0;
+
+void new_task(int id, const char* title){
+    for(int i = 0; i < MAX_THREADS; i++){
+        if (tasks[i].id == -1 && !tasks[i].title && tasks[i].id == -1){
+            tasks[i].id = id;
+            tasks[i].status = 0;
+            tasks[i].title = title;
+            break;
+        }
+    }
+}
+
+void del_task(int id){
+    for(int i = 0; i < MAX_THREADS; i++){
+        if (tasks[i].id == id){
+            printf("Killing task %d\n", id);
+            tasks[i].id = -1;
+            tasks[i].status = -1;
+            tasks[i].title = NULL;
+            break;
+        }
+    }
+
+    tasks_size--;
+}
+
+
+void init_taskman()
+{
+    ee_thread_status_t info;
+    info.stack_size = -1;
+    tasks_size = 0;
+
+    for(int i = 0; i < MAX_THREADS; i++){
+        tasks[i].id = -1;
+        tasks[i].status = -1;
+        tasks[i].title = NULL;
+    }
+
+    new_task(0, "Idle");
+
+    while(info.stack_size != 0) {
+        tasks_size++;
+        ReferThreadStatus(tasks_size, &info);
+        new_task(tasks_size, "Main: PS2SDK/Kernel Patch");
+    } //A way to list already created threads
+    
+    dbgprintf("Threads running during boot: %d\n", tasks_size);
+
+    dbgprintf("Task manager started successfully!\n");
+
+}
+
+int create_task(const char* title, void* func, int stack_size, int priority)
+{    
+    ee_thread_t thread_param;
+	
+	thread_param.gp_reg = &_gp;
+    thread_param.func = func;
+    thread_param.stack_size = stack_size;
+    thread_param.stack = memalign(128, stack_size);
+    thread_param.initial_priority = priority;
+
+	int thread = CreateThread(&thread_param);
+
+	if (thread < 0) {
+        free(thread_param.stack);
+        return -1;
+    }
+
+    new_task(thread, title);
+
+    printf("new Task: %d %d %s\n", thread, tasks_size, title);
+
+    dbgprintf("%s task created.\n",tasks[tasks_size].title);
+
+    tasks_size++;
+    
+    return thread;
+
+}
+
+void init_task(int id, void* args){
+    StartThread(id, args);
+}
+
+void kill_task(int id){
+    TerminateThread(id);
+    DeleteThread(id);
+    del_task(id);
+}
+
+void exitkill_task(){
+    del_task(GetThreadId());
+    ExitDeleteThread();
 }

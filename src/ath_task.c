@@ -16,7 +16,7 @@ static JSValue athena_killtask(JSContext *ctx, JSValue this_val, int argc, JSVal
 	return 0;
 }
 
-static JSValue athena_gettasklist(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
+/*static JSValue athena_gettasklist(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
       if (argc != 0) return JS_ThrowSyntaxError(ctx, "wrong number of arguments.");
     JSValue array, obj;
 
@@ -32,10 +32,10 @@ static JSValue athena_gettasklist(JSContext *ctx, JSValue this_val, int argc, JS
     }
 
     return array;
-}
+}*/
 
 static const JSCFunctionListEntry module_funcs[] = {
-	JS_CFUNC_DEF("get", 0, athena_gettasklist),
+	//JS_CFUNC_DEF("get", 0, athena_gettasklist),
 	JS_CFUNC_DEF("kill", 1, athena_killtask),
 };
 

@@ -67,7 +67,7 @@ size_t AsyncWriteFileCallback(void *contents, size_t size, size_t nmemb, void *u
   return written;
 }
 
-static void *async_download(void* data) {
+static void async_download(void* data) {
     CURLcode res;
 
     JSRequestData *s = data;
@@ -127,12 +127,10 @@ static void *async_download(void* data) {
 
     s->ready = true;
 
-    exitkill_task();
-
-	return NULL;
+    //exitkill_task();
 }
 
-static void *async_get(void* data)
+static void async_get(void* data)
 {
     CURLcode res;
 
@@ -198,9 +196,7 @@ static void *async_get(void* data)
 
     req->ready = true;
 
-    exitkill_task();
-
-	return NULL;
+    //exitkill_task();
 }
 
 static JSValue athena_nw_init(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
@@ -691,13 +687,12 @@ static JSValue athena_nw_requests_ready(JSContext *ctx, JSValue this_val, int ar
         s->chunk.timer = 0;
         s->chunk.transferring = false;
 
-        //kill_task(s->tid);
         curl_easy_cleanup(s->curl);
         curl_global_cleanup();
 
+        kill_task(s->tid);
+
         //s->curl = NULL;
-
-
 
         if(s->error) {
             return JS_ThrowInternalError(ctx, s->error);
