@@ -143,40 +143,6 @@ bool waitUntilDeviceIsReady(char *path) {
     return ret == 0;
 }
 
-static bool sema_started = false;
-
-static s32 malloc_semaid;
-static ee_sema_t malloc_sema;
-
-static int malloc_locked = 0;
-static int malloc_lock_count = 0;
-
-#include <reent.h>
-
-extern void __malloc_lock(struct _reent *r) {
-    if(!sema_started) {
-        malloc_sema.init_count = 1;
-        malloc_sema.max_count = 1;
-        malloc_sema.option = 0;
-        malloc_semaid = CreateSema(&malloc_sema);
-        sema_started = true;
-    }
-    if (!malloc_locked) {
-        WaitSema(malloc_semaid);
-        malloc_locked = 1;
-    }
-    malloc_lock_count++;
-}
-
-extern void __malloc_unlock(struct _reent *r) {
-    malloc_lock_count--;
-    if (malloc_lock_count == 0) {
-        malloc_locked = 0;
-        SignalSema(malloc_semaid);
-    }
-}
-
-
 int main(int argc, char **argv) {
     char MountPoint[32+6+1]; // max partition name + 'hdd0:/' = '\0' 
     char newCWD[255];
