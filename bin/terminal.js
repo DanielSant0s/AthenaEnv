@@ -14,40 +14,6 @@ function printPrompt(user, device, cur_path) {
     Console.setFontColor(0xFFFFFFFF);
 }
 
-
-IOP.reset();
-IOP.loadDefaultModule(IOP.hdd);
-IOP.loadDefaultModule(IOP.cdfs);
-IOP.loadDefaultModule(IOP.memcard);
-IOP.loadDefaultModule(IOP.usb_mass);
-IOP.loadDefaultModule(IOP.pads);
-IOP.loadDefaultModule(IOP.network);
-IOP.loadDefaultModule(IOP.keyboard);
-
-Network.init();
-Keyboard.init();
-
-Keyboard.setBlockingMode(1);
-
-globalThis.user = "user";
-globalThis.device = "ps2";
-
-const VK_ACTION = 27;
-const VK_RIGHT = 41;
-const VK_LEFT = 42;
-const VK_DOWN = 43;
-const VK_UP = 44;
-const BACKSPACE = 7;
-const RETURN = 10;
-
-let old_char = 0;
-let cur_char = 0;
-
-let cmds = System.listDir("usr/bin").map(file => file.name.replace(".js", ""));
-let cmd_found = false;
-
-let cur_path = null;
-
 class CommandLineInterface {
     constructor() {
         this.str = "";
@@ -203,6 +169,39 @@ class CommandLineInterface {
         this.str = "";
     }
 };
+
+IOP.reset();
+IOP.loadDefaultModule(IOP.hdd);
+IOP.loadDefaultModule(IOP.cdfs);
+IOP.loadDefaultModule(IOP.memcard);
+IOP.loadDefaultModule(IOP.usb_mass);
+IOP.loadDefaultModule(IOP.pads);
+IOP.loadDefaultModule(IOP.network);
+IOP.loadDefaultModule(IOP.keyboard);
+
+Network.init();
+Keyboard.init();
+
+Keyboard.setBlockingMode(1);
+
+globalThis.user = "user";
+globalThis.device = "ps2";
+
+const VK_ACTION = 27;
+const VK_RIGHT = 41;
+const VK_LEFT = 42;
+const VK_DOWN = 43;
+const VK_UP = 44;
+const BACKSPACE = 7;
+const RETURN = 10;
+
+let old_char = 0;
+let cur_char = 0;
+
+let cmds = System.listDir("usr/bin").map(file => file.name.replace(".js", ""));
+let cmd_found = false;
+
+let cur_path = null;
 
 const cli = new CommandLineInterface();
 

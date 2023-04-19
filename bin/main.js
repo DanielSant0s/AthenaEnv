@@ -78,7 +78,7 @@ while(true) {
             bin = app_table[0].bin;
         }
 
-        System.loadELF(System.currentDir() + app_table[0].bin, [System.currentDir() + app_table[0].file]); // Doing this to reset all the stuff
+        System.loadELF(System.currentDir() + bin, [System.currentDir() + app_table[0].file]); // Doing this to reset all the stuff
     }
 
     font_medium.print(210, 125, app_table[0].name);

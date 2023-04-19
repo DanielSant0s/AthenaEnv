@@ -11,6 +11,7 @@ struct MemoryStruct {
      FILE* fp;
     };
     size_t size;
+    bool transferring;
     clock_t timer;
 };
 

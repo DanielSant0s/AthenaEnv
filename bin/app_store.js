@@ -357,14 +357,14 @@ while(true) {
                     break;
                 case LD_PKGLIST:
                     if (update_state == NOT_UPDATED) {
-                        req.download("https://raw.githubusercontent.com/DanielSant0s/brewstore-db/main/brew_data.json", "brew_data.json");
+                        req.asyncDownload("https://raw.githubusercontent.com/DanielSant0s/brewstore-db/main/brew_data.json", "brew_data.json");
                         update_state = UPDATING;
                         transfering = true;
                     } else if (update_state == UPDATING) {
-                        //if(req.ready(5)) {
+                        if(req.ready(5)) {
                             transfering = false;
                             update_state = UPDATED;
-                        //}
+                        }
                     } else {
                         app_list = load_app_db("brew_data.json");
                         loading_text += "\n" + app_list.length + " packages found."
@@ -442,10 +442,24 @@ while(true) {
                     dl_state++;
                     break;
                 case DOWNLOADING:
-                    if(req.ready(5)) {
-                        transfering = false;
-                        dl_state++;
+                    try {
+                        if(req.ready(5)) {
+                            transfering = false;
+                            dl_state++;
+                        }
+                    } catch (ex) {
+                        dling_text += ex.message;
+                        dling_text += "Restarting application...\n"
+                        System.currentDir(boot_path);
+                        ui.println(dling_text);
+                        
+                        for (let i = 0; i < 1000; i++) {
+                            Screen.flip();
+                        }   
+
+                        System.loadELF(boot_path + "athena_pkd.elf", [boot_path + "app_store.js"]);
                     }
+
                     break;
                 case DOWNLOADED:
                     if(!app_list[explore_menu.num].fname.endsWith(".elf") && !app_list[explore_menu.num].fname.endsWith(".ELF")) {
