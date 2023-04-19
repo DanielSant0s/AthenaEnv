@@ -716,8 +716,6 @@ static JSValue athena_nw_requests_getasyncdata(JSContext *ctx, JSValue this_val,
         ret = JS_NewStringLen(ctx, s->chunk.memory, s->chunk.size);
 
        // kill_task(s->tid);
-        //curl_easy_cleanup(s->curl);
-        //curl_global_cleanup();
         s->fname = NULL;
         s->url = NULL;
         s->chunk.memory = NULL;
@@ -725,7 +723,9 @@ static JSValue athena_nw_requests_getasyncdata(JSContext *ctx, JSValue this_val,
         s->chunk.size = 0;
         s->chunk.timer = 0;
         s->chunk.transferring = false;
-        s->curl = NULL;
+
+        curl_easy_cleanup(s->curl);
+        curl_global_cleanup();
 
         if (s->error) {
             return JS_ThrowInternalError(ctx, s->error);
