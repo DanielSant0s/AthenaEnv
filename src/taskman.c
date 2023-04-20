@@ -44,7 +44,6 @@ void new_task(int id, const char* title){
 void del_task(int id){
     for(int i = 0; i < MAX_THREADS; i++){
         if (tasks[i].id == id){
-            printf("Killing task %d\n", id);
             tasks[i].id = -1;
             tasks[i].status = -1;
             tasks[i].title = NULL;

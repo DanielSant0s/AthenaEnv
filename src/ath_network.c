@@ -693,7 +693,6 @@ static JSValue athena_nw_requests_ready(JSContext *ctx, JSValue this_val, int ar
         kill_task(s->tid);
 
         //s->curl = NULL;
-
         if(s->error) {
             return JS_ThrowInternalError(ctx, s->error);
         }
