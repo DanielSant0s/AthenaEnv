@@ -600,6 +600,52 @@ static JSValue athena_darkmode(JSContext *ctx, JSValue this_val, int argc, JSVal
 	return JS_UNDEFINED;
 }
 
+
+#define GS_REG_CSR (volatile u64 *)0x12001000 // System Status
+
+static JSValue athena_getcpuinfo(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
+{
+    unsigned short int revision;
+    unsigned int value;
+
+	JSValue data = JS_NewObject(ctx);
+
+    revision                                       = GetCop0(15);
+
+	JS_DefinePropertyValueStr(ctx, data, "implementation", JS_NewInt32(ctx, (u8)(revision >> 8)), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, data, "revision", JS_NewInt32(ctx, (u8)(revision & 0xFF)), JS_PROP_C_W_E);
+
+    asm("cfc1 %0, $0\n"
+        : "=r"(revision)
+        :);
+
+	JS_DefinePropertyValueStr(ctx, data, "FPUimplementation", JS_NewInt32(ctx, (u8)(revision >> 8)), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, data, "FPUrevision", JS_NewInt32(ctx, (u8)(revision & 0xFF)), JS_PROP_C_W_E);
+
+    value                                             = GetCop0(16);
+
+	JS_DefinePropertyValueStr(ctx, data, "ICacheSize", JS_NewInt32(ctx, (u8)(value >> 9 & 3)), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, data, "DCacheSize", JS_NewInt32(ctx, (u8)(value >> 6 & 3)), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, data, "RAMSize", JS_NewUint32(ctx, GetMemorySize()), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, data, "MachineType", JS_NewUint32(ctx, MachineType()), JS_PROP_C_W_E);
+
+    return data;
+}
+
+static JSValue athena_getgpuinfo(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
+{
+    unsigned short int revision;
+    unsigned int value;
+
+	JSValue data = JS_NewObject(ctx);
+
+    revision                                          = (*GS_REG_CSR) >> 16;
+	JS_DefinePropertyValueStr(ctx, data, "revision", JS_NewInt32(ctx, (u8)(revision & 0xFF)), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, data, "id", JS_NewInt32(ctx, (u8)(revision >> 8)), JS_PROP_C_W_E);
+
+    return data;
+}
+
 static const JSCFunctionListEntry system_funcs[] = {
 	JS_CFUNC_DEF( "openFile",           		  2,         athena_openfile),
 	JS_CFUNC_DEF( "readFile",          		  2,         athena_readfile		 ),
@@ -627,6 +673,8 @@ static const JSCFunctionListEntry system_funcs[] = {
 	JS_CFUNC_DEF( "getDiscType",        		  0,     	athena_getDiscType	 ),
 	JS_CFUNC_DEF( "checkDiscTray",      		  0,   		athena_checkDiscTray	 ),
 	JS_CFUNC_DEF( "setDarkMode",      		  1,   		athena_darkmode	 ),
+	JS_CFUNC_DEF( "getCPUInfo",      		  0,   		athena_getcpuinfo	 ),
+	JS_CFUNC_DEF( "getGPUInfo",      		  0,   		athena_getgpuinfo	 ),
 	JS_PROP_STRING_DEF("boot_path", boot_path, JS_PROP_CONFIGURABLE ),
 	JS_PROP_INT32_DEF("FREAD", O_RDONLY, JS_PROP_CONFIGURABLE ),
 	JS_PROP_INT32_DEF("FWRITE", O_WRONLY, JS_PROP_CONFIGURABLE ),

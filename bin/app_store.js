@@ -12,83 +12,6 @@ function decodeUTF16LE(binaryStr) {
     return String.fromCharCode.apply( String, cp );
 }
 
-const LOADING = 0;
-const MAIN_MENU = 1;
-const OPTIONS_MENU = 2;
-const DLING_MENU = 3;
-
-const LD_INITIAL = 0;
-const LD_NETWORK = 1;
-const LD_PKGLIST = 2;
-const LD_PKGQNTD = 3;
-const LD_FADE = 4;
-const LD_FINAL = 5;
-
-const NOT_UPDATED = 0;
-const UPDATING = 1;
-const UPDATED = 2;
-
-const DETAILS = 0;
-const TODOWNLOAD = 1;
-const DOWNLOADING = 2;
-const DOWNLOADED = 3;
-const EXTRACTING = 4;
-const EXTRACTED = 5;
-const LEAVING = 6;
-let dl_state = DETAILS;
-
-const MM_LOADING = 0;
-const MM_LOADED = 1;
-let mm_state = MM_LOADING;
-
-const manager_fds = [];
-
-class StateManager {
-    #file;
-    #state;
-
-    constructor(fname) {
-        this.#file = std.open(`pkg_data/${fname}`, "rb+");
-        if (this.#file === null) {
-            this.#file = std.open(`pkg_data/${fname}`, "wb+");
-        }
-        this.#file.seek(0, std.SEEK_END); // seek to end of file
-        let size = this.#file.tell(); // get current file pointer
-        this.#file.seek(0, std.SEEK_SET); // seek back to beginning of file
-
-        if(size > 0) {
-            this.#file.seek(0, std.SEEK_SET); // seek back to beginning of file
-            this.#state = this.#file.getByte();
-        } else {
-            this.#file.seek(0, std.SEEK_SET); // seek back to beginning of file
-            this.#file.putByte(LOADING);
-            this.#state = LOADING;
-        }
-
-        manager_fds.push(this.#file);
-    }
-
-    getState() {
-        return this.#state;
-    }
-
-    setState(state) {
-        this.#file.seek(0, std.SEEK_SET); // seek back to beginning of file
-        this.#file.putByte(state);
-        this.#state = state;
-    }
-
-    static restart() {
-        Network.deinit();
-        manager_fds.forEach(file => file.close());
-        System.loadELF(System.boot_path + "athena_pkd.elf", ["app_store.js"]);
-    }
-};
-
-const stman = new StateManager("general.st");
-const st_loading = new StateManager("loading.st");
-const st_updating = new StateManager("updating.st");
-
 function load_app_db(fname) {
     let list_file = std.open(fname, "r");
     let app_list = JSON.parse(decodeUTF16LE(list_file.getline()));
@@ -113,9 +36,11 @@ function load_network_driver() {
 }
 
 let req = new Request();
+req.noprogress = true;
+req.keepalive = true;
 req.followlocation = true;
 req.useragent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Ubuntu Chromium/37.0.2062.94 Chrome/37.0.2062.94 Safari/537.36";
-req.headers = ["upgrade-insecure-requests: 0",
+req.headers = ["upgrade-insecure-requests: 1",
                "sec-fetch-dest: document",
                "sec-fetch-mode: navigate",
                "sec-fetch-user: ?1",
@@ -125,6 +50,27 @@ req.headers = ["upgrade-insecure-requests: 0",
                'sec-ch-ua-platform: ^\^"Linux^\^"',
                "sec-ch-ua-mobile: ?0",
                ];
+
+const LOADING = 0;
+const MAIN_MENU = 1;
+const OPTIONS_MENU = 2;
+const DLING_MENU = 3;
+
+let app_state = LOADING;
+
+const LD_INITIAL = 0;
+const LD_NETWORK = 1;
+const LD_PKGLIST = 2;
+const LD_PKGQNTD = 3;
+const LD_FADE = 4;
+const LD_FINAL = 5;
+
+let loading_state = LD_INITIAL;
+
+const MM_INITIAL = 0;
+const MM_FINAL = 1;
+
+let mainmenu_state = MM_INITIAL;
 
 let loading_text = "Athena package manager";
 
@@ -365,20 +311,32 @@ main_menu.center_x();
 
 let explore_menu = undefined;
 
+const DETAILS = 0;
+const TODOWNLOAD = 1;
+const DOWNLOADING = 2;
+const DOWNLOADED = 3;
+const EXTRACTING = 4;
+const EXTRACTED = 5;
+const LEAVING = 6;
+
+let dl_state = DETAILS;
 let dling_text = "";
 let terminate = false;
 
 let transfering = false;
 
-load_network_driver();
+const NOT_UPDATED = 0;
+const UPDATING = 1;
+const UPDATED = 2;
+let update_state = NOT_UPDATED;
 
 while(true) {
     pad[1] = pad[0];
     pad[0] = Pads.get();
 
-    switch (stman.getState()) {
+    switch (app_state) {
         case LOADING:
-            switch(st_loading.getState()) {
+            switch(loading_state) {
                 case LD_INITIAL:
                     if(!ui.fading && ui.text_alpha != 0x80) {
                         ui.fade_text(FADE_OUT);
@@ -386,43 +344,47 @@ while(true) {
 
                     if (ui.text_alpha == 0x80) {
                         loading_text += "\n\nLoading network driver...";
-                        st_loading.setState(LD_NETWORK);
+                        loading_state++;
                     }
 
                     break;
                 case LD_NETWORK:
                     loading_text += "\nLoading package list, it's gonna take a while...";
-                    st_loading.setState(LD_PKGLIST);
+                    load_network_driver();
+                    loading_state++;
                     break;
                 case LD_PKGLIST:
-                    if (st_updating.getState() == NOT_UPDATED) {
+                    if (update_state == NOT_UPDATED) {
                         req.asyncDownload("https://raw.githubusercontent.com/DanielSant0s/brewstore-db/main/brew_data.json", "brew_data.json");
-                        st_updating.setState(UPDATING);
+                        update_state = UPDATING;
                         transfering = true;
-                    } else if (st_updating.getState() == UPDATING) {
+                    } else if (update_state == UPDATING) {
                         if(req.ready(5)) {
                             transfering = false;
-                            st_updating.setState(UPDATED);
-                            StateManager.restart();
+                            update_state = UPDATED;
                         }
                     } else {
                         app_list = load_app_db("brew_data.json");
                         loading_text += "\n" + app_list.length + " packages found."
                         //loading_text += "\n" + Math.floor(System.getFreeMemory()/1024) + "KB free for allocation.";
-                        st_loading.setState(LD_PKGQNTD);
+                        loading_state++;
                     }
 
                     break;
                 case LD_PKGQNTD:
-                    st_loading.setState(LD_FADE);
+                    loading_state++;
+                    explore_menu = new IconMenu(120, 110, ui.font, app_list);
+                    explore_menu.padding = -5;
+                    explore_menu.icon_padding = 20;
                     break;
                 case LD_FADE:
                     ui.fade_text(FADE_IN);
-                    st_loading.setState(LD_FINAL);
+                    loading_state++;
                     break;
                 case LD_FINAL:
                     if (!ui.fading) {
-                        stman.setState(MAIN_MENU);
+                        loading_state = 0;
+                        app_state = MAIN_MENU;
                     }
             }
 
@@ -431,14 +393,16 @@ while(true) {
 
             break;
         case MAIN_MENU:
-            if(mm_state == LOADING) {
-                explore_menu = new IconMenu(120, 110, ui.font, app_list);
-                explore_menu.padding = -5;
-                explore_menu.icon_padding = 20;
-                mm_state++;
+            switch (mainmenu_state) {
+                case MM_INITIAL:
+                    mainmenu_state++;
+                    break;
+                case MM_FINAL:
+                    break;
             }
+
             if(pressed(pad, Pads.CROSS)) {
-                stman.setState(DLING_MENU);
+                app_state = DLING_MENU;
             }
 
             if(pressed(pad, Pads.TRIANGLE)) {
@@ -466,12 +430,11 @@ while(true) {
                         dl_state++;
                     }
                     if(pressed(pad, Pads.TRIANGLE)) {
-                        stman.setState(MAIN_MENU);
+                        app_state = MAIN_MENU;
                     }
                     break;
                 case TODOWNLOAD:
-                    System.currentDir(System.boot_path + "downloads\\");
-                    req.asyncDownload(app_list[explore_menu.num].link, app_list[explore_menu.num].fname);
+                    req.asyncDownload(app_list[explore_menu.num].link, System.boot_path + app_list[explore_menu.num].fname);
                     transfering = true;
                     dl_state++;
                     break;
@@ -484,10 +447,12 @@ while(true) {
                     } catch (ex) {
                         dling_text += ex.message;
                         dling_text += "Restarting application...\n"
-                        System.currentDir(System.boot_path);
                         ui.println(dling_text);
-
-                        StateManager.restart();
+                        for (let i = 0; i < 5000; i++) {
+                            Screen.flip();
+                        }   
+                        Network.deinit();
+                        System.loadELF(System.loadELF(System.boot_path + "athena_pkd.elf", ["app_store.js"]) );
                     }
 
                     break;
@@ -508,9 +473,7 @@ while(true) {
                     dl_state++;
                     break;
                 case EXTRACTED:
-                    System.currentDir(System.boot_path);
-                    stman.setState(MAIN_MENU);
-                    StateManager.restart();
+                    app_state = MAIN_MENU;
                     dl_state = DETAILS;
                     dling_text = "";
                     break;

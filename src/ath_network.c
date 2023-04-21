@@ -40,8 +40,6 @@ size_t AsyncWriteMemoryCallback(void *contents, size_t size, size_t nmemb, void 
     return 0;
   }
 
-  printf("AsyncGet: %ld bytes transfered.\n", realsize);
-
   memcpy(&(mem->memory[mem->size]), contents, realsize);
   mem->size += realsize;
   mem->memory[mem->size] = 0;
@@ -57,8 +55,6 @@ size_t AsyncWriteFileCallback(void *contents, size_t size, size_t nmemb, void *u
   struct MemoryStruct *mem = (struct MemoryStruct *)userp;
 
   size_t written = fwrite(contents, size, nmemb, mem->fp);
-
-  printf("AsyncDownload: %ld bytes transfered.\n", written);
 
   mem->size += written;
   mem->timer = clock();
