@@ -763,6 +763,7 @@ static JSValue athena_resetiop(JSContext *ctx, JSValue this_val, int argc, JSVal
 	mc_started = false;
 	hdd_started = false;
 	filexio_started = false;
+	camera_started = false;
 
 	SifExecModuleBuffer(&poweroff_irx, size_poweroff_irx, 0, NULL, NULL);
 	load_default_module(FILEXIO_MODULE);
@@ -805,6 +806,7 @@ static const JSCFunctionListEntry sif_funcs[] = {
 	JS_PROP_INT32_DEF("cdfs", CDFS_MODULE, JS_PROP_CONFIGURABLE),
 	JS_PROP_INT32_DEF("hdd", HDD_MODULE, JS_PROP_CONFIGURABLE),
 	JS_PROP_INT32_DEF("boot_device", BOOT_MODULE, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("camera", CAMERA_MODULE, JS_PROP_CONFIGURABLE),
 };
 
 static int system_init(JSContext *ctx, JSModuleDef *m)

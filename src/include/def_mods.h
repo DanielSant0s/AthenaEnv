@@ -46,6 +46,7 @@ extern bool dev9_started;
 extern bool mc_started;
 extern bool hdd_started;
 extern bool filexio_started;
+extern bool camera_started;
 extern bool HDD_USABLE;
 
 /// @brief list of modules ID to be used with `load_default_module` loads the mentioned module and manages their IRX dependencies
@@ -67,6 +68,7 @@ enum MODLIST {
     FILEXIO_MODULE,
     SIO2MAN_MODULE,
     DEV9_MODULE,
+    CAMERA_MODULE,
 };
 
 #define BOOT_MODULE 99
@@ -105,6 +107,10 @@ irx_define(ps2kbd);
 
 #ifdef ATHENA_MOUSE
 irx_define(ps2mouse);
+#endif
+
+#ifdef ATHENA_CAMERA
+irx_define(ps2cam);
 #endif
 
 irx_define(freeram);

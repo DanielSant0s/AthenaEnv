@@ -113,6 +113,11 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"globalThis.Sound = Sound;\n"
 				#endif
 
+				#ifdef ATHENA_CAMERA
+				"import * as Camera from 'Camera';\n"
+				"globalThis.Camera = Camera;\n"
+				#endif
+
 				#ifdef ATHENA_KEYBOARD
 				"import * as Keyboard from 'Keyboard';\n"
 				"globalThis.Keyboard = Keyboard;\n"
@@ -283,6 +288,10 @@ static JSContext *JS_NewCustomContext(JSRuntime *rt)
 
 	#ifdef ATHENA_MOUSE
 	athena_mouse_init(ctx);
+	#endif
+
+	#ifdef ATHENA_CAMERA
+	athena_camera_init(ctx);
 	#endif
 
 	#ifdef ATHENA_NETWORK

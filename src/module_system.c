@@ -226,6 +226,18 @@ int load_default_module(int id) {
 				REPORT("FILEXIO");
 				filexio_started = LOAD_SUCCESS();
 			}
+			break;
+		#ifdef ATHENA_CAMERA
+		case CAMERA_MODULE:
+			if (!usbd_started)
+				load_default_module(USBD_MODULE);
+			if (!camera_started) {
+				ID = SifExecModuleBuffer(&ps2cam_irx, size_ps2cam_irx, 0, NULL, &ret);
+				REPORT("PS2CAM");
+				camera_started = LOAD_SUCCESS();
+			}
+			break;
+		#endif
 		default:
 			break;
 	}
