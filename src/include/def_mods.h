@@ -122,3 +122,7 @@ int get_boot_device(const char* path);
 
 int load_default_module(int id);
 
+bool waitUntilDeviceIsReady(char *path);
+
+void prepare_IOP();
+

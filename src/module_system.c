@@ -1,3 +1,4 @@
+#include <kernel.h>
 #include "include/def_mods.h"
 #include "include/dbgprintf.h"
 #include <string.h>
@@ -11,6 +12,58 @@
 
 static const char hddarg[] = "-o" "\0" "4" "\0" "-n" "\0" "20";
 static const char pfsarg[] = "-m" "\0" "4" "\0" "-o" "\0" "10" "\0" "-n" "\0" "40";
+
+bool kbd_started = false;
+bool mouse_started = false;
+bool freeram_started = false;
+bool ds34bt_started = false;
+bool ds34usb_started = false;
+bool network_started = false;
+bool sio2man_started = false;
+bool usbd_started = false;
+bool usb_mass_started = false;
+bool pads_started = false;
+bool audio_started = false;
+bool cdfs_started = false;
+bool dev9_started = false;
+bool mc_started = false;
+bool hdd_started = false;
+bool filexio_started = false;
+bool camera_started = false;
+bool HDD_USABLE = false;
+
+void prepare_IOP() {
+    dbgprintf("AthenaEnv: Starting IOP Reset...\n");
+    SifInitRpc(0);
+    #if defined(RESET_IOP)  
+    while (!SifIopReset("", 0)){};
+    #endif
+    while (!SifIopSync()){};
+    SifInitRpc(0);
+    dbgprintf("AthenaEnv: IOP reset done.\n");
+    
+    // install sbv patch fix
+    dbgprintf("AthenaEnv: Installing SBV Patches...\n");
+    sbv_patch_enable_lmb();
+    sbv_patch_disable_prefix_check(); 
+}
+
+bool waitUntilDeviceIsReady(char *path) {
+    dbgprintf("waiting for '%s'\n", path);
+    struct stat buffer;
+    int ret = -1;
+    int retries = 500;
+
+    while(ret != 0 && retries > 0) {
+        ret = stat(path, &buffer);
+        /* Wait untill the device is ready */
+        nopdelay();
+
+        retries--;
+    }
+
+    return ret == 0;
+}
 
 int get_boot_device(const char* path) {
 	int device = -1;
