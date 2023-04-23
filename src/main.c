@@ -173,10 +173,10 @@ int mnt(const char* path, int index, int openmod)
             dbgprintf("mount failed again!\n");
             return -1;
         } else {
-            dbgprintf("Second mount succed!\n");
+            dbgprintf("Second mount succeed!\n");
         }
     } else {
-        dbgprintf("mount successfull on first attemp\n");
+        dbgprintf("mount successfull on first attempt\n");
     }
     return 0;
 }
