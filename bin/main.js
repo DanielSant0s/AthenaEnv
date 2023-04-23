@@ -16,6 +16,8 @@ font.scale = 0.44f;
 
 let no_icon = new Image("no_icon.png");
 
+console.log("Total used memory: " + System.getMemoryStats().used + " bytes");
+
 let app_table = System.listDir().map(file => file.name).filter(str => str.endsWith(".js")).map( app => {
     const app_fd = std.open(app, "r");
     const metadata_str = app_fd.getline().replace("// ", "");

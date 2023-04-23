@@ -16,7 +16,7 @@ var logo =
     @@@@@( *@@@@@@@@@@@@@@@@@@          Terminal: TermOwl
     .@@@@@@@@@@@@@@@ @@@@@@@@@@@.       CPU: MIPS R5900 impl. ${ee_info.implementation} rev. ${ee_info.revision}
     @@@(@@@@@@@@&   @@@@@@@@@@@@@@      GPU: Graphics Synthesizer id ${gs_info.id} rev. ${gs_info.revision}
-   .@@@   @@@@     *@@@@@@@@@@@@@@@.    Memory: ${32 - Math.floor(System.getFreeMemory() / 1048576)}MiB / ${Math.floor(ee_info.RAMSize / 1048576)}MiB
+   .@@@   @@@@     *@@@@@@@@@@@@@@@.    Memory: ${Math.floor(System.getMemoryStats().used / 1048576)}MiB / ${Math.floor(ee_info.RAMSize / 1048576)}MiB
    .@@@            /@@@@@@@@@@@@@@@@.   
     @@@,            @@@@@@@@@@@@@@@@@   
      @@@            /@@@@@@@@@@@@@@@@@  

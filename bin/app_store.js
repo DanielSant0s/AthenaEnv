@@ -440,7 +440,7 @@ while(true) {
                     break;
                 case DOWNLOADING:
                     try {
-                        if(req.ready(5)) {
+                        if(req.ready(30)) {
                             transfering = false;
                             dl_state++;
                         }

@@ -7,6 +7,7 @@
 
 #include "ath_env.h"
 #include "include/system.h"
+#include "include/memory.h"
 #include "include/def_mods.h"
 
 #define MAX_DIR_FILES 512
@@ -646,6 +647,19 @@ static JSValue athena_getgpuinfo(JSContext *ctx, JSValue this_val, int argc, JSV
     return data;
 }
 
+static JSValue athena_geteememory(JSContext *ctx, JSValue this_val, int argc, JSValueConst * argv){
+	if (argc != 0) return JS_ThrowSyntaxError(ctx, "Wrong number of arguments");
+
+	JSValue obj = JS_NewObject(ctx);
+    JS_DefinePropertyValueStr(ctx, obj, "core", JS_NewUint32(ctx, get_binary_size()), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "nativeStack", JS_NewUint32(ctx, get_stack_size()), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "allocs", JS_NewUint32(ctx, get_allocs_size()), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "used", JS_NewUint32(ctx, get_used_memory()), JS_PROP_C_W_E);
+
+
+	return obj;
+}
+
 static const JSCFunctionListEntry system_funcs[] = {
 	JS_CFUNC_DEF( "openFile",           		  2,         athena_openfile),
 	JS_CFUNC_DEF( "readFile",          		  2,         athena_readfile		 ),
@@ -675,6 +689,7 @@ static const JSCFunctionListEntry system_funcs[] = {
 	JS_CFUNC_DEF( "setDarkMode",      		  1,   		athena_darkmode	 ),
 	JS_CFUNC_DEF( "getCPUInfo",      		  0,   		athena_getcpuinfo	 ),
 	JS_CFUNC_DEF( "getGPUInfo",      		  0,   		athena_getgpuinfo	 ),
+	JS_CFUNC_DEF( "getMemoryStats",      	  0,   		athena_geteememory	 ),
 	JS_PROP_STRING_DEF("boot_path", boot_path, JS_PROP_CONFIGURABLE ),
 	JS_PROP_INT32_DEF("FREAD", O_RDONLY, JS_PROP_CONFIGURABLE ),
 	JS_PROP_INT32_DEF("FWRITE", O_WRONLY, JS_PROP_CONFIGURABLE ),
@@ -772,7 +787,7 @@ static JSValue athena_resetiop(JSContext *ctx, JSValue this_val, int argc, JSVal
 	return JS_UNDEFINED;
 }
 
-static JSValue athena_getmemory(JSContext *ctx, JSValue this_val, int argc, JSValueConst * argv){
+static JSValue athena_getiopmemory(JSContext *ctx, JSValue this_val, int argc, JSValueConst * argv){
 	if (argc != 0) return JS_ThrowSyntaxError(ctx, "Wrong number of arguments");
 	s32 freeram = 0;
     s32 usedram = 0;
@@ -792,7 +807,7 @@ static const JSCFunctionListEntry sif_funcs[] = {
 	JS_CFUNC_DEF("loadModuleBuffer",      3,       athena_sifloadmodulebuffer),
 	JS_CFUNC_DEF("loadDefaultModule",     3,       athena_sifloaddefaultmodule),
 	JS_CFUNC_DEF("reset",      			  0,     	athena_resetiop),
-	JS_CFUNC_DEF("getMemoryStats",        0,     	athena_getmemory),
+	JS_CFUNC_DEF("getMemoryStats",        0,     	athena_getiopmemory),
 	JS_PROP_INT32_DEF("keyboard", KEYBOARD_MODULE, JS_PROP_CONFIGURABLE),
 	JS_PROP_INT32_DEF("mouse", MOUSE_MODULE, JS_PROP_CONFIGURABLE),
 	JS_PROP_INT32_DEF("freeram", FREERAM_MODULE, JS_PROP_CONFIGURABLE),

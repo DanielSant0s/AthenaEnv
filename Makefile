@@ -55,7 +55,7 @@ EE_INCS += -I$(PS2DEV)/gsKit/include -I$(PS2SDK)/ports/include -I$(PS2SDK)/ports
 
 EE_INCS += -Imodules/ds34bt/ee -Imodules/ds34usb/ee
 
-EE_CFLAGS += -Wno-sign-compare -fno-strict-aliasing -fno-exceptions -DCONFIG_VERSION=\"$(shell cat VERSION)\" -D__TM_GMTOFF=tm_gmtoff -DPATH_MAX=256 -DEMSCRIPTEN
+EE_CFLAGS += -Wno-sign-compare -fno-strict-aliasing -fno-exceptions -DCONFIG_VERSION=\"$(shell cat VERSION)\" -D__TM_GMTOFF=tm_gmtoff -DPATH_MAX=256 -DPS2
 ifeq ($(RESET_IOP),1)
   EE_CFLAGS += -DRESET_IOP
 endif
@@ -71,7 +71,7 @@ EXT_LIBS = modules/ds34usb/ee/libds34usb.a modules/ds34bt/ee/libds34bt.a
 JS_CORE = quickjs/cutils.o quickjs/libbf.o quickjs/libregexp.o quickjs/libunicode.o \
 				 quickjs/realpath.o quickjs/quickjs.o quickjs/quickjs-libc.o 
 
-APP_CORE = main.o module_system.o taskman.o pad.o system.o strUtils.o
+APP_CORE = main.o memory.o ee_tools.o module_system.o taskman.o pad.o system.o strUtils.o 
 
 ATHENA_MODULES = ath_env.o ath_pads.o ath_system.o ath_archive.o ath_timer.o ath_task.o 
 
