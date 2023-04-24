@@ -6,10 +6,18 @@
 #include <sys/stat.h>
 #include <stdbool.h>
 
+#include "include/memory.h"
+
 #include "include/def_mods.h"
 #include "include/strUtils.h"
 
+#include "include/taskman.h"
+
 #include "ath_env.h"
+
+#define NEWLIB_PORT_AWARE
+#include <fileXio_rpc.h>
+#include <fileio.h>
 
 #ifdef ATHENA_GRAPHICS
 #include "include/graphics.h"
@@ -19,37 +27,37 @@
 #include <debug.h>
 
 void athena_error_screen(const char* errMsg, bool dark_mode) {
-    uint32_t color = 0xFF000000;
-    uint32_t color2 = 0xFFFFFFFF;
+    uint32_t color = 0x000000;
+    uint32_t color2 = 0xFFFFFF;
 
     if (errMsg != NULL)
     {
         dbgprintf("AthenaEnv ERROR!\n%s", errMsg);
 
-        /*if (strstr(errMsg, "EvalError") != NULL) {
-            color = GS_SETREG_RGBAQ(0x56,0x71,0x7D,0x80,0x00);
+        if (strstr(errMsg, "EvalError") != NULL) {
+            color = 0x7D7156;
         } else if (strstr(errMsg, "SyntaxError") != NULL) {
-            color = GS_SETREG_RGBAQ(0x20,0x60,0xB0,0x80,0x00);
+            color = 0xB06020;
         } else if (strstr(errMsg, "TypeError") != NULL) {
-            color = GS_SETREG_RGBAQ(0x3b,0x81,0x32,0x80,0x00);
+            color = 0x32813b;
         } else if (strstr(errMsg, "ReferenceError") != NULL) {
-            color = GS_SETREG_RGBAQ(0xE5,0xDE,0x00,0x80,0x00);
+            color = 0x00DEE5; 
         } else if (strstr(errMsg, "RangeError") != NULL) {
-            color = GS_SETREG_RGBAQ(0xD0,0x31,0x3D,0x80,0x00);
+            color = 0x3D31D0; 
         } else if (strstr(errMsg, "InternalError") != NULL) {
-            color = GS_SETREG_RGBAQ(0x8A,0x00,0xC2,0x80,0x00);
+            color = 0xC2008A;
         } else if(strstr(errMsg, "URIError") != NULL) {
-            color = GS_SETREG_RGBAQ(0xFF,0x78,0x1F,0x80,0x00);
+            color = 0x1F78FF;
         } else if(strstr(errMsg, "AggregateError") != NULL) {
-            color = GS_SETREG_RGBAQ(0xE2,0x61,0x9F,0x80,0x00);
+            color = 0x9F61E2; 
         }
 
         if(dark_mode) {
             color2 = color;
-            color = 0xFF000000;
+            color = 0x000000;
         } else {
-            color2 = 0xFFFFFFFF;
-        }*/
+            color2 = 0xFFFFFF;
+        }
 
         scr_clear();
 
@@ -68,45 +76,8 @@ void athena_error_screen(const char* errMsg, bool dark_mode) {
 }
 #endif
 
-#define NEWLIB_PORT_AWARE
-#include <fileXio_rpc.h>
-#include <fileio.h>
-
 char boot_path[255];
 bool dark_mode;
-bool kbd_started = false;
-bool mouse_started = false;
-bool freeram_started = false;
-bool ds34bt_started = false;
-bool ds34usb_started = false;
-bool network_started = false;
-bool sio2man_started = false;
-bool usbd_started = false;
-bool usb_mass_started = false;
-bool pads_started = false;
-bool audio_started = false;
-bool cdfs_started = false;
-bool dev9_started = false;
-bool mc_started = false;
-bool hdd_started = false;
-bool filexio_started = false;
-bool HDD_USABLE = false;
-
-void prepare_IOP() {
-    dbgprintf("AthenaEnv: Starting IOP Reset...\n");
-    SifInitRpc(0);
-    #if defined(RESET_IOP)  
-    while (!SifIopReset("", 0)){};
-    #endif
-    while (!SifIopSync()){};
-    SifInitRpc(0);
-    dbgprintf("AthenaEnv: IOP reset done.\n");
-    
-    // install sbv patch fix
-    dbgprintf("AthenaEnv: Installing SBV Patches...\n");
-    sbv_patch_enable_lmb();
-    sbv_patch_disable_prefix_check(); 
-}
 
 static void init_drivers() {
     SifExecModuleBuffer(&poweroff_irx, size_poweroff_irx, 0, NULL, NULL);
@@ -126,24 +97,9 @@ static void init_drivers() {
 
 }
 
-bool waitUntilDeviceIsReady(char *path) {
-    dbgprintf("waiting for '%s'\n", path);
-    struct stat buffer;
-    int ret = -1;
-    int retries = 500;
-
-    while(ret != 0 && retries > 0) {
-        ret = stat(path, &buffer);
-        /* Wait untill the device is ready */
-        nopdelay();
-
-        retries--;
-    }
-
-    return ret == 0;
-}
-
 int main(int argc, char **argv) {
+    init_memory_manager();
+
     char MountPoint[32+6+1]; // max partition name + 'hdd0:/' = '\0' 
     char newCWD[255];
     dbginit(); // if we are using serial port. initialize it here before the fun starts
@@ -166,8 +122,6 @@ int main(int argc, char **argv) {
         }
     }
     waitUntilDeviceIsReady(boot_path);
-    
-    init_taskman();
 
     #ifdef ATHENA_GRAPHICS
 	init_graphics();
@@ -177,6 +131,8 @@ int main(int argc, char **argv) {
     init_scr();
     #endif
     #endif
+
+    init_taskman();
 
 	const char* errMsg;
 
@@ -219,10 +175,10 @@ int mnt(const char* path, int index, int openmod)
             dbgprintf("mount failed again!\n");
             return -1;
         } else {
-            dbgprintf("Second mount succed!\n");
+            dbgprintf("Second mount succeed!\n");
         }
     } else {
-        dbgprintf("mount successfull on first attemp\n");
+        dbgprintf("mount successfull on first attempt\n");
     }
     return 0;
 }

@@ -5,16 +5,42 @@
 #include <loadfile.h>
 #include <pthread.h>
 
+extern CURL* curl; // REWORK IT LATER, ADD GET AND SET FUNCTIONS
+
 struct MemoryStruct {
     union {
      char *memory;
      FILE* fp;
     };
     size_t size;
+    bool transferring;
     clock_t timer;
 };
 
-size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp);
+enum RequestMethods {
+    ATHENA_GET = 0,
+    ATHENA_POST,
+    ATHENA_HEAD,
+};
+
+typedef struct
+{
+    int tid;
+    bool ready;
+    bool save;
+    int method;
+    const char* url;
+    const char* error;
+    long keepalive;
+    const char* userpwd;
+    const char* useragent;
+    struct MemoryStruct chunk;
+    long response_code;
+    char* headers[16];
+    int headers_len;
+} JSRequestData;
+
+void requestThread(void* data);
 
 int ethApplyNetIFConfig(int mode);
 int ethWaitValidNetIFLinkState(void);

@@ -16,6 +16,8 @@ font.scale = 0.44f;
 
 let no_icon = new Image("no_icon.png");
 
+console.log(JSON.stringify(Tasks.get()));
+
 let app_table = System.listDir().map(file => file.name).filter(str => str.endsWith(".js")).map( app => {
     const app_fd = std.open(app, "r");
     const metadata_str = app_fd.getline().replace("// ", "");
@@ -50,6 +52,8 @@ const VK_OLD_DOWN = 27;
 const VK_NEW_DOWN = 43;
 const VK_RETURN = 10;
 
+var ee_info = System.getCPUInfo();
+
 while(true) {
     old_pad = new_pad;
     new_pad = Pads.get();
@@ -62,6 +66,8 @@ while(true) {
     bg.draw(0, 0);
 
     font_bold.print(15, 5, "Athena dash alpha v0.1");
+
+    font.print(15, 420, `RAM Usage: ${Math.floor(System.getMemoryStats().used / 1048576)}MB / ${Math.floor(ee_info.RAMSize / 1048576)}MB`);
 
     if(Pads.check(new_pad, Pads.UP) && !Pads.check(old_pad, Pads.UP) || old_kbd_char == VK_OLD_UP && kbd_char == VK_NEW_UP) {
         app_table.unshift(app_table.pop());
@@ -78,7 +84,7 @@ while(true) {
             bin = app_table[0].bin;
         }
 
-        System.loadELF(System.currentDir() + app_table[0].bin, [System.currentDir() + app_table[0].file]); // Doing this to reset all the stuff
+        System.loadELF(System.currentDir() + bin, [System.currentDir() + app_table[0].file]); // Doing this to reset all the stuff
     }
 
     font_medium.print(210, 125, app_table[0].name);

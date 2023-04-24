@@ -46,6 +46,7 @@ extern bool dev9_started;
 extern bool mc_started;
 extern bool hdd_started;
 extern bool filexio_started;
+extern bool camera_started;
 extern bool HDD_USABLE;
 
 /// @brief list of modules ID to be used with `load_default_module` loads the mentioned module and manages their IRX dependencies
@@ -67,6 +68,7 @@ enum MODLIST {
     FILEXIO_MODULE,
     SIO2MAN_MODULE,
     DEV9_MODULE,
+    CAMERA_MODULE,
 };
 
 #define BOOT_MODULE 99
@@ -91,7 +93,6 @@ irx_define(ps2fs);
 #ifdef ATHENA_NETWORK
 irx_define(SMAP);
 irx_define(NETMAN);
-irx_define(ps2ips);
 #endif
 
 #ifdef ATHENA_AUDIO
@@ -107,6 +108,10 @@ irx_define(ps2kbd);
 irx_define(ps2mouse);
 #endif
 
+#ifdef ATHENA_CAMERA
+irx_define(ps2cam);
+#endif
+
 irx_define(freeram);
 irx_define(ds34bt);
 irx_define(ds34usb);
@@ -115,4 +120,8 @@ irx_define(poweroff);
 int get_boot_device(const char* path);
 
 int load_default_module(int id);
+
+bool waitUntilDeviceIsReady(char *path);
+
+void prepare_IOP();
 

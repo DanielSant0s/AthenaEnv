@@ -17,6 +17,8 @@ extern "C" {
 */
 int getMountInfo(char *path, char *mountString, char *mountPoint, char *newCWD);
 
+char* s_sprintf(const char* format, ...);
+
 #ifdef __cplusplus
 }
 #endif

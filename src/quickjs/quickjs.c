@@ -75,7 +75,7 @@
 
 /* define to include Atomics.* operations which depend on the OS
    threads */
-#if !defined(EMSCRIPTEN)
+#if !defined(EMSCRIPTEN) && !defined(PS2)
 #define CONFIG_ATOMICS
 #endif
 

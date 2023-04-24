@@ -47,6 +47,7 @@ AUDIO ?= 1
 NETWORK ?= 1
 KEYBOARD ?= 1
 MOUSE ?= 1
+CAMERA ?= 0
 
 EE_LIBS = -L$(PS2SDK)/ports/lib -L$(PS2DEV)/gsKit/lib/ -Lmodules/ds34bt/ee/ -Lmodules/ds34usb/ee/ -lmc -lpad -laudsrv -lpatches -ldebug -lmath3d -ljpeg -lfreetype -lgskit_toolkit -lgskit -ldmakit -lpng -lz -lelf-loader -lds34bt -lds34usb -lnetman -lps2ip -lcurl -lwolfssl -lkbd -lmouse -lvorbisfile -lvorbis -logg -llzma -lzip -lfileXio
 
@@ -54,8 +55,7 @@ EE_INCS += -I$(PS2DEV)/gsKit/include -I$(PS2SDK)/ports/include -I$(PS2SDK)/ports
 
 EE_INCS += -Imodules/ds34bt/ee -Imodules/ds34usb/ee
 
-EE_CFLAGS += -Wno-sign-compare -fno-strict-aliasing -fno-exceptions -DCONFIG_VERSION=\"$(shell cat VERSION)\" -D__TM_GMTOFF=tm_gmtoff -DPATH_MAX=256 -DEMSCRIPTEN
-
+EE_CFLAGS += -Wno-sign-compare -fno-strict-aliasing -fno-exceptions -DCONFIG_VERSION=\"$(shell cat VERSION)\" -D__TM_GMTOFF=tm_gmtoff -DPATH_MAX=256 -DPS2
 ifeq ($(RESET_IOP),1)
   EE_CFLAGS += -DRESET_IOP
 endif
@@ -71,7 +71,7 @@ EXT_LIBS = modules/ds34usb/ee/libds34usb.a modules/ds34bt/ee/libds34bt.a
 JS_CORE = quickjs/cutils.o quickjs/libbf.o quickjs/libregexp.o quickjs/libunicode.o \
 				 quickjs/realpath.o quickjs/quickjs.o quickjs/quickjs-libc.o 
 
-APP_CORE = main.o module_system.o taskman.o pad.o system.o strUtils.o
+APP_CORE = main.o memory.o ee_tools.o module_system.o taskman.o pad.o system.o strUtils.o 
 
 ATHENA_MODULES = ath_env.o ath_pads.o ath_system.o ath_archive.o ath_timer.o ath_task.o 
 
@@ -118,6 +118,15 @@ ifeq ($(MOUSE),1)
   EE_CFLAGS += -DATHENA_MOUSE
   ATHENA_MODULES += ath_mouse.o
   IOP_MODULES += ps2mouse.o 
+endif
+
+ifeq ($(CAMERA),1)
+  EE_BIN := $(EE_BIN)_cam
+  EE_BIN_PKD := $(EE_BIN_PKD)_cam
+  EE_CFLAGS += -DATHENA_CAMERA
+  ATHENA_MODULES += ath_camera.o
+  IOP_MODULES += ps2cam.o
+  EE_LIBS += -lps2cam 
 endif
 
 ifneq ($(EE_SIO), 0)

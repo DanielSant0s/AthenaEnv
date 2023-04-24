@@ -1,3 +1,4 @@
+#include <kernel.h>
 #include "include/def_mods.h"
 #include "include/dbgprintf.h"
 #include <string.h>
@@ -11,6 +12,76 @@
 
 static const char hddarg[] = "-o" "\0" "4" "\0" "-n" "\0" "20";
 static const char pfsarg[] = "-m" "\0" "4" "\0" "-o" "\0" "10" "\0" "-n" "\0" "40";
+
+bool kbd_started = false;
+bool mouse_started = false;
+bool freeram_started = false;
+bool ds34bt_started = false;
+bool ds34usb_started = false;
+bool network_started = false;
+bool sio2man_started = false;
+bool usbd_started = false;
+bool usb_mass_started = false;
+bool pads_started = false;
+bool audio_started = false;
+bool cdfs_started = false;
+bool dev9_started = false;
+bool mc_started = false;
+bool hdd_started = false;
+bool filexio_started = false;
+bool camera_started = false;
+bool HDD_USABLE = false;
+
+void prepare_IOP() {
+    dbgprintf("AthenaEnv: Starting IOP Reset...\n");
+    SifInitRpc(0);
+    #if defined(RESET_IOP)  
+    while (!SifIopReset("", 0)){};
+    #endif
+    while (!SifIopSync()){};
+    SifInitRpc(0);
+    dbgprintf("AthenaEnv: IOP reset done.\n");
+    
+    // install sbv patch fix
+    dbgprintf("AthenaEnv: Installing SBV Patches...\n");
+    sbv_patch_enable_lmb();
+    sbv_patch_disable_prefix_check(); 
+
+	kbd_started = false;
+	mouse_started = false;
+	freeram_started = false;
+	ds34bt_started = false;
+	ds34usb_started = false;
+	network_started = false;
+	sio2man_started = false;
+	usbd_started = false;
+	usb_mass_started = false;
+	pads_started = false;
+	audio_started = false;
+	cdfs_started = false;
+	dev9_started = false;
+	mc_started = false;
+	hdd_started = false;
+	filexio_started = false;
+	camera_started = false;
+}
+
+bool waitUntilDeviceIsReady(char *path) {
+    dbgprintf("waiting for '%s'\n", path);
+    struct stat buffer;
+    int ret = -1;
+    int retries = 500;
+
+    while(ret != 0 && retries > 0) {
+        ret = stat(path, &buffer);
+        /* Wait untill the device is ready */
+        nopdelay();
+
+        retries--;
+    }
+
+    return ret == 0;
+}
 
 int get_boot_device(const char* path) {
 	int device = -1;
@@ -109,10 +180,6 @@ int load_default_module(int id) {
 				REPORT("NETMAN");
 				ID = SifExecModuleBuffer((void*)SMAP_irx, size_SMAP_irx, 0, NULL, &ret);
 				REPORT("SMAP");
-				//ID = SifExecModuleBuffer((void*)ps2ip_irx, size_ps2ip_irx, 0, NULL, &ret);
-				//REPORT("ps2ip");
-				ID = SifExecModuleBuffer((void*)ps2ips_irx, size_ps2ips_irx, 0, NULL, &ret);
-				REPORT("ps2ips");
 				network_started = LOAD_SUCCESS();
 			}
 			break;
@@ -226,6 +293,18 @@ int load_default_module(int id) {
 				REPORT("FILEXIO");
 				filexio_started = LOAD_SUCCESS();
 			}
+			break;
+		#ifdef ATHENA_CAMERA
+		case CAMERA_MODULE:
+			if (!usbd_started)
+				load_default_module(USBD_MODULE);
+			if (!camera_started) {
+				ID = SifExecModuleBuffer(&ps2cam_irx, size_ps2cam_irx, 0, NULL, &ret);
+				REPORT("PS2CAM");
+				camera_started = LOAD_SUCCESS();
+			}
+			break;
+		#endif
 		default:
 			break;
 	}

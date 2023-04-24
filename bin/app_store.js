@@ -36,18 +36,7 @@ function load_network_driver() {
 }
 
 let req = new Request();
-req.followlocation = true;
-req.useragent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Ubuntu Chromium/37.0.2062.94 Chrome/37.0.2062.94 Safari/537.36";
-req.headers = ["upgrade-insecure-requests: 0",
-               "sec-fetch-dest: document",
-               "sec-fetch-mode: navigate",
-               "sec-fetch-user: ?1",
-               "sec-fetch-site: same-origin",
-               "sec-ch-ua-mobile: ?0",
-               "accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-               'sec-ch-ua-platform: ^\^"Linux^\^"',
-               "sec-ch-ua-mobile: ?0",
-               ];
+req.keepalive = true;
 
 const LOADING = 0;
 const MAIN_MENU = 1;
@@ -321,11 +310,7 @@ let dl_state = DETAILS;
 let dling_text = "";
 let terminate = false;
 
-let boot_path = System.currentDir();
-
 let transfering = false;
-
-console.log(boot_path);
 
 const NOT_UPDATED = 0;
 const UPDATING = 1;
@@ -357,14 +342,15 @@ while(true) {
                     break;
                 case LD_PKGLIST:
                     if (update_state == NOT_UPDATED) {
-                        req.download("https://raw.githubusercontent.com/DanielSant0s/brewstore-db/main/brew_data.json", "brew_data.json");
+                        req.asyncDownload("https://raw.githubusercontent.com/DanielSant0s/brewstore-db/main/brew_data.json", "brew_data.json");
+                        console.log(JSON.stringify(Tasks.get()));
                         update_state = UPDATING;
                         transfering = true;
                     } else if (update_state == UPDATING) {
-                        //if(req.ready(5)) {
+                        if(req.ready(5)) {
                             transfering = false;
                             update_state = UPDATED;
-                        //}
+                        }
                     } else {
                         app_list = load_app_db("brew_data.json");
                         loading_text += "\n" + app_list.length + " packages found."
@@ -436,16 +422,27 @@ while(true) {
                     }
                     break;
                 case TODOWNLOAD:
-                    System.currentDir(boot_path + "downloads\\");
-                    req.asyncDownload(app_list[explore_menu.num].link, app_list[explore_menu.num].fname);
+                    req.asyncDownload(app_list[explore_menu.num].link, System.boot_path + app_list[explore_menu.num].fname);
                     transfering = true;
                     dl_state++;
                     break;
                 case DOWNLOADING:
-                    if(req.ready(5)) {
-                        transfering = false;
-                        dl_state++;
+                    try {
+                        if(req.ready(30)) {
+                            transfering = false;
+                            dl_state++;
+                        }
+                    } catch (ex) {
+                        dling_text += ex.message;
+                        dling_text += "Restarting application...\n"
+                        ui.println(dling_text);
+                        for (let i = 0; i < 5000; i++) {
+                            Screen.flip();
+                        }   
+                        Network.deinit();
+                        System.loadELF(System.loadELF(System.boot_path + "athena_pkd.elf", ["app_store.js"]) );
                     }
+
                     break;
                 case DOWNLOADED:
                     if(!app_list[explore_menu.num].fname.endsWith(".elf") && !app_list[explore_menu.num].fname.endsWith(".ELF")) {
@@ -459,12 +456,13 @@ while(true) {
                     if (app_list[explore_menu.num].fname.endsWith(".tar.gz")) {
                         Archive.untar(app_list[explore_menu.num].fname);
                     } else if (app_list[explore_menu.num].fname.endsWith(".zip")) {
-                        Archive.extractAll(app_list[explore_menu.num].fname);
+                        let arc = Archive.open(app_list[explore_menu.num].fname);
+                        Archive.extractAll(arc);
+                        Archive.close(arc);
                     }
                     dl_state++;
                     break;
                 case EXTRACTED:
-                    System.currentDir(boot_path);
                     app_state = MAIN_MENU;
                     dl_state = DETAILS;
                     dling_text = "";
@@ -492,4 +490,4 @@ while(true) {
 
 Network.deinit();
 
-System.loadELF(boot_path + "athena_pkd.elf");
+System.loadELF(System.boot_path + "athena_pkd.elf");

@@ -94,3 +94,6 @@ $(EE_ASM_DIR)ps2kbd.s: $(PS2SDK)/iop/irx/ps2kbd.irx | $(EE_ASM_DIR)
 
 $(EE_ASM_DIR)ps2mouse.s: $(PS2SDK)/iop/irx/ps2mouse.irx | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ ps2mouse_irx
+
+$(EE_ASM_DIR)ps2cam.s: $(PS2SDK)/iop/irx/ps2cam.irx | $(EE_ASM_DIR)
+	$(BIN2S) $< $@ ps2cam_irx

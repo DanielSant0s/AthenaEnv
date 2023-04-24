@@ -6,6 +6,8 @@
 
 #include "ath_env.h"
 
+#include "include/taskman.h"
+
 static JSValue athena_killtask(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
   	if (argc != 1) return JS_ThrowSyntaxError(ctx, "wrong number of arguments.");
 	int task ;
@@ -20,15 +22,19 @@ static JSValue athena_gettasklist(JSContext *ctx, JSValue this_val, int argc, JS
       if (argc != 0) return JS_ThrowSyntaxError(ctx, "wrong number of arguments.");
     JSValue array, obj;
 
-    Tasklist* tasks = get_tasklist();
+    Task* tasks = get_tasks();
 
     array = JS_NewArray(ctx);
 
-    for(int i = 0; tasks->size > i; i++){
-        obj = JS_NewObject(ctx);
-        JS_DefinePropertyValueStr(ctx, obj, "name", JS_NewString(ctx, tasks->list[i]->title), JS_PROP_C_W_E);
-        JS_DefinePropertyValueStr(ctx, obj, "status", JS_NewInt32(ctx, tasks->list[i]->status), JS_PROP_C_W_E);
-        JS_DefinePropertyValueUint32(ctx, array, i, obj, JS_PROP_C_W_E);
+    for(int i = 0; i < MAX_THREADS; i++){
+        if (!is_invalid_task(&tasks[i])){
+            obj = JS_NewObject(ctx);
+            JS_DefinePropertyValueStr(ctx, obj, "id", JS_NewUint32(ctx, tasks[i].id), JS_PROP_C_W_E);
+            JS_DefinePropertyValueStr(ctx, obj, "name", JS_NewString(ctx, tasks[i].title), JS_PROP_C_W_E);
+            JS_DefinePropertyValueStr(ctx, obj, "status", JS_NewInt32(ctx, tasks[i].status), JS_PROP_C_W_E);
+            JS_DefinePropertyValueStr(ctx, obj, "stack", JS_NewUint32(ctx, tasks[i].stack_size), JS_PROP_C_W_E);
+            JS_DefinePropertyValueUint32(ctx, array, i, obj, JS_PROP_C_W_E);
+        }
     }
 
     return array;
