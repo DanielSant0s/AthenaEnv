@@ -354,6 +354,7 @@ Methods:
 * var freemem = System.getFreeMemory()
 * System.exitToBrowser()
 * System.setDarkMode(value)
+* var temps = System.getTemperature() // It only works with SCPH-500XX and later models.
 * var info = System.getMCInfo(slot)  
   • info.type  
   • info.freemem  
