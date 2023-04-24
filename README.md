@@ -359,6 +359,26 @@ Methods:
   • info.freemem  
   • info.format  
   
+* var ee_info = System.getCPUInfo()  
+  • ee_info.implementation  
+  • ee_info.revision  
+  • ee_info.FPUimplementation  
+  • ee_info.FPUrevision  
+  • ee_info.ICacheSize  
+  • ee_info.DCacheSize  
+  • ee_info.RAMSize  
+  • ee_info.MachineSize  
+  
+* var gs_info = System.getGPUInfo()  
+  • gs_info.id  
+  • gs_info.revision  
+  
+* var ram_usage = System.getMemoryStats()  
+  • ram_usage.core - Kernel + Native code size in RAM  
+  • ram_usage.nativeStack - Kernel + Native stack size  
+  • ram_usage.allocs - Dynamic allocated memory tracking  
+  • ram_usage.used - All above, but combined  
+  
 Asynchronous functions:  
 * System.threadCopyFile(source, dest)
 * var progress = System.getFileProgress()  
@@ -447,20 +467,23 @@ var r = new Request();
 
 Properties:
 
-* followlocation - bool
-* forbid_reuse - bool
 * keepalive - bool
-* noprogress - bool
-* maxredirs - int
-* timeout - int
 * useragent - string
 * userpwd - string
+* headers - string array
 
 Methods:
 
 * get(url)
 * post(url, data)
-* download(url, fname)
+* download(url, fname)  
+  
+Asynchronous methods:  
+* asyncGet(url)
+* asyncDownload(url, fname)
+* ready(*timeout*, *conn_timeout*)
+* getAsyncData()
+* getAsyncSize()
 
 
 ### Socket module
