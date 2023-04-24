@@ -14,7 +14,7 @@ var logo =
    .     @@@*       *@@@@@@@@           Packages: 4 (dpkg)
    @@@@@@   #@@@@@@@@@@@@@@@@           Shell: owlsh 0.1
     @@@@@( *@@@@@@@@@@@@@@@@@@          Terminal: TermOwl
-    .@@@@@@@@@@@@@@@ @@@@@@@@@@@.       CPU: MIPS R5900 impl. ${ee_info.implementation} rev. ${ee_info.revision}
+    .@@@@@@@@@@@@@@@ @@@@@@@@@@@.       CPU: MIPS R5900 rev. ${ee_info.revision} @ ${Math.floor(ee_info.CPUClock * 0.000001)}MHz
     @@@(@@@@@@@@&   @@@@@@@@@@@@@@      GPU: Graphics Synthesizer id ${gs_info.id} rev. ${gs_info.revision}
    .@@@   @@@@     *@@@@@@@@@@@@@@@.    Memory: ${Math.floor(System.getMemoryStats().used / 1048576)}MiB / ${Math.floor(ee_info.RAMSize / 1048576)}MiB
    .@@@            /@@@@@@@@@@@@@@@@.   

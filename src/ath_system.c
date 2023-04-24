@@ -4,6 +4,8 @@
 #include <dirent.h>
 #include <sys/stat.h>
 #include <elf-loader.h>
+#include <libcdvd.h>
+#include <timer.h>
 
 #include "ath_env.h"
 #include "include/system.h"
@@ -626,9 +628,11 @@ static JSValue athena_getcpuinfo(JSContext *ctx, JSValue this_val, int argc, JSV
 
     value                                             = GetCop0(16);
 
-	JS_DefinePropertyValueStr(ctx, data, "ICacheSize", JS_NewInt32(ctx, (u8)(value >> 9 & 3)), JS_PROP_C_W_E);
-	JS_DefinePropertyValueStr(ctx, data, "DCacheSize", JS_NewInt32(ctx, (u8)(value >> 6 & 3)), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, data, "ICacheSize", JS_NewUint32(ctx, (u8)(value >> 9 & 3)), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, data, "DCacheSize", JS_NewUint32(ctx, (u8)(value >> 6 & 3)), JS_PROP_C_W_E);
 	JS_DefinePropertyValueStr(ctx, data, "RAMSize", JS_NewUint32(ctx, GetMemorySize()), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, data, "BUSClock", JS_NewUint32(ctx, kBUSCLK), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, data, "CPUClock", JS_NewUint32(ctx, kBUSCLK*2), JS_PROP_C_W_E);
 	JS_DefinePropertyValueStr(ctx, data, "MachineType", JS_NewUint32(ctx, MachineType()), JS_PROP_C_W_E);
 
     return data;
@@ -661,6 +665,29 @@ static JSValue athena_geteememory(JSContext *ctx, JSValue this_val, int argc, JS
 	return obj;
 }
 
+static JSValue athena_gettemps(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
+	// Based on PS2Ident libxcdvd from SP193
+	unsigned char in_buffer[1], out_buffer[16];
+	int result;
+	int stat = 0;
+
+    memset(&out_buffer, 0, 16);
+	
+	in_buffer[0]= 0xEF;
+	if((result=sceCdApplySCmd(0x03, in_buffer, sizeof(in_buffer), out_buffer))!=0)
+	{
+		stat=out_buffer[0];
+	}
+    
+	if( !stat) {
+		unsigned short temp = out_buffer[1] * 256 + out_buffer[2];
+		return JS_NewFloat32(ctx, (float)((temp - (temp%128) ) / 128.0f) + (float)((temp%128))/10.0f);
+	}
+
+	return JS_UNDEFINED;
+
+}
+
 static const JSCFunctionListEntry system_funcs[] = {
 	JS_CFUNC_DEF( "openFile",           		  2,         athena_openfile),
 	JS_CFUNC_DEF( "readFile",          		  2,         athena_readfile		 ),
@@ -691,6 +718,7 @@ static const JSCFunctionListEntry system_funcs[] = {
 	JS_CFUNC_DEF( "getCPUInfo",      		  0,   		athena_getcpuinfo	 ),
 	JS_CFUNC_DEF( "getGPUInfo",      		  0,   		athena_getgpuinfo	 ),
 	JS_CFUNC_DEF( "getMemoryStats",      	  0,   		athena_geteememory	 ),
+	JS_CFUNC_DEF( "getTemperature",      	  0,   		athena_gettemps	 ),
 	JS_PROP_STRING_DEF("boot_path", boot_path, JS_PROP_CONFIGURABLE ),
 	JS_PROP_INT32_DEF("FREAD", O_RDONLY, JS_PROP_CONFIGURABLE ),
 	JS_PROP_INT32_DEF("FWRITE", O_WRONLY, JS_PROP_CONFIGURABLE ),

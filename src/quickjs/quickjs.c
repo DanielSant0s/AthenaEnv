@@ -11755,7 +11755,7 @@ JSValue JS_ToStringInternal(JSContext *ctx, JSValueConst val, BOOL is_ToProperty
         return js_dtoa(ctx, JS_VALUE_GET_FLOAT64(val), 10, 0,
                        JS_DTOA_VAR_FORMAT);
     case JS_CUSTOM_TAG_FLOAT32:
-        snprintf(buf, sizeof(buf), "%f", JS_VALUE_GET_FLOAT32(val));
+        snprintf(buf, sizeof(buf), "%g", JS_VALUE_GET_FLOAT32(val));
         str = buf;
         goto new_string;
 #ifdef CONFIG_BIGNUM

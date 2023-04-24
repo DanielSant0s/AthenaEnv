@@ -67,7 +67,7 @@ while(true) {
 
     font_bold.print(15, 5, "Athena dash alpha v0.1");
 
-    font.print(15, 420, `RAM Usage: ${Math.floor(System.getMemoryStats().used / 1048576)}MB / ${Math.floor(ee_info.RAMSize / 1048576)}MB`);
+    font.print(15, 420, `Temp: ${System.getTemperature() === undefined? "NaN" : System.getTemperature()} C | RAM Usage: ${Math.floor(System.getMemoryStats().used / 1048576)}MB / ${Math.floor(ee_info.RAMSize / 1048576)}MB`);
 
     if(Pads.check(new_pad, Pads.UP) && !Pads.check(old_pad, Pads.UP) || old_kbd_char == VK_OLD_UP && kbd_char == VK_NEW_UP) {
         app_table.unshift(app_table.pop());
