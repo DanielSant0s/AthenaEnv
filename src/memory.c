@@ -6,9 +6,6 @@
 #include "include/memory.h"
 #include "include/ee_tools.h"
 
-extern char __start;
-extern char _end;
-
 typedef struct {
 	size_t binary_size;
 	size_t allocs_size;
@@ -48,8 +45,7 @@ extern void __malloc_unlock(struct _reent *r) {
     }
 }
 
-
-void *tracked_malloc(size_t size) {
+void *malloc(size_t size) {
     size_t* ptr = _malloc_r(_REENT, size);
 
     if (ptr) {
@@ -60,9 +56,13 @@ void *tracked_malloc(size_t size) {
     
 }
 
-void *tracked_realloc(void *memblock, size_t size) {
-    prog_mem.allocs_size -= ((size_t*)memblock)[-1];
+void *realloc(void *memblock, size_t size) {
+    if (memblock) {
+        prog_mem.allocs_size -= ((size_t*)memblock)[-1];
+    }
+    
     size_t* ptr = _realloc_r(_REENT, memblock, size);
+    
     if (ptr) {
         prog_mem.allocs_size += ((size_t*)ptr)[-1];
     }
@@ -70,8 +70,9 @@ void *tracked_realloc(void *memblock, size_t size) {
     return ptr;
 }
 
-void *tracked_calloc(size_t number, size_t size) {
+void *calloc(size_t number, size_t size) {
     size_t* ptr = _calloc_r(_REENT, number, size);
+
     if (ptr) {
         prog_mem.allocs_size += ((size_t*)ptr)[-1];
     }
@@ -79,8 +80,9 @@ void *tracked_calloc(size_t number, size_t size) {
     return ptr;
 }
 
-void *tracked_memalign(size_t alignment, size_t size) {
+void *memalign(size_t alignment, size_t size) {
     size_t* ptr = _memalign_r(_REENT, alignment, size);
+
     if (ptr) {
         prog_mem.allocs_size += ((size_t*)ptr)[-1];
     }
@@ -88,20 +90,18 @@ void *tracked_memalign(size_t alignment, size_t size) {
     return ptr;
 }
 
-void tracked_free(void* ptr) {
-    prog_mem.allocs_size -= ((size_t*)ptr)[-1];
+void free(void* ptr) {
+    if (ptr) {
+        prog_mem.allocs_size -= ((size_t*)ptr)[-1];
+    }
+
     _free_r(_REENT, ptr);
 }
+
 
 void init_memory_manager() {
     prog_mem.binary_size = (unsigned long)&_end - (unsigned long)&__start;
     prog_mem.stack_size = 0x20000;
-
-    RedirectFunction(memalign, tracked_memalign);
-    RedirectFunction(malloc, tracked_malloc);
-    RedirectFunction(realloc, tracked_realloc);
-    RedirectFunction(calloc, tracked_calloc);
-    RedirectFunction(free, tracked_free);
 }
 
 size_t get_binary_size() {  return prog_mem.binary_size;    }

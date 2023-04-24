@@ -1,4 +1,5 @@
 #include "include/network.h"
+#include "include/taskman.h"
 #include <time.h>
 
 static JSClassID js_request_class_id;
@@ -67,9 +68,7 @@ static void async_download(void* data) {
     CURLcode res;
 
     JSRequestData *s = data;
-
-    curl_global_init(CURL_GLOBAL_ALL);
-
+    
     s->curl = curl_easy_init();
     if (s->curl) {
         s->chunk.fp = fopen(s->fname, "wb");
@@ -80,22 +79,31 @@ static void async_download(void* data) {
                 chunk = curl_slist_append(chunk, s->headers[i]);
             }
 
+	        chunk = curl_slist_append(chunk, "Accept: */*");
+	        chunk = curl_slist_append(chunk, "Content-Type: application/json");
+	        chunk = curl_slist_append(chunk, "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36");
+	        chunk = curl_slist_append(chunk, "Content-Length: 0");
+
             curl_easy_setopt(s->curl, CURLOPT_HTTPHEADER, chunk);
+
+            curl_easy_setopt(s->curl, CURLOPT_HTTPGET, 1L);
 
             curl_easy_setopt(s->curl, CURLOPT_URL, s->url);
 
             curl_easy_setopt(s->curl, CURLOPT_WRITEFUNCTION, AsyncWriteFileCallback);
             curl_easy_setopt(s->curl, CURLOPT_WRITEDATA, (void *)&(s->chunk));
 
-            curl_easy_setopt(s->curl, CURLOPT_NOPROGRESS, s->noprogress);
+            curl_easy_setopt(s->curl, CURLOPT_NOPROGRESS, 1L);
             curl_easy_setopt(s->curl, CURLOPT_MAXREDIRS, s->maxredirs);
 
             curl_easy_setopt(s->curl, CURLOPT_TIMEOUT, s->timeout);
 
+            curl_easy_setopt(s->curl, CURLOPT_SSLVERSION, CURL_SSLVERSION_TLSv1_3);
+
             curl_easy_setopt(s->curl, CURLOPT_USERPWD, s->userpwd);
             curl_easy_setopt(s->curl, CURLOPT_USERAGENT, s->useragent);
 
-            curl_easy_setopt(s->curl, CURLOPT_FOLLOWLOCATION, s->followlocation);
+            curl_easy_setopt(s->curl, CURLOPT_FOLLOWLOCATION, 1L);
             curl_easy_setopt(s->curl, CURLOPT_TCP_KEEPALIVE, s->keepalive);
 
             curl_easy_setopt(s->curl, CURLOPT_FORBID_REUSE, s->forbid_reuse);
@@ -119,7 +127,7 @@ static void async_download(void* data) {
         s->error = "Error while initializing curl library.\n";
     }
 
-    curl_global_cleanup();
+
 
     s->ready = true;
 
@@ -134,8 +142,6 @@ static void async_get(void* data)
 
     req->chunk.memory = malloc(1);  /* will be grown as needed by the realloc above */
     req->chunk.size = 0;    /* no data at this point */
-
-    curl_global_init(CURL_GLOBAL_ALL);
 
     req->curl = curl_easy_init();
     if(req->curl) {
@@ -188,7 +194,7 @@ static void async_get(void* data)
         curl_easy_cleanup(req->curl);
   }
  
-    curl_global_cleanup();
+
 
     req->ready = true;
 
@@ -280,6 +286,7 @@ static JSValue athena_nw_gethostbyname(JSContext *ctx, JSValue this_val, int arg
 static void athena_nw_dtor(JSRuntime *rt, JSValue val)
 {
     JSRequestData *s = JS_GetOpaque(val, js_request_class_id);
+    curl_global_cleanup();
     js_free_rt(rt, s);
 }
 
@@ -304,6 +311,8 @@ static JSValue athena_nw_ctor(JSContext *ctx, JSValueConst new_target, int argc,
     req->useragent = "libcurl-agent/1.0";
     req->async_data = NULL;
     req->headers_len = 0;
+
+    curl_global_init(CURL_GLOBAL_ALL);
 
     proto = JS_GetPropertyStr(ctx, new_target, "prototype");
     if (JS_IsException(proto))
@@ -479,7 +488,7 @@ static JSValue athena_nw_requests_download(JSContext *ctx, JSValue this_val, int
     const char* url = JS_ToCString(ctx, argv[0]);
     const char* filename = JS_ToCString(ctx, argv[1]);
 
-    curl_global_init(CURL_GLOBAL_ALL);
+    
 
     curl = curl_easy_init();
     if (curl) {
@@ -526,7 +535,7 @@ static JSValue athena_nw_requests_download(JSContext *ctx, JSValue this_val, int
         return JS_ThrowInternalError(ctx, "Error while initializing curl library.\n");
     }
 
-    curl_global_cleanup();
+
 
     return JS_UNDEFINED;
 }
@@ -569,7 +578,7 @@ static JSValue athena_nw_requests_get(JSContext *ctx, JSValue this_val, int argc
     chunk.memory = malloc(1);  /* will be grown as needed by the realloc above */
     chunk.size = 0;    /* no data at this point */
 
-    curl_global_init(CURL_GLOBAL_ALL);
+    
 
     curl = curl_easy_init();
     if(curl) {
@@ -621,7 +630,7 @@ static JSValue athena_nw_requests_get(JSContext *ctx, JSValue this_val, int argc
         curl_easy_cleanup(curl);
   }
  
-    curl_global_cleanup();
+
 
     JSValue obj = JS_NewObject(ctx);
     JS_DefinePropertyValueStr(ctx, obj, "text", JS_NewStringLen(ctx, chunk.memory, chunk.size), JS_PROP_C_W_E);
@@ -684,9 +693,8 @@ static JSValue athena_nw_requests_ready(JSContext *ctx, JSValue this_val, int ar
         s->chunk.transferring = false;
 
         curl_easy_cleanup(s->curl);
-        curl_global_cleanup();
 
-        kill_task(s->tid);
+        //kill_task(s->tid);
 
         //s->curl = NULL;
         if(s->error) {
@@ -715,7 +723,7 @@ static JSValue athena_nw_requests_getasyncdata(JSContext *ctx, JSValue this_val,
         s->chunk.transferring = false;
 
         curl_easy_cleanup(s->curl);
-        curl_global_cleanup();
+    
 
         if (s->error) {
             return JS_ThrowInternalError(ctx, s->error);
@@ -751,7 +759,7 @@ static JSValue athena_nw_requests_post(JSContext *ctx, JSValue this_val, int arg
 
     unsigned int len = 0;
 
-    curl_global_init(CURL_GLOBAL_ALL);
+    
     
     curl = curl_easy_init();
     if(curl) {
@@ -802,7 +810,7 @@ static JSValue athena_nw_requests_post(JSContext *ctx, JSValue this_val, int arg
         
     }
 
-    curl_global_cleanup();
+
 
     JSValue obj = JS_NewObject(ctx);
     JS_DefinePropertyValueStr(ctx, obj, "text", JS_NewStringLen(ctx, chunk.memory, chunk.size), JS_PROP_C_W_E);

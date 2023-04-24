@@ -46,6 +46,24 @@ void prepare_IOP() {
     dbgprintf("AthenaEnv: Installing SBV Patches...\n");
     sbv_patch_enable_lmb();
     sbv_patch_disable_prefix_check(); 
+
+	kbd_started = false;
+	mouse_started = false;
+	freeram_started = false;
+	ds34bt_started = false;
+	ds34usb_started = false;
+	network_started = false;
+	sio2man_started = false;
+	usbd_started = false;
+	usb_mass_started = false;
+	pads_started = false;
+	audio_started = false;
+	cdfs_started = false;
+	dev9_started = false;
+	mc_started = false;
+	hdd_started = false;
+	filexio_started = false;
+	camera_started = false;
 }
 
 bool waitUntilDeviceIsReady(char *path) {

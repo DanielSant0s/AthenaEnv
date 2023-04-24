@@ -9,6 +9,7 @@
 #include "include/system.h"
 #include "include/memory.h"
 #include "include/def_mods.h"
+#include "include/taskman.h"
 
 #define MAX_DIR_FILES 512
 
@@ -761,24 +762,6 @@ static JSValue athena_resetiop(JSContext *ctx, JSValue this_val, int argc, JSVal
 	#endif
 
 	prepare_IOP();
-
-	kbd_started = false;
-	mouse_started = false;
-	freeram_started = false;
-	ds34bt_started = false;
-	ds34usb_started = false;
-	network_started = false;
-	sio2man_started = false;
-	usbd_started = false;
-	usb_mass_started = false;
-	pads_started = false;
-	audio_started = false;
-	cdfs_started = false;
-	dev9_started = false;
-	mc_started = false;
-	hdd_started = false;
-	filexio_started = false;
-	camera_started = false;
 
 	SifExecModuleBuffer(&poweroff_irx, size_poweroff_irx, 0, NULL, NULL);
 	load_default_module(FILEXIO_MODULE);

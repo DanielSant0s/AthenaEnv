@@ -4,6 +4,30 @@
 #include <string.h>
 #include <malloc.h>
 #include <assert.h>
+#include <stdarg.h>
+
+char* s_sprintf(const char* format, ...)
+{
+    va_list args;
+    va_start(args, format);
+
+    // Determine o tamanho necessário da string
+    int size = vsnprintf(NULL, 0, format, args);
+    va_end(args);
+
+    // Aloque memória para a string
+    char* str = (char*)malloc(size + 1);
+    if (!str) {
+        return NULL;
+    }
+
+    // Formate a string
+    va_start(args, format);
+    vsnprintf(str, size + 1, format, args);
+    va_end(args);
+
+    return str;
+}
 
 char** str_split(char* a_str, const char a_delim)
 {

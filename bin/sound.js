@@ -51,6 +51,8 @@ var cur_duration = 0.0f;
 
 let text_size = null;
 
+console.log(JSON.stringify(Tasks.get()));
+
 while(true){
     Screen.clear(Color.new(32, 32, 32));
     oldpad = pad;

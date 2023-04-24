@@ -39,17 +39,7 @@ let req = new Request();
 req.noprogress = true;
 req.keepalive = true;
 req.followlocation = true;
-req.useragent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Ubuntu Chromium/37.0.2062.94 Chrome/37.0.2062.94 Safari/537.36";
-req.headers = ["upgrade-insecure-requests: 1",
-               "sec-fetch-dest: document",
-               "sec-fetch-mode: navigate",
-               "sec-fetch-user: ?1",
-               "sec-fetch-site: same-origin",
-               "sec-ch-ua-mobile: ?0",
-               "accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-               'sec-ch-ua-platform: ^\^"Linux^\^"',
-               "sec-ch-ua-mobile: ?0",
-               ];
+req.useragent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36";
 
 const LOADING = 0;
 const MAIN_MENU = 1;
@@ -356,6 +346,7 @@ while(true) {
                 case LD_PKGLIST:
                     if (update_state == NOT_UPDATED) {
                         req.asyncDownload("https://raw.githubusercontent.com/DanielSant0s/brewstore-db/main/brew_data.json", "brew_data.json");
+                        console.log(JSON.stringify(Tasks.get()));
                         update_state = UPDATING;
                         transfering = true;
                     } else if (update_state == UPDATING) {
@@ -468,7 +459,9 @@ while(true) {
                     if (app_list[explore_menu.num].fname.endsWith(".tar.gz")) {
                         Archive.untar(app_list[explore_menu.num].fname);
                     } else if (app_list[explore_menu.num].fname.endsWith(".zip")) {
-                        Archive.extractAll(app_list[explore_menu.num].fname);
+                        let arc = Archive.open(app_list[explore_menu.num].fname);
+                        Archive.extractAll(arc);
+                        Archive.close(arc);
                     }
                     dl_state++;
                     break;

@@ -5,8 +5,12 @@
 #include <unistd.h>
 #include <string.h>
 #include <stdbool.h>
+#include "ath_env.h"
 #include "include/taskman.h"
+#include "include/memory.h"
+#include "include/ee_tools.h"
 #include "include/dbgprintf.h"
+#include "include/strUtils.h"
 
 extern void *_gp;
 
@@ -20,20 +24,20 @@ void update_thread_status(){
     }
 }
 
-Tasklist* get_tasklist(){
-    update_thread_status();
-    return &tasks;
-}
-
 */
 
 static Task tasks[MAX_THREADS];
 static int tasks_size = 0;
 
-void new_task(int id, const char* title){
+bool is_invalid_task(Task* task) {
+    return (task->id == -1 && !task->title && task->id == -1 && task->stack_size == 0);
+}
+
+void new_task(int id, size_t stack_sz, const char* title){
     for(int i = 0; i < MAX_THREADS; i++){
-        if (tasks[i].id == -1 && !tasks[i].title && tasks[i].id == -1){
+        if (is_invalid_task(&tasks[i])){
             tasks[i].id = id;
+            tasks[i].stack_size = stack_sz;
             tasks[i].status = 0;
             tasks[i].title = title;
             break;
@@ -41,10 +45,16 @@ void new_task(int id, const char* title){
     }
 }
 
+s32 AthenaCreateThread(ee_thread_t *thread) {
+    new_task(tasks_size++, thread->stack_size, thread->option == 0? "Unknown" : thread->option);
+    return CreateThread(thread);
+}
+
 void del_task(int id){
     for(int i = 0; i < MAX_THREADS; i++){
         if (tasks[i].id == id){
             tasks[i].id = -1;
+            tasks[i].stack_size = 0;
             tasks[i].status = -1;
             tasks[i].title = NULL;
             break;
@@ -59,21 +69,37 @@ void init_taskman()
 {
     ee_thread_status_t info;
     info.stack_size = -1;
-    tasks_size = 0;
+    tasks_size = 1;
+
+    for (uint32_t i = &__start; i < &_end; i += sizeof(uint32_t)) {
+        if(*(uint32_t*)i == (0x0C000000 + ((uint32_t)CreateThread)/4)) {
+            RedirectCall(i, AthenaCreateThread);
+        }
+    }
 
     for(int i = 0; i < MAX_THREADS; i++){
         tasks[i].id = -1;
+        tasks[i].stack_size = 0;
         tasks[i].status = -1;
         tasks[i].title = NULL;
     }
 
-    new_task(0, "Idle");
+    ReferThreadStatus(tasks_size, &info);
+    new_task(tasks_size, info.stack_size, "AthenaEnv: JavaScript Runtime");
+    tasks_size++;
+    ReferThreadStatus(tasks_size, &info);
+    new_task(tasks_size, info.stack_size, "Kernel: Thread manager");
+    tasks_size++;
 
-    while(info.stack_size != 0) {
-        tasks_size++;
+    do {
+        
         ReferThreadStatus(tasks_size, &info);
-        new_task(tasks_size, "Main: PS2SDK/Kernel Patch");
-    } //A way to list already created threads
+        if(info.stack_size != 0) {
+            new_task(tasks_size, info.stack_size, "Unknown");
+            tasks_size++;
+        }
+
+    } while(info.stack_size != 0) //A way to list already created threads
     
     dbgprintf("Threads running during boot: %d\n", tasks_size);
 
@@ -90,6 +116,7 @@ int create_task(const char* title, void* func, int stack_size, int priority)
     thread_param.stack_size = stack_size;
     thread_param.stack = memalign(128, stack_size);
     thread_param.initial_priority = priority;
+    thread_param.option = title;
 
 	int thread = CreateThread(&thread_param);
 
@@ -98,13 +125,7 @@ int create_task(const char* title, void* func, int stack_size, int priority)
         return -1;
     }
 
-    new_task(thread, title);
-
-    printf("new Task: %d %d %s\n", thread, tasks_size, title);
-
-    dbgprintf("%s task created.\n",tasks[tasks_size].title);
-
-    tasks_size++;
+    dbgprintf("%s task created.\n", title);
     
     return thread;
 
@@ -123,4 +144,8 @@ void kill_task(int id){
 void exitkill_task(){
     del_task(GetThreadId());
     ExitDeleteThread();
+}
+
+Task* get_tasks() {
+    return &tasks;
 }
