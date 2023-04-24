@@ -20,6 +20,42 @@ size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *user
   return realsize;
 }
 
+
+size_t AsyncWriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp)
+{
+  size_t realsize = size * nmemb;
+  struct MemoryStruct *mem = (struct MemoryStruct *)userp;
+
+  mem->memory = realloc(mem->memory, mem->size + realsize + 1);
+  if(mem->memory == NULL) {
+    /* out of memory */
+    dbgprintf("not enough memory (realloc returned NULL)\n");
+    return 0;
+  }
+
+  memcpy(&(mem->memory[mem->size]), contents, realsize);
+  mem->size += realsize;
+  mem->memory[mem->size] = 0;
+
+  mem->timer = clock();
+  mem->transferring = true;
+
+  return realsize;
+}
+
+size_t AsyncWriteFileCallback(void *contents, size_t size, size_t nmemb, void *userp)
+{
+  struct MemoryStruct *mem = (struct MemoryStruct *)userp;
+
+  size_t written = fwrite(contents, size, nmemb, mem->fp);
+
+  mem->size += written;
+  mem->timer = clock();
+  mem->transferring = true;
+
+  return written;
+}
+
 int ethApplyNetIFConfig(int mode)
 {
 	int result;

@@ -180,10 +180,6 @@ int load_default_module(int id) {
 				REPORT("NETMAN");
 				ID = SifExecModuleBuffer((void*)SMAP_irx, size_SMAP_irx, 0, NULL, &ret);
 				REPORT("SMAP");
-				//ID = SifExecModuleBuffer((void*)ps2ip_irx, size_ps2ip_irx, 0, NULL, &ret);
-				//REPORT("ps2ip");
-				ID = SifExecModuleBuffer((void*)ps2ips_irx, size_ps2ips_irx, 0, NULL, &ret);
-				REPORT("ps2ips");
 				network_started = LOAD_SUCCESS();
 			}
 			break;

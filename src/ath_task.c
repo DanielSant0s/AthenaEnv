@@ -6,6 +6,8 @@
 
 #include "ath_env.h"
 
+#include "include/taskman.h"
+
 static JSValue athena_killtask(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
   	if (argc != 1) return JS_ThrowSyntaxError(ctx, "wrong number of arguments.");
 	int task ;

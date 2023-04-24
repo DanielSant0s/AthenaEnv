@@ -93,7 +93,6 @@ irx_define(ps2fs);
 #ifdef ATHENA_NETWORK
 irx_define(SMAP);
 irx_define(NETMAN);
-irx_define(ps2ips);
 #endif
 
 #ifdef ATHENA_AUDIO

@@ -11,6 +11,8 @@
 #include "include/def_mods.h"
 #include "include/strUtils.h"
 
+#include "include/taskman.h"
+
 #include "ath_env.h"
 
 #define NEWLIB_PORT_AWARE

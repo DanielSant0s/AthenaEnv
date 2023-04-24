@@ -16,6 +16,8 @@ struct MemoryStruct {
 };
 
 size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp);
+size_t AsyncWriteFileCallback(void *contents, size_t size, size_t nmemb, void *userp);
+size_t AsyncWriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp);
 
 int ethApplyNetIFConfig(int mode);
 int ethWaitValidNetIFLinkState(void);
