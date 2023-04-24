@@ -15,7 +15,7 @@ static JSValue athena_killtask(JSContext *ctx, JSValue this_val, int argc, JSVal
 
 	kill_task(task);
 
-	return 0;
+	return JS_UNDEFINED;
 }
 
 static JSValue athena_gettasklist(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {

@@ -296,6 +296,12 @@ static JSValue athena_sleep(JSContext *ctx, JSValue this_val, int argc, JSValueC
 	return JS_UNDEFINED;
 }
 
+static JSValue athena_delay(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
+{
+	nopdelay();
+	return JS_UNDEFINED;
+}
+
 static JSValue athena_getFreeMemory(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
 {
 	if (argc != 0) return JS_ThrowSyntaxError(ctx, "no arguments expected.");
@@ -707,6 +713,7 @@ static const JSCFunctionListEntry system_funcs[] = {
 	JS_CFUNC_DEF( "removeFile",         		  2,      	athena_removeFile		 ),
 	JS_CFUNC_DEF( "rename",           		  2,          athena_rename		 ),
 	JS_CFUNC_DEF( "sleep",           		  1,           athena_sleep		 ),
+	JS_CFUNC_DEF( "delay",           		  0,           athena_delay		 ),
 	JS_CFUNC_DEF( "getFreeMemory",      		  0,   		athena_getFreeMemory ),
 	JS_CFUNC_DEF( "exitToBrowser",  		  0,            athena_exit	 ),
 	JS_CFUNC_DEF( "getMCInfo",          2,       	athena_getmcinfo	 		 ),

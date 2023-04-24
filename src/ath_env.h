@@ -93,3 +93,4 @@ JSModuleDef *athena_sound_init(JSContext* ctx);
 #ifdef ATHENA_CAMERA
 JSModuleDef *athena_camera_init(JSContext* ctx);
 #endif
+
