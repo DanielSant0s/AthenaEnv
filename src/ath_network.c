@@ -4,132 +4,6 @@
 
 static JSClassID js_request_class_id;
 
-static CURL* curl = NULL;
-
-typedef struct
-{
-    bool ready;
-    int tid;
-    const char* url;
-    const char* fname;
-    const char* error;
-    long keepalive;
-    const char* userpwd;
-    const char* useragent;
-    struct MemoryStruct chunk;
-    long response_code;
-    char* headers[16];
-    int headers_len;
-} JSRequestData;
-
-static void async_download(void* data) {
-    CURLcode res;
-
-    JSRequestData *s = data;
-
-    curl_easy_reset(curl);
-
-    s->chunk.fp = fopen(s->fname, "wb");
-    if (s->chunk.fp) {
-        struct curl_slist *header_chunk = NULL;
-
-        curl_easy_setopt(curl, CURLOPT_URL, s->url);
-
-        for(int i = 0; i < s->headers_len; i++) {
-            header_chunk = curl_slist_append(header_chunk, s->headers[i]);
-        }
-
-	    header_chunk = curl_slist_append(header_chunk, "Accept: */*");
-	    header_chunk = curl_slist_append(header_chunk, "Content-Type: application/json");
-	    header_chunk = curl_slist_append(header_chunk, "Content-Length: 0");
-
-        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, header_chunk);
-
-        curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);
-
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, AsyncWriteFileCallback);
-        curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&(s->chunk));
-
-        curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1L);
-
-        curl_easy_setopt(curl, CURLOPT_SSLVERSION, CURL_SSLVERSION_TLSv1_3);
-
-        curl_easy_setopt(curl, CURLOPT_USERPWD, s->userpwd);
-        curl_easy_setopt(curl, CURLOPT_USERAGENT, s->useragent);
-
-        curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-        curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, s->keepalive);
-
-        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
-        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
-
-        s->chunk.timer = clock();
-        res = curl_easy_perform(curl);
-        if (res != CURLE_OK) {
-            s->error = "Error while downloading file\n"; //, curl_easy_strerror(res));
-        }
-
-        fclose(s->chunk.fp);
-    } else {
-        s->error = "Error while creating file\n";
-    }
-
-    s->ready = true;
-
-    //exitkill_task();
-}
-
-static void async_get(void* data)
-{
-    CURLcode res;
-
-    JSRequestData* req = data;
-
-    req->chunk.memory = malloc(1);  /* will be grown as needed by the realloc above */
-    req->chunk.size = 0;    /* no data at this point */
-
-    curl_easy_reset(curl);
-
-    struct curl_slist *header_chunk = NULL;
-    
-    for(int i = 0; i < req->headers_len; i++) {
-        header_chunk = curl_slist_append(header_chunk, req->headers[i]);
-    }
-
-    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, header_chunk);
-
-    curl_easy_setopt(curl, CURLOPT_URL, req->url);
-
-    curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1L);
-
-    curl_easy_setopt(curl, CURLOPT_USERPWD, req->userpwd);
-    curl_easy_setopt(curl, CURLOPT_USERAGENT, req->useragent);
-
-    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-    curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, req->keepalive);
-
-    /* send all data to this function  */
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, AsyncWriteMemoryCallback);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&(req->chunk));
-
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
-
-    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &(req->response_code));
- 
-    /* Perform the request, res will get the return code */
-    req->chunk.timer = clock();
-    res = curl_easy_perform(curl);
-    /* Check for errors */
-    if(res != CURLE_OK) {
-        req->error = "curl_easy_perform() failed: %s\n"; //, curl_easy_strerror(res);
-    }
-
-    req->ready = true;
-
-    //exitkill_task();
-}
-
 static JSValue athena_nw_init(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	if (argc != 0 && argc != 4) return JS_ThrowInternalError(ctx, "wrong number of arguments.");
 	
@@ -363,52 +237,30 @@ static JSValue athena_nw_set_headers(JSContext *ctx, JSValueConst this_val, JSVa
 }
 
 static JSValue athena_nw_requests_download(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
-
-    FILE *fp;
-    CURLcode res;
-
     JSRequestData *s = JS_GetOpaque2(ctx, this_val, js_request_class_id);
     if (!s)
         return JS_EXCEPTION;
         
-    const char* url = JS_ToCString(ctx, argv[0]);
-    const char* filename = JS_ToCString(ctx, argv[1]);
+    s->error = NULL;
+    s->ready = false;
+    s->url = JS_ToCString(ctx, argv[0]);
+    s->method = ATHENA_GET;
+    s->save = true;
 
-    curl_easy_reset(curl);
+    s->chunk.timer = 0;
+    s->chunk.transferring = false;
+    s->chunk.fp = fopen(JS_ToCString(ctx, argv[1]), "wb");
+    s->tid = -1;
 
-    fp = fopen(filename, "wb");
-    if (fp) {
-        struct curl_slist *header_chunk = NULL;
-
-        for(int i = 0; i < s->headers_len; i++) {
-            header_chunk = curl_slist_append(header_chunk, s->headers[i]);
-        }
-
-        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, header_chunk);
-
-        curl_easy_setopt(curl, CURLOPT_URL, url);
-        curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1L);
-        curl_easy_setopt(curl, CURLOPT_WRITEDATA, fp);
-
-        curl_easy_setopt(curl, CURLOPT_USERPWD, s->userpwd);
-        curl_easy_setopt(curl, CURLOPT_USERAGENT, s->useragent);
-
-        curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-        curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, s->keepalive);
-
-        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
-        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
-
-        res = curl_easy_perform(curl);
-        if (res != CURLE_OK) {
-            return JS_ThrowInternalError(ctx, "Error while downloading file: %s\n", curl_easy_strerror(res));
-        }
-
-        fclose(fp);
-    } else {
-        return JS_ThrowInternalError(ctx, "Error while creating file: %s\n", filename);
+    if(!s->chunk.fp) {
+        return JS_ThrowInternalError(ctx, "asyncDownload: Error creating file\n");
     }
 
+    requestThread(s);
+
+    if (s->error) {
+        return JS_ThrowInternalError(ctx, s->error);
+    }
 
     return JS_UNDEFINED;
 }
@@ -422,12 +274,18 @@ static JSValue athena_nw_requests_async_dl(JSContext *ctx, JSValue this_val, int
     s->error = NULL;
     s->ready = false;
     s->url = JS_ToCString(ctx, argv[0]);
-    s->fname = JS_ToCString(ctx, argv[1]);
+    s->method = ATHENA_GET;
+    s->save = true;
+
     s->chunk.timer = 0;
-
     s->chunk.transferring = false;
+    s->chunk.fp = fopen(JS_ToCString(ctx, argv[1]), "wb");
 
-    s->tid = create_task("Requests: Asynchronous download", async_download, 4096*10, 16);
+    if(!s->chunk.fp) {
+        return JS_ThrowInternalError(ctx, "asyncDownload: Error creating file\n");
+    }
+
+    s->tid = create_task("Requests: Download", requestThread, 4096*10, 16);
     init_task(s->tid, (void*)s);
 
     return JS_UNDEFINED;
@@ -436,60 +294,31 @@ static JSValue athena_nw_requests_async_dl(JSContext *ctx, JSValue this_val, int
 
 static JSValue athena_nw_requests_get(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
 {
-
-    CURLcode res;
-    long response_code;
-    double elapsed;
-    char* url;
-
-    struct MemoryStruct chunk;
-
     JSRequestData *s = JS_GetOpaque2(ctx, this_val, js_request_class_id);
     if (!s)
         return JS_EXCEPTION;
 
-    chunk.memory = malloc(1);  /* will be grown as needed by the realloc above */
-    chunk.size = 0;    /* no data at this point */
+    s->error = NULL;
+    s->ready = false;
+    s->url = JS_ToCString(ctx, argv[0]);
+    s->method = ATHENA_GET;
+    s->save = false;
 
-    struct curl_slist *header_chunk = NULL;
+    s->chunk.timer = 0;
+    s->chunk.memory = malloc(1);  /* will be grown as needed by the realloc above */
+    s->chunk.size = 0;    /* no data at this point */
+    s->chunk.transferring = false;
+    s->tid = -1;
 
-    curl_easy_reset(curl);
-    
-    for(int i = 0; i < s->headers_len; i++) {
-        header_chunk = curl_slist_append(header_chunk, s->headers[i]);
-    }
+    requestThread(s);
 
-    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, header_chunk);
-
-    curl_easy_setopt(curl, CURLOPT_URL, JS_ToCString(ctx, argv[0]));
-
-    curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1L);
-
-    curl_easy_setopt(curl, CURLOPT_USERPWD, s->userpwd);
-    curl_easy_setopt(curl, CURLOPT_USERAGENT, s->useragent);
-
-    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-    curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, s->keepalive);
-
-    /* send all data to this function  */
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&chunk);
-
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
-
-    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
- 
-    /* Perform the request, res will get the return code */
-    res = curl_easy_perform(curl);
-    /* Check for errors */
-    if(res != CURLE_OK) {
-        return JS_ThrowInternalError(ctx, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+    if (s->error) {
+        return JS_ThrowInternalError(ctx, s->error);
     }
 
     JSValue obj = JS_NewObject(ctx);
-    JS_DefinePropertyValueStr(ctx, obj, "text", JS_NewStringLen(ctx, chunk.memory, chunk.size), JS_PROP_C_W_E);
-	JS_DefinePropertyValueStr(ctx, obj, "status_code", JS_NewInt32(ctx, (int)response_code), JS_PROP_C_W_E);
+    JS_DefinePropertyValueStr(ctx, obj, "text", JS_NewStringLen(ctx, s->chunk.memory, s->chunk.size), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "status_code", JS_NewInt32(ctx, s->response_code), JS_PROP_C_W_E);
 	return obj;
 }
 
@@ -504,12 +333,15 @@ static JSValue athena_nw_requests_async_get(JSContext *ctx, JSValue this_val, in
     s->error = NULL;
     s->ready = false;
     s->url = JS_ToCString(ctx, argv[0]);
-    s->chunk.timer = 0;
-    s->fname = NULL;
+    s->method = ATHENA_GET;
+    s->save = false;
 
+    s->chunk.timer = 0;
+    s->chunk.memory = malloc(1);  /* will be grown as needed by the realloc above */
+    s->chunk.size = 0;    /* no data at this point */
     s->chunk.transferring = false;
 
-    s->tid = create_task("Requests: Asynchronous get", async_get, 4096*16, 16);
+    s->tid = create_task("Requests: Get", requestThread, 4096*10, 16);
     init_task(s->tid, (void*)s);
 
     return JS_UNDEFINED;
@@ -533,9 +365,8 @@ static JSValue athena_nw_requests_ready(JSContext *ctx, JSValue this_val, int ar
         } 
     }
 
-    if(s->fname != NULL && (s->ready || s->error)) {
+    if(s->chunk.fp && (s->ready || s->error)) {
         fclose(s->chunk.fp);
-        s->fname = NULL;
         s->url = NULL;
         s->chunk.memory = NULL;
         s->chunk.fp = NULL;
@@ -545,7 +376,6 @@ static JSValue athena_nw_requests_ready(JSContext *ctx, JSValue this_val, int ar
 
         kill_task(s->tid);
 
-        //curl = NULL;
         if(s->error) {
             return JS_ThrowInternalError(ctx, s->error);
         }
@@ -562,17 +392,13 @@ static JSValue athena_nw_requests_getasyncdata(JSContext *ctx, JSValue this_val,
     if (s->ready || s->error) {
         ret = JS_NewStringLen(ctx, s->chunk.memory, s->chunk.size);
 
-       // kill_task(s->tid);
-        s->fname = NULL;
+        kill_task(s->tid);
         s->url = NULL;
         s->chunk.memory = NULL;
         s->chunk.fp = NULL;
         s->chunk.size = 0;
         s->chunk.timer = 0;
         s->chunk.transferring = false;
-
-        
-    
 
         if (s->error) {
             return JS_ThrowInternalError(ctx, s->error);
@@ -591,60 +417,30 @@ static JSValue athena_nw_requests_getasyncsize(JSContext *ctx, JSValue this_val,
 
 static JSValue athena_nw_requests_post(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
 {
-    CURLcode res;
-    long response_code;
-
-    struct MemoryStruct chunk;
-
     JSRequestData *s = JS_GetOpaque2(ctx, this_val, js_request_class_id);
     if (!s)
         return JS_EXCEPTION;
+    s->error = NULL;
+    s->ready = false;
+    s->url = JS_ToCString(ctx, argv[0]);
+    s->method = ATHENA_POST;
+    s->save = false;
 
-    chunk.memory = malloc(1);  /* will be grown as needed by the realloc above */
-    chunk.size = 0;    /* no data at this point */
+    s->chunk.timer = 0;
+    s->chunk.memory = malloc(1);  /* will be grown as needed by the realloc above */
+    s->chunk.size = 0;    /* no data at this point */
+    s->chunk.transferring = false;
+    s->tid = -1;
 
-    unsigned int len = 0;
+    requestThread(s);
 
-    struct curl_slist *header_chunk = NULL;
-
-    curl_easy_reset(curl);
-    
-    for(int i = 0; i < s->headers_len; i++) {
-        header_chunk = curl_slist_append(header_chunk, s->headers[i]);
+    if (s->error) {
+        return JS_ThrowInternalError(ctx, s->error);
     }
 
-    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, header_chunk);
-
-    curl_easy_setopt(curl, CURLOPT_URL, JS_ToCString(ctx, argv[0]));
-    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, JS_ToCStringLen(ctx, &len, argv[1]));
-    curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, (long)len);
-
-    curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1L);
-
-    curl_easy_setopt(curl, CURLOPT_USERPWD, s->userpwd);
-    curl_easy_setopt(curl, CURLOPT_USERAGENT, s->useragent);
-
-    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-    curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, s->keepalive);
-
-    /* send all data to this function  */
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&chunk);
-
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
-
-    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
-
-    /* Perform the request, res will get the return code */
-    res = curl_easy_perform(curl);
-    /* Check for errors */
-    if(res != CURLE_OK)
-        return JS_ThrowInternalError(ctx, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
-
     JSValue obj = JS_NewObject(ctx);
-    JS_DefinePropertyValueStr(ctx, obj, "text", JS_NewStringLen(ctx, chunk.memory, chunk.size), JS_PROP_C_W_E);
-	JS_DefinePropertyValueStr(ctx, obj, "status_code", JS_NewInt32(ctx, (int)response_code), JS_PROP_C_W_E);
+    JS_DefinePropertyValueStr(ctx, obj, "text", JS_NewStringLen(ctx, s->chunk.memory, s->chunk.size), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "status_code", JS_NewInt32(ctx, s->response_code), JS_PROP_C_W_E);
 
 	return obj;
 }
