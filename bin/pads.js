@@ -102,23 +102,4 @@ for(;;){
     Screen.flip();
 }
 
-circle = null;
-cross = null;
-square = null;
-triangle = null;
-up = null; 
-down = null;
-left = null;
-right = null;
-start = null;
-pad_select = null;
-r1 = null; 
-r2 = null; 
-l1 = null; 
-l2 = null; 
-l3 = null; 
-r3 = null;
-rumble = null; 
-font = null;
-new_pad = null;
-old_pad = null;
+System.loadELF(System.boot_path + "athena_pkd.elf");

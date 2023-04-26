@@ -42,6 +42,21 @@ static JSValue athena_getFPS(JSContext *ctx, JSValue this_val, int argc, JSValue
 	return JS_NewFloat32(ctx, FPSCounter(time_intvl));
 }
 
+static JSValue athena_getvmode(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	GSGLOBAL *gsGlobal = getGSGLOBAL();
+	JSValue obj = JS_NewObject(ctx);
+
+	JS_DefinePropertyValueStr(ctx, obj, "mode", JS_NewInt32(ctx, gsGlobal->Mode), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "width", JS_NewInt32(ctx, gsGlobal->Width), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "height", JS_NewInt32(ctx, gsGlobal->Height), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "psm", JS_NewInt32(ctx, gsGlobal->PSM), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "interlace", JS_NewInt32(ctx, gsGlobal->Interlace), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "field", JS_NewInt32(ctx, gsGlobal->Field), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "psmz", JS_NewInt32(ctx, gsGlobal->PSMZ), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "zbuffering", JS_NewBool(ctx, gsGlobal->ZBuffering), JS_PROP_C_W_E);
+
+	return obj;
+}
 
 static JSValue athena_setvmode(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	int width, height, psm, mode, interlace, field, psmz = GS_PSMZ_16S;
@@ -115,6 +130,7 @@ static const JSCFunctionListEntry module_funcs[] = {
 	JS_CFUNC_DEF("getFPS", 1, athena_getFPS),
     JS_CFUNC_DEF("waitVblankStart", 0, athena_vblank),
 	JS_CFUNC_DEF("setVSync", 1, athena_vsync),
+	JS_CFUNC_DEF("getMode", 0, athena_getvmode),
     JS_CFUNC_DEF("setMode", 9, athena_setvmode),
 	JS_CFUNC_DEF("log", 1, athena_scrlog),
 	JS_CFUNC_DEF("cls", 0, athena_cls),

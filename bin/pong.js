@@ -9,7 +9,7 @@ let sounds = {
     over:Sound.load("pong/over.adp")
 }
 
-const screen = {width:640, height:448};
+const screen = Screen.getMode();
 
 const dark_gray = Color.new(32, 32, 32);
 const gray = Color.new(64, 64, 64);
