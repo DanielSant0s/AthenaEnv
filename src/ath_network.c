@@ -365,7 +365,7 @@ static JSValue athena_nw_requests_ready(JSContext *ctx, JSValue this_val, int ar
         } 
     }
 
-    if(s->chunk.fp && (s->ready || s->error)) {
+    if(s->save && (s->ready || s->error)) {
         fclose(s->chunk.fp);
         s->url = NULL;
         s->chunk.memory = NULL;
