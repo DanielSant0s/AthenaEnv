@@ -102,58 +102,6 @@ static JSValue athena_dir(JSContext *ctx, JSValue this_val, int argc, JSValueCon
 	
 	strcpy(path,__ps2_normalize_path(path));
 	dbgprintf("\nchecking path : %s\n",path);
-		
-
-        
-    //-----------------------------------------------------------------------------------------
-	// read from MC ?
-        
-    if( !strcmp( path, "mc0:" ) || !strcmp( path, "mc1:" ) )
-    {       
-        int	nPort, numRead;
-        char mcPath[256];
-		sceMcTblGetDir mcEntries[MAX_DIR_FILES] __attribute__((aligned(64)));
-		
-		if( !strcmp( path, "mc0:" ) )
-			nPort = 0;
-		else
-			nPort = 1;
-		
-		
-		// copy only the path without the device (ie : mc0:/xxx/xxx -> /xxx/xxx)
-		strcpy(mcPath,(char *)&path[4]);
-				
-		// it temp_path is empty put a "/" inside
-        if (strlen(mcPath)==0)
-           strcpy((char *)mcPath,(char *)"/");
-		
-
-		if (mcPath[strlen(mcPath)-1] != '/')
-		  strcat( mcPath, "/-*" );
-		else
-		  strcat( mcPath, "*" );
-	
-		mcGetDir( nPort, 0, mcPath, 0, MAX_DIR_FILES, mcEntries);
-   		while (!mcSync( MC_WAIT, NULL, &numRead ));
-   		                	    
-	    int cpt = 0;
-
-		for( int i = 0; i < numRead; i++ )
-		{	
-			JSValue obj = JS_NewObject(ctx);
-
-			JS_DefinePropertyValueStr(ctx, obj, "name", JS_NewString(ctx, (const char *)mcEntries[i].EntryName), JS_PROP_C_W_E);
-			JS_DefinePropertyValueStr(ctx, obj, "size", JS_NewUint32(ctx, mcEntries[i].FileSizeByte), JS_PROP_C_W_E);
-			JS_DefinePropertyValueStr(ctx, obj, "dir", JS_NewBool(ctx, ( mcEntries[i].AttrFile & MC_ATTR_SUBDIR )), JS_PROP_C_W_E);
-
-			JS_DefinePropertyValueUint32(ctx, arr, cpt++, obj, JS_PROP_C_W_E);
-
-		}
-		return arr; 
-    }
-    //-----------------------------------------------------------------------------------------
-    
-    // else regular one using opendir/readdir
 
 	int i = 0;
 

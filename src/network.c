@@ -38,6 +38,46 @@ size_t AsyncWriteFileCallback(void *contents, size_t size, size_t nmemb, void *u
   return written;
 }
 
+// Função para substituir todos os caracteres de um string por outros
+void replaceAll(char *str, char find, char replace) {
+    for (int i = 0; i < strlen(str); i++) {
+        if (str[i] == find) {
+            str[i] = replace;
+        }
+    }
+}
+
+// Função que converte um JSON para o formato de URL
+char* jsonToUrl(char *json) {
+    // Inicializar variáveis
+    char *url = (char*) malloc(strlen(json) * 3 * sizeof(char)); // Buffer para armazenar o resultado
+    char *ptr = strtok(json, "{}:,\'"); // Separar a string em tokens
+    int count = 0;
+
+    // Percorrer todos os tokens e construir a string de resultado
+    while (ptr != NULL) {
+        // Inserir o nome do atributo ou valor na string de resultado
+        if (count % 2 == 0) {
+            strcat(url, ptr);
+            strcat(url, "=");
+        } else {
+            strcat(url, ptr);
+            strcat(url, "&");
+        }
+
+        ptr = strtok(NULL, "{}:,\'");
+        count++;
+    }
+
+    // Substituir todos os espaços em branco por "%20"
+    replaceAll(url, ' ', '%');
+
+    // Remover o último caractere "&" da string
+    url[strlen(url) - 1] = '\0';
+
+    return url;
+}
+
 void requestThread(void* data) {
     CURLcode res;
 
@@ -53,9 +93,7 @@ void requestThread(void* data) {
         header_chunk = curl_slist_append(header_chunk, s->headers[i]);
     }
 
-	header_chunk = curl_slist_append(header_chunk, "Accept: */*");
 	header_chunk = curl_slist_append(header_chunk, "Content-Type: application/json");
-	header_chunk = curl_slist_append(header_chunk, "Content-Length: 0");
 
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, header_chunk);
 
@@ -65,10 +103,9 @@ void requestThread(void* data) {
 		break;
 	case ATHENA_POST:
 		curl_easy_setopt(curl, CURLOPT_POST, 1L);
-		/*if (s->postdata){
+		if (s->postdata){
 			curl_easy_setopt(curl, CURLOPT_POSTFIELDS, s->postdata);
-			curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, s->postlen * 1L);
-		}*/
+		}
 		break;
 	case ATHENA_HEAD:
 		curl_easy_setopt(curl, CURLOPT_NOBODY, 1L);

@@ -113,6 +113,7 @@ static JSValue athena_nw_ctor(JSContext *ctx, JSValueConst new_target, int argc,
     req->userpwd = NULL;
     req->useragent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36";
     req->headers_len = 0;
+    req->postdata = NULL;
 
     proto = JS_GetPropertyStr(ctx, new_target, "prototype");
     if (JS_IsException(proto))
@@ -325,7 +326,7 @@ static JSValue athena_nw_requests_get(JSContext *ctx, JSValue this_val, int argc
 
 static JSValue athena_nw_requests_async_get(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
 {
-    pthread_t tid;
+
     JSRequestData* s = JS_GetOpaque2(ctx, this_val, js_request_class_id);
     if (!s)
         return JS_EXCEPTION;
@@ -399,6 +400,7 @@ static JSValue athena_nw_requests_getasyncdata(JSContext *ctx, JSValue this_val,
         s->chunk.size = 0;
         s->chunk.timer = 0;
         s->chunk.transferring = false;
+        s->postdata = NULL;
 
         if (s->error) {
             return JS_ThrowInternalError(ctx, s->error);
@@ -430,6 +432,7 @@ static JSValue athena_nw_requests_post(JSContext *ctx, JSValue this_val, int arg
     s->chunk.memory = malloc(1);  /* will be grown as needed by the realloc above */
     s->chunk.size = 0;    /* no data at this point */
     s->chunk.transferring = false;
+    s->postdata = JS_ToCString(ctx, argv[1]);
     s->tid = -1;
 
     requestThread(s);
@@ -445,6 +448,32 @@ static JSValue athena_nw_requests_post(JSContext *ctx, JSValue this_val, int arg
 	return obj;
 }
 
+static JSValue athena_nw_requests_async_post(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
+{
+
+    JSRequestData* s = JS_GetOpaque2(ctx, this_val, js_request_class_id);
+    if (!s)
+        return JS_EXCEPTION;
+
+    s->error = NULL;
+    s->ready = false;
+    s->url = JS_ToCString(ctx, argv[0]);
+    s->postdata = JS_ToCString(ctx, argv[1]);
+    s->method = ATHENA_POST;
+    s->save = false;
+
+    s->chunk.timer = 0;
+    s->chunk.memory = malloc(1);  /* will be grown as needed by the realloc above */
+    s->chunk.size = 0;    /* no data at this point */
+    s->chunk.transferring = false;
+
+    s->tid = create_task("Requests: Post", requestThread, 4096*10, 16);
+    init_task(s->tid, (void*)s);
+
+    return JS_UNDEFINED;
+
+}
+
 static JSClassDef js_request_class = {
     "Request",
     .finalizer = athena_nw_dtor,
@@ -457,6 +486,7 @@ static const JSCFunctionListEntry athena_request_funcs[] = {
     JS_CGETSET_DEF("headers", athena_nw_get_headers, athena_nw_set_headers),
     JS_CFUNC_DEF("get", 1, athena_nw_requests_get),
     JS_CFUNC_DEF("asyncGet", 1, athena_nw_requests_async_get),
+    JS_CFUNC_DEF("asyncPost", 2, athena_nw_requests_async_post),
     JS_CFUNC_DEF("asyncDownload", 2, athena_nw_requests_async_dl),
     JS_CFUNC_DEF("getAsyncData", 0, athena_nw_requests_getasyncdata),
     JS_CFUNC_DEF("getAsyncSize", 0, athena_nw_requests_getasyncsize),

@@ -34,6 +34,7 @@ typedef struct
     long keepalive;
     const char* userpwd;
     const char* useragent;
+    const char* postdata;
     struct MemoryStruct chunk;
     long response_code;
     char* headers[16];
@@ -41,7 +42,7 @@ typedef struct
 } JSRequestData;
 
 void requestThread(void* data);
-
+char* jsonToUrl(char *json);
 int ethApplyNetIFConfig(int mode);
 int ethWaitValidNetIFLinkState(void);
 int ethWaitValidDHCPState(void);
