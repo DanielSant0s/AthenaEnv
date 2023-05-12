@@ -85,6 +85,20 @@ static inline int list_empty(struct list_head *el)
     return el->next == el;
 }
 
+static inline void list_splice(const struct list_head *list,
+                               struct list_head *head)
+{
+    if (!list_empty(list)) {
+        struct list_head *a = list->next;
+        struct list_head *b = list->prev;
+        struct list_head *c = head->next;
+        head->next = a;
+        a->prev = head;
+        b->next = c;
+        c->prev = b;
+    }
+}
+
 #define list_for_each(el, head) \
   for(el = (head)->next; el != (head); el = el->next)
 

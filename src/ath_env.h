@@ -76,6 +76,7 @@ JSModuleDef *athena_console_init(JSContext* ctx);
 JSModuleDef *athena_socket_init(JSContext* ctx);
 JSModuleDef *athena_network_init(JSContext* ctx);
 JSModuleDef *athena_request_init(JSContext *ctx);
+JSModuleDef *athena_ws_init(JSContext *ctx);
 #endif
 
 #ifdef ATHENA_KEYBOARD

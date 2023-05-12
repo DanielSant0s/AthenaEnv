@@ -8,7 +8,9 @@
 #include "ath_env.h"
 
 static JSValue athena_print(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-	scr_printf(JS_ToCString(ctx, argv[0]));
+	const char* text = JS_ToCString(ctx, argv[0]);
+	scr_printf(text);
+	JS_FreeCString(ctx, text);
 	return JS_UNDEFINED;
 }
 

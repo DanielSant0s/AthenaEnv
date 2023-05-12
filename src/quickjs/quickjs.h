@@ -354,6 +354,10 @@ typedef JSValue JSCFunction(JSContext *ctx, JSValueConst this_val, int argc, JSV
 typedef JSValue JSCFunctionMagic(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv, int magic);
 typedef JSValue JSCFunctionData(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv, int magic, JSValue *func_data);
 
+typedef struct JSRuntimeThreadState {
+    char data[64];
+} JSRuntimeThreadState;
+
 typedef struct JSMallocState {
     size_t malloc_count;
     size_t malloc_size;
@@ -371,6 +375,10 @@ typedef struct JSMallocFunctions {
 typedef struct JSGCObjectHeader JSGCObjectHeader;
 
 JSRuntime *JS_NewRuntime(void);
+void JS_Enter(JSRuntime *rt);
+void JS_Suspend(JSRuntime *rt, JSRuntimeThreadState *state);
+void JS_Resume(JSRuntime *rt, const JSRuntimeThreadState *state);
+void JS_Leave(JSRuntime *rt);
 /* info lifetime must exceed that of rt */
 void JS_SetRuntimeInfo(JSRuntime *rt, const char *info);
 void JS_SetMemoryLimit(JSRuntime *rt, size_t limit);
