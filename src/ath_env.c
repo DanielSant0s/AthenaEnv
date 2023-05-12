@@ -133,6 +133,7 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"import * as Request from 'Request';\n"
 				"import * as Socket from 'Socket';\n"
 				"import * as SocketConst from 'SocketConst';\n"
+				"import * as WebSocket from 'WebSocket';\n"
 				"globalThis.Network = Network;\n"
 				"globalThis.AF_INET = SocketConst.AF_INET;\n"
 				"globalThis.SOCK_STREAM = SocketConst.SOCK_STREAM;\n"
@@ -140,6 +141,7 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"globalThis.SOCK_RAW = SocketConst.SOCK_RAW;\n"
 				"globalThis.Socket = Socket.Socket;\n"
 				"globalThis.Request = Request.Request;\n"
+				"globalThis.WebSocket = WebSocket.WebSocket;\n"
 				#endif
 
 				#ifdef ATHENA_GRAPHICS
@@ -298,6 +300,7 @@ static JSContext *JS_NewCustomContext(JSRuntime *rt)
 	athena_network_init(ctx);
 	athena_request_init(ctx);
 	athena_socket_init(ctx);
+	athena_ws_init(ctx);
 	#endif
 
     return ctx;

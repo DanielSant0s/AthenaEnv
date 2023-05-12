@@ -14,37 +14,6 @@ typedef struct {
 
 static AthenaMemory prog_mem;
 
-static bool sema_started = false;
-
-static s32 malloc_semaid;
-static ee_sema_t malloc_sema;
-
-static int malloc_locked = 0;
-static int malloc_lock_count = 0;
-
-extern void __malloc_lock(struct _reent *r) {
-    if(!sema_started) {
-        malloc_sema.init_count = 1;
-        malloc_sema.max_count = 1;
-        malloc_sema.option = 0;
-        malloc_semaid = CreateSema(&malloc_sema);
-        sema_started = true;
-    }
-    if (!malloc_locked) {
-        WaitSema(malloc_semaid);
-        malloc_locked = 1;
-    }
-    malloc_lock_count++;
-}
-
-extern void __malloc_unlock(struct _reent *r) {
-    malloc_lock_count--;
-    if (malloc_lock_count == 0) {
-        malloc_locked = 0;
-        SignalSema(malloc_semaid);
-    }
-}
-
 void *malloc(size_t size) {
     size_t* ptr = _malloc_r(_REENT, size);
 

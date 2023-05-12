@@ -210,6 +210,8 @@ static JSValue athena_archiveopen(JSContext *ctx, JSValue this_val, int argc, JS
         za->type = GZ_FILE;
     }
 
+	JS_FreeCString(ctx, path);
+
 	return JS_NewUint32(ctx, za);
 }
 
@@ -295,6 +297,8 @@ static JSValue athena_untar(JSContext *ctx, JSValue this_val, int argc, JSValueC
 	getcwd(tar_path, 512);
 	untar(fp, tar_path);
 	fclose(fp);
+
+	JS_FreeCString(ctx, path);
 
 	return JS_UNDEFINED;
 }

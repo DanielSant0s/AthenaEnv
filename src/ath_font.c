@@ -56,6 +56,8 @@ static JSValue athena_font_ctor(JSContext *ctx, JSValueConst new_target, int arg
             if (font->data == NULL) return JS_EXCEPTION;
             font->type = image_font;
         }
+
+        JS_FreeCString(ctx, path);
     } else {
         font->type = osdsys_font;
     }
@@ -97,6 +99,8 @@ static JSValue athena_font_print(JSContext *ctx, JSValue this_val, int argc, JSV
         fntRenderString(font->id, x, y, 0, 0, 0, text, font->color);
     }
 
+    JS_FreeCString(ctx, text);
+
 	return JS_UNDEFINED;
 }
 
@@ -113,6 +117,8 @@ static JSValue athena_font_gettextsize(JSContext *ctx, JSValue this_val, int arg
         size.width = strlen(str) * font->scale * 0.68f * 26.0f;
         size.height = 26.0f * font->scale;
     }
+
+    JS_FreeCString(ctx, str);
 
     obj = JS_NewObject(ctx);
     JS_DefinePropertyValueStr(ctx, obj, "width", JS_NewUint32(ctx, size.width), JS_PROP_C_W_E);
