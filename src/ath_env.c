@@ -316,6 +316,8 @@ const char* runScript(const char* script, bool isBuffer)
     js_std_init_handlers(rt);
     JSContext *ctx = JS_NewCustomContext(rt); if (!ctx) { return "Context creation"; }
 
+	JS_SetModuleLoaderFunc(rt, NULL, js_module_loader, NULL);
+
     int s = qjs_handle_file(ctx, script, NULL);
 
     if (s < 0) { 

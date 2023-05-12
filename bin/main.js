@@ -1,3 +1,7 @@
+import test from "./test.js";
+
+test("module test ok");
+
 IOP.loadDefaultModule(IOP.keyboard);
 Keyboard.init();
 
@@ -13,6 +17,8 @@ font.color = unsel_color;
 font_bold.scale = 0.7f
 font_medium.scale = 1.0f;
 font.scale = 0.44f;
+
+
 
 let no_icon = new Image("no_icon.png");
 
