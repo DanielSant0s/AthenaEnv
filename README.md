@@ -259,10 +259,10 @@ var font = new Font("Segoe UI.ttf"); //Load trueType font
 
 Properties:
 * color - Define font tinting, default value is Color.new(255, 255, 255, 128).
+* scale - Proportional scale, default: 1.0f
 
 Methods:
 * print(x, y, text) - Draw text on screen(call it every frame). Example: font.print(10.0, 10.0, "Hello world!));
-* setScale(scale) - Set font scale;
 
 ### Pads module
 
@@ -476,6 +476,7 @@ Properties:
 Methods:
 
 * get(url)
+* head(url)
 * post(url, data)
 * download(url, fname)  
   
@@ -504,6 +505,21 @@ Methods:
 * send(data) - Send data with Buffer
 * recv(size) - Receive data to a buffer
 * close()
+
+
+### WebSocket module
+
+Construction:  
+
+* var s = new WebSocket(url)  
+```js
+var s = new WebSocket("wss://example.com");
+```
+
+Methods:
+
+* send(data) - Send data with Buffer
+* recv() - Receive data to a buffer
 
 ## Contributing
 
