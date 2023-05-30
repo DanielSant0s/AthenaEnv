@@ -101,13 +101,14 @@ static JSValue athena_dir(JSContext *ctx, JSValue this_val, int argc, JSValueCon
 	           strcat ((char *)path, temp_path);
 	}
 	
-	strcpy(path,__ps2_normalize_path(path));
+	//strcpy(path, __ps2_normalize_path(path));
 	dbgprintf("\nchecking path : %s\n",path);
 
 	int i = 0;
 
 	DIR *d;
 	struct dirent *dir;
+
 	d = opendir(path);
 
 	if (d) {
@@ -391,7 +392,7 @@ static JSValue athena_loadELF(JSContext *ctx, JSValue this_val, int argc, JSValu
 	JSValue val;
 	int n = 0;
 	char **args = NULL;
-	const char *elftoload = JS_ToCString(ctx, argv[0]);
+	const char *path = JS_ToCString(ctx, argv[0]);
 
 	if(argc == 2){
 		if (!JS_IsArray(ctx, argv[1])) {
@@ -408,7 +409,7 @@ static JSValue athena_loadELF(JSContext *ctx, JSValue this_val, int argc, JSValu
 		}
 	}
 
-	LoadELFFromFile(elftoload, n, args);
+	LoadELFFromFile(path, n, args);
 	return JS_UNDEFINED;
 }
 

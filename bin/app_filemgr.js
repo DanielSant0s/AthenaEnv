@@ -138,11 +138,11 @@ var file_manager = new App();
 file_manager.data = [0, 0, 0, 1];
 file_manager.comp = 0;
 
-var root = [{name:"cdfs:", size:0, dir:true}, 
-            {name:"host:", size:0, dir:true}, 
-            {name:"mass:", size:0, dir:true}, 
-            {name:"mc0:", size:0, dir:true},
-            {name:"mc1:", size:0, dir:true}];
+var root = [{name:"cdfs:/", size:0, dir:true}, 
+            {name:"host:/", size:0, dir:true}, 
+            {name:"mass:/", size:0, dir:true}, 
+            {name:"mc0:/", size:0, dir:true},
+            {name:"mc1:/", size:0, dir:true}];
 
 var path = "";
 var file = root;
@@ -156,6 +156,7 @@ file_manager.process = function() {
     if(file_manager.data[2] == 1){
         file_manager.data[1] = process_list_commands(file_manager.data[1], range(5));
     }
+
     if(file_manager.data[3] == 1){
         file_manager.data[0] = process_list_commands(file_manager.data[0], file);
         if(file_manager.data[0] > 20){
@@ -164,23 +165,27 @@ file_manager.process = function() {
             file_manager.comp = 0;
         }
     }
+
     if ((Pads.check(pad, Pads.TRIANGLE) && !Pads.check(oldpad, Pads.TRIANGLE))){
         var idxof = path.lastIndexOf("/");
-        if(idxof != -1){
+        if(path[idxof-1] != ":" && idxof != -1){
             path = path.slice(0, idxof);
+            idxof = path.lastIndexOf("/");
+            path = path.slice(0, idxof+1);
             file = System.listDir(path);
         } else {
             path = "";
             file = root;
-        };
-    };
+        }
+    }
+
     if ((Pads.check(pad, Pads.CROSS) && !Pads.check(oldpad, Pads.CROSS))){
         if(file_manager.data[3] == 1){
             if(file[file_manager.data[0]].dir){
                 if(path == ""){
                     path = file[file_manager.data[0]].name;
                 } else {
-                    path = path + "/" + file[file_manager.data[0]].name;
+                    path = path + file[file_manager.data[0]].name + "/";
                 }
                 file = System.listDir(path);
 
@@ -197,6 +202,7 @@ file_manager.process = function() {
                 file = System.listDir(path); // Update file list
             }
         }
+
         if(file_manager.data[2] == 1){
             switch (file_manager.data[1]) {
                 case 0:
@@ -239,12 +245,13 @@ file_manager.process = function() {
                     break;
             }
         }
-    };
+    }
+
     if (Pads.check(pad, Pads.R1) && !Pads.check(oldpad, Pads.R1)){
         file_manager.data[2] ^= 1;
         file_manager.data[3] ^= 1;
-    };
-};
+    }
+}
 
 file_manager.gfx = new Window();
 file_manager.gfx.t = "File Manager"

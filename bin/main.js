@@ -85,12 +85,14 @@ while(true) {
     }
 
     if(Pads.check(new_pad, Pads.CROSS) && !Pads.check(old_pad, Pads.CROSS) || kbd_char == VK_RETURN){
-        let bin = "athena_pkd.elf";
+        let bin = "athena.elf";
         if ("bin" in app_table[0]) {
             bin = app_table[0].bin;
         }
 
-        System.loadELF(System.currentDir() + bin, [System.currentDir() + app_table[0].file]); // Doing this to reset all the stuff
+        
+
+        System.loadELF(System.boot_path + bin, [app_table[0].file, ]); // Doing this to reset all the stuff
     }
 
     font_medium.print(210, 125, app_table[0].name);
