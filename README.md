@@ -142,15 +142,15 @@ Below is the list of usable functions of AthenaEnv project currently, this list 
 P.S.: *Italic* parameters refer to optional parameters
 
 ### Color module
-* var col = Color.new(r, g, b, *a*)
-* var r = Color.getR(col)
-* var g = Color.getG(col)
-* var b = Color.getB(col)
-* var a = Color.getA(col)
-* Color.setR(col, r)
-* Color.setG(col, g)
-* Color.setB(col, g)
-* Color.setA(col, a)
+* var col = Color.new(r, g, b, *a*) - Returns a color object from the specified RGB(A) parameters.
+* var r = Color.getR(col) - Get red intensity of the color.
+* var g = Color.getG(col) - Get green intensity of the color.
+* var b = Color.getB(col) - Get blue intensity of the color.
+* var a = Color.getA(col) - Get alpha intensity of the color.
+* Color.setR(col, r) - Set red intensity of the color.
+* Color.setG(col, g) - Set green intensity of the color.
+* Color.setB(col, g) - Set blue intensity of the color.
+* Color.setA(col, a) - Set alpha intensity of the color.
 
 ### Image Module  
 
@@ -197,25 +197,29 @@ async_list.process();
   
   
 ### Draw module
-* Draw.point(x, y, color)
-* Draw.rect(x, y, width, height, color)
-* Draw.line(x, y, x2, y2, color)
-* Draw.circle(x, y, radius, color, *filled*)
-* Draw.triangle(x, y, x2, y2, x3, y3, color, *color2*, *color3*)
-* Draw.quad(x, y, x2, y2, x3, y3, x4, y4 color, *color2*, *color3*, *color4*)
+* Draw.point(x, y, color) - Draws a pixel on the specified color and position on the screen.
+* Draw.rect(x, y, width, height, color) - Draws a rectangle on the specified color, position and size on the screen.
+* Draw.line(x, y, x2, y2, color) - Draws a line on the specified colors and position on the screen.
+* Draw.circle(x, y, radius, color, *filled*) - Draws a circle on the specified color, position, radius and fill on the screen.
+* Draw.triangle(x, y, x2, y2, x3, y3, color, *color2*, *color3*) - Draws a triangle on the specified points positions and colors on the screen.
+* Draw.quad(x, y, x2, y2, x3, y3, x4, y4 color, *color2*, *color3*, *color4*) - Draws a quad on the specified points positions and colors on the screen.
 
 ### Render module
 
 • Remember to enable zbuffering on screen mode, put the line of code below  
 • Default NTSC mode(3D enabled): 
 ```js
-Display.setMode(NTSC, 640, 448, CT24, INTERLACED, FIELD, true, Z16S);
+const canvas = Screen.getMode();
+canvas.zbuffering = true;
+canvas.psmz = Z16S;
+
+Screen.setMode(canvas);
 ```
 
-* Render.init(aspect) *default aspect is 4/3, widescreen is 16/9
-* var model = Render.loadOBJ(path, *texture*)
-* Render.drawOBJ(model, pos_x, pos_y, pos_z, rot_x, rot_y, rot_z)
-* Render.freeOBJ(model)  
+* Render.init(aspect) - Initializes rendering routines. *default aspect is 4/3, widescreen is 16/9
+* var model = Render.loadOBJ(path, *texture*) - Load simple obj 3d data files. MTL not supported yet. Actually it only supports a single texture that you have to load using Image class and pass as a second argument if you want to use it.
+* Render.drawOBJ(model, pos_x, pos_y, pos_z, rot_x, rot_y, rot_z) - Draws the loaded OBJ on the screen.
+* Render.freeOBJ(model)  - Frees the model from memory.
 
 **Camera**   
 * Camera.position(x, y, z)
@@ -227,14 +231,14 @@ Display.setMode(NTSC, 640, 448, CT24, INTERLACED, FIELD, true, Z16S);
   • Avaiable light types: AMBIENT, DIRECTIONAL  
 
 ### Screen module
-* Screen.clear(*color*)
-* Screen.flip()
-* var freevram = Screen.getFreeVRAM()
-* var fps = Screen.getFPS(frame_interval)
-* Screen.setVSync(bool)
-* Screen.setFrameCounter(bool)
-* Screen.waitVblankStart()
-* const canvas = Screen.getMode()  
+* Screen.clear(*color*) - Clears screen with the specified color. If you don't specify any argument, it will use black as default.
+* Screen.flip() - Run the render queue and jump to the next frame, i.e.: Updates your screen.
+* var freevram = Screen.getFreeVRAM() - Returns the total of free Video Memory.
+* Screen.setVSync(bool) - Toggles VSync, which makes the framerate stable in 15, 30, 60(depending on the mode) on screen.
+* Screen.setFrameCounter(bool) - Toggles frame counting and FPS collecting.
+* Screen.waitVblankStart() - Waits for a vertical sync.
+* var fps = Screen.getFPS(frame_interval) - Get Frames per second measure within the specified frame_interval in msec. Dependant on Screen.setFrameCounter(true) to work.
+* const canvas = Screen.getMode() - Get actual video mode parameters. Returns an object.
   • canvas.mode - Available modes: NTSC, DTV_480p, PAL, DTV_576p, DTV_720p, DTV_1080i.  
   • canvas.width - Screen width. Default: 640.  
   • canvas.height - Screen height. Default: 448 on NTSC consoles, 512 on PAL consoles.  
@@ -244,18 +248,18 @@ Display.setMode(NTSC, 640, 448, CT24, INTERLACED, FIELD, true, Z16S);
   • canvas.double_buffering - Enable or disable double buffering(bool).  
   • canvas.zbuffering - Enable or disable Z buffering (3D buffering)(bool).  
   • canvas.psmz - ZBuffering color mode. Available zbuffer colormodes: Z16, Z16S, Z24, Z32.  
-* Screen.setMode(canvas)   
+* Screen.setMode(canvas) - Set the current video mode, get an video mode object as an argument.  
 
 ### Font module
 
 Construction:  
 
 ```js
-var font = new Font(path);  
+var font = new Font(path);  // It supports png, bmp, jpg, otf, ttf.
 ```
   path - Path to a font file, E.g.: "images/atlas.png", "fonts/font.png".  
 ```js
-var osdfnt = new Font();  //Load BIOS font  
+var osdfnt = new Font();  //Load BIOS font, not available for all console models  
 var font = new Font("Segoe UI.ttf"); //Load trueType font 
 ``` 
 
@@ -265,10 +269,11 @@ Properties:
 
 Methods:
 * print(x, y, text) - Draw text on screen(call it every frame). Example: font.print(10.0, 10.0, "Hello world!));
+* getTextSize(text) - Returns text absolute size in pixels (width, height). Example: const size = font.getTextSize("Hello world!");
 
 ### Pads module
 
-* var pad = Pads.get(*port*)
+* var pad = Pads.get(*port*) - Returns a pad object containing the following properties:  
   • pad.btns - Buttons  
   • pad.lx - Left analog horizontal position (left = -127, default = 0, right = 128)  
   • pad.ly - Left analog vertical position (up = -127, default = 0, down = 128)  
@@ -277,13 +282,13 @@ Methods:
     
   ![analog_graph](https://user-images.githubusercontent.com/47725160/154816009-99d7e5da-badf-409b-9a3b-3618fd372f09.png)
 
-* var type = Pads.getType(*port*)
+* var type = Pads.getType(*port*) - Gets gamepad type in the specified port.
   • Pads.DIGITAL  
   • Pads.ANALOG  
   • Pads.DUALSHOCK  
-* var press = Pads.getPressure(*port*, button)
-* Pads.rumble(port, big, small)
-* var ret = Pads.check(pad, button)
+* var press = Pads.getPressure(*port*, button) - Get button pressure level.
+* Pads.rumble(port, big, small) - Rumble your gamepad.
+* var ret = Pads.check(pad, button) - Check if the button was pressed on the specified pad.
 * Buttons list:  
   • Pads.SELECT  
   • Pads.START  
@@ -303,25 +308,25 @@ Methods:
   • Pads.R3  
   
 ### Keyboard module
-* Keyboard.init()
-* var c = Keyboard.get()
-* Keyboard.setRepeatRate(msec)
-* Keyboard.setBlockingMode(mode)
-* Keyboard.deinit()
+* Keyboard.init() - Initialize keyboard routines.
+* var c = Keyboard.get() - Get keyboard current char.
+* Keyboard.setRepeatRate(msec) - Set keyboard repeat rate.
+* Keyboard.setBlockingMode(mode) - Sets keyboard to block(or not) the thread waiting for the next key to be pressed.
+* Keyboard.deinit() - Destroy keyboard routines.
 
 ### Mouse module
-* Mouse.init()
-* var mouse = Mouse.get()  
+* Mouse.init() - Initialize mouse routines.
+* var mouse = Mouse.get() - Returns mouse actual properties on the object format below:  
   • mouse.x  
   • mouse.y  
   • mouse.wheel  
   • mouse.buttons  
-* Mouse.setBoundary(minx, maxx, miny, maxy)
-* var mode = Mouse.getMode()
-* Mouse.setMode(mode)
-* var accel = Mouse.getAccel()
-* Mouse.setAccel(val)
-* Mouse.setPosition(x, y)
+* Mouse.setBoundary(minx, maxx, miny, maxy) - Set mouse x and y bounds.
+* var mode = Mouse.getMode() - Get mouse mode(absolute or relative).
+* Mouse.setMode(mode) - Set mouse mode.
+* var accel = Mouse.getAccel() - Get mouse acceleration.
+* Mouse.setAccel(val) - Set mouse acceleration.
+* Mouse.setPosition(x, y) - Set mouse pointer position.
   
 ### System module
 
@@ -416,7 +421,7 @@ Asynchronous functions:
 
 * var zip = Archive.open(fname)
 * var list = Archive.list(zip)
-* Archive.extractAll(fname)
+* Archive.extractAll(zip)
 * Archive.close(zip)
 * Archive.untar(fname)
 
