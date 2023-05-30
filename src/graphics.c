@@ -29,6 +29,7 @@ void (*flipScreen)();
 
 static bool vsync = true;
 static bool perf = false;
+static bool hires = false;
 static int vsync_sema_id = 0;
 static clock_t curtime = 0;
 static float fps = 0.0f;
@@ -1021,7 +1022,7 @@ int GetInterlacedFrameMode()
 }
 GSGLOBAL *getGSGLOBAL(){return gsGlobal;}
 
-void setVideoMode(s16 mode, int width, int height, int psm, s16 interlace, s16 field, bool zbuffering, int psmz, bool double_buffering) {
+void setVideoMode(s16 mode, int width, int height, int psm, s16 interlace, s16 field, bool zbuffering, int psmz, bool double_buffering, uint8_t pass_count) {
 	gsGlobal->Mode = mode;
 	gsGlobal->Width = width;
 	if ((interlace == GS_INTERLACED) && (field == GS_FRAME))
@@ -1040,8 +1041,6 @@ void setVideoMode(s16 mode, int width, int height, int psm, s16 interlace, s16 f
 	gsGlobal->Interlace = interlace;
 	gsGlobal->Field = field;
 
-	switchFlipScreenFunction();
-
 	gsKit_set_primalpha(gsGlobal, GS_SETREG_ALPHA(0, 1, 0, 1, 0), 0);
 
 	dbgprintf("\nGraphics: created video surface of (%d, %d)\n",
@@ -1049,7 +1048,17 @@ void setVideoMode(s16 mode, int width, int height, int psm, s16 interlace, s16 f
 
 	gsKit_set_clamp(gsGlobal, GS_CMODE_REPEAT);
 	gsKit_vram_clear(gsGlobal);
-	gsKit_init_screen(gsGlobal);
+
+	if (pass_count > 1) {
+		gsKit_hires_init_screen(gsGlobal, pass_count);
+		hires = true;
+	} else {
+		gsKit_init_screen(gsGlobal);
+		hires = false;
+	}
+
+	switchFlipScreenFunction();
+	
 	gsKit_set_display_offset(gsGlobal, -0.5f, -0.5f);
 	gsKit_sync_flip(gsGlobal);
 
@@ -1174,8 +1183,7 @@ inline void processFrameCounter()
 void flipScreenSingleBuffering()
 {
 	//gsKit_set_finish(gsGlobal);
-    if(vsync) 
-		gsKit_sync(gsGlobal);
+	gsKit_sync(gsGlobal);
 	gsKit_queue_exec(gsGlobal);
 
 	gsKit_TexManager_nextFrame(gsGlobal);
@@ -1184,9 +1192,7 @@ void flipScreenSingleBuffering()
 void flipScreenSingleBufferingPerf()
 {
 	//gsKit_set_finish(gsGlobal);
-
-    if(vsync) 
-		gsKit_sync(gsGlobal);
+	gsKit_sync(gsGlobal);
 	gsKit_queue_exec(gsGlobal);
 
 	gsKit_TexManager_nextFrame(gsGlobal);
@@ -1200,8 +1206,7 @@ void flipScreenDoubleBuffering()
 
 	gsKit_queue_exec(gsGlobal);
 	gsKit_finish();
-	if(vsync) 
-		gsKit_sync(gsGlobal);
+	gsKit_sync(gsGlobal);
 	gsKit_flip(gsGlobal);
 	
 	gsKit_TexManager_nextFrame(gsGlobal);
@@ -1213,8 +1218,7 @@ void flipScreenDoubleBufferingPerf()
 
 	gsKit_queue_exec(gsGlobal);
 	gsKit_finish();
-	if(vsync) 
-		gsKit_sync(gsGlobal);
+	gsKit_sync(gsGlobal);
 	gsKit_flip(gsGlobal);
 	
 	gsKit_TexManager_nextFrame(gsGlobal);
@@ -1257,40 +1261,66 @@ void flipScreenDoubleBufferingPerfNoVSync()
 	processFrameCounter();
 }
 
+//////////////////////////////////////////////////////////////////////////////////////////////
+
+void flipScreenHiRes()
+{
+	gsKit_hires_sync(gsGlobal);
+	gsKit_hires_flip(gsGlobal);
+	gsKit_TexManager_nextFrame(gsGlobal);
+
+}
+
+void flipScreenHiResPerf()
+{
+	gsKit_hires_sync(gsGlobal);
+	gsKit_hires_flip(gsGlobal);
+	gsKit_TexManager_nextFrame(gsGlobal);
+
+	processFrameCounter();
+}
+
 void switchFlipScreenFunction()
 {
-	if (vsync) {
-		if (gsGlobal->DoubleBuffering == GS_SETTING_OFF) {
-			if(perf) {
-				flipScreen = flipScreenSingleBufferingPerf;
-			} else {
-				flipScreen = flipScreenSingleBuffering;
-			}
+	if (hires) {
+		if(perf) {
+			flipScreen = flipScreenHiResPerf;
 		} else {
-			if(perf) {
-				flipScreen = flipScreenDoubleBufferingPerf;
-			} else {
-				flipScreen = flipScreenDoubleBuffering;
-			}
+			flipScreen = flipScreenHiRes;
 		}
-
 	} else {
-		if (gsGlobal->DoubleBuffering == GS_SETTING_OFF) {
-			if(perf) {
-				flipScreen = flipScreenSingleBufferingPerfNoVSync;
+		if (vsync) {
+			if (gsGlobal->DoubleBuffering == GS_SETTING_OFF) {
+				if(perf) {
+					flipScreen = flipScreenSingleBufferingPerf;
+				} else {
+					flipScreen = flipScreenSingleBuffering;
+				}
 			} else {
-				flipScreen = flipScreenSingleBufferingNoVSync;
+				if(perf) {
+					flipScreen = flipScreenDoubleBufferingPerf;
+				} else {
+					flipScreen = flipScreenDoubleBuffering;
+				}
 			}
+
 		} else {
-			if(perf) {
-				flipScreen = flipScreenDoubleBufferingPerfNoVSync;
+			if (gsGlobal->DoubleBuffering == GS_SETTING_OFF) {
+				if(perf) {
+					flipScreen = flipScreenSingleBufferingPerfNoVSync;
+				} else {
+					flipScreen = flipScreenSingleBufferingNoVSync;
+				}
 			} else {
-				flipScreen = flipScreenDoubleBufferingNoVSync;
+				if(perf) {
+					flipScreen = flipScreenDoubleBufferingPerfNoVSync;
+				} else {
+					flipScreen = flipScreenDoubleBufferingNoVSync;
+				}
 			}
+
 		}
-
 	}
-
 }
 
 void init_graphics()

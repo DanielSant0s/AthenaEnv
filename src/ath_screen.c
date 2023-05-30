@@ -67,6 +67,7 @@ static JSValue athena_getvmode(JSContext *ctx, JSValue this_val, int argc, JSVal
 static JSValue athena_setvmode(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	int width, height, psm, mode, interlace, field, psmz = GS_PSMZ_16S;
 	bool zbuffering = false, double_buffering = true;
+	uint32_t pass_count;
 	JSValue val;
 
 	val = JS_GetPropertyStr(ctx, argv[0], "mode");
@@ -96,7 +97,10 @@ static JSValue athena_setvmode(JSContext *ctx, JSValue this_val, int argc, JSVal
 	val = JS_GetPropertyStr(ctx, argv[0], "double_buffering");
 	double_buffering = JS_ToBool(ctx, val);
 
-	setVideoMode(mode, width, height, psm, interlace, field, zbuffering, psmz, double_buffering);
+	val = JS_GetPropertyStr(ctx, argv[0], "pass_count");
+	JS_ToUint32(ctx, &pass_count, val);
+
+	setVideoMode(mode, width, height, psm, interlace, field, zbuffering, psmz, double_buffering, pass_count);
 	return JS_UNDEFINED;
 }
 
