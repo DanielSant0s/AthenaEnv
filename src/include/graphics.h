@@ -58,11 +58,13 @@ void init_graphics();
 
 void clearScreen(Color color);
 
-void flipScreen();
+extern void (*flipScreen)();
 
 void graphicWaitVblankStart();
 
 void setVSync(bool vsync_flag);
+
+void toggleFrameCounter(bool enable);
 
 void gsKit_clear_screens();
 
@@ -74,7 +76,7 @@ int getFreeVRAM();
 
 float FPSCounter(int interval);
 
-void setVideoMode(s16 mode, int width, int height, int psm, s16 interlace, s16 field, bool zbuffering, int psmz);
+void setVideoMode(s16 mode, int width, int height, int psm, s16 interlace, s16 field, bool zbuffering, int psmz, bool double_buffering);
 
 int load_image(GSTEXTURE* image, const char* path, bool delayed);
 

@@ -4,7 +4,16 @@
 var fntcpy = new Font();
 fntcpy.scale = (0.4f);
 
-Screen.setMode(NTSC, 640, 448, CT24, INTERLACED, FIELD, true, Z16S);
+Screen.setFrameCounter(true);
+Screen.setVSync(false);
+
+const canvas = Screen.getMode();
+
+canvas.zbuffering = true;
+canvas.psmz = Z16S;
+
+Screen.setMode(canvas);
+
 Render.init(4/3);
 
 var dragontex = new Image("render/dragon.png");
@@ -40,7 +49,7 @@ var savedly = 180.0f;
 var savedrx = 50.0f;
 var savedry = 0.0f;
 
-var free_mem = Math.ceilf(System.getFreeMemory()/1024);
+var free_mem = 0;
 var free_vram = Screen.getFreeVRAM();
 
 while(true){
