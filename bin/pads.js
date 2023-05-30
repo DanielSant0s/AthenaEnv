@@ -1,5 +1,14 @@
 // {"name": "Gamepad tester", "author": "Daniel Santos", "version": "04072023", "icon": "pads_icon.png", "file": "pads.js"}
 
+const canvas = Screen.getMode();
+
+canvas.double_buffering = false;
+
+Screen.setMode(canvas);
+
+Screen.setVSync(false);
+Screen.setFrameCounter(true);
+
 var font = new Font();
 font.color = Color.new(128, 0, 255);
 font.scale = (0.4);

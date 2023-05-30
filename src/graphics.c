@@ -25,7 +25,11 @@ static const u64 BLACK_RGBAQ   = GS_SETREG_RGBAQ(0x00,0x00,0x00,0x80,0x00);
 static GSGLOBAL *gsGlobal = NULL;
 static GSFONTM *gsFontM = NULL;
 
+void (*flipScreen)();
+
 static bool vsync = true;
+static bool perf = false;
+static bool hires = false;
 static int vsync_sema_id = 0;
 static clock_t curtime = 0;
 static float fps = 0.0f;
@@ -1018,7 +1022,7 @@ int GetInterlacedFrameMode()
 }
 GSGLOBAL *getGSGLOBAL(){return gsGlobal;}
 
-void setVideoMode(s16 mode, int width, int height, int psm, s16 interlace, s16 field, bool zbuffering, int psmz) {
+void setVideoMode(s16 mode, int width, int height, int psm, s16 interlace, s16 field, bool zbuffering, int psmz, bool double_buffering, uint8_t pass_count) {
 	gsGlobal->Mode = mode;
 	gsGlobal->Width = width;
 	if ((interlace == GS_INTERLACED) && (field == GS_FRAME))
@@ -1030,7 +1034,7 @@ void setVideoMode(s16 mode, int width, int height, int psm, s16 interlace, s16 f
 	gsGlobal->PSMZ = psmz;
 
 	gsGlobal->ZBuffering = zbuffering;
-	gsGlobal->DoubleBuffering = GS_SETTING_ON;
+	gsGlobal->DoubleBuffering = double_buffering;
 	gsGlobal->PrimAlphaEnable = GS_SETTING_ON;
 	gsGlobal->Dithering = GS_SETTING_OFF;
 
@@ -1044,7 +1048,17 @@ void setVideoMode(s16 mode, int width, int height, int psm, s16 interlace, s16 f
 
 	gsKit_set_clamp(gsGlobal, GS_CMODE_REPEAT);
 	gsKit_vram_clear(gsGlobal);
-	gsKit_init_screen(gsGlobal);
+
+	if (pass_count > 1) {
+		gsKit_hires_init_screen(gsGlobal, pass_count);
+		hires = true;
+	} else {
+		gsKit_init_screen(gsGlobal);
+		hires = false;
+	}
+
+	switchFlipScreenFunction();
+	
 	gsKit_set_display_offset(gsGlobal, -0.5f, -0.5f);
 	gsKit_sync_flip(gsGlobal);
 
@@ -1071,7 +1085,15 @@ static int vsync_handler()
    return 0;
 }
 
-void setVSync(bool vsync_flag){ vsync = vsync_flag;}
+void setVSync(bool vsync_flag){ 
+	vsync = vsync_flag;
+	switchFlipScreenFunction();
+}
+
+void toggleFrameCounter(bool enable){ 
+	perf = enable;
+	switchFlipScreenFunction();
+}
 
 /* Copy of gsKit_sync_flip, but without the 'flip' */
 static void gsKit_sync(GSGLOBAL *gsGlobal)
@@ -1145,6 +1167,162 @@ void athena_error_screen(const char* errMsg, bool dark_mode) {
     }
 }
 
+inline void processFrameCounter()
+{
+	if (frames > frame_interval && frame_interval != -1) {
+		clock_t prevtime = curtime;
+		curtime = clock();
+
+		fps = ((float)(frame_interval)) / (((float)(curtime - prevtime)) / ((float)CLOCKS_PER_SEC));
+
+		frames = 0;
+	}
+	frames++;
+}
+
+void flipScreenSingleBuffering()
+{
+	//gsKit_set_finish(gsGlobal);
+	gsKit_sync(gsGlobal);
+	gsKit_queue_exec(gsGlobal);
+
+	gsKit_TexManager_nextFrame(gsGlobal);
+}
+
+void flipScreenSingleBufferingPerf()
+{
+	//gsKit_set_finish(gsGlobal);
+	gsKit_sync(gsGlobal);
+	gsKit_queue_exec(gsGlobal);
+
+	gsKit_TexManager_nextFrame(gsGlobal);
+
+	processFrameCounter();
+}
+
+void flipScreenDoubleBuffering()
+{	
+	//gsKit_set_finish(gsGlobal);
+
+	gsKit_queue_exec(gsGlobal);
+	gsKit_finish();
+	gsKit_sync(gsGlobal);
+	gsKit_flip(gsGlobal);
+	
+	gsKit_TexManager_nextFrame(gsGlobal);
+}
+
+void flipScreenDoubleBufferingPerf()
+{	
+	//gsKit_set_finish(gsGlobal);
+
+	gsKit_queue_exec(gsGlobal);
+	gsKit_finish();
+	gsKit_sync(gsGlobal);
+	gsKit_flip(gsGlobal);
+	
+	gsKit_TexManager_nextFrame(gsGlobal);
+
+	processFrameCounter();
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////
+
+void flipScreenSingleBufferingNoVSync()
+{
+	gsKit_queue_exec(gsGlobal);
+	gsKit_TexManager_nextFrame(gsGlobal);
+}
+
+void flipScreenSingleBufferingPerfNoVSync()
+{
+
+	gsKit_queue_exec(gsGlobal);
+	gsKit_TexManager_nextFrame(gsGlobal);
+
+	processFrameCounter();
+}
+
+void flipScreenDoubleBufferingNoVSync()
+{	
+	gsKit_queue_exec(gsGlobal);
+	gsKit_finish();
+	gsKit_flip(gsGlobal);
+	gsKit_TexManager_nextFrame(gsGlobal);
+}
+
+void flipScreenDoubleBufferingPerfNoVSync()
+{	
+	gsKit_queue_exec(gsGlobal);
+	gsKit_finish();
+	gsKit_flip(gsGlobal);
+	gsKit_TexManager_nextFrame(gsGlobal);
+
+	processFrameCounter();
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////
+
+void flipScreenHiRes()
+{
+	gsKit_hires_sync(gsGlobal);
+	gsKit_hires_flip(gsGlobal);
+	gsKit_TexManager_nextFrame(gsGlobal);
+
+}
+
+void flipScreenHiResPerf()
+{
+	gsKit_hires_sync(gsGlobal);
+	gsKit_hires_flip(gsGlobal);
+	gsKit_TexManager_nextFrame(gsGlobal);
+
+	processFrameCounter();
+}
+
+void switchFlipScreenFunction()
+{
+	if (hires) {
+		if(perf) {
+			flipScreen = flipScreenHiResPerf;
+		} else {
+			flipScreen = flipScreenHiRes;
+		}
+	} else {
+		if (vsync) {
+			if (gsGlobal->DoubleBuffering == GS_SETTING_OFF) {
+				if(perf) {
+					flipScreen = flipScreenSingleBufferingPerf;
+				} else {
+					flipScreen = flipScreenSingleBuffering;
+				}
+			} else {
+				if(perf) {
+					flipScreen = flipScreenDoubleBufferingPerf;
+				} else {
+					flipScreen = flipScreenDoubleBuffering;
+				}
+			}
+
+		} else {
+			if (gsGlobal->DoubleBuffering == GS_SETTING_OFF) {
+				if(perf) {
+					flipScreen = flipScreenSingleBufferingPerfNoVSync;
+				} else {
+					flipScreen = flipScreenSingleBufferingNoVSync;
+				}
+			} else {
+				if(perf) {
+					flipScreen = flipScreenDoubleBufferingPerfNoVSync;
+				} else {
+					flipScreen = flipScreenDoubleBufferingNoVSync;
+				}
+			}
+
+		}
+	}
+}
+
 void init_graphics()
 {
 	ee_sema_t sema;
@@ -1174,6 +1352,8 @@ void init_graphics()
 	dmaKit_init(D_CTRL_RELE_OFF, D_CTRL_MFD_OFF, D_CTRL_STS_UNSPEC, D_CTRL_STD_OFF, D_CTRL_RCYC_8, 1 << DMA_CHANNEL_GIF);
 	dmaKit_chan_init(DMA_CHANNEL_GIF);
 
+	flipScreen = flipScreenDoubleBuffering;
+
 	dbgprintf("\nGraphics: created %ix%i video surface\n",
 		gsGlobal->Width, gsGlobal->Height);
 
@@ -1196,33 +1376,6 @@ void init_graphics()
 	gsKit_vsync_wait();
 	flipScreen();
 
-}
-
-void flipScreen()
-{	
-	//gsKit_set_finish(gsGlobal);
-	if (gsGlobal->DoubleBuffering == GS_SETTING_OFF) {
-        if(vsync) 
-			gsKit_sync(gsGlobal);
-		gsKit_queue_exec(gsGlobal);
-    } else {
-		gsKit_queue_exec(gsGlobal);
-		gsKit_finish();
-		if(vsync) 
-			gsKit_sync(gsGlobal);
-		gsKit_flip(gsGlobal);
-	}
-	gsKit_TexManager_nextFrame(gsGlobal);
-
-	if (frames > frame_interval && frame_interval != -1) {
-		clock_t prevtime = curtime;
-		curtime = clock();
-
-		fps = ((float)(frame_interval)) / (((float)(curtime - prevtime)) / ((float)CLOCKS_PER_SEC));
-
-		frames = 0;
-	}
-	frames++;
 }
 
 void graphicWaitVblankStart(){

@@ -232,17 +232,19 @@ Display.setMode(NTSC, 640, 448, CT24, INTERLACED, FIELD, true, Z16S);
 * var freevram = Screen.getFreeVRAM()
 * var fps = Screen.getFPS(frame_interval)
 * Screen.setVSync(bool)
+* Screen.setFrameCounter(bool)
 * Screen.waitVblankStart()
-* Screen.setMode(mode, width, height, colormode, interlace, field, *zbuffering*, *zbuf_colormode*)  
-  • Default NTSC mode(3D disabled): Screen.setMode(NTSC, 640, 448, CT24, INTERLACED, FIELD)  
-  • Default NTSC mode(3D enabled):  Screen.setMode(NTSC, 640, 448, CT24, INTERLACED, FIELD, true, Z16S)  
-  • Default PAL mode(3D disabled): Screen.setMode(PAL, 640, 512, CT24, INTERLACED, FIELD)  
-  • Default PAL mode(3D enabled):  Screen.setMode(PAL, 640, 512, CT24, INTERLACED, FIELD, true, Z16S)  
-  • Available modes: NTSC, DTV_480p, PAL, DTV_576p, DTV_720p, DTV_1080i  
-  • Available colormodes: CT16, CT16S, CT24, CT32  
-  • Available zbuffer colormodes: Z16, Z16S, Z24, Z32  
-  • Available interlaces: INTERLACED, PROGRESSIVE  
-  • Available fields: FIELD, FRAME  
+* const canvas = Screen.getMode()  
+  • canvas.mode - Available modes: NTSC, DTV_480p, PAL, DTV_576p, DTV_720p, DTV_1080i.  
+  • canvas.width - Screen width. Default: 640.  
+  • canvas.height - Screen height. Default: 448 on NTSC consoles, 512 on PAL consoles.  
+  • canvas.psm - Color mode. Available colormodes: CT16, CT16S, CT24, CT32.  
+  • canvas.interlace - Available interlaces: INTERLACED, PROGRESSIVE.  
+  • canvas.field - Available fields: FIELD, FRAME.  
+  • canvas.double_buffering - Enable or disable double buffering(bool).  
+  • canvas.zbuffering - Enable or disable Z buffering (3D buffering)(bool).  
+  • canvas.psmz - ZBuffering color mode. Available zbuffer colormodes: Z16, Z16S, Z24, Z32.  
+* Screen.setMode(canvas)   
 
 ### Font module
 

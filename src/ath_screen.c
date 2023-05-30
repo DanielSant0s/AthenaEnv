@@ -31,6 +31,11 @@ static JSValue athena_vsync(JSContext *ctx, JSValue this_val, int argc, JSValueC
 	return 0;
 }
 
+static JSValue athena_fcount(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	toggleFrameCounter(JS_ToBool(ctx, argv[0]));
+	return 0;
+}
+
 static JSValue athena_getFreeVRAM(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	return JS_NewUint32(ctx, (uint32_t)(getFreeVRAM()));
 }
@@ -54,26 +59,49 @@ static JSValue athena_getvmode(JSContext *ctx, JSValue this_val, int argc, JSVal
 	JS_DefinePropertyValueStr(ctx, obj, "field", JS_NewInt32(ctx, gsGlobal->Field), JS_PROP_C_W_E);
 	JS_DefinePropertyValueStr(ctx, obj, "psmz", JS_NewInt32(ctx, gsGlobal->PSMZ), JS_PROP_C_W_E);
 	JS_DefinePropertyValueStr(ctx, obj, "zbuffering", JS_NewBool(ctx, gsGlobal->ZBuffering), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "double_buffering", JS_NewBool(ctx, gsGlobal->DoubleBuffering), JS_PROP_C_W_E);
 
 	return obj;
 }
 
 static JSValue athena_setvmode(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	int width, height, psm, mode, interlace, field, psmz = GS_PSMZ_16S;
-	bool zbuffering = false;
+	bool zbuffering = false, double_buffering = true;
+	uint32_t pass_count;
+	JSValue val;
 
-	JS_ToInt32(ctx, &mode, argv[0]);
-	JS_ToInt32(ctx, &width, argv[1]);
-	JS_ToInt32(ctx, &height, argv[2]);
-	JS_ToInt32(ctx, &psm, argv[3]);
-	JS_ToInt32(ctx, &interlace, argv[4]);
-	JS_ToInt32(ctx, &field, argv[5]);
-	if(argc == 8){
-		zbuffering = JS_ToBool(ctx, argv[6]);
-		JS_ToInt32(ctx, &psmz, argv[7]);
-	}
-	setVideoMode(mode, width, height, psm, interlace, field, zbuffering, psmz);
-	return 0;
+	val = JS_GetPropertyStr(ctx, argv[0], "mode");
+	JS_ToInt32(ctx, &mode, val);
+
+	val = JS_GetPropertyStr(ctx, argv[0], "width");
+	JS_ToInt32(ctx, &width, val);
+
+	val = JS_GetPropertyStr(ctx, argv[0], "height");
+	JS_ToInt32(ctx, &height, val);
+
+	val = JS_GetPropertyStr(ctx, argv[0], "psm");
+	JS_ToInt32(ctx, &psm, val);
+
+	val = JS_GetPropertyStr(ctx, argv[0], "interlace");
+	JS_ToInt32(ctx, &interlace, val);
+
+	val = JS_GetPropertyStr(ctx, argv[0], "field");
+	JS_ToInt32(ctx, &field, val);
+
+	val = JS_GetPropertyStr(ctx, argv[0], "psmz");
+	JS_ToInt32(ctx, &psmz, val);
+
+	val = JS_GetPropertyStr(ctx, argv[0], "zbuffering");
+	zbuffering = JS_ToBool(ctx, val);
+
+	val = JS_GetPropertyStr(ctx, argv[0], "double_buffering");
+	double_buffering = JS_ToBool(ctx, val);
+
+	val = JS_GetPropertyStr(ctx, argv[0], "pass_count");
+	JS_ToUint32(ctx, &pass_count, val);
+
+	setVideoMode(mode, width, height, psm, interlace, field, zbuffering, psmz, double_buffering, pass_count);
+	return JS_UNDEFINED;
 }
 
 static char* str_buf = NULL;
@@ -130,8 +158,9 @@ static const JSCFunctionListEntry module_funcs[] = {
 	JS_CFUNC_DEF("getFPS", 1, athena_getFPS),
     JS_CFUNC_DEF("waitVblankStart", 0, athena_vblank),
 	JS_CFUNC_DEF("setVSync", 1, athena_vsync),
+	JS_CFUNC_DEF("setFrameCounter", 1, athena_fcount),
 	JS_CFUNC_DEF("getMode", 0, athena_getvmode),
-    JS_CFUNC_DEF("setMode", 9, athena_setvmode),
+    JS_CFUNC_DEF("setMode", 1, athena_setvmode),
 	JS_CFUNC_DEF("log", 1, athena_scrlog),
 	JS_CFUNC_DEF("cls", 0, athena_cls),
 	JS_PROP_INT32_DEF("NTSC", GS_MODE_NTSC, JS_PROP_CONFIGURABLE),
