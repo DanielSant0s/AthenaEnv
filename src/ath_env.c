@@ -328,6 +328,8 @@ const char* runScript(const char* script, bool isBuffer)
 
     int s = qjs_handle_file(ctx, script, NULL);
 
+	js_std_loop(ctx);
+
     if (s < 0) { 
 		JSValue exception_val = JS_GetException(ctx);
 		const char* exception = JS_ToCString(ctx, exception_val);
