@@ -27,15 +27,15 @@ old_stat = null;
 sysalert("Allocation test, creating some arrays and objects...");
 
 let test = Array.from({length: 512}, () => Math.floor(Math.random() * 512));
-sysalert(JSON.stringify(test));
-test = null;
+
+let new_stat = memalert();
+const new_alloc = old_stat.allocs;
+old_stat = null;
 
 std.gc();
 
-let new_stat = memalert();
-
 sysalert(`512 random numbers array: ${new_stat.allocs - old_alloc} bytes`);
-
+sysalert(JSON.stringify(test));
 
 
 System.sleep(0xFFFFFFFF);

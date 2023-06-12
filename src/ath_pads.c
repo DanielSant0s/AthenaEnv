@@ -158,6 +158,8 @@ static JSValue athena_check(JSContext *ctx, JSValue this_val, int argc, JSValueC
 
 	JS_ToInt32(ctx, &button, argv[1]);
 
+	JS_FreeValue(ctx, val);
+
 	return JS_NewBool(ctx, (pad & button));
 }
 

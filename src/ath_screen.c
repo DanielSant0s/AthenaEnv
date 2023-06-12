@@ -72,33 +72,43 @@ static JSValue athena_setvmode(JSContext *ctx, JSValue this_val, int argc, JSVal
 
 	val = JS_GetPropertyStr(ctx, argv[0], "mode");
 	JS_ToInt32(ctx, &mode, val);
+	JS_FreeValue(ctx, val);
 
 	val = JS_GetPropertyStr(ctx, argv[0], "width");
 	JS_ToInt32(ctx, &width, val);
+	JS_FreeValue(ctx, val);
 
 	val = JS_GetPropertyStr(ctx, argv[0], "height");
 	JS_ToInt32(ctx, &height, val);
+	JS_FreeValue(ctx, val);
 
 	val = JS_GetPropertyStr(ctx, argv[0], "psm");
 	JS_ToInt32(ctx, &psm, val);
+	JS_FreeValue(ctx, val);
 
 	val = JS_GetPropertyStr(ctx, argv[0], "interlace");
 	JS_ToInt32(ctx, &interlace, val);
+	JS_FreeValue(ctx, val);
 
 	val = JS_GetPropertyStr(ctx, argv[0], "field");
 	JS_ToInt32(ctx, &field, val);
+	JS_FreeValue(ctx, val);
 
 	val = JS_GetPropertyStr(ctx, argv[0], "psmz");
 	JS_ToInt32(ctx, &psmz, val);
+	JS_FreeValue(ctx, val);
 
 	val = JS_GetPropertyStr(ctx, argv[0], "zbuffering");
 	zbuffering = JS_ToBool(ctx, val);
+	JS_FreeValue(ctx, val);
 
 	val = JS_GetPropertyStr(ctx, argv[0], "double_buffering");
 	double_buffering = JS_ToBool(ctx, val);
+	JS_FreeValue(ctx, val);
 
 	val = JS_GetPropertyStr(ctx, argv[0], "pass_count");
 	JS_ToUint32(ctx, &pass_count, val);
+	JS_FreeValue(ctx, val);
 
 	setVideoMode(mode, width, height, psm, interlace, field, zbuffering, psmz, double_buffering, pass_count);
 	return JS_UNDEFINED;

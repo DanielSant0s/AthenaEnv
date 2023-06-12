@@ -312,12 +312,15 @@ static char error_buf[1024];
 
 const char* runScript(const char* script, bool isBuffer)
 {
+	size_t memoryLimit = (GetMemorySize() - get_used_memory()) >> 1;
+
     dbgprintf("\nStarting AthenaEnv...\n");
     JSRuntime *rt = JS_NewRuntime(); if (!rt) { return "Runtime creation"; }
     js_std_set_worker_new_context_func(JS_NewCustomContext);
     js_std_init_handlers(rt);
 
-	JS_SetMemoryLimit(rt, (GetMemorySize() - get_used_memory()) / 2);
+	JS_SetMemoryLimit(rt, memoryLimit);
+	JS_SetGCThreshold(rt, memoryLimit >> 3);
 
     JSContext *ctx = JS_NewCustomContext(rt); if (!ctx) { return "Context creation"; }
 
