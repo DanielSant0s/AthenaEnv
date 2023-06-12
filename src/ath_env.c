@@ -6,6 +6,8 @@
 
 #include "ath_env.h"
 
+#include "include/memory.h"
+
 #define TRUE 1
 
 JSModuleDef *athena_push_module(JSContext* ctx, JSModuleInitFunc *func, const JSCFunctionListEntry *func_list, int len, const char* module_name){
@@ -314,6 +316,9 @@ const char* runScript(const char* script, bool isBuffer)
     JSRuntime *rt = JS_NewRuntime(); if (!rt) { return "Runtime creation"; }
     js_std_set_worker_new_context_func(JS_NewCustomContext);
     js_std_init_handlers(rt);
+
+	JS_SetMemoryLimit(rt, (GetMemorySize() - get_used_memory()) / 2);
+
     JSContext *ctx = JS_NewCustomContext(rt); if (!ctx) { return "Context creation"; }
 
 	JS_SetModuleLoaderFunc(rt, NULL, js_module_loader, NULL);
