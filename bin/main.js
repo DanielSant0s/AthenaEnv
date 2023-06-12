@@ -63,7 +63,7 @@ const VK_RETURN = 10;
 
 var ee_info = System.getCPUInfo();
 
-while(true) {
+os.setInterval(() => {
     old_pad = new_pad;
     new_pad = Pads.get();
 
@@ -106,4 +106,4 @@ while(true) {
     }
 
     Screen.flip();
-}
+}, 0);
