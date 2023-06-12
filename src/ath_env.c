@@ -308,7 +308,7 @@ static JSContext *JS_NewCustomContext(JSRuntime *rt)
     return ctx;
 }
 
-static char error_buf[1024];
+static char error_buf[4096];
 
 const char* runScript(const char* script, bool isBuffer)
 {
