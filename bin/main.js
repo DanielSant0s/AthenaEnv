@@ -2,6 +2,9 @@ import test from "./test.js";
 
 test("module test ok");
 
+let fr_float = Math.fround(15.6787869696);
+console.log(fr_float);
+
 IOP.loadDefaultModule(IOP.keyboard);
 Keyboard.init();
 

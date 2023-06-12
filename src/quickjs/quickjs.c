@@ -16479,6 +16479,17 @@ static JSValue js_call_c_function(JSContext *ctx, JSValueConst func_obj,
             ret_val = JS_NewFloat32(ctx, func.f_f_f(f1, f2));
         }
         break;
+    case JS_CFUNC_f_d:
+        {
+            double d1;
+
+            if (unlikely(JS_ToFloat64(ctx, &d1, arg_buf[0]))) {
+                ret_val = JS_EXCEPTION;
+                break;
+            }
+            ret_val = JS_NewFloat32(ctx, func.f_d(d1));
+        }
+        break;
     case JS_CFUNC_iterator_next:
         {
             int done;
@@ -42226,9 +42237,9 @@ static JSValue js_math_hypot(JSContext *ctx, JSValueConst this_val,
     return JS_NewFloat64(ctx, r);
 }
 
-static double js_math_fround(double a)
+static float js_math_fround(double a)
 {
-    return (double)a;
+    return (float)a;
 }
 
 static JSValue js_math_imul(JSContext *ctx, JSValueConst this_val,
@@ -42360,7 +42371,7 @@ static const JSCFunctionListEntry js_math_funcs[] = {
 
     JS_CFUNC_DEF("hypot", 2, js_math_hypot ),
     JS_CFUNC_DEF("random", 0, js_math_random ),
-    JS_CFUNC_SPECIAL_DEF("fround", 1, d_d, js_math_fround ),
+    JS_CFUNC_SPECIAL_DEF("fround", 1, f_d, js_math_fround ),
     JS_CFUNC_DEF("imul", 2, js_math_imul ),
     JS_CFUNC_DEF("clz32", 1, js_math_clz32 ),
     JS_PROP_STRING_DEF("[Symbol.toStringTag]", "Math", JS_PROP_CONFIGURABLE ),
