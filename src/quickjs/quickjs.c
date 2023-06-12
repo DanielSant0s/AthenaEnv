@@ -1691,6 +1691,10 @@ void JS_SetRuntimeOpaque(JSRuntime *rt, void *opaque)
     rt->user_opaque = opaque;
 }
 
+size_t ps2_malloc_usable_size(void *ptr) {
+    return ((size_t*)ptr)[-1];
+}
+
 /* default memory allocation functions with memory limitation */
 static inline size_t js_def_malloc_usable_size(void *ptr)
 {
@@ -1702,6 +1706,8 @@ static inline size_t js_def_malloc_usable_size(void *ptr)
     return 0;
 #elif defined(__linux__)
     return malloc_usable_size(ptr);
+#elif defined(PS2)
+    return ps2_malloc_usable_size(ptr);
 #else
     /* change this to `return 0;` if compilation fails */
     return 0;

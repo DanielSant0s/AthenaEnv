@@ -162,6 +162,9 @@ debug: $(EXT_LIBS) $(EE_BIN)
 	echo "Building $(EE_BIN) with debug symbols..."
 	mv $(EE_BIN) bin/athena_debug.elf
 
+tests: all
+	mv bin/$(EE_BIN) tests/test_suite.elf
+
 clean:
 	echo Cleaning executables...
 	rm -f bin/$(EE_BIN) bin/$(EE_BIN_PKD)

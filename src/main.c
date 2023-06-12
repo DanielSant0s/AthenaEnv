@@ -134,11 +134,11 @@ int main(int argc, char **argv) {
 
     init_taskman();
 
-	const char* errMsg;
+	const char* errMsg = NULL;
 
     dark_mode = true;
 
-    while(true)
+    do
     {
         if (argc < 2) {
             errMsg = runScript("main.js", false);
@@ -148,7 +148,7 @@ int main(int argc, char **argv) {
 
         athena_error_screen(errMsg, dark_mode);
 
-    }
+    } while (errMsg != NULL);
 
 	// End program.
 	return 0;

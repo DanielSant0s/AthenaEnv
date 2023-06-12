@@ -401,11 +401,13 @@ static JSValue athena_loadELF(JSContext *ctx, JSValue this_val, int argc, JSValu
 
 		val = JS_GetPropertyStr(ctx, argv[1], "length");
 		JS_ToInt32(ctx, &n, val);
+		JS_FreeValue(ctx, val);
 		args = malloc(n*sizeof(char*));
 
 		for (int i = 0; i < n; i++) {
 			val = JS_GetPropertyUint32(ctx, argv[1], i);
 		    *(args + i) = (char*)JS_ToCString(ctx, val);
+			JS_FreeValue(ctx, val);
 		}
 	}
 
