@@ -80,6 +80,8 @@ IOP_MODULES = iomanx.o filexio.o sio2man.o mcman.o mcserv.o padman.o  \
 			  ds34usb.o freeram.o ps2dev9.o mtapman.o poweroff.o ps2atad.o \
 			  ps2hdd.o ps2fs.o
 
+EMBEDDED_ASSETS = quicksand_regular.o
+
 ifeq ($(CLI),1)
   EE_BIN := $(EE_BIN)_cli
   EE_BIN_PKD := $(EE_BIN_PKD)_cli
@@ -137,7 +139,7 @@ ifneq ($(EE_SIO), 0)
 endif
 
 
-EE_OBJS = $(APP_CORE) $(JS_CORE) $(ATHENA_MODULES) $(IOP_MODULES) #group them all
+EE_OBJS = $(APP_CORE) $(JS_CORE) $(ATHENA_MODULES) $(IOP_MODULES) $(EMBEDDED_ASSETS) #group them all
 EE_OBJS := $(EE_OBJS:%=$(EE_OBJS_DIR)%) #prepend the object folder
 
 EE_BIN := $(EE_BIN)$(EE_EXT)

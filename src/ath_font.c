@@ -47,23 +47,29 @@ static JSValue athena_font_ctor(JSContext *ctx, JSValueConst new_target, int arg
 
     if (argc == 1) {
         const char* path = JS_ToCString(ctx, argv[0]);
-        dbgprintf("%s\n", path);
-        font->id = fntLoadFile(path);
-        font->type = truetype_font;
 
-        if (font->id == -1) {
-            font->data = loadFont(path);
-            if (font->data == NULL) return JS_EXCEPTION;
-            font->type = image_font;
+        if (strcmp(path, "default") == 0) {
+            font->id = fntLoadFile(path);
+            font->type = truetype_font;
+        } else {
+            dbgprintf("%s\n", path);
+            font->id = fntLoadFile(path);
+            font->type = truetype_font;
+
+            if (font->id == -1) {
+                font->data = loadFont(path);
+                if (font->data == NULL) return JS_EXCEPTION;
+                font->type = image_font;
+            }
         }
-
+        
         JS_FreeCString(ctx, path);
     } else {
         font->type = osdsys_font;
     }
 
     font->color = 0x80808080;
-    font->scale = 1.0;
+    font->scale = 1.0f;
 
     proto = JS_GetPropertyStr(ctx, new_target, "prototype");
     if (JS_IsException(proto))

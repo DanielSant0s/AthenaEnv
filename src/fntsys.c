@@ -20,6 +20,9 @@
 
 #include FT_FREETYPE_H
 
+extern void *quicksand_regular;
+extern int size_quicksand_regular;
+
 // freetype vars
 static FT_Library font_library;
 
@@ -281,15 +284,17 @@ static int fntLoadSlot(font_t *font, const char* path)
 
     fntInitSlot(font);
 
-   
+    if (path) {
         buffer = readFile(path, -1, &bufferSize);
         if (!buffer) {
             dbgprintf("FNTSYS Font file loading failed: %s\n", path);
             return FNT_ERROR;
         }
         font->dataPtr = buffer;
-
-
+    } else {
+        buffer = &quicksand_regular;
+        bufferSize = size_quicksand_regular;
+    }
 
     // load the font via memory handle
     int error = FT_New_Memory_Face(font_library, (FT_Byte *)buffer, bufferSize, 0, &font->face);
@@ -326,13 +331,15 @@ void fntInit()
     for (; i < FNT_MAX_COUNT; ++i)
         fntInitSlot(&fonts[i]);
 
+    fntLoadDefault(NULL);
+
     fntUpdateAspectRatio();
 }
 
 int fntLoadFile(const char* path)
 {
     font_t *font;
-    int i = 0;
+    int i = 1;
     for (; i < FNT_MAX_COUNT; i++) {
         font = &fonts[i];
         if (!font->isValid) {
