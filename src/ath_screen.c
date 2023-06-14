@@ -10,30 +10,30 @@
 
 static JSValue athena_flip(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
   flipScreen();
-  return 0;
+  return JS_UNDEFINED;
 }
 
 static JSValue athena_clear(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	Color color = GS_SETREG_RGBAQ(0x00, 0x00, 0x00, 0x80, 0x00);
-  if (argc == 1) JS_ToInt32(ctx, &color, argv[0]);
+  	if (argc == 1) JS_ToInt32(ctx, &color, argv[0]);
 	clearScreen(color);
-	return 0;
+	return JS_UNDEFINED;
 }
 
 
 static JSValue athena_vblank(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	graphicWaitVblankStart();
-	return 0;
+	return JS_UNDEFINED;
 }
 
 static JSValue athena_vsync(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	setVSync(JS_ToBool(ctx, argv[0]));
-	return 0;
+	return JS_UNDEFINED;
 }
 
 static JSValue athena_fcount(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	toggleFrameCounter(JS_ToBool(ctx, argv[0]));
-	return 0;
+	return JS_UNDEFINED;
 }
 
 static JSValue athena_getFreeVRAM(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
@@ -123,6 +123,12 @@ static size_t buf_len = 0;
 static JSValue athena_scrlog(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	unsigned int old_len, len = 0;
 	const char* in_str = JS_ToCStringLen(ctx, &len, argv[0]);
+	
+	if(!str_buf) {
+		str_buf = malloc(512);
+		buf_len = 512;
+		memset(str_buf, 0, buf_len);
+	}
 
 	old_len = str_len;
 	str_len += len + 1;
@@ -195,10 +201,6 @@ static const JSCFunctionListEntry module_funcs[] = {
 
 static int screen_init(JSContext *ctx, JSModuleDef *m)
 {
-	str_buf = malloc(512);
-	buf_len = 512;
-	memset(str_buf, 0, buf_len);
-
     return JS_SetModuleExportList(ctx, m, module_funcs, countof(module_funcs));
 }
 

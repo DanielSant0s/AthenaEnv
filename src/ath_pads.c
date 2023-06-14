@@ -16,8 +16,8 @@ static JSValue athena_gettype(JSContext *ctx, JSValue this_val, int argc, JSValu
 }
 
 static JSValue athena_getpad(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-	if (argc != 0 && argc != 1) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
 	int port = 0;
+
 	if (argc == 1){
 		JS_ToInt32(ctx, &port, argv[0]);
 		if (port > 1) return JS_ThrowSyntaxError(ctx, "wrong port number.");
@@ -149,7 +149,6 @@ static JSValue athena_rumble(JSContext *ctx, JSValue this_val, int argc, JSValue
 }
 
 static JSValue athena_check(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-	if (argc != 2) return JS_ThrowSyntaxError(ctx, "wrong number of arguments.");
 	int pad, button;
     JSValue val;
 
@@ -162,7 +161,6 @@ static JSValue athena_check(JSContext *ctx, JSValue this_val, int argc, JSValueC
 
 	return JS_NewBool(ctx, (pad & button));
 }
-
 
 static JSValue athena_set_led(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	if (argc != 3 && argc != 4) return JS_ThrowSyntaxError(ctx, "wrong number of arguments.");
@@ -215,8 +213,6 @@ static const JSCFunctionListEntry module_funcs[] = {
 	JS_PROP_INT32_DEF("DUALSHOCK", PAD_TYPE_DUALSHOCK, JS_PROP_CONFIGURABLE ),
 
 };
-
-
 
 static int module_init(JSContext *ctx, JSModuleDef *m)
 {

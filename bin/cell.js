@@ -49,8 +49,11 @@ var main_menu_ptr = 0;
 var oldpad = Pads.get();
 var pad = oldpad;
 
+const transparent = Color.new(255, 255, 255, 40);
+const purple = Color.new(64, 0, 128);
+
 while(running){
-    Screen.clear(Color.new(64, 0, 128));
+    Screen.clear(purple);
 
     oldpad = pad;
     pad = Pads.get();
@@ -127,13 +130,13 @@ while(running){
             s_lines = World2Screen({x:i, y:-1500}, camera);
             if(s_lines[0] > 0 && s_lines[0] < 640) {
                 e_lines = World2Screen({x:i, y:1500}, camera);
-                Draw.line(s_lines[0], s_lines[1], e_lines[0], e_lines[1], Color.new(255, 255, 255, 40));
+                Draw.line(s_lines[0], s_lines[1], e_lines[0], e_lines[1], transparent);
             }
 
             s_lines = World2Screen({x:-1500, y:i}, camera);
             if(s_lines[1] > 0 && s_lines[1] < 448) {
                 e_lines = World2Screen({x: 1500, y:i}, camera);
-                Draw.line(s_lines[0], s_lines[1], e_lines[0], e_lines[1], Color.new(255, 255, 255, 40));
+                Draw.line(s_lines[0], s_lines[1], e_lines[0], e_lines[1], transparent);
             }
         }
 

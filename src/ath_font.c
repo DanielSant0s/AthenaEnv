@@ -89,7 +89,6 @@ static JSValue athena_font_ctor(JSContext *ctx, JSValueConst new_target, int arg
 
 static JSValue athena_font_print(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
     float x, y;
-	if (argc != 3) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
 
     JSFontData *font = JS_GetOpaque2(ctx, this_val, js_font_class_id);
 
@@ -207,7 +206,6 @@ static int font_init(JSContext *ctx, JSModuleDef *m) {
                       
     JS_SetModuleExport(ctx, m, "Font", font_class);
 
-    fntInit();
     return 0;
 }
 

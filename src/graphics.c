@@ -987,8 +987,8 @@ void drawCircle(float x, float y, float radius, u64 color, u8 filled)
 	int a;
 
 	for (a = 0; a < 36; a++) {
-		v[a*2] = (cos(a * (PI*2)/36) * radius) + x;
-		v[a*2+1] = (sin(a * (PI*2)/36) * radius) + y;
+		v[a*2] = (cosf(a * (PI*2)/36) * radius) + x;
+		v[a*2+1] = (sinf(a * (PI*2)/36) * radius) + y;
 	}
 
 	if (!filled) {

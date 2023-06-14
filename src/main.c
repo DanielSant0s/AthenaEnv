@@ -21,6 +21,7 @@
 
 #ifdef ATHENA_GRAPHICS
 #include "include/graphics.h"
+#include "include/fntsys.h"
 #endif
 
 #ifdef ATHENA_CLI
@@ -125,6 +126,7 @@ int main(int argc, char **argv) {
 
     #ifdef ATHENA_GRAPHICS
 	init_graphics();
+    fntInit();
     loadFontM();
     #else
     #ifdef ATHENA_CLI

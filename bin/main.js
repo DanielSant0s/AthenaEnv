@@ -21,8 +21,6 @@ font_bold.scale = 0.7f
 font_medium.scale = 1.0f;
 font.scale = 0.44f;
 
-
-
 let no_icon = new Image("no_icon.png");
 
 console.log(JSON.stringify(Tasks.get()));

@@ -86,9 +86,9 @@ static JSValue athena_image_ctor(JSContext *ctx, JSValueConst new_target, int ar
 	image->endy = image->tex.Height;
 
  register_obj:
-	image->startx = 0.0;
-	image->starty = 0.0;
-	image->angle = 0.0;
+	image->startx = 0.0f;
+	image->starty = 0.0f;
+	image->angle = 0.0f;
 	image->color = 0x80808080;
 	image->tex.Filter = GS_FILTER_NEAREST;
 
@@ -109,8 +109,6 @@ static JSValue athena_image_ctor(JSContext *ctx, JSValueConst new_target, int ar
 }
 
 static JSValue athena_image_draw(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-	if (argc != 2) return JS_ThrowSyntaxError(ctx, "draw takes x and y arguments(2)!");
-
 	float x, y;
 
 	JSImageData *image = JS_GetOpaque2(ctx, this_val, js_image_class_id);
@@ -118,7 +116,7 @@ static JSValue athena_image_draw(JSContext *ctx, JSValue this_val, int argc, JSV
 	JS_ToFloat32(ctx, &x, argv[0]);
 	JS_ToFloat32(ctx, &y, argv[1]);
 
-	if(image->angle != 0.0){
+	if(image->angle != 0.0f){
 		drawImageRotate(&(image->tex), x, y, image->width, image->height, image->startx, image->starty, image->endx, image->endy, image->angle, image->color);
 	} else {
 		drawImage(&(image->tex), x, y, image->width, image->height, image->startx, image->starty, image->endx, image->endy, image->color);
