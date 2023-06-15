@@ -9,7 +9,7 @@ static JSValue athena_kbd_get(JSContext *ctx, JSValue this_val, int argc, JSValu
 	char key = 0;
 
 	PS2KbdRead(&key);
-	return JS_NewUint32(ctx, key);
+	return JS_NewInt32(ctx, key);
 }
 
 static JSValue athena_kbd_setrepeatrate(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){

@@ -49,7 +49,7 @@ static JSValue athena_font_ctor(JSContext *ctx, JSValueConst new_target, int arg
         const char* path = JS_ToCString(ctx, argv[0]);
 
         if (strcmp(path, "default") == 0) {
-            font->id = fntLoadFile(path);
+            font->id = 0;
             font->type = truetype_font;
         } else {
             dbgprintf("%s\n", path);
