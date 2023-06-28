@@ -173,7 +173,6 @@ void pad_init()
     dbgprintf("PortMax: %d\n", padGetPortMax());
     dbgprintf("SlotMax: %d\n", padGetSlotMax(port));
 
-
     if((ret = padPortOpen(port, slot, padBuf)) == 0) {
         dbgprintf("padOpenPort failed: %d\n", ret);
         SleepThread();

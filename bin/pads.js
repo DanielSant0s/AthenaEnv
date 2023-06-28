@@ -15,9 +15,9 @@ const dark_gray = Color.new(128, 128, 128, 32);
 const opaque = Color.new(128, 128, 128, 128);
 const translucent = Color.new(128, 128, 128, 60);
 
-const font = new Font();
+const font = new Font("fonts/minecraft.ttf");
 font.color = Color.new(128, 0, 255);
-font.scale = 0.4f;
+font.scale = Math.fround(0.4);
 
 const circle = new Image("pads/circle.png", VRAM);
 const cross = new Image("pads/cross.png", VRAM);

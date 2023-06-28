@@ -48,7 +48,7 @@ typedef struct {
     GSTEXTURE* texture;
 } model;
 
-typedef u32 Color;
+typedef u64 Color;
 #define A(color) ((u8)(color >> 24 & 0xFF))
 #define B(color) ((u8)(color >> 16 & 0xFF))
 #define G(color) ((u8)(color >> 8 & 0xFF))

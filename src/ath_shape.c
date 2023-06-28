@@ -16,7 +16,7 @@ static JSValue athena_point_draw(JSContext *ctx, JSValue this_val, int argc, JSV
 	JS_ToUint32(ctx, &color, argv[2]);
 
 	drawPixel(x, y, color);
-	return 0;
+	return JS_UNDEFINED;
 }
 
 static JSValue athena_line_draw(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
@@ -30,7 +30,7 @@ static JSValue athena_line_draw(JSContext *ctx, JSValue this_val, int argc, JSVa
 	JS_ToUint32(ctx, &color, argv[4]);
 
 	drawLine(x1, y1, x2, y2, color);
-	return 0;
+	return JS_UNDEFINED;
 }
 
 static JSValue athena_triangle_draw(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
@@ -54,7 +54,7 @@ static JSValue athena_triangle_draw(JSContext *ctx, JSValue this_val, int argc, 
         drawTriangle_gouraud(x1, y1, x2, y2, x3, y3, color1, color2, color3);
     }
 	
-	return 0;
+	return JS_UNDEFINED;
 }
 
 static JSValue athena_quad_draw(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
@@ -81,7 +81,7 @@ static JSValue athena_quad_draw(JSContext *ctx, JSValue this_val, int argc, JSVa
         drawQuad_gouraud(x1, y1, x2, y2, x3, y3, x4, y4, color1, color2, color3, color4);
     }
 	
-	return 0;
+	return JS_UNDEFINED;
 }
 
 static JSValue athena_rect_draw(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
@@ -95,7 +95,7 @@ static JSValue athena_rect_draw(JSContext *ctx, JSValue this_val, int argc, JSVa
 	JS_ToUint32(ctx, &color, argv[4]);
 
 	drawRect(x, y, w, h, color);
-	return 0;
+	return JS_UNDEFINED;
 }
 
 static JSValue athena_circle_draw(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
@@ -110,7 +110,7 @@ static JSValue athena_circle_draw(JSContext *ctx, JSValue this_val, int argc, JS
     if (argc == 5) filled = JS_ToBool(ctx, argv[4]);
 
 	drawCircle(x, y, r, color, filled);
-	return 0;
+	return JS_UNDEFINED;
 }
 
 static const JSCFunctionListEntry module_funcs[] = {
