@@ -46,6 +46,7 @@ int initializePad(int port, int slot)
     int ret;
     int modes;
     int i;
+    int status;
 
     waitPadReady(port, slot);
 
@@ -57,13 +58,15 @@ int initializePad(int port, int slot)
     if (modes > 0) {
         dbgprintf("( ");
         for (i = 0; i < modes; i++) {
-            dbgprintf("%d ", padInfoMode(port, slot, PAD_MODETABLE, i));
+            status = padInfoMode(port, slot, PAD_MODETABLE, i);
+            dbgprintf("%d ", status);
         }
         dbgprintf(")");
     }
 
+    status = padInfoMode(port, slot, PAD_MODECURID, 0);
     dbgprintf("It is currently using mode %d\n",
-               padInfoMode(port, slot, PAD_MODECURID, 0));
+               status);
 
     // If modes == 0, this is not a Dual shock controller
     // (it has no actuator engines)
@@ -98,14 +101,16 @@ int initializePad(int port, int slot)
     padSetMainMode(port, slot, PAD_MMODE_DUALSHOCK, PAD_MMODE_LOCK);
 
     waitPadReady(port, slot);
-    dbgprintf("infoPressMode: %d\n", padInfoPressMode(port, slot));
+    status = padInfoPressMode(port, slot);
+    dbgprintf("infoPressMode: %d\n", status);
 
     waitPadReady(port, slot);
-    dbgprintf("enterPressMode: %d\n", padEnterPressMode(port, slot));
+    status = padEnterPressMode(port, slot);
+    dbgprintf("enterPressMode: %d\n", status);
 
     waitPadReady(port, slot);
     actuators = padInfoAct(port, slot, -1, 0);
-    dbgprintf("# of actuators: %d\n",actuators);
+    dbgprintf("# of actuators: %d\n", actuators);
 
     if (actuators != 0) {
         actAlign[0] = 0;   // Enable small engine
@@ -116,8 +121,8 @@ int initializePad(int port, int slot)
         actAlign[5] = 0xff;
 
         waitPadReady(port, slot);
-        dbgprintf("padSetActAlign: %d\n",
-                   padSetActAlign(port, slot, actAlign));
+        status = padSetActAlign(port, slot, actAlign);
+        dbgprintf("padSetActAlign: %d\n", status);
     }
     else {
         dbgprintf("Did not find any actuators.\n");

@@ -47,8 +47,7 @@ let app_table = System.listDir().map(file => file.name).filter(str => str.endsWi
 
 let menu_ptr = 0;
 
-let new_pad = Pads.get();
-let old_pad = new_pad;
+let pad = Pads.get();
 
 let old_kbd_char = 0;
 let kbd_char = 0;
@@ -62,8 +61,7 @@ const VK_RETURN = 10;
 var ee_info = System.getCPUInfo();
 
 os.setInterval(() => {
-    old_pad = new_pad;
-    new_pad = Pads.get();
+    pad.update();
 
     old_kbd_char = kbd_char;
     kbd_char = Keyboard.get();
@@ -76,16 +74,16 @@ os.setInterval(() => {
 
     font.print(15, 420, `Temp: ${System.getTemperature() === undefined? "NaN" : System.getTemperature()} C | RAM Usage: ${Math.floor(System.getMemoryStats().used / 1048576)}MB / ${Math.floor(ee_info.RAMSize / 1048576)}MB`);
 
-    if(Pads.check(new_pad, Pads.UP) && !Pads.check(old_pad, Pads.UP) || old_kbd_char == VK_OLD_UP && kbd_char == VK_NEW_UP) {
+    if(pad.justPressed(Pads.UP) || old_kbd_char == VK_OLD_UP && kbd_char == VK_NEW_UP) {
         app_table.unshift(app_table.pop());
 
     }
 
-    if(Pads.check(new_pad, Pads.DOWN) && !Pads.check(old_pad, Pads.DOWN) || old_kbd_char == VK_OLD_DOWN && kbd_char == VK_NEW_DOWN){
+    if(pad.justPressed(Pads.DOWN) || old_kbd_char == VK_OLD_DOWN && kbd_char == VK_NEW_DOWN){
         app_table.push(app_table.shift());
     }
 
-    if(Pads.check(new_pad, Pads.CROSS) && !Pads.check(old_pad, Pads.CROSS) || kbd_char == VK_RETURN){
+    if(pad.justPressed(Pads.CROSS) || kbd_char == VK_RETURN){
         let bin = "athena.elf";
         if ("bin" in app_table[0]) {
             bin = app_table[0].bin;

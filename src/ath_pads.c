@@ -4,6 +4,24 @@
 #include <libds34bt.h>
 #include <libds34usb.h>
 
+static JSClassID js_pads_class_id;
+
+typedef struct {
+	char port;
+
+    u32 btns;
+    char lx;
+	char ly;
+	char rx;
+	char ry;
+
+    u32 old_btns;
+    char old_lx;
+	char old_ly;
+	char old_rx;
+	char old_ry;
+} JSPads;
+
 static JSValue athena_gettype(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	if (argc != 0 && argc != 1) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
 	int port = 0;
@@ -15,9 +33,19 @@ static JSValue athena_gettype(JSContext *ctx, JSValue this_val, int argc, JSValu
 	return JS_NewInt32(ctx, mode);
 }
 
-static JSValue athena_getpad(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+static JSValue athena_getpad(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv){
 	int port = 0;
 
+    JSPads* pad;
+    JSValue obj = JS_UNDEFINED;
+    JSValue proto;
+
+    obj = JS_NewObjectClass(ctx, js_pads_class_id);
+	if (JS_IsException(obj))
+        goto fail;
+	pad = js_mallocz(ctx, sizeof(*pad));
+    if (!pad)
+        return JS_EXCEPTION;
 	if (argc == 1){
 		JS_ToInt32(ctx, &port, argv[0]);
 		if (port > 1) return JS_ThrowSyntaxError(ctx, "wrong port number.");
@@ -51,25 +79,76 @@ static JSValue athena_getpad(JSContext *ctx, JSValue this_val, int argc, JSValue
         }
     }
 
-    JSValue obj = JS_NewObject(ctx);
-    JS_DefinePropertyValueStr(ctx, obj, "btns", JS_NewUint32(ctx, paddata), JS_PROP_C_W_E);
-	JS_DefinePropertyValueStr(ctx, obj, "lx", JS_NewInt32(ctx, buttons.ljoy_h-127), JS_PROP_C_W_E);
-	JS_DefinePropertyValueStr(ctx, obj, "ly", JS_NewInt32(ctx, buttons.ljoy_v-127), JS_PROP_C_W_E);
-	JS_DefinePropertyValueStr(ctx, obj, "rx", JS_NewInt32(ctx, buttons.rjoy_h-127), JS_PROP_C_W_E);
-	JS_DefinePropertyValueStr(ctx, obj, "ry", JS_NewInt32(ctx, buttons.rjoy_v-127), JS_PROP_C_W_E);
+	pad->btns = paddata;
+	pad->lx = buttons.ljoy_h-127;
+	pad->ly = buttons.ljoy_v-127;
+	pad->rx = buttons.rjoy_h-127;
+	pad->ry = buttons.rjoy_v-127;
+	pad->port = port;
 
-	return obj;
+    JS_SetOpaque(obj, pad);
+    return obj;
+
+ fail:
+    js_free(ctx, pad);
+    return JS_EXCEPTION;
+}
+
+static JSValue athena_update(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+    JSPads *pad = JS_GetOpaque2(ctx, this_val, js_pads_class_id);
+
+	struct padButtonStatus buttons;
+	u32 paddata = 0;
+	int ret;
+
+	int state = padGetState(pad->port, 0);
+
+	if ((state == PAD_STATE_STABLE) || (state == PAD_STATE_FINDCTP1)) {
+        // pad is connected. Read pad button information.
+        ret = padRead(pad->port, 0, &buttons); // port, slot, buttons
+        if (ret != 0) {
+            paddata = 0xffff ^ buttons.btns;
+        }
+    } 
+
+	if (ds34bt_get_status(pad->port) & DS34BT_STATE_RUNNING) {
+        ret = ds34bt_get_data(pad->port, (u8 *)&buttons.btns);
+        if (ret != 0) {
+            paddata |= 0xffff ^ buttons.btns;
+        }
+    }
+
+	if (ds34usb_get_status(pad->port) & DS34USB_STATE_RUNNING) {
+        ret = ds34usb_get_data(pad->port, (u8 *)&buttons.btns);
+        if (ret != 0) {
+            paddata |= 0xffff ^ buttons.btns;
+        }
+    }
+
+	pad->old_btns = pad->btns;
+	pad->old_lx = pad->lx; 
+	pad->old_ly = pad->ly; 
+	pad->old_rx = pad->rx; 
+	pad->old_ry = pad->ry; 
+
+	pad->btns = paddata;
+	pad->lx = buttons.ljoy_h-127;
+	pad->ly = buttons.ljoy_v-127;
+	pad->rx = buttons.rjoy_h-127;
+	pad->ry = buttons.rjoy_v-127;
+
+    return JS_UNDEFINED;
 }
 
 static JSValue athena_getpressure(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	if (argc != 1 && argc != 2) return JS_ThrowSyntaxError(ctx, "wrong number of arguments.");
 	int port = 0;
-	int button;
+	u32 button;
 	if (argc == 2) {
 		JS_ToInt32(ctx, &port, argv[0]);
-		JS_ToInt32(ctx, &button, argv[1]);
+		JS_ToUint32(ctx, &button, argv[1]);
 	} else {
-		JS_ToInt32(ctx, &button, argv[0]);
+		JS_ToUint32(ctx, &button, argv[0]);
 	}
 	
 	struct padButtonStatus pad;
@@ -149,17 +228,21 @@ static JSValue athena_rumble(JSContext *ctx, JSValue this_val, int argc, JSValue
 }
 
 static JSValue athena_check(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-	int pad, button;
-    JSValue val;
+	int button;
+	JSPads *pad = JS_GetOpaque2(ctx, this_val, js_pads_class_id);
 
-    val = JS_GetPropertyStr(ctx, argv[0], "btns");
-	JS_ToUint32(ctx, &pad, val);
+	JS_ToInt32(ctx, &button, argv[0]);
 
-	JS_ToInt32(ctx, &button, argv[1]);
+	return JS_NewBool(ctx, (pad->btns & button));
+}
 
-	JS_FreeValue(ctx, val);
+static JSValue athena_justpressed(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	int button;
+	JSPads *pad = JS_GetOpaque2(ctx, this_val, js_pads_class_id);
 
-	return JS_NewBool(ctx, (pad & button));
+	JS_ToInt32(ctx, &button, argv[0]);
+
+	return JS_NewBool(ctx, (pad->btns & button) && !(pad->old_btns & button));
 }
 
 static JSValue athena_set_led(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
@@ -185,13 +268,103 @@ static JSValue athena_set_led(JSContext *ctx, JSValue this_val, int argc, JSValu
 	return JS_UNDEFINED;
 }
 
+static JSValue js_pad_get_prop(JSContext *ctx, JSValueConst this_val, int magic)
+{
+	JSValue val = JS_UNDEFINED;
+    JSPads *pad = JS_GetOpaque2(ctx, this_val, js_pads_class_id);
+	
+    if (!pad){
+		return JS_EXCEPTION;
+	}
+
+	switch(magic) {
+		case 0:
+			val = JS_NewUint32(ctx, pad->btns);
+			break;
+		case 1:
+			val = JS_NewInt32(ctx, pad->lx);
+			break;
+		case 2:
+			val = JS_NewInt32(ctx, pad->ly);
+			break;
+		case 3:
+			val = JS_NewInt32(ctx, pad->rx);
+			break;
+		case 4:
+			val = JS_NewInt32(ctx, pad->ry);
+			break;
+		case 5:
+			val = JS_NewUint32(ctx, pad->old_btns);
+			break;
+		case 6:
+			val = JS_NewInt32(ctx, pad->old_lx);
+			break;
+		case 7:
+			val = JS_NewInt32(ctx, pad->old_ly);
+			break;
+		case 8:
+			val = JS_NewInt32(ctx, pad->old_rx);
+			break;
+		case 9:
+			val = JS_NewInt32(ctx, pad->old_ry);
+			break;
+	}
+
+	return val;
+
+}
+
+static JSValue js_pad_set_prop(JSContext *ctx, JSValueConst this_val, JSValue val, int magic)
+{
+    JSPads *pad = JS_GetOpaque2(ctx, this_val, js_pads_class_id);
+    u32 v;
+
+    if (!pad || JS_ToUint32(ctx, &v, val)){
+		return JS_EXCEPTION;
+	}
+
+	switch(magic) {
+		case 0:
+			pad->btns = v;
+			break;
+		case 1:
+			pad->lx = (char)v;
+			break;
+		case 2:
+			pad->ly = (char)v;
+			break;
+		case 3:
+			pad->rx = (char)v;
+			break;
+		case 4:
+			pad->ry = (char)v;
+			break;
+		case 5:
+			pad->old_btns = v;
+			break;
+		case 6:
+			pad->old_lx = (char)v;
+			break;
+		case 7:
+			pad->old_ly = (char)v;
+			break;
+		case 8:
+			pad->old_rx = (char)v;
+			break;
+		case 9:
+			pad->old_ry = (char)v;
+			break;
+	}
+
+    return JS_UNDEFINED;
+}
+
 static const JSCFunctionListEntry module_funcs[] = {
     JS_CFUNC_DEF("get", 1, athena_getpad),
     JS_CFUNC_DEF("getType", 1, athena_gettype),
     JS_CFUNC_DEF("getPressure", 2, athena_getpressure),
     JS_CFUNC_DEF("rumble", 3, athena_rumble),
     JS_CFUNC_DEF("setLED", 4, athena_set_led),
-    JS_CFUNC_DEF("check", 2, athena_check),
 	JS_PROP_INT32_DEF("SELECT", PAD_SELECT, JS_PROP_CONFIGURABLE ),
 	JS_PROP_INT32_DEF("START", PAD_START, JS_PROP_CONFIGURABLE ),
 	JS_PROP_INT32_DEF("UP", PAD_UP, JS_PROP_CONFIGURABLE ),
@@ -210,15 +383,48 @@ static const JSCFunctionListEntry module_funcs[] = {
 	JS_PROP_INT32_DEF("R3", PAD_R3, JS_PROP_CONFIGURABLE ),
 	JS_PROP_INT32_DEF("DIGITAL", PAD_TYPE_DIGITAL, JS_PROP_CONFIGURABLE ),
 	JS_PROP_INT32_DEF("ANALOG", PAD_TYPE_ANALOG, JS_PROP_CONFIGURABLE ),
-	JS_PROP_INT32_DEF("DUALSHOCK", PAD_TYPE_DUALSHOCK, JS_PROP_CONFIGURABLE ),
-
+	JS_PROP_INT32_DEF("DUALSHOCK", PAD_TYPE_DUALSHOCK, JS_PROP_CONFIGURABLE )
 };
 
-static int module_init(JSContext *ctx, JSModuleDef *m)
+static const JSCFunctionListEntry js_pad_proto_funcs[] = {
+    JS_CFUNC_DEF("update", 0, athena_update),
+	JS_CFUNC_DEF("pressed", 1, athena_check),
+	JS_CFUNC_DEF("justPressed", 1, athena_justpressed),
+	JS_CGETSET_MAGIC_DEF("btns", js_pad_get_prop, js_pad_set_prop, 0),
+	JS_CGETSET_MAGIC_DEF("lx",   js_pad_get_prop, js_pad_set_prop, 1),
+	JS_CGETSET_MAGIC_DEF("ly",   js_pad_get_prop, js_pad_set_prop, 2),
+	JS_CGETSET_MAGIC_DEF("rx",   js_pad_get_prop, js_pad_set_prop, 3),
+	JS_CGETSET_MAGIC_DEF("ry",   js_pad_get_prop, js_pad_set_prop, 4),
+	JS_CGETSET_MAGIC_DEF("old_btns", js_pad_get_prop, js_pad_set_prop, 5),
+	JS_CGETSET_MAGIC_DEF("old_lx",   js_pad_get_prop, js_pad_set_prop, 6),
+	JS_CGETSET_MAGIC_DEF("old_ly",   js_pad_get_prop, js_pad_set_prop, 7),
+	JS_CGETSET_MAGIC_DEF("old_rx",   js_pad_get_prop, js_pad_set_prop, 8),
+	JS_CGETSET_MAGIC_DEF("old_ry",   js_pad_get_prop, js_pad_set_prop, 9),
+};
+
+static JSClassDef js_pads_class = {
+    "Pad",
+    //.finalizer = js_std_file_finalizer,
+}; 
+
+static int js_pads_init(JSContext *ctx, JSModuleDef *m)
 {
-    return JS_SetModuleExportList(ctx, m, module_funcs, countof(module_funcs));
+    JSValue proto;
+
+    /* the class ID is created once */
+    JS_NewClassID(&js_pads_class_id);
+    /* the class is created once per runtime */
+    JS_NewClass(JS_GetRuntime(ctx), js_pads_class_id, &js_pads_class);
+    proto = JS_NewObject(ctx);
+    JS_SetPropertyFunctionList(ctx, proto, js_pad_proto_funcs,
+                               countof(js_pad_proto_funcs));
+    JS_SetClassProto(ctx, js_pads_class_id, proto);
+
+    return JS_SetModuleExportList(ctx, m, module_funcs,
+                           countof(module_funcs));
+;
 }
 
 JSModuleDef *athena_pads_init(JSContext* ctx){
-    return athena_push_module(ctx, module_init, module_funcs, countof(module_funcs), "Pads");
+    return athena_push_module(ctx, js_pads_init, module_funcs, countof(module_funcs), "Pads");
 }
