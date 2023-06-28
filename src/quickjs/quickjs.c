@@ -14432,10 +14432,10 @@ static no_inline __exception int js_unary_arith_slow(JSContext *ctx,
         f = JS_VALUE_GET_FLOAT32(op1);
         switch(op) {
         case OP_inc:
-            f++;
+            f+=1.0f;
             break;
         case OP_dec:
-            f--;
+            f-=1.0f;
             break;
         case OP_plus:
             break;
@@ -36167,6 +36167,15 @@ static JSValue JS_ReadObjectRec(BCReaderState *s)
                 return JS_EXCEPTION;
             bc_read_trace(s, "%g\n", u.d);
             obj = __JS_NewFloat64(ctx, u.d);
+        }
+        break;
+    case BC_TAG_FLOAT32:
+        {
+            JSFloat32Union u;
+            if (bc_get_u32(s, &u.u32))
+                return JS_EXCEPTION;
+            bc_read_trace(s, "%g\n", u.f);
+            obj = custom_JS_NewFloat32(ctx, u.f);
         }
         break;
     case BC_TAG_STRING:
