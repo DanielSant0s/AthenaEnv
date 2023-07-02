@@ -44,7 +44,7 @@ typedef struct {
 	VECTOR* texcoords;
 	VECTOR* normals;
     VECTOR* colours;
-    VECTOR* bounding_box;
+    VECTOR bounding_box[8];
     GSTEXTURE* texture;
 } model;
 

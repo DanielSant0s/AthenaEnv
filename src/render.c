@@ -165,8 +165,6 @@ model* loadOBJ(const char* path, GSTEXTURE* text){
         if (hiZ < res_m->positions[i][2]) hiZ = res_m->positions[i][2];
     }
 
-	res_m->bounding_box = (VECTOR*)malloc(sizeof(VECTOR)*8);
-
     res_m->bounding_box[0][0] = lowX;
 	res_m->bounding_box[0][1] = lowY;
 	res_m->bounding_box[0][2] = lowZ;
