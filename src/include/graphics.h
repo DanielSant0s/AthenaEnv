@@ -37,14 +37,26 @@ typedef struct
     GSTEXTURE *txt;
 } rm_quad_t;
 
-typedef struct {
+typedef struct ath_model {
 	uint32_t facesCount;
-    uint16_t* idxList;
+    uint32_t indexCount;
+
     VECTOR* positions;
 	VECTOR* texcoords;
 	VECTOR* normals;
     VECTOR* colours;
+
     VECTOR bounding_box[8];
+
+    void (*render)(struct ath_model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z);
+
+    VECTOR *tmp_normals;
+    VECTOR *tmp_lights;
+    color_f_t *tmp_colours;
+    vertex_f_t *tmp_xyz;
+
+    void* vertices;
+
     GSTEXTURE* texture;
 } model;
 
@@ -115,7 +127,6 @@ void setLightQuantity(int quantity);
 void createLight(int lightid, float dir_x, float dir_y, float dir_z, int type, float r, float g, float b);
 
 model* loadOBJ(const char* path, GSTEXTURE* text);
-void drawOBJ(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z);
 void draw_bbox(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z, Color color);
 
 

@@ -54,8 +54,6 @@ static JSValue athena_freeobj(JSContext *ctx, JSValue this_val, int argc, JSValu
 	m->normals = NULL;
     free(m->texcoords);
 	m->texcoords = NULL;
-	free(m->bounding_box);
-	m->bounding_box = NULL;
 	
 	free(m);
 	m = NULL;
@@ -77,7 +75,7 @@ static JSValue athena_drawobj(JSContext *ctx, JSValue this_val, int argc, JSValu
 	JS_ToFloat32(ctx, &rot_y, argv[5]);
 	JS_ToFloat32(ctx, &rot_z, argv[6]);
 	
-	drawOBJ(m, pos_x, pos_y, pos_z, rot_x, rot_y, rot_z);
+	m->render(m, pos_x, pos_y, pos_z, rot_x, rot_y, rot_z);
 
 	return JS_UNDEFINED;
 }

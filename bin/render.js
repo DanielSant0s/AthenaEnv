@@ -50,7 +50,9 @@ var savedly = 180.0f;
 var savedrx = 50.0f;
 var savedry = 0.0f;
 
-var free_mem = 0;
+var ee_info = System.getCPUInfo();
+
+var free_mem = `RAM Usage: ${Math.floor(System.getMemoryStats().used / 1048576)}MB / ${Math.floor(ee_info.RAMSize / 1048576)}MB`;
 var free_vram = Screen.getFreeVRAM();
 
 const gray = Color.new(40, 40, 40, 128);
@@ -91,7 +93,7 @@ while(true){
         Render.drawBbox(model[modeltodisplay], 0.0f, 0.0f, 30.0f, savedly, savedlx, 0.0f, Color.new(128, 0, 255));
     }
 
-    fntcpy.print(10, 10, Screen.getFPS(360) + " FPS | Free RAM: " + free_mem + "KB | Free VRAM: " + free_vram + "KB");
+    fntcpy.print(10, 10, Screen.getFPS(360) + " FPS | " + free_mem + " | Free VRAM: " + free_vram + "KB");
 
     Screen.flip();
 }
