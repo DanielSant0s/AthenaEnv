@@ -4,6 +4,7 @@
 #include <malloc.h>
 #include <math.h>
 #include <fcntl.h>
+#include "fast_obj/fast_obj.h"
 
 #include "include/render.h"
 
@@ -85,351 +86,74 @@ void createLight(int lightid, float dir_x, float dir_y, float dir_z, int type, f
 
 model* loadOBJ(const char* path, GSTEXTURE* text){
     // Opening model file and loading it on RAM
-	int file = open(path, O_RDONLY, 0777);
-	uint32_t size = lseek(file, 0, SEEK_END);
-	lseek(file, 0, SEEK_SET);
-	char* content = (char*)malloc(size+1);
-	read(file, content, size);
-	content[size] = 0;
-	
-	// Closing file
-	close(file);
-	
-	// Creating temp vertexList
-	rawVertexList* vl = (rawVertexList*)malloc(sizeof(rawVertexList));
-	rawVertexList* init = vl;
-	
-	// Init variables
-	char* str = content;
-	char* ptr = strstr(str,"v ");
-	int idx;
-	char float_val[16];
-	char* init_val;
-	char magics[3][3] = {"v ","vt","vn"};
-	int magics_idx = 0;
-	vertex* res;
-	int v_idx = 0;
-	bool skip = false;
-	char* end_vert;
-	char* end_val;
-	float* vert_args;
-	rawVertexList* old_vl;
-	
-	// Vertices extraction
-	for(;;){
-		
-		// Check if a magic change is needed
-		while (ptr == NULL){
-			if (magics_idx < 2){
-				res = init->vert;
-				vl = init;
-				magics_idx++;
-				ptr = strstr(str,magics[magics_idx]);
-			}else{
-				skip = true;
-				break;
-			}
-		}
-		if (skip) break;
-		
-		// Extract vertex
-		if (magics_idx == 0) idx = 0;
-		else if (magics_idx == 1) idx = 3;
-		else idx = 5;
-		if (magics_idx == 0) init_val = ptr + 2;
-		else init_val = ptr + 3;
-		while (init_val[0] == ' ') init_val++;
-		end_vert = strstr(init_val,"\n");
-		if (magics_idx == 0) res = (vertex*)malloc(sizeof(vertex));
-		end_val = strstr(init_val," ");
-		vert_args = (float*)res; // Hacky way to iterate in vertex struct		
-		while (init_val < end_vert){
-			if (end_val > end_vert) end_val = end_vert;
-			strncpy(float_val, init_val, end_val - init_val);
-			float_val[end_val - init_val] = 0;
-			vert_args[idx] = atof(float_val);
-			idx++;
-			init_val = end_val + 1;
-			while (init_val[0] == ' ') init_val++;
-			end_val = strstr(init_val," ");
-		}
-		
-		// Update rawVertexList struct
-		if (magics_idx == 0){
-			vl->vert = res;
-			vl->next = (rawVertexList*)malloc(sizeof(rawVertexList));
-		}
-		old_vl = vl;
-		vl = vl->next;
-		if (magics_idx == 0){
-			vl->vert = NULL;
-			vl->next = NULL;
-		}else{
-			if (vl == NULL){
-				old_vl->next = (rawVertexList*)malloc(sizeof(rawVertexList));
-				vl = old_vl->next;
-				vl->vert = (vertex*)malloc(sizeof(vertex));
-				vl->next = NULL;
-			}else if(vl->vert == NULL) vl->vert = (vertex*)malloc(sizeof(vertex));
-			res = vl->vert;
-		}
-		
-		// Searching for next vertex
-		str = ptr + 1;
-		ptr = strstr(str,magics[magics_idx]);
-		
-	}
-
-	// Creating real RAW vertexList
-	ptr = strstr(str, "f ");
-	rawVertexList* faces = (rawVertexList*)malloc(sizeof(rawVertexList));
-	rawVertexList* initFaces = faces;
-	faces->vert = NULL;
-	faces->next = NULL;
-	int len = 0;
-	char val[8];
-	int f_idx;
-	char* ptr2;
-	int t_idx;
-	rawVertexList* tmp;
-	
-	// Faces extraction
-	while (ptr != NULL){
-		
-		// Skipping padding
-		ptr+=2;		
-		
-		// Extracting face info
-		f_idx = 0;
-		while (f_idx < 3){
-		
-			// Allocating new vertex
-			faces->vert = (vertex*)malloc(sizeof(vertex));
-		
-			// Extracting x,y,z
-			ptr2 = strstr(ptr,"/");
-			strncpy(val,ptr,ptr2-ptr);
-			val[ptr2-ptr] = 0;
-			v_idx = atoi(val);
-			t_idx = 1;
-			tmp = init;
-			while (t_idx < v_idx){
-				tmp = tmp->next;
-				t_idx++;
-			}
-			faces->vert->x = tmp->vert->x;
-			faces->vert->y = tmp->vert->y;
-			faces->vert->z = tmp->vert->z;
-			
-			// Extracting texture info
-			ptr = ptr2+1;
-			ptr2 = strstr(ptr,"/");
-			if (ptr2 != ptr){
-				strncpy(val,ptr,ptr2-ptr);
-				val[ptr2-ptr] = 0;
-				v_idx = atoi(val);
-				t_idx = 1;
-				tmp = init;
-				while (t_idx < v_idx){
-					tmp = tmp->next;
-					t_idx++;
-				}
-				faces->vert->t1 = tmp->vert->t1;
-				faces->vert->t2 = 1.0f - tmp->vert->t2;
-			}else{
-				faces->vert->t1 = 0.0f;
-				faces->vert->t2 = 0.0f;
-			}
-			
-			// Extracting normals info
-			ptr = ptr2+1;
-			if (f_idx < 2) ptr2 = strstr(ptr," ");
-			else{
-				ptr2 = strstr(ptr,"\n");
-				if (ptr2 == NULL) ptr2 = content + size;
-			}
-			strncpy(val,ptr,ptr2-ptr);
-			val[ptr2-ptr] = 0;
-			v_idx = atoi(val);
-			t_idx = 1;
-			tmp = init;
-			while (t_idx < v_idx){
-				tmp = tmp->next;
-				t_idx++;
-			}
-			faces->vert->n1 = tmp->vert->n1;
-			faces->vert->n2 = tmp->vert->n2;
-			faces->vert->n3 = tmp->vert->n3;
-
-			// Setting values for next vertex
-			ptr = ptr2;
-			faces->next = (rawVertexList*)malloc(sizeof(rawVertexList));
-			faces = faces->next;
-			faces->next = NULL;
-			faces->vert = NULL;
-			len++;
-			f_idx++;
-		}
-		
-		ptr = strstr(ptr,"f ");
-		
-	}
-	
-	// Freeing temp vertexList and allocated file
-	free(content);
-	rawVertexList* tmp_init;
-	while (init != NULL){
-		tmp_init = init;
-		free(init->vert);
-		init = init->next;
-		free(tmp_init);
-	}
-	
-	// Create the model struct and populating vertex list
 	model* res_m = (model*)malloc(sizeof(model));
-	vertexList* vlist = (vertexList*)malloc(sizeof(vertexList));
-	vertexList* vlist_start = vlist;
-	vlist->next = NULL;
-	bool first = true;
-	for(int i = 0; i < len; i+=3) {
-		if (first) first = false;
-		else{
-			vlist->next = (vertexList*)malloc(sizeof(vertexList));
-			vlist = vlist->next;
-			vlist->next = NULL;
-		}
-		tmp_init = initFaces;
-		memcpy(&vlist->v1,initFaces->vert,sizeof(vertex));
-		initFaces = initFaces->next;
-		free(tmp_init->vert);
-		free(tmp_init);
-		tmp_init = initFaces;
-		memcpy(&vlist->v2,initFaces->vert,sizeof(vertex));
-		initFaces = initFaces->next;
-		free(tmp_init->vert);
-		free(tmp_init);
-		tmp_init = initFaces;
-		memcpy(&vlist->v3,initFaces->vert,sizeof(vertex));
-		initFaces = initFaces->next;
-		free(tmp_init->vert);
-		free(tmp_init);
-	}
-	res_m->facesCount = len / 3;
-  
+	fastObjMesh* m = fast_obj_read(path);
 	
 	// Setting texture
 	res_m->texture = text;
 
-	vlist = vlist_start;
-	res_m->positions = (VECTOR*)memalign(128, res_m->facesCount * 3 * sizeof(VECTOR));
-    res_m->texcoords = (VECTOR*)memalign(128, res_m->facesCount * 3 * sizeof(VECTOR));
-    res_m->normals =  (VECTOR*)memalign(128, res_m->facesCount * 3 * sizeof(VECTOR));
-	res_m->colours =  (VECTOR*)memalign(128, res_m->facesCount * 3 * sizeof(VECTOR));
-	res_m->idxList = (uint16_t*)memalign(128, res_m->facesCount * 3 * sizeof(uint16_t));
-	vertexList* object = vlist;
-	int n = 0;
-	while (object != NULL){
+	VECTOR* c_verts = (VECTOR*)memalign(128, m->position_count * sizeof(VECTOR));
+    VECTOR* c_texcoords = (VECTOR*)memalign(128, m->texcoord_count * sizeof(VECTOR));
+    VECTOR* c_normals =  (VECTOR*)memalign(128, m->normal_count * sizeof(VECTOR));
 
-        //v1
-        res_m->positions[n][0] = object->v1.x;
-		res_m->positions[n][1] = object->v1.y;
-		res_m->positions[n][2] = object->v1.z;
-		res_m->positions[n][3] = 1.000f;
+	for(int i = 0; i < m->position_count; i++) {
+		for(int j = 0; j < 3; j++) {
+			c_verts[i][j] = m->positions[(3*i)+j];
+		}
 
-        res_m->normals[n][0] = object->v1.n1;
-		res_m->normals[n][1] = object->v1.n2;
-		res_m->normals[n][2] = object->v1.n3;
-		res_m->normals[n][3] = 1.000f;
-
-        res_m->texcoords[n][0] = object->v1.t1;
-		res_m->texcoords[n][1] = object->v1.t2;
-		res_m->texcoords[n][2] = 0.000f;
-		res_m->texcoords[n][3] = 0.000f;
-
-		res_m->colours[n][0] = 1.000f;
-		res_m->colours[n][1] = 1.000f;
-		res_m->colours[n][2] = 1.000f;
-		res_m->colours[n][3] = 1.000f;
-
-        //v2
-        res_m->positions[n+1][0] = object->v2.x;
-		res_m->positions[n+1][1] = object->v2.y;
-		res_m->positions[n+1][2] = object->v2.z;
-		res_m->positions[n+1][3] = 1.000f;
-
-        res_m->normals[n+1][0] = object->v2.n1;
-		res_m->normals[n+1][1] = object->v2.n2;
-		res_m->normals[n+1][2] = object->v2.n3;
-		res_m->normals[n+1][3] = 1.000f;
-
-        res_m->texcoords[n+1][0] = object->v2.t1;
-		res_m->texcoords[n+1][1] = object->v2.t2;
-		res_m->texcoords[n+1][2] = 0.000f;
-		res_m->texcoords[n+1][3] = 0.000f;
-	
-		res_m->colours[n+1][0] = 1.000f;
-		res_m->colours[n+1][1] = 1.000f;
-		res_m->colours[n+1][2] = 1.000f;
-		res_m->colours[n+1][3] = 1.000f;
-
-        //v3
-        res_m->positions[n+2][0] = object->v3.x;
-		res_m->positions[n+2][1] = object->v3.y;
-		res_m->positions[n+2][2] = object->v3.z;
-		res_m->positions[n+2][3] = 1.000f;
-
-        res_m->normals[n+2][0] = object->v3.n1;
-		res_m->normals[n+2][1] = object->v3.n2;
-		res_m->normals[n+2][2] = object->v3.n3;
-		res_m->normals[n+2][3] = 1.000f;
-
-        res_m->texcoords[n+2][0] = object->v3.t1;
-		res_m->texcoords[n+2][1] = object->v3.t2;
-		res_m->texcoords[n+2][2] = 0.000f;
-		res_m->texcoords[n+2][3] = 0.000f;
-
-		res_m->colours[n+2][0] = 1.000f;
-		res_m->colours[n+2][1] = 1.000f;
-		res_m->colours[n+2][2] = 1.000f;
-		res_m->colours[n+2][3] = 1.000f;
-
-		res_m->idxList[n] = n;
-		res_m->idxList[n+1] = n+1;
-		res_m->idxList[n+2] = n+2;
-		object = object->next;
-		n += 3;
+		c_verts[i][3] = 1.0f;
 	}
 
-	while (vlist != NULL){
-		vertexList* old = vlist;
-		vlist = vlist->next;
-		free(old);
+	for(int i = 0; i < m->normal_count; i++) {
+		for(int j = 0; j < 3; j++) {
+			c_normals[i][j] = m->normals[(3*i)+j];
+		}
+		
+		c_normals[i][3] = 1.0f;
 	}
 
-	VECTOR* c_verts = (VECTOR*)memalign(128, res_m->facesCount * 3 * sizeof(VECTOR));
-    VECTOR* c_texcoords = (VECTOR*)memalign(128, res_m->facesCount * 3 * sizeof(VECTOR));
-    VECTOR* c_normals =  (VECTOR*)memalign(128, res_m->facesCount * 3 * sizeof(VECTOR));
+	for(int i = 0; i < m->texcoord_count; i++) {
+		c_texcoords[i][0] = m->texcoords[(2*i)+0];
+		c_texcoords[i][1] = 1.0f - m->texcoords[(2*i)+1];
+		c_texcoords[i][2] = 0.0f;
+		c_texcoords[i][3] = 0.0f;
+	}
 
-	for (int i = 0; i < res_m->facesCount*3; i++)
+	res_m->facesCount = m->face_count;
+	res_m->positions = (VECTOR*)memalign(128, m->index_count*sizeof(VECTOR));
+	res_m->texcoords = (VECTOR*)memalign(128, m->index_count*sizeof(VECTOR));
+	res_m->normals =   (VECTOR*)memalign(128, m->index_count*sizeof(VECTOR));
+	res_m->colours =   (VECTOR*)memalign(128, m->index_count*sizeof(VECTOR));
+
+	for (int i = 0; i < m->index_count; i++)
 	{
-		memcpy(&c_verts[i], &res_m->positions[res_m->idxList[i]], sizeof(VECTOR));
-		memcpy(&c_texcoords[i], &res_m->texcoords[res_m->idxList[i]], sizeof(VECTOR));
-		memcpy(&c_normals[i], &res_m->normals[res_m->idxList[i]], sizeof(VECTOR));
+		memcpy(&res_m->positions[i], &c_verts[m->indices[i].p], sizeof(VECTOR));
+		memcpy(&res_m->texcoords[i], &c_texcoords[m->indices[i].t], sizeof(VECTOR));
+		memcpy(&res_m->normals[i], &c_normals[m->indices[i].n], sizeof(VECTOR));
+		
+		res_m->colours[i][0] = 1.0f;
+		res_m->colours[i][1] = 1.0f;
+		res_m->colours[i][2] = 1.0f;
+		res_m->colours[i][3] = 1.0f;
 	}
+
+	free(c_verts);
+	free(c_normals);
+	free(c_texcoords);
 	
 	//calculate bounding box
 	float lowX, lowY, lowZ, hiX, hiY, hiZ;
-    lowX = hiX = res_m->positions[res_m->idxList[0]][0];
-    lowY = hiY = res_m->positions[res_m->idxList[0]][1];
-    lowZ = hiZ = res_m->positions[res_m->idxList[0]][2];
+    lowX = hiX = res_m->positions[0][0];
+    lowY = hiY = res_m->positions[0][1];
+    lowZ = hiZ = res_m->positions[0][2];
     for (int i = 0; i < res_m->facesCount; i++)
     {
-        if (lowX > res_m->positions[res_m->idxList[i]][0]) lowX = res_m->positions[res_m->idxList[i]][0];
-        if (hiX < res_m->positions[res_m->idxList[i]][0]) hiX = res_m->positions[res_m->idxList[i]][0];
-        if (lowY > res_m->positions[res_m->idxList[i]][1]) lowY = res_m->positions[res_m->idxList[i]][1];
-        if (hiY < res_m->positions[res_m->idxList[i]][1]) hiY = res_m->positions[res_m->idxList[i]][1];
-        if (lowZ > res_m->positions[res_m->idxList[i]][2]) lowZ = res_m->positions[res_m->idxList[i]][2];
-        if (hiZ < res_m->positions[res_m->idxList[i]][2]) hiZ = res_m->positions[res_m->idxList[i]][2];
+        if (lowX > res_m->positions[i][0]) lowX = res_m->positions[i][0];
+        if (hiX < res_m->positions[i][0]) hiX = res_m->positions[i][0];
+        if (lowY > res_m->positions[i][1]) lowY = res_m->positions[i][1];
+        if (hiY < res_m->positions[i][1]) hiY = res_m->positions[i][1];
+        if (lowZ > res_m->positions[i][2]) lowZ = res_m->positions[i][2];
+        if (hiZ < res_m->positions[i][2]) hiZ = res_m->positions[i][2];
     }
 
 	res_m->bounding_box = (VECTOR*)malloc(sizeof(VECTOR)*8);
@@ -473,14 +197,6 @@ model* loadOBJ(const char* path, GSTEXTURE* text){
 	res_m->bounding_box[7][1] = hiY;
 	res_m->bounding_box[7][2] = hiZ;
 	res_m->bounding_box[7][3] = 1.00f;
-
-	free(res_m->positions);
-	free(res_m->normals);
-	free(res_m->texcoords);
-
-	res_m->positions = c_verts;
-	res_m->normals = c_normals;
-	res_m->texcoords = c_texcoords;
 
     return res_m;
 }

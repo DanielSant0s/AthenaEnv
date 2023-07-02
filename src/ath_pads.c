@@ -10,10 +10,10 @@ typedef struct {
 	char port;
 
     u32 btns;
-    char lx;
-	char ly;
-	char rx;
-	char ry;
+    int lx;
+	int ly;
+	int rx;
+	int ry;
 
     u32 old_btns;
     char old_lx;
@@ -328,31 +328,31 @@ static JSValue js_pad_set_prop(JSContext *ctx, JSValueConst this_val, JSValue va
 			pad->btns = v;
 			break;
 		case 1:
-			pad->lx = (char)v;
+			pad->lx = v;
 			break;
 		case 2:
-			pad->ly = (char)v;
+			pad->ly = v;
 			break;
 		case 3:
-			pad->rx = (char)v;
+			pad->rx = v;
 			break;
 		case 4:
-			pad->ry = (char)v;
+			pad->ry = v;
 			break;
 		case 5:
 			pad->old_btns = v;
 			break;
 		case 6:
-			pad->old_lx = (char)v;
+			pad->old_lx = v;
 			break;
 		case 7:
-			pad->old_ly = (char)v;
+			pad->old_ly = v;
 			break;
 		case 8:
-			pad->old_rx = (char)v;
+			pad->old_rx = v;
 			break;
 		case 9:
-			pad->old_ry = (char)v;
+			pad->old_ry = v;
 			break;
 	}
 

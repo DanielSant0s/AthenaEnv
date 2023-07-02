@@ -36,8 +36,7 @@ Lights.create(1);
 Lights.set(1,  0.0,  1.0, -1.0, 0.9, 0.5, 0.5, DIRECTIONAL);
 //Lights.set(4, -1.0, -1.0, -1.0, 0.5, 0.5, 0.5, DIRECTIONAL);
 
-var pad = null;
-var oldpad = null;
+var pad = Pads.get();
 var modeltodisplay = 0;
 var lx = null;
 var ly = null;
@@ -52,11 +51,12 @@ var savedry = 0.0f;
 var free_mem = 0;
 var free_vram = Screen.getFreeVRAM();
 
-while(true){
-    Screen.clear(Color.new(40, 40, 40, 128));
+const gray = Color.new(40, 40, 40, 128);
 
-    oldpad = pad;
-    pad = Pads.get();
+while(true){
+    Screen.clear(gray);
+    pad.update();
+
     lx = ((pad.lx > 25 || pad.lx < -25)? pad.lx : 0) / 1024.0f;
     ly = ((pad.ly > 25 || pad.ly < -25)? pad.ly : 0) / 1024.0f;
     savedlx = savedlx - lx;
@@ -69,11 +69,11 @@ while(true){
 
     Camera.position(0.0f, savedry,  savedrx);
 
-    if((Pads.check(pad, Pads.LEFT) && !Pads.check(oldpad, Pads.LEFT)) || (Pads.check(pad, Pads.RIGHT) && !Pads.check(oldpad, Pads.RIGHT))){
+    if(pad.justPressed(Pads.LEFT) || pad.justPressed(Pads.RIGHT)){
         modeltodisplay ^= 1
     }
 
-    if(Pads.check(pad, Pads.TRIANGLE) && !Pads.check(oldpad, Pads.TRIANGLE)) {
+    if(pad.justPressed(Pads.TRIANGLE)) {
         break;
     }
 
