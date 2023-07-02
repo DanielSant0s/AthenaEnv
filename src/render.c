@@ -95,6 +95,7 @@ model* loadOBJ(const char* path, GSTEXTURE* text){
 	VECTOR* c_verts = (VECTOR*)memalign(128, m->position_count * sizeof(VECTOR));
     VECTOR* c_texcoords = (VECTOR*)memalign(128, m->texcoord_count * sizeof(VECTOR));
     VECTOR* c_normals =  (VECTOR*)memalign(128, m->normal_count * sizeof(VECTOR));
+	VECTOR* c_colours = (VECTOR*)memalign(128, m->index_count * sizeof(VECTOR));
 
 	for(int i = 0; i < m->position_count; i++) {
 		for(int j = 0; j < 3; j++) {
@@ -125,19 +126,27 @@ model* loadOBJ(const char* path, GSTEXTURE* text){
 	res_m->normals =   (VECTOR*)memalign(128, m->index_count*sizeof(VECTOR));
 	res_m->colours =   (VECTOR*)memalign(128, m->index_count*sizeof(VECTOR));
 
-	for (int i = 0; i < m->index_count; i++)
-	{
-		memcpy(&res_m->positions[i], &c_verts[m->indices[i].p], sizeof(VECTOR));
-		memcpy(&res_m->texcoords[i], &c_texcoords[m->indices[i].t], sizeof(VECTOR));
-		memcpy(&res_m->normals[i], &c_normals[m->indices[i].n], sizeof(VECTOR));
-		
-		res_m->colours[i][0] = 1.0f;
-		res_m->colours[i][1] = 1.0f;
-		res_m->colours[i][2] = 1.0f;
-		res_m->colours[i][3] = 1.0f;
-	}
+    for (int i = 0, j = 0; i < m->index_count; i++, j += 3) {
+        int vertIndex = m->indices[i].p;
+        int texcoordIndex = m->indices[i].t;
+        int normalIndex = m->indices[i].n;
+
+        memcpy(&res_m->positions[i], &c_verts[vertIndex], sizeof(VECTOR));
+        memcpy(&res_m->texcoords[i], &c_texcoords[texcoordIndex], sizeof(VECTOR));
+        memcpy(&res_m->normals[i], &c_normals[normalIndex], sizeof(VECTOR));
+
+        // Find the face index that corresponds to the current vertex index
+        int faceIndex = i / 3;
+        c_colours[i][0] = m->materials[m->face_materials[faceIndex]].Kd[0];
+        c_colours[i][1] = m->materials[m->face_materials[faceIndex]].Kd[1];
+        c_colours[i][2] = m->materials[m->face_materials[faceIndex]].Kd[2];
+        c_colours[i][3] = 1.0f;
+    }
+
+    memcpy(res_m->colours, c_colours, m->index_count * sizeof(VECTOR));
 
 	free(c_verts);
+	free(c_colours);
 	free(c_normals);
 	free(c_texcoords);
 	
@@ -396,13 +405,13 @@ void drawOBJ(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float
 	// Calculate the normal values.
 	calculate_normals(t_normals, m->facesCount*3, m->normals, local_light);
 	calculate_lights(t_lights, m->facesCount*3, t_normals, light_direction, light_colour, light_type, light_count);
-	calculate_colours((VECTOR *)t_colours, m->facesCount, m->colours, t_lights);
+	calculate_colours((VECTOR *)t_colours, m->facesCount*3, m->colours, t_lights);
 	calculate_vertices_clipped((VECTOR *)t_xyz, m->facesCount*3, m->positions, local_screen);
 
 	if (m->texture != NULL) {
 		GSPRIMSTQPOINT* gs_vertices = (GSPRIMSTQPOINT*)memalign(128, sizeof(GSPRIMSTQPOINT)*m->facesCount*3);
 
-		athena_process_xyz_rgbaq_st(gs_vertices, gsGlobal, m->facesCount*3, (color_f_t*)t_lights, t_xyz, (texel_f_t *)m->texcoords);
+		athena_process_xyz_rgbaq_st(gs_vertices, gsGlobal, m->facesCount*3, t_colours, t_xyz, (texel_f_t *)m->texcoords);
 
 		gsKit_TexManager_bind(gsGlobal, m->texture);
 		gsKit_prim_list_triangle_goraud_texture_stq_3d(gsGlobal, m->texture, m->facesCount*3, gs_vertices);
@@ -412,7 +421,7 @@ void drawOBJ(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float
 	} else {
 		GSPRIMPOINT* gs_vertices = (GSPRIMPOINT*)memalign(128, sizeof(GSPRIMPOINT)*m->facesCount*3);
 
-		athena_process_xyz_rgbaq(gs_vertices, gsGlobal, m->facesCount*3, (color_f_t*)t_lights, t_xyz);
+		athena_process_xyz_rgbaq(gs_vertices, gsGlobal, m->facesCount*3, t_colours, t_xyz);
 
 		gsKit_prim_list_triangle_gouraud_3d(gsGlobal, m->facesCount*3, gs_vertices);
 

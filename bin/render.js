@@ -24,7 +24,9 @@ var monkeytex = new Image("render/monkey.png");
 monkeytex.filter = LINEAR;
 var monkeymesh = Render.loadOBJ("render/monkey.obj", monkeytex);
 
-var model = [dragonmesh, monkeymesh];
+var teapot = Render.loadOBJ("render/Car.obj");
+
+var model = [dragonmesh, monkeymesh, teapot];
 
 Camera.position(0.0f, 0.0f, 50.0f);
 Camera.rotation(0.0f, 0.0f,  0.0f);
@@ -33,11 +35,11 @@ Lights.create(1);
 
 //Lights.set(1,  0.0,  0.0,  0.0, 1.0, 1.0, 1.0,     AMBIENT);
 //Lights.set(2,  1.0,  0.0, -1.0, 1.0, 1.0, 1.0, DIRECTIONAL);
-Lights.set(1,  0.0,  1.0, -1.0, 0.9, 0.5, 0.5, DIRECTIONAL);
+Lights.set(1,  0.0,  1.0, -1.0, 0.8, 0.8, 0.8, DIRECTIONAL);
 //Lights.set(4, -1.0, -1.0, -1.0, 0.5, 0.5, 0.5, DIRECTIONAL);
 
 var pad = Pads.get();
-var modeltodisplay = 0;
+var modeltodisplay = 2;
 var lx = null;
 var ly = null;
 var rx = null;
@@ -52,6 +54,8 @@ var free_mem = 0;
 var free_vram = Screen.getFreeVRAM();
 
 const gray = Color.new(40, 40, 40, 128);
+
+var bbox = false;
 
 while(true){
     Screen.clear(gray);
@@ -77,7 +81,15 @@ while(true){
         break;
     }
 
+    if(pad.justPressed(Pads.SQUARE)) {
+        bbox ^= 1;
+    }
+
     Render.drawOBJ(model[modeltodisplay], 0.0f, 0.0f, 30.0f, savedly, savedlx, 0.0f);
+
+    if(bbox) {
+        Render.drawBbox(model[modeltodisplay], 0.0f, 0.0f, 30.0f, savedly, savedlx, 0.0f, Color.new(128, 0, 255));
+    }
 
     fntcpy.print(10, 10, Screen.getFPS(360) + " FPS | Free RAM: " + free_mem + "KB | Free VRAM: " + free_vram + "KB");
 
