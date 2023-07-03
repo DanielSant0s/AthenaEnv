@@ -28,9 +28,11 @@ var monkeymesh = Render.loadOBJ("monkey.obj", monkeytex);
 
 var teapot = Render.loadOBJ("Car.obj");
 
-var mill = Render.loadOBJ("cubes.obj")
+var mill = Render.loadOBJ("cubes.obj");
 
-var model = [dragonmesh, monkeymesh, teapot, mill];
+var boombox = Render.loadOBJ("Boombox.obj");
+
+var model = [dragonmesh, monkeymesh, teapot, mill, boombox];
 
 Camera.position(0.0f, 0.0f, 50.0f);
 Camera.rotation(0.0f, 0.0f,  0.0f);
