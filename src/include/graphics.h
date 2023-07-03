@@ -57,7 +57,9 @@ typedef struct ath_model {
 
     void* vertices;
 
-    GSTEXTURE* texture;
+    GSTEXTURE* textures[10];
+	int tex_ranges[10];
+	int tex_count;
 } model;
 
 typedef u64 Color;

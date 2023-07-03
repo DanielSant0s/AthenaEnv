@@ -16,24 +16,28 @@ Screen.setMode(canvas);
 
 Render.init(4/3);
 
-var dragontex = new Image("render/dragon.png");
+os.chdir("render");
+
+var dragontex = new Image("dragon.png");
 dragontex.filter = LINEAR;
-var dragonmesh = Render.loadOBJ("render/dragon.obj", dragontex);
+var dragonmesh = Render.loadOBJ("dragon.obj", dragontex);
 
-var monkeytex = new Image("render/monkey.png");
+var monkeytex = new Image("monkey.png");
 monkeytex.filter = LINEAR;
-var monkeymesh = Render.loadOBJ("render/monkey.obj", monkeytex);
+var monkeymesh = Render.loadOBJ("monkey.obj", monkeytex);
 
-var teapot = Render.loadOBJ("render/Car.obj");
+var teapot = Render.loadOBJ("Car.obj");
 
-var model = [dragonmesh, monkeymesh, teapot];
+var mill = Render.loadOBJ("cubes.obj")
+
+var model = [dragonmesh, monkeymesh, teapot, mill];
 
 Camera.position(0.0f, 0.0f, 50.0f);
 Camera.rotation(0.0f, 0.0f,  0.0f);
 
 Lights.create(1);
 
-//Lights.set(1,  0.0,  0.0,  0.0, 1.0, 1.0, 1.0,     AMBIENT);
+Lights.set(1,  0.0,  0.0,  0.0, 1.0, 1.0, 1.0,     AMBIENT);
 //Lights.set(2,  1.0,  0.0, -1.0, 1.0, 1.0, 1.0, DIRECTIONAL);
 Lights.set(1,  0.0,  1.0, -1.0, 0.8, 0.8, 0.8, DIRECTIONAL);
 //Lights.set(4, -1.0, -1.0, -1.0, 0.5, 0.5, 0.5, DIRECTIONAL);
@@ -47,7 +51,7 @@ var ry = null;
 
 var savedlx = 0.0f;
 var savedly = 180.0f;
-var savedrx = 50.0f;
+var savedrx = 100.0f;
 var savedry = 0.0f;
 
 var ee_info = System.getCPUInfo();

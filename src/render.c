@@ -244,8 +244,51 @@ void render_singletex(model* m, float pos_x, float pos_y, float pos_z, float rot
 	calculate_vertices_clipped((VECTOR *)m->tmp_xyz, m->indexCount, m->positions, local_screen);
 
 	athena_process_xyz_rgbaq_st(m->vertices, gsGlobal, m->indexCount, m->tmp_colours, m->tmp_xyz, (texel_f_t *)m->texcoords);
-	gsKit_TexManager_bind(gsGlobal, m->texture);
-	gsKit_prim_list_triangle_goraud_texture_stq_3d(gsGlobal, m->texture, m->indexCount, m->vertices);
+	gsKit_TexManager_bind(gsGlobal, m->textures[0]);
+	gsKit_prim_list_triangle_goraud_texture_stq_3d(gsGlobal, m->textures[0], m->indexCount, m->vertices);
+}
+
+void render_multitex(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z)
+{
+	VECTOR object_position = { pos_x, pos_y, pos_z, 1.00f };
+	VECTOR object_rotation = { rot_x, rot_y, rot_z, 1.00f };
+
+    GSGLOBAL *gsGlobal = getGSGLOBAL();
+
+	// Matrices to setup the 3D environment and camera
+	MATRIX local_world;
+	MATRIX local_light;
+	MATRIX world_view;
+	MATRIX local_screen;
+
+	//gsGlobal->PrimAlphaEnable = GS_SETTING_OFF;
+	//gsKit_set_test(gsGlobal, GS_ATEST_OFF);
+	gsGlobal->PrimAAEnable = GS_SETTING_ON;
+	gsKit_set_test(gsGlobal, GS_ZTEST_ON);
+
+	// Create the local_world matrix.
+	create_local_world(local_world, object_position, object_rotation);
+	create_local_light(local_light, object_rotation);
+	create_world_view(world_view, camera_position, camera_rotation);
+	create_local_screen(local_screen, local_world, world_view, view_screen);
+	if(clip_bounding_box(local_screen, m->bounding_box)) return;
+
+	// Calculate the normal values.
+	calculate_normals(m->tmp_normals, m->indexCount, m->normals, local_light);
+	calculate_lights(m->tmp_lights, m->indexCount, m->tmp_normals, light_direction, light_colour, light_type, light_count);
+	calculate_colours((VECTOR *)m->tmp_colours, m->indexCount, m->colours, m->tmp_lights);
+	calculate_vertices_clipped((VECTOR *)m->tmp_xyz, m->indexCount, m->positions, local_screen);
+
+	athena_process_xyz_rgbaq_st(m->vertices, gsGlobal, m->indexCount, m->tmp_colours, m->tmp_xyz, (texel_f_t *)m->texcoords);
+
+	GSPRIMSTQPOINT* vertices = m->vertices;
+	
+	int lastIdx = -1;
+	for(int i = 0; i < m->tex_count; i++) {
+		gsKit_TexManager_bind(gsGlobal, m->textures[i]);
+		gsKit_prim_list_triangle_goraud_texture_stq_3d(gsGlobal, m->textures[i], (m->tex_ranges[i]-lastIdx), &vertices[lastIdx+1]);
+		lastIdx = m->tex_ranges[i];
+	}
 }
 
 model* loadOBJ(const char* path, GSTEXTURE* text) {
@@ -261,6 +304,9 @@ model* loadOBJ(const char* path, GSTEXTURE* text) {
     VECTOR* c_texcoords = (VECTOR*)malloc(texcoordCount * sizeof(VECTOR));
     VECTOR* c_normals = (VECTOR*)malloc(normalCount * sizeof(VECTOR));
     VECTOR* c_colours = (VECTOR*)malloc(indexCount * sizeof(VECTOR));
+
+	char* tex_names[10];
+	res_m->tex_count = 0;
 
     for (int i = 0; i < positionCount; i++) {
         memcpy(c_verts[i], m->positions + (3 * i), sizeof(VECTOR));
@@ -289,6 +335,7 @@ model* loadOBJ(const char* path, GSTEXTURE* text) {
     res_m->colours = (VECTOR*)malloc(indexCount * sizeof(VECTOR));
 
     int faceMaterialIndex;
+	char* oldTex = NULL;
     for (int i = 0, j = 0; i < indexCount; i++, j += 3) {
         int vertIndex = m->indices[i].p;
         int texcoordIndex = m->indices[i].t;
@@ -300,7 +347,18 @@ model* loadOBJ(const char* path, GSTEXTURE* text) {
 
 		if(m->material_count > 0) {
 			faceMaterialIndex = m->face_materials[i / 3];
-			printf("%d\n", faceMaterialIndex);
+
+			if(oldTex != m->materials[faceMaterialIndex].map_Kd.name) {
+				tex_names[res_m->tex_count] = m->materials[faceMaterialIndex].map_Kd.name;
+				oldTex = tex_names[res_m->tex_count];
+				res_m->textures[res_m->tex_count] = malloc(sizeof(GSTEXTURE));
+				load_image(res_m->textures[res_m->tex_count], tex_names[res_m->tex_count], true);
+				res_m->tex_ranges[res_m->tex_count] = i;
+				res_m->tex_count++;
+			} else if (m->materials[faceMaterialIndex].map_Kd.name) {
+				res_m->tex_ranges[res_m->tex_count-1] = i;
+			}
+
         	c_colours[i][0] = m->materials[faceMaterialIndex].Kd[0];
         	c_colours[i][1] = m->materials[faceMaterialIndex].Kd[1];
         	c_colours[i][2] = m->materials[faceMaterialIndex].Kd[2];
@@ -325,6 +383,7 @@ model* loadOBJ(const char* path, GSTEXTURE* text) {
     lowX = hiX = res_m->positions[0][0];
     lowY = hiY = res_m->positions[0][1];
     lowZ = hiZ = res_m->positions[0][2];
+	
     for (int i = 0; i < res_m->facesCount; i++) {
         if (lowX > res_m->positions[i][0]) lowX = res_m->positions[i][0];
         if (hiX < res_m->positions[i][0]) hiX = res_m->positions[i][0];
@@ -375,8 +434,11 @@ model* loadOBJ(const char* path, GSTEXTURE* text) {
     res_m->bounding_box[7][3] = 1.00f;
 
 	if(text) {
-		res_m->texture = text;
+		res_m->textures[0] = text;
 		res_m->render = render_singletex;
+		res_m->vertices = memalign(128, sizeof(GSPRIMSTQPOINT)*m->index_count);
+	} else if (res_m->tex_count > 0) {
+		res_m->render = render_multitex;
 		res_m->vertices = memalign(128, sizeof(GSPRIMSTQPOINT)*m->index_count);
 	} else {
 		res_m->render = render_notex;

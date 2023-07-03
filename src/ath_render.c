@@ -44,16 +44,17 @@ static JSValue athena_freeobj(JSContext *ctx, JSValue this_val, int argc, JSValu
 	model* m;
 	JS_ToUint32(ctx, &m, argv[0]);
 
-    free(m->idxList);
-	m->idxList = NULL;
+    free(m->tmp_colours);
+    free(m->tmp_lights);
+    free(m->tmp_normals);
+    free(m->tmp_xyz);
+
 	free(m->positions);
-	m->positions = NULL;
     free(m->colours);
-	m->colours = NULL;
     free(m->normals);
-	m->normals = NULL;
     free(m->texcoords);
-	m->texcoords = NULL;
+
+	free(m->vertices);
 	
 	free(m);
 	m = NULL;
