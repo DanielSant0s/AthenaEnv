@@ -39,7 +39,7 @@ Lights.set(1,  0.0,  1.0, -1.0, 0.8, 0.8, 0.8, DIRECTIONAL);
 //Lights.set(4, -1.0, -1.0, -1.0, 0.5, 0.5, 0.5, DIRECTIONAL);
 
 var pad = Pads.get();
-var modeltodisplay = 2;
+var modeltodisplay = 0;
 var lx = null;
 var ly = null;
 var rx = null;
@@ -75,8 +75,12 @@ while(true){
 
     Camera.position(0.0f, savedry,  savedrx);
 
-    if(pad.justPressed(Pads.LEFT) || pad.justPressed(Pads.RIGHT)){
-        modeltodisplay ^= 1
+    if(pad.justPressed(Pads.LEFT) && modeltodisplay > 0){
+        modeltodisplay -= 1;
+    }
+
+    if(pad.justPressed(Pads.RIGHT) && modeltodisplay < model.length-1){
+        modeltodisplay += 1;
     }
 
     if(pad.justPressed(Pads.TRIANGLE)) {

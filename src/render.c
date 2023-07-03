@@ -298,11 +298,20 @@ model* loadOBJ(const char* path, GSTEXTURE* text) {
         memcpy(&res_m->texcoords[i], &c_texcoords[texcoordIndex], sizeof(VECTOR));
         memcpy(&res_m->normals[i], &c_normals[normalIndex], sizeof(VECTOR));
 
-        faceMaterialIndex = m->face_materials[i / 3];
-        c_colours[i][0] = m->materials[faceMaterialIndex].Kd[0];
-        c_colours[i][1] = m->materials[faceMaterialIndex].Kd[1];
-        c_colours[i][2] = m->materials[faceMaterialIndex].Kd[2];
-        c_colours[i][3] = 1.0f;
+		if(m->material_count > 0) {
+			faceMaterialIndex = m->face_materials[i / 3];
+			printf("%d\n", faceMaterialIndex);
+        	c_colours[i][0] = m->materials[faceMaterialIndex].Kd[0];
+        	c_colours[i][1] = m->materials[faceMaterialIndex].Kd[1];
+        	c_colours[i][2] = m->materials[faceMaterialIndex].Kd[2];
+        	c_colours[i][3] = 1.0f;
+		} else {
+			c_colours[i][0] = 1.0f;
+        	c_colours[i][1] = 1.0f;
+        	c_colours[i][2] = 1.0f;
+        	c_colours[i][3] = 1.0f;
+		}
+
     }
 
     memcpy(res_m->colours, c_colours, indexCount * sizeof(VECTOR));
