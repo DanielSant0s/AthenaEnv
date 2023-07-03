@@ -376,7 +376,7 @@ Screen.setMode(canvas);
 ```
 
 * Render.init(aspect) - Initializes rendering routines. *default aspect is 4/3, widescreen is 16/9
-* var model = Render.loadOBJ(path, *texture*) - Load simple obj 3d data files. MTL not supported yet. Actually it only supports a single texture that you have to load using Image class and pass as a second argument if you want to use it.
+* var model = Render.loadOBJ(path, *texture*) - Load simple obj 3d data files. MTL is supported (including per-vertex colors and multi-texturing). If you don't have a MTL file but you want to bind a texture on it, just load it using an Image class and pass as a second argument if you want to use it.
 * Render.drawOBJ(model, pos_x, pos_y, pos_z, rot_x, rot_y, rot_z) - Draws the loaded OBJ on the screen.
 * Render.freeOBJ(model)  - Frees the model from memory.
 
@@ -427,27 +427,11 @@ Properties:
 * scale - Proportional scale, default: 1.0f
 
 Methods:
-* print(x, y, text) - Draw text on screen(call it every frame). Example: font.print(10.0, 10.0, "Hello world!));
+* print(x, y, text) - Draw text on screen(call it every frame). Example: font.print(10.0, 10.0, "Hello world!);
 * getTextSize(text) - Returns text absolute size in pixels (width, height). Example: const size = font.getTextSize("Hello world!");
 
 ### Pads module
 
-* var pad = Pads.get(*port*) - Returns a pad object containing the following properties:  
-  • pad.btns - Buttons  
-  • pad.lx - Left analog horizontal position (left = -127, default = 0, right = 128)  
-  • pad.ly - Left analog vertical position (up = -127, default = 0, down = 128)  
-  • pad.rx - Right analog horizontal position (left = -127, default = 0, right = 128)  
-  • pad.ry - Right analog vertical position (up = -127, default = 0, down = 128)  
-    
-  ![analog_graph](https://user-images.githubusercontent.com/47725160/154816009-99d7e5da-badf-409b-9a3b-3618fd372f09.png)
-
-* var type = Pads.getType(*port*) - Gets gamepad type in the specified port.
-  • Pads.DIGITAL  
-  • Pads.ANALOG  
-  • Pads.DUALSHOCK  
-* var press = Pads.getPressure(*port*, button) - Get button pressure level.
-* Pads.rumble(port, big, small) - Rumble your gamepad.
-* var ret = Pads.check(pad, button) - Check if the button was pressed on the specified pad.
 * Buttons list:  
   • Pads.SELECT  
   • Pads.START  
@@ -465,6 +449,31 @@ Methods:
   • Pads.R2  
   • Pads.L3  
   • Pads.R3  
+
+* var pad = Pads.get(*port*) - Returns a pad object:  
+Properties:  
+  • pad.btns - Button state on the current check.  
+  • pad.old_btns = Button state on the last check.  
+  • pad.lx - Left analog horizontal position (left = -127, default = 0, right = 128).  
+  • pad.ly - Left analog vertical position (up = -127, default = 0, down = 128).  
+  • pad.rx - Right analog horizontal position (left = -127, default = 0, right = 128).  
+  • pad.ry - Right analog vertical position (up = -127, default = 0, down = 128).  
+    
+  ![analog_graph](https://user-images.githubusercontent.com/47725160/154816009-99d7e5da-badf-409b-9a3b-3618fd372f09.png)  
+  
+Methods:  
+  • update() - Updates all pads pressed and stick positions data.  
+  • pressed(button) - Checks if a button is being pressed (continuously).  
+  • justPressed(button) - Checks if a button was pressed only once.  
+
+* var type = Pads.getType(*port*) - Gets gamepad type in the specified port.
+* Pad Types:
+  • Pads.DIGITAL  
+  • Pads.ANALOG  
+  • Pads.DUALSHOCK  
+
+* var press = Pads.getPressure(*port*, button) - Get button pressure level.
+* Pads.rumble(port, big, small) - Rumble your gamepad.
   
 ### Keyboard module
 * Keyboard.init() - Initialize keyboard routines.
