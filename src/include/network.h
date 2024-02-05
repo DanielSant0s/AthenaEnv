@@ -1,6 +1,9 @@
 #include "../ath_env.h"
 #include <netman.h>
-#include <ps2ip.h>
+#include <sys/socket.h> /* socket, connect */
+#include <arpa/inet.h> /* struct sockaddr_in, struct sockaddr */
+#include <netdb.h> /* struct hostent, gethostbyname */
+#include <loadfile.h>
 #include <curl/curl.h>
 #include <loadfile.h>
 #include <pthread.h>

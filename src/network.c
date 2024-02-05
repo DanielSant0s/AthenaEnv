@@ -225,3 +225,4 @@ int ethApplyIPConfig(int use_dhcp, const struct ip4_addr *ip, const struct ip4_a
 
 	return result;
 }
+

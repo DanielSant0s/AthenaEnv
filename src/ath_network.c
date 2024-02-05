@@ -62,10 +62,10 @@ static JSValue athena_nw_get_config(JSContext *ctx, JSValue this_val, int argc, 
 	if (ps2ip_getconfig("sm0", &ip_info) >= 0)
 	{
         obj = JS_NewObject(ctx);
-        JS_DefinePropertyValueStr(ctx, obj, "ip", JS_NewString(ctx, inet_ntoa(ip_info.ipaddr)), JS_PROP_C_W_E);
-        JS_DefinePropertyValueStr(ctx, obj, "netmask", JS_NewString(ctx, inet_ntoa(ip_info.netmask)), JS_PROP_C_W_E);
-        JS_DefinePropertyValueStr(ctx, obj, "gateway", JS_NewString(ctx, inet_ntoa(ip_info.gw)), JS_PROP_C_W_E);
-        JS_DefinePropertyValueStr(ctx, obj, "dns", JS_NewString(ctx, inet_ntoa(*dns_getserver(0))), JS_PROP_C_W_E);
+        JS_DefinePropertyValueStr(ctx, obj, "ip", JS_NewString(ctx, ip4addr_ntoa(ip_info.ipaddr)), JS_PROP_C_W_E);
+        JS_DefinePropertyValueStr(ctx, obj, "netmask", JS_NewString(ctx, ip4addr_ntoa(ip_info.netmask)), JS_PROP_C_W_E);
+        JS_DefinePropertyValueStr(ctx, obj, "gateway", JS_NewString(ctx, ip4addr_ntoa(ip_info.gw)), JS_PROP_C_W_E);
+        JS_DefinePropertyValueStr(ctx, obj, "dns", JS_NewString(ctx, ip4addr_ntoa(*libcglue_dns_getserver(0))), JS_PROP_C_W_E);
 	} else {
 		obj = JS_ThrowInternalError(ctx, "Unable to read network info.\n");
 	}
@@ -86,12 +86,12 @@ static JSValue athena_nw_deinit(JSContext *ctx, JSValue this_val, int argc, JSVa
 static JSValue athena_nw_gethostbyname(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
 {
     const char* host = JS_ToCString(ctx, argv[0]);
-    struct hostent *host_address = lwip_gethostbyname(host);
+    struct hostent *host_address = gethostbyname(host);
     
     if (host_address == NULL)
         return JS_ThrowInternalError(ctx, "Unable to resolve address.\n");
 
-    return JS_NewString(ctx, inet_ntoa(*(struct in_addr*)host_address->h_addr));
+    return JS_NewString(ctx, ip4addr_ntoa(*(struct in_addr*)host_address->h_addr));
 }
 
 static void athena_nw_dtor(JSRuntime *rt, JSValue val)

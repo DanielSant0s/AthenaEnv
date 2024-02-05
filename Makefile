@@ -35,7 +35,7 @@ EE_BIN_PKD = athena_pkd
 
 EE_SRC_DIR = src/
 EE_OBJS_DIR = obj/
-EE_ASM_DIR = asm/
+EE_ASM_DIR = embed/
 
 RESET_IOP ?= 1
 DEBUG ?= 0
@@ -64,7 +64,7 @@ ifeq ($(DEBUG),1)
   EE_CFLAGS += -DDEBUG
 endif
 
-BIN2S = $(PS2SDK)/bin/bin2s
+BIN2S = $(PS2SDK)/bin/bin2c
 
 EXT_LIBS = modules/ds34usb/ee/libds34usb.a modules/ds34bt/ee/libds34bt.a
 
@@ -192,7 +192,7 @@ $(EE_OBJS_DIR)%.o: $(EE_SRC_DIR)%.c | $(EE_OBJS_DIR)
 	$(DIR_GUARD)
 	$(EE_CC) $(EE_CFLAGS) $(EE_INCS) -c $< -o $@
 
-$(EE_OBJS_DIR)%.o: $(EE_ASM_DIR)%.s | $(EE_OBJS_DIR)
-	@echo AS - $<
+$(EE_OBJS_DIR)%.o: $(EE_ASM_DIR)%.c | $(EE_OBJS_DIR)
+	@echo BIN2C - $<
 	$(DIR_GUARD)
-	$(EE_AS) $(EE_ASFLAGS) $< -o $@
+	$(EE_CC) $(EE_CFLAGS) $(EE_INCS) -c $< -o $@

@@ -111,14 +111,19 @@ static JSValue athena_dir(JSContext *ctx, JSValue this_val, int argc, JSValueCon
 
 	d = opendir(path);
 
+	struct stat     statbuf;
+
 	if (d) {
 		while ((dir = readdir(d)) != NULL) {
+
+    	if (stat(dir->d_name, &statbuf) == -1)
+    	    continue;
 
 			JSValue obj = JS_NewObject(ctx);
 
 			JS_DefinePropertyValueStr(ctx, obj, "name", JS_NewString(ctx, dir->d_name), JS_PROP_C_W_E);
-			JS_DefinePropertyValueStr(ctx, obj, "size", JS_NewUint32(ctx, dir->d_stat.st_size), JS_PROP_C_W_E);
-			JS_DefinePropertyValueStr(ctx, obj, "dir", JS_NewBool(ctx, S_ISDIR(dir->d_stat.st_mode)), JS_PROP_C_W_E);
+			JS_DefinePropertyValueStr(ctx, obj, "size", JS_NewUint32(ctx, statbuf.st_size), JS_PROP_C_W_E);
+			JS_DefinePropertyValueStr(ctx, obj, "dir", JS_NewBool(ctx, S_ISDIR(statbuf.st_mode)), JS_PROP_C_W_E);
 
 			JS_DefinePropertyValueUint32(ctx, arr, i++, obj, JS_PROP_C_W_E);
 	    }

@@ -1,7 +1,7 @@
 // {"name": "Render demo", "author": "Daniel Santos", "version": "04072023", "icon": "render_icon.png", "file": "render.js"}
 
 
-var fntcpy = new Font();
+let fntcpy = new Font();
 fntcpy.scale = (0.4f);
 
 Screen.setFrameCounter(true);
@@ -18,21 +18,21 @@ Render.init(4/3);
 
 os.chdir("render");
 
-var dragontex = new Image("dragon.png");
+let dragontex = new Image("dragon.png");
 dragontex.filter = LINEAR;
-var dragonmesh = Render.loadOBJ("dragon.obj", dragontex);
+let dragonmesh = Render.loadOBJ("dragon.obj", dragontex);
 
-var monkeytex = new Image("monkey.png");
+let monkeytex = new Image("monkey.png");
 monkeytex.filter = LINEAR;
-var monkeymesh = Render.loadOBJ("monkey.obj", monkeytex);
+let monkeymesh = Render.loadOBJ("monkey.obj", monkeytex);
 
-var teapot = Render.loadOBJ("Car.obj");
+let teapot = Render.loadOBJ("Car.obj");
 
-var mill = Render.loadOBJ("cubes.obj");
+let mill = Render.loadOBJ("cubes.obj");
 
-var boombox = Render.loadOBJ("Boombox.obj");
+let boombox = Render.loadOBJ("Boombox.obj");
 
-var model = [dragonmesh, monkeymesh, teapot, mill, boombox];
+let model = [dragonmesh, monkeymesh, teapot, mill, boombox];
 
 Camera.position(0.0f, 0.0f, 50.0f);
 Camera.rotation(0.0f, 0.0f,  0.0f);
@@ -44,26 +44,26 @@ Lights.set(1,  0.0,  0.0,  0.0, 1.0, 1.0, 1.0,     AMBIENT);
 Lights.set(1,  0.0,  1.0, -1.0, 0.8, 0.8, 0.8, DIRECTIONAL);
 //Lights.set(4, -1.0, -1.0, -1.0, 0.5, 0.5, 0.5, DIRECTIONAL);
 
-var pad = Pads.get();
-var modeltodisplay = 0;
-var lx = null;
-var ly = null;
-var rx = null;
-var ry = null;
+let pad = Pads.get();
+let modeltodisplay = 0;
+let lx = null;
+let ly = null;
+let rx = null;
+let ry = null;
 
-var savedlx = 0.0f;
-var savedly = 180.0f;
-var savedrx = 100.0f;
-var savedry = 0.0f;
+let savedlx = 0.0f;
+let savedly = 180.0f;
+let savedrx = 100.0f;
+let savedry = 0.0f;
 
-var ee_info = System.getCPUInfo();
+let ee_info = System.getCPUInfo();
 
-var free_mem = `RAM Usage: ${Math.floor(System.getMemoryStats().used / 1048576)}MB / ${Math.floor(ee_info.RAMSize / 1048576)}MB`;
-var free_vram = Screen.getFreeVRAM();
+let free_mem = `RAM Usage: ${Math.floor(System.getMemoryStats().used / 1048576)}MB / ${Math.floor(ee_info.RAMSize / 1048576)}MB`;
+let free_vram = Screen.getFreeVRAM();
 
 const gray = Color.new(40, 40, 40, 128);
 
-var bbox = false;
+let bbox = false;
 
 while(true){
     Screen.clear(gray);

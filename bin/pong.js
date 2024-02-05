@@ -145,8 +145,7 @@ const player = new Paddle();
 const ball = new Ball();
 ball.randomDirection();
 
-let new_pad = Pads.get();
-let old_pad = new_pad;
+let pad = Pads.get();
 
 let paused = true;
 let game_over = false;
@@ -167,12 +166,11 @@ const pause = {
 };
 
 while(true) {
-    old_pad = new_pad;
-    new_pad = Pads.get();
+    pad.update();
 
     Screen.clear(dark_gray);
 
-    if(Pads.check(new_pad, Pads.START) && !Pads.check(old_pad, Pads.START)) {
+    if(pad.justPressed(Pads.START)) {
         paused = (!paused);
         if(game_over) {
             ball.reset();
@@ -186,11 +184,11 @@ while(true) {
     }
 
     if(!paused) {
-        if(Pads.check(new_pad, Pads.LEFT) || new_pad.rx < -50) {
+        if(pad.pressed(Pads.LEFT) || pad.rx < -50) {
             player.moveLeft();
         }
     
-        if(Pads.check(new_pad, Pads.RIGHT) || new_pad.rx > 50){
+        if(pad.pressed(Pads.RIGHT) || pad.rx > 50){
             player.moveRight();
         }
 
