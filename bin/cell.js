@@ -1,6 +1,9 @@
 // {"name": "Cell.io", "author": "Daniel Santos", "version": "04072023", "icon": "cell_icon.png", "file": "cell.js"}
 
-var font = new Font("fonts/LEMONMILK-Regular.otf");
+Screen.setFrameCounter(true);
+Screen.setVSync(false);
+
+let font = new Font("fonts/LEMONMILK-Regular.otf");
 font.scale = (2);
 
 const MAIN_MENU = 0;
@@ -8,15 +11,15 @@ const RUN_GAME = 1;
 const PAUSE_MENU = 2;
 const GAME_OVER = 3;
 
-var game_state = MAIN_MENU;
+let game_state = MAIN_MENU;
 
-var running = true;
+let running = true;
 
-var player = {x:0, y:0, r:25, color:Color.new(128, 100, 255)};
+let player = {x:0, y:0, r:25, color:Color.new(128, 100, 255)};
 
-var camera = {x:-320, y:-224};
+let camera = {x:-320, y:-224};
 
-var enemies = [];
+let enemies = [];
 
 function World2Screen(rect, camera){
     return [rect.x-camera.x, rect.y-camera.y]
@@ -28,9 +31,9 @@ function drawCell(coords, radius, color, hollow){
 }
 
 function circleCircleColl(c1, c2) {
-    var distX = c1.x - c2.x;
-    var distY = c1.y - c2.y;
-    var dist = Math.sqrtf( (distX*distX) + (distY*distY) );
+    let distX = c1.x - c2.x;
+    let distY = c1.y - c2.y;
+    let dist = Math.sqrtf( (distX*distX) + (distY*distY) );
 
     if (dist <= c1.r + c2.r) {
         return true;
@@ -44,10 +47,9 @@ function randint(min, max) {
     return Math.floorf(Math.random() * (max - min + 1)) + min;
 }
 
-var main_menu_ptr = 0;
+let main_menu_ptr = 0;
 
-var oldpad = Pads.get();
-var pad = oldpad;
+let pad = Pads.get();
 
 const transparent = Color.new(255, 255, 255, 40);
 const purple = Color.new(64, 0, 128);
@@ -55,23 +57,22 @@ const purple = Color.new(64, 0, 128);
 while(running){
     Screen.clear(purple);
 
-    oldpad = pad;
-    pad = Pads.get();
+    pad.update();
 
     if(game_state == MAIN_MENU){
-        if(Pads.check(pad, Pads.UP) && !Pads.check(oldpad, Pads.UP)){
+        if(pad.justPressed(Pads.UP)){
             if(main_menu_ptr > 0){
                 main_menu_ptr--;
             }
         }
 
-        if(Pads.check(pad, Pads.DOWN) && !Pads.check(oldpad, Pads.DOWN)){
+        if(pad.justPressed(Pads.DOWN)){
             if(main_menu_ptr < 2){
                 main_menu_ptr++;
             }
         }
 
-        if(Pads.check(pad, Pads.CROSS) && !Pads.check(oldpad, Pads.CROSS)){
+        if(pad.justPressed(Pads.CROSS)){
             switch(main_menu_ptr){
                 case 0:
                     game_state = RUN_GAME;
@@ -84,15 +85,15 @@ while(running){
                     camera.y = -224;
 
 
-                    enemies_qt = randint(8, 15);
+                    let enemies_qt = randint(8, 15);
 
                     while(enemies_qt > enemies.length){
-                        var color = Color.new(randint(0, 255), randint(0, 255), randint(0, 255));
-                        var enemy = {color:color, x:randint(0, 640), y:randint(0, 448), r:randint(5, 75)};
+                        let color = Color.new(randint(0, 255), randint(0, 255), randint(0, 255));
+                        let enemy = {color:color, x:randint(0, 640), y:randint(0, 448), r:randint(5, 75)};
 
-                        var found_collision = false;
+                        let found_collision = false;
 
-                        for(var j = 0; j < enemies.length; j++){
+                        for(let j = 0; j < enemies.length; j++){
                             if (circleCircleColl(enemy, enemies[j])) {
                                 found_collision = true;
                             }
@@ -123,9 +124,9 @@ while(running){
 
     } else if(game_state == RUN_GAME){
 
-        var s_lines = null;
-        var e_lines = null;
-        for(var i = -1500; i < 1501; i+=50){
+        let s_lines = null;
+        let e_lines = null;
+        for(let i = -1500; i < 1501; i+=50){
 
             s_lines = World2Screen({x:i, y:-1500}, camera);
             if(s_lines[0] > 0 && s_lines[0] < 640) {
@@ -140,25 +141,25 @@ while(running){
             }
         }
 
-        if(Pads.check(pad, Pads.LEFT) && player.x > -1500){
+        if(pad.pressed(Pads.LEFT) && player.x > -1500){
             player.x-=4;
             camera.x-=4;
         }
-        if(Pads.check(pad, Pads.RIGHT) && player.x < 1500){
+        if(pad.pressed(Pads.RIGHT) && player.x < 1500){
             player.x+=4;
             camera.x+=4;
         }
-        if(Pads.check(pad, Pads.UP) && player.y > -1500){
+        if(pad.pressed(Pads.UP) && player.y > -1500){
             player.y-=4;
             camera.y-=4;
         }
-        if(Pads.check(pad, Pads.DOWN) && player.y < 1500){
+        if(pad.pressed(Pads.DOWN) && player.y < 1500){
             player.y+=4;
             camera.y+=4;
         }
     
-        for(var i = 0; i < enemies.length; i++){
-            var enemy_coords = World2Screen(enemies[i], camera);
+        for(let i = 0; i < enemies.length; i++){
+            let enemy_coords = World2Screen(enemies[i], camera);
             if((enemy_coords[0]+enemies[i].r) > 0 && (enemy_coords[0]-enemies[i].r) < 640 && 
                (enemy_coords[1]+enemies[i].r) > 0 && (enemy_coords[1]-enemies[i].r) < 448 ){
                 drawCell(enemy_coords, enemies[i].r, enemies[i].color, false);
@@ -188,7 +189,7 @@ while(running){
         font.color = Color.new(128, 128, 128);
         font.print(150, 200, ((!enemies.length)? "VICTORY!" : "GAME OVER"));
 
-        if(Pads.check(pad, Pads.CROSS) && !Pads.check(oldpad, Pads.CROSS)){
+        if(pad.justPressed(Pads.CROSS)){
             game_state = MAIN_MENU;
             enemies = [];
         }

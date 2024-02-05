@@ -91,7 +91,7 @@ os.setInterval(() => {
 
         
 
-        System.loadELF(System.boot_path + bin, [app_table[0].file, ]); // Doing this to reset all the stuff
+        System.loadELF(System.boot_path + "/" + bin, [app_table[0].file, ]); // Doing this to reset all the stuff
     }
 
     font_medium.print(210, 125, app_table[0].name);

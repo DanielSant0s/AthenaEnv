@@ -25,8 +25,7 @@ Sound.play(track);
 Timer.reset(timer);
 
 let repeat = false;
-let pad = 0;
-let oldpad = 0;
+let pad = Pads.get();
 
 const icons = {play:new Image("amp/play.png"), pause:new Image("amp/pause.png"), next:new Image("amp/next.png"), back:new Image("amp/back.png")};
 icons.play.color = purple;
@@ -55,10 +54,9 @@ console.log(JSON.stringify(Tasks.get()));
 
 while(true){
     Screen.clear(Color.new(32, 32, 32));
-    oldpad = pad;
-    pad = Pads.get();
+    pad.update();
 
-    if(Pads.check(pad, Pads.START) && !Pads.check(oldpad, Pads.START)) {
+    if(pad.justPressed(Pads.START)) {
         if(Sound.isPlaying()) {
             Sound.pause(track);
             Timer.pause(timer);
@@ -70,7 +68,7 @@ while(true){
         }
     }
 
-    if(Pads.check(pad, Pads.LEFT) && !Pads.check(oldpad, Pads.LEFT)) {
+    if(pad.justPressed(Pads.LEFT)) {
         cur_duration = 0;
         Sound.pause(track);
         sounds.unshift(sounds.pop());
@@ -83,7 +81,7 @@ while(true){
         Sound.free(old_track);
     }
 
-    if(Pads.check(pad, Pads.RIGHT) && !Pads.check(oldpad, Pads.RIGHT)) {
+    if(pad.justPressed(Pads.RIGHT)) {
         cur_duration = 0;
         Sound.pause(track);
         sounds.push(sounds.shift());
@@ -96,7 +94,7 @@ while(true){
         Sound.free(old_track);
     }
 
-    if(Pads.check(pad, Pads.TRIANGLE) && !Pads.check(oldpad, Pads.TRIANGLE)) {
+    if(pad.justPressed(Pads.TRIANGLE)) {
         break;
     }
 
