@@ -8,24 +8,16 @@
 #include "include/fntsys.h"
 #include "ath_env.h"
 
-static JSValueConst render_loop = NULL;
-static Color clear_color = GS_SETREG_RGBAQ(0x00, 0x00, 0x00, 0x80, 0x00);
-
 static JSValue athena_set_clear_color(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-  JS_ToInt32(ctx, &clear_color, argv[0]);
-  return JS_UNDEFINED;
+	static Color clear_color = GS_SETREG_RGBAQ(0x00, 0x00, 0x00, 0x80, 0x00);
+  	JS_ToInt32(ctx, &clear_color, argv[0]);
+  	js_set_clear_color((uint64_t)clear_color);
+  	return JS_UNDEFINED;
 }
 
 static JSValue athena_displayfunc(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-  render_loop = JS_DupValue(ctx, argv[0]);
-  return JS_UNDEFINED;
-}
-
-static JSValue athena_loop(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-  clearScreen(clear_color);
-  JS_Call(ctx, render_loop, JS_UNDEFINED, 0, NULL);
-  flipScreen();
-  return JS_UNDEFINED;
+	js_set_render_loop_func(JS_DupValue(ctx, argv[0]));
+	return JS_UNDEFINED;
 }
 
 static JSValue athena_flip(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
@@ -199,7 +191,6 @@ static const JSCFunctionListEntry module_funcs[] = {
 
 	JS_CFUNC_DEF("clearColor", 1, athena_set_clear_color),
 	JS_CFUNC_DEF("displayFunc", 1, athena_displayfunc),
-	JS_CFUNC_DEF("display", 0, athena_loop),
 
 	JS_PROP_INT32_DEF("NTSC", GS_MODE_NTSC, JS_PROP_CONFIGURABLE),
 	JS_PROP_INT32_DEF("DTV_480p", GS_MODE_DTV_480P, JS_PROP_CONFIGURABLE),

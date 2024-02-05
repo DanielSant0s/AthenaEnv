@@ -112,7 +112,3 @@ const loop = () => {
 }
 
 Screen.displayFunc(loop);
-
-os.setInterval(() => {
-    Screen.display();
-}, 0);

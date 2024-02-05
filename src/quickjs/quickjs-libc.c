@@ -37,35 +37,13 @@
 #include <limits.h>
 #include <sys/stat.h>
 #include <dirent.h>
-#if defined(_WIN32)
-#include <windows.h>
-#include <conio.h>
-#include <utime.h>
-#else
+
 //#include <dlfcn.h>
 //#include <termios.h>
 #include <sys/ioctl.h>
 #include <sys/wait.h>
 
-#if defined(__APPLE__)
-typedef sig_t sighandler_t;
-#if !defined(environ)
-#include <crt_externs.h>
-#define environ (*_NSGetEnviron())
-#endif
-#endif /* __APPLE__ */
-
-#endif
-
-#if !defined(_WIN32)
-/* enable the os.Worker API. IT relies on POSIX threads */
-#define USE_WORKER
-#endif
-
-#ifdef USE_WORKER
-#include <pthread.h>
-#include <stdatomic.h>
-#endif
+#include "../include/graphics.h"
 
 #include "cutils.h"
 #include "list.h"
@@ -277,23 +255,12 @@ static JSValue js_printf_internal(JSContext *ctx,
                     goto fail;
                 if (mod == 'l') {
                     /* 64 bit number */
-#if defined(_WIN32)
-                    if (q >= fmtbuf + sizeof(fmtbuf) - 3)
-                        goto invalid;
-                    q[2] = q[-1];
-                    q[-1] = 'I';
-                    q[0] = '6';
-                    q[1] = '4';
-                    q[3] = '\0';
-                    dbuf_printf_fun(&dbuf, fmtbuf, (int64_t)int64_arg);
-#else
                     if (q >= fmtbuf + sizeof(fmtbuf) - 2)
                         goto invalid;
                     q[1] = q[-1];
                     q[-1] = q[0] = 'l';
                     q[2] = '\0';
                     dbuf_printf_fun(&dbuf, fmtbuf, (long long)int64_arg);
-#endif
                 } else {
                     dbuf_printf_fun(&dbuf, fmtbuf, (int)int64_arg);
                 }
@@ -453,21 +420,11 @@ static JSValue js_std_loadFile(JSContext *ctx, JSValueConst this_val,
 typedef JSModuleDef *(JSInitModuleFunc)(JSContext *ctx,
                                         const char *module_name);
 
-
-#if defined(_WIN32)
-static JSModuleDef *js_module_loader_so(JSContext *ctx,
-                                        const char *module_name)
-{
-    JS_ThrowReferenceError(ctx, "shared library modules are not supported yet");
-    return NULL;
-}
-#else
 static JSModuleDef *js_module_loader_so(JSContext *ctx,
                                         const char *module_name)
 {
     return NULL;
 }
-#endif /* !_WIN32 */
 
 int js_module_set_import_meta(JSContext *ctx, JSValueConst func_val,
                               JS_BOOL use_realpath, JS_BOOL is_main)
@@ -1842,7 +1799,7 @@ static void js_os_timer_mark(JSRuntime *rt, JSValueConst val,
     }
 }
 
-static JSValue js_os_create_timer(JSContext *ctx, int64_t interval,
+JSValue js_os_create_timer(JSContext *ctx, int64_t interval,
 int64_t delay, JSValueConst func)
 {
     JSRuntime *rt = JS_GetRuntime(ctx);
@@ -3592,6 +3549,19 @@ void js_std_promise_rejection_tracker(JSContext *ctx, JSValueConst promise,
 }
 
 /* main loop which calls the user JS callbacks */
+
+static JSValueConst render_loop_func = JS_UNDEFINED;
+static uint64_t clear_color = GS_SETREG_RGBAQ(0x00, 0x00, 0x00, 0x80, 0x00);
+
+void js_set_render_loop_func(JSValueConst func) {
+    render_loop_func = func;
+
+}
+
+void js_set_clear_color(uint64_t color) {
+    clear_color = color;
+}
+
 void js_std_loop(JSContext *ctx)
 {
     JSContext *ctx1;
@@ -3609,7 +3579,13 @@ void js_std_loop(JSContext *ctx)
             }
         }
 
-        if (!os_poll_func || os_poll_func(ctx))
+        if (render_loop_func != JS_UNDEFINED) {
+            clearScreen(clear_color);
+            JS_Call(ctx, render_loop_func, JS_UNDEFINED, 0, NULL);
+            flipScreen();
+        }
+
+        if ((!os_poll_func || os_poll_func(ctx)) && render_loop_func == JS_UNDEFINED)
             break;
     }
 }
