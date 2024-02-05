@@ -81,7 +81,7 @@ static JSValue athena_dir(JSContext *ctx, JSValue this_val, int argc, JSValueCon
 	JSValue arr = JS_NewArray(ctx);
 
     const char *temp_path = "";
-	char path[255];
+	char path[255], tpath[384];
 	
 	getcwd((char *)path, 256);
 	dbgprintf("current dir %s\n",(char *)path);
@@ -116,14 +116,16 @@ static JSValue athena_dir(JSContext *ctx, JSValue this_val, int argc, JSValueCon
 	if (d) {
 		while ((dir = readdir(d)) != NULL) {
 
-    	if (stat(dir->d_name, &statbuf) == -1)
-    	    continue;
+			strcpy(tpath, path);
+			strcat(tpath, "/");
+			strcat(tpath, dir->d_name);
+    		stat(tpath, &statbuf);
 
 			JSValue obj = JS_NewObject(ctx);
 
 			JS_DefinePropertyValueStr(ctx, obj, "name", JS_NewString(ctx, dir->d_name), JS_PROP_C_W_E);
 			JS_DefinePropertyValueStr(ctx, obj, "size", JS_NewUint32(ctx, statbuf.st_size), JS_PROP_C_W_E);
-			JS_DefinePropertyValueStr(ctx, obj, "dir", JS_NewBool(ctx, S_ISDIR(statbuf.st_mode)), JS_PROP_C_W_E);
+			JS_DefinePropertyValueStr(ctx, obj, "dir", JS_NewBool(ctx, (dir->d_type == DT_DIR)), JS_PROP_C_W_E);
 
 			JS_DefinePropertyValueUint32(ctx, arr, i++, obj, JS_PROP_C_W_E);
 	    }

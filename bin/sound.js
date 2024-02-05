@@ -10,6 +10,8 @@ let timer = Timer.new();
 
 const sound_table = System.listDir("/sounds").map(file => file.name).filter(str => str.endsWith(".ogg") || str.endsWith(".wav") );
 
+console.log(JSON.stringify(System.listDir("/sounds")));
+
 const sounds = Array();
 
 sound_table.forEach(name => {
