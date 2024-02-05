@@ -1,3 +1,6 @@
+#ifndef ATH_ENV_H
+#define ATH_ENV_H
+
 #include <kernel.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -95,3 +98,6 @@ JSModuleDef *athena_sound_init(JSContext* ctx);
 JSModuleDef *athena_camera_init(JSContext* ctx);
 #endif
 
+
+
+#endif
