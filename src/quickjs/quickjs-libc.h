@@ -54,7 +54,33 @@ void js_std_set_worker_new_context_func(JSContext *(*func)(JSRuntime *rt));
 void js_set_render_loop_func(JSValue func);
 void js_set_clear_color(uint64_t color);
 
-                                        
+typedef enum {
+    PRESSED_EVENT,
+    JUSTPRESSED_EVENT,
+    NONPRESSED_EVENT
+} EventFlavours;
+
+typedef struct {
+	char port;
+
+    uint32_t btns;
+    int lx;
+	int ly;
+	int rx;
+	int ry;
+
+    uint32_t old_btns;
+    char old_lx;
+	char old_ly;
+	char old_rx;
+	char old_ry;
+} JSPads;
+
+int js_new_input_event(int buttons, JSValueConst func, EventFlavours flavour);
+void js_delete_input_event(int id);
+void js_set_input_event_handler(JSPads* pad);
+void js_pads_update(JSPads *pad);
+
 #ifdef __cplusplus
 } /* extern "C" { */
 #endif

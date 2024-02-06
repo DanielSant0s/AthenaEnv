@@ -6,22 +6,6 @@
 
 static JSClassID js_pads_class_id;
 
-typedef struct {
-	char port;
-
-    u32 btns;
-    int lx;
-	int ly;
-	int rx;
-	int ry;
-
-    u32 old_btns;
-    char old_lx;
-	char old_ly;
-	char old_rx;
-	char old_ry;
-} JSPads;
-
 static JSValue athena_gettype(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	if (argc != 0 && argc != 1) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
 	int port = 0;
@@ -31,6 +15,21 @@ static JSValue athena_gettype(JSContext *ctx, JSValue this_val, int argc, JSValu
 	}
 	int mode = padInfoMode(port, 0, PAD_MODETABLE, 0);
 	return JS_NewInt32(ctx, mode);
+}
+
+static JSValue athena_new_pad_event(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	int buttons, flavour;
+	JS_ToInt32(ctx, &buttons, argv[0]);
+	JS_ToInt32(ctx, &flavour, argv[1]);
+	int id = js_new_input_event(buttons, JS_DupValue(ctx, argv[2]), flavour);
+	return JS_NewInt32(ctx, id);
+}
+
+static JSValue athena_delete_pad_event(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	int id;
+	JS_ToInt32(ctx, &id, argv[0]);
+	js_delete_input_event(id);
+	return JS_UNDEFINED;
 }
 
 static JSValue athena_getstate(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
@@ -109,6 +108,48 @@ static JSValue athena_getpad(JSContext *ctx, JSValueConst this_val, int argc, JS
  fail:
     js_free(ctx, pad);
     return JS_EXCEPTION;
+}
+
+void js_pads_update(JSPads *pad) {
+	struct padButtonStatus buttons;
+	u32 paddata = 0;
+	int ret;
+
+	int state = padGetState(pad->port, 0);
+
+	if ((state == PAD_STATE_STABLE) || (state == PAD_STATE_FINDCTP1)) {
+        // pad is connected. Read pad button information.
+        ret = padRead(pad->port, 0, &buttons); // port, slot, buttons
+        if (ret != 0) {
+            paddata = 0xffff ^ buttons.btns;
+        }
+    } 
+
+	if (ds34bt_get_status(pad->port) & DS34BT_STATE_RUNNING) {
+        ret = ds34bt_get_data(pad->port, (u8 *)&buttons.btns);
+        if (ret != 0) {
+            paddata |= 0xffff ^ buttons.btns;
+        }
+    }
+
+	if (ds34usb_get_status(pad->port) & DS34USB_STATE_RUNNING) {
+        ret = ds34usb_get_data(pad->port, (u8 *)&buttons.btns);
+        if (ret != 0) {
+            paddata |= 0xffff ^ buttons.btns;
+        }
+    }
+
+	pad->old_btns = pad->btns;
+	pad->old_lx = pad->lx; 
+	pad->old_ly = pad->ly; 
+	pad->old_rx = pad->rx; 
+	pad->old_ry = pad->ry; 
+
+	pad->btns = paddata;
+	pad->lx = buttons.ljoy_h-127;
+	pad->ly = buttons.ljoy_v-127;
+	pad->rx = buttons.rjoy_h-127;
+	pad->ry = buttons.rjoy_v-127;
 }
 
 static JSValue athena_update(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
@@ -262,6 +303,13 @@ static JSValue athena_justpressed(JSContext *ctx, JSValue this_val, int argc, JS
 	return JS_NewBool(ctx, (pad->btns & button) && !(pad->old_btns & button));
 }
 
+static JSValue athena_seteventhandler(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	int button;
+	JSPads *pad = JS_GetOpaque2(ctx, this_val, js_pads_class_id);
+	js_set_input_event_handler(pad);
+	return JS_UNDEFINED;
+}
+
 static JSValue athena_set_led(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	if (argc != 3 && argc != 4) return JS_ThrowSyntaxError(ctx, "wrong number of arguments.");
 	u8 led[4];
@@ -383,6 +431,13 @@ static const JSCFunctionListEntry module_funcs[] = {
     JS_CFUNC_DEF("getPressure", 2, athena_getpressure),
     JS_CFUNC_DEF("rumble", 3, athena_rumble),
     JS_CFUNC_DEF("setLED", 4, athena_set_led),
+	
+	JS_CFUNC_DEF("newEvent", 3, athena_new_pad_event),
+	JS_CFUNC_DEF("deleteEvent", 1, athena_delete_pad_event),
+
+	JS_PROP_INT32_DEF("PRESSED", PRESSED_EVENT, JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("JUST_PRESSED", JUSTPRESSED_EVENT, JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("NONPRESSED", NONPRESSED_EVENT, JS_PROP_CONFIGURABLE ),
 
 	JS_PROP_INT32_DEF("SELECT", PAD_SELECT, JS_PROP_CONFIGURABLE ),
 	JS_PROP_INT32_DEF("START", PAD_START, JS_PROP_CONFIGURABLE ),
@@ -423,6 +478,7 @@ static const JSCFunctionListEntry js_pad_proto_funcs[] = {
     JS_CFUNC_DEF("update", 0, athena_update),
 	JS_CFUNC_DEF("pressed", 1, athena_check),
 	JS_CFUNC_DEF("justPressed", 1, athena_justpressed),
+	JS_CFUNC_DEF("setEventHandler", 0, athena_seteventhandler),
 	JS_CGETSET_MAGIC_DEF("btns", js_pad_get_prop, js_pad_set_prop, 0),
 	JS_CGETSET_MAGIC_DEF("lx",   js_pad_get_prop, js_pad_set_prop, 1),
 	JS_CGETSET_MAGIC_DEF("ly",   js_pad_get_prop, js_pad_set_prop, 2),

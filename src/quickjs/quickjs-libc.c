@@ -3555,11 +3555,45 @@ static uint64_t clear_color = GS_SETREG_RGBAQ(0x00, 0x00, 0x00, 0x80, 0x00);
 
 void js_set_render_loop_func(JSValueConst func) {
     render_loop_func = func;
-
 }
 
 void js_set_clear_color(uint64_t color) {
     clear_color = color;
+}
+
+typedef struct {
+    int buttons;
+    JSValueConst function;
+    EventFlavours flavour;
+} InputEvent;
+
+static InputEvent padEvents[64];
+static uint8_t totalPadEvents;
+
+static JSPads* inputEventHandler = NULL;
+
+void js_set_input_event_handler(JSPads* pad) {
+    inputEventHandler = pad;
+}
+
+int js_new_input_event(int buttons, JSValueConst func, EventFlavours flavour) {
+    for (int i = 0; i < 64; i++) {
+        if (!padEvents[i].function) {
+            padEvents[i].buttons = buttons;
+            padEvents[i].function = func;
+            padEvents[i].flavour = flavour;
+            totalPadEvents++;
+            return i;
+        }
+    }
+    return -1;
+}
+
+void js_delete_input_event(int id) {
+    padEvents[id].buttons = 0;
+    padEvents[id].function = NULL;
+    padEvents[id].flavour = PRESSED_EVENT;
+    totalPadEvents--;
 }
 
 void js_std_loop(JSContext *ctx)
@@ -3585,7 +3619,32 @@ void js_std_loop(JSContext *ctx)
             flipScreen();
         }
 
-        if ((!os_poll_func || os_poll_func(ctx)) && render_loop_func == JS_UNDEFINED)
+        if (inputEventHandler) {
+            js_pads_update(inputEventHandler);
+            if (totalPadEvents) {
+                for (int i = 0; i < 64; i++) {
+                    if (padEvents[i].function) {
+                        bool trigger_event = false;
+                        switch (padEvents[i].flavour) {
+                            case PRESSED_EVENT:
+                                trigger_event = (inputEventHandler->btns & padEvents[i].buttons);
+                                break;
+                            case JUSTPRESSED_EVENT:
+                                trigger_event = ((inputEventHandler->btns & padEvents[i].buttons) && !(inputEventHandler->old_btns & padEvents[i].buttons));
+                                break;
+                            case NONPRESSED_EVENT:
+                                trigger_event = !(inputEventHandler->btns & padEvents[i].buttons);
+                                break;
+                        };
+
+                        if (trigger_event)
+                            JS_Call(ctx, padEvents[i].function, JS_UNDEFINED, 0, NULL);
+                    }
+                }
+            }
+        }
+
+        if ((!os_poll_func || os_poll_func(ctx)) && render_loop_func == JS_UNDEFINED && !totalPadEvents)
             break;
     }
 }

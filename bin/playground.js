@@ -9,4 +9,10 @@ Screen.log(`Vectors sub is ${Vector2.sub(v1, v2).toString()}`);
 Screen.log(`Vectors mul is ${Vector2.mul(v1, v2).toString()}`);
 Screen.log(`Vectors div is ${Vector2.div(v1, v2).toString()}`);
 
-System.sleep(99999);
+let pad = Pads.get();
+
+pad.setEventHandler();
+
+Pads.newEvent(Pads.LEFT, Pads.JUST_PRESSED, () => { 
+    Screen.log(`DPad Left button was just pressed`); 
+});
