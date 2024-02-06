@@ -42415,6 +42415,20 @@ static const JSCFunctionListEntry js_math_obj[] = {
     JS_OBJECT_DEF("Math", js_math_funcs, countof(js_math_funcs), JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE ),
 };
 
+
+static const JSCFunctionListEntry js_fast_math_funcs[] = {
+    JS_CFUNC_SPECIAL_DEF("sinf", 1, f_f, athena_sinf ),
+    JS_CFUNC_SPECIAL_DEF("cosf", 1, f_f, athena_cosf ),
+    JS_CFUNC_SPECIAL_DEF("tanf", 1, f_f, athena_tanf ),
+    JS_CFUNC_SPECIAL_DEF("atan2f", 2, f_f_f, athena_atan2f ),
+    JS_CFUNC_SPECIAL_DEF("asinf", 1, f_f, athena_asinf ),
+    JS_CFUNC_SPECIAL_DEF("acosf", 1, f_f, athena_acosf ),
+};
+
+static const JSCFunctionListEntry js_fast_math_obj[] = {
+    JS_OBJECT_DEF("FastMath", js_fast_math_funcs, countof(js_fast_math_funcs), JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE ),
+};
+
 /* Date */
 
 #if 0
@@ -51504,6 +51518,7 @@ void JS_AddIntrinsicBaseObjects(JSContext *ctx)
     /* Math: create as autoinit object */
     js_random_init(ctx);
     JS_SetPropertyFunctionList(ctx, ctx->global_obj, js_math_obj, countof(js_math_obj));
+    JS_SetPropertyFunctionList(ctx, ctx->global_obj, js_fast_math_obj, countof(js_fast_math_obj));
 
     /* ES6 Reflect: create as autoinit object */
     JS_SetPropertyFunctionList(ctx, ctx->global_obj, js_reflect_obj, countof(js_reflect_obj));

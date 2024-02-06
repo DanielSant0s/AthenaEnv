@@ -73,7 +73,7 @@ JS_CORE = quickjs/cutils.o quickjs/libbf.o quickjs/libregexp.o quickjs/libunicod
 
 APP_CORE = main.o athena_math.o memory.o ee_tools.o module_system.o taskman.o pad.o system.o strUtils.o 
 
-ATHENA_MODULES = ath_env.o ath_pads.o ath_system.o ath_archive.o ath_timer.o ath_task.o 
+ATHENA_MODULES = ath_env.o ath_vector.o ath_pads.o ath_system.o ath_archive.o ath_timer.o ath_task.o 
 
 IOP_MODULES = iomanx.o filexio.o sio2man.o mcman.o mcserv.o padman.o  \
 			  usbd.o bdm.o bdmfs_fatfs.o usbmass_bd.o cdfs.o ds34bt.o \

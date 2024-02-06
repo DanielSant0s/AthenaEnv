@@ -210,6 +210,7 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"import * as System from 'System';\n"
 				"import * as IOP from 'IOP';\n"
 				"import * as Archive from 'Archive';\n"
+				"import * as Vector2 from 'Vector2';\n"
 
                 "globalThis.std = std;\n"
                 "globalThis.os = os;\n"
@@ -218,7 +219,8 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"globalThis.Pads = Pads;\n"
 				"globalThis.System = System;\n"
 				"globalThis.Archive = Archive;\n"
-				"globalThis.IOP = IOP;\n";
+				"globalThis.IOP = IOP;\n"
+				"globalThis.Vector2 = Vector2.Vector2;\n";
 				
             rc = qjs_eval_buf(ctx, str, strlen(str), "<input>", JS_EVAL_TYPE_MODULE);
             if (rc != 0) { return retval; }
@@ -267,6 +269,7 @@ static JSContext *JS_NewCustomContext(JSRuntime *rt)
 	athena_timer_init(ctx);
 	athena_task_init(ctx);
 	athena_pads_init(ctx);
+	athena_vector_init(ctx);
 
 	#ifdef ATHENA_AUDIO
 	athena_sound_init(ctx);
