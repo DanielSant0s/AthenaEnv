@@ -5,7 +5,8 @@
 #include "include/pad.h"
 #include "include/dbgprintf.h"
 
-static char padBuf[256] __attribute__((aligned(64)));
+static char pad0Buf[256] __attribute__((aligned(64)));
+static char pad1Buf[256] __attribute__((aligned(64)));
 
 static char actAlign[6];
 static int actuators;
@@ -178,13 +179,18 @@ void pad_init()
     dbgprintf("PortMax: %d\n", padGetPortMax());
     dbgprintf("SlotMax: %d\n", padGetSlotMax(port));
 
-    if((ret = padPortOpen(port, slot, padBuf)) == 0) {
+    if((ret = padPortOpen(0, 0, pad0Buf)) == 0) {
         dbgprintf("padOpenPort failed: %d\n", ret);
         SleepThread();
     }
 
     if(!initializePad(port, slot)) {
         dbgprintf("pad initalization failed!\n");
+        SleepThread();
+    }
+
+    if((ret = padPortOpen(1, 0, pad1Buf)) == 0) {
+        dbgprintf("padOpenPort failed: %d\n", ret);
         SleepThread();
     }
 }

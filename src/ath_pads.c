@@ -33,6 +33,19 @@ static JSValue athena_gettype(JSContext *ctx, JSValue this_val, int argc, JSValu
 	return JS_NewInt32(ctx, mode);
 }
 
+static JSValue athena_getstate(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	if (argc != 0 && argc != 1) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
+	int port = 0;
+	if (argc == 1){
+		JS_ToInt32(ctx, &port, argv[0]);
+		if (port > 1) return JS_ThrowSyntaxError(ctx, "wrong port number.");
+	}
+	int mode = padGetState(port, 0);
+	return JS_NewInt32(ctx, mode);
+}
+
+static bool pad1_initialized = false;
+
 static JSValue athena_getpad(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv){
 	int port = 0;
 
@@ -48,6 +61,10 @@ static JSValue athena_getpad(JSContext *ctx, JSValueConst this_val, int argc, JS
         return JS_EXCEPTION;
 	if (argc == 1){
 		JS_ToInt32(ctx, &port, argv[0]);
+		if (port == 1 && !pad1_initialized) {
+			initializePad(1, 0);
+			pad1_initialized = true;
+		}
 		if (port > 1) return JS_ThrowSyntaxError(ctx, "wrong port number.");
 	}
 
@@ -362,9 +379,11 @@ static JSValue js_pad_set_prop(JSContext *ctx, JSValueConst this_val, JSValue va
 static const JSCFunctionListEntry module_funcs[] = {
     JS_CFUNC_DEF("get", 1, athena_getpad),
     JS_CFUNC_DEF("getType", 1, athena_gettype),
+	JS_CFUNC_DEF("getState", 1, athena_getstate),
     JS_CFUNC_DEF("getPressure", 2, athena_getpressure),
     JS_CFUNC_DEF("rumble", 3, athena_rumble),
     JS_CFUNC_DEF("setLED", 4, athena_set_led),
+
 	JS_PROP_INT32_DEF("SELECT", PAD_SELECT, JS_PROP_CONFIGURABLE ),
 	JS_PROP_INT32_DEF("START", PAD_START, JS_PROP_CONFIGURABLE ),
 	JS_PROP_INT32_DEF("UP", PAD_UP, JS_PROP_CONFIGURABLE ),
@@ -381,9 +400,17 @@ static const JSCFunctionListEntry module_funcs[] = {
 	JS_PROP_INT32_DEF("R2", PAD_R2, JS_PROP_CONFIGURABLE ),
 	JS_PROP_INT32_DEF("L3", PAD_L3, JS_PROP_CONFIGURABLE ),
 	JS_PROP_INT32_DEF("R3", PAD_R3, JS_PROP_CONFIGURABLE ),
+
 	JS_PROP_INT32_DEF("DIGITAL", PAD_TYPE_DIGITAL, JS_PROP_CONFIGURABLE ),
 	JS_PROP_INT32_DEF("ANALOG", PAD_TYPE_ANALOG, JS_PROP_CONFIGURABLE ),
-	JS_PROP_INT32_DEF("DUALSHOCK", PAD_TYPE_DUALSHOCK, JS_PROP_CONFIGURABLE )
+	JS_PROP_INT32_DEF("DUALSHOCK", PAD_TYPE_DUALSHOCK, JS_PROP_CONFIGURABLE ),
+
+	JS_PROP_INT32_DEF("STATE_DISCONN", PAD_STATE_DISCONN,  JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("STATE_FINDPAD", PAD_STATE_FINDPAD,  JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("STATE_FINDCTP1", PAD_STATE_FINDCTP1, JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("STATE_EXECCMD", PAD_STATE_EXECCMD,  JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("STATE_STABLE ", PAD_STATE_STABLE,   JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("STATE_ERROR  ", PAD_STATE_ERROR,    JS_PROP_CONFIGURABLE ),
 };
 
 static const JSCFunctionListEntry js_pad_proto_funcs[] = {

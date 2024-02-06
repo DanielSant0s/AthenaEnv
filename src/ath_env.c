@@ -220,7 +220,8 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"globalThis.System = System;\n"
 				"globalThis.Archive = Archive;\n"
 				"globalThis.IOP = IOP;\n"
-				"globalThis.Vector2 = Vector2.Vector2;\n";
+				"globalThis.Vector2 = Vector2;\n";
+
 				
             rc = qjs_eval_buf(ctx, str, strlen(str), "<input>", JS_EVAL_TYPE_MODULE);
             if (rc != 0) { return retval; }

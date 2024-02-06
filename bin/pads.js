@@ -37,7 +37,7 @@ const l3 = new Image("pads/l3.png", VRAM);
 const r3 = new Image("pads/r3.png", VRAM);
 
 var rumble = false;
-var pad = Pads.get();
+var pad = Pads.get(0);
 
 Screen.display(() => {
     pad.update();
