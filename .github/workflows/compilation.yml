@@ -31,8 +31,6 @@ jobs:
     - name: Compile project
       run: |
         make clean 
-        make CLI=1
-        make clean
         make
 
     - name: Get short SHA
