@@ -991,6 +991,8 @@ typedef enum JSCFunctionEnum {  /* XXX: should rename for namespace isolation */
     JS_CFUNC_f_f,
     JS_CFUNC_f_f_f,
     JS_CFUNC_f_d,
+    JS_CFUNC_i_i,
+    JS_CFUNC_i_i_i,
     JS_CFUNC_getter,
     JS_CFUNC_setter,
     JS_CFUNC_getter_magic,
@@ -1009,6 +1011,8 @@ typedef union JSCFunctionType {
     float (*f_f)(float);
     float (*f_f_f)(float, float);
     float (*f_d)(double);
+    int (*i_i)(int);
+    int (*i_i_i)(int, int);
     JSValue (*getter)(JSContext *ctx, JSValueConst this_val);
     JSValue (*setter)(JSContext *ctx, JSValueConst this_val, JSValueConst val);
     JSValue (*getter_magic)(JSContext *ctx, JSValueConst this_val, int magic);

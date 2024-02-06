@@ -71,7 +71,7 @@ EXT_LIBS = modules/ds34usb/ee/libds34usb.a modules/ds34bt/ee/libds34bt.a
 JS_CORE = quickjs/cutils.o quickjs/libbf.o quickjs/libregexp.o quickjs/libunicode.o \
 				 quickjs/realpath.o quickjs/quickjs.o quickjs/quickjs-libc.o 
 
-APP_CORE = main.o memory.o ee_tools.o module_system.o taskman.o pad.o system.o strUtils.o 
+APP_CORE = main.o athena_math.o memory.o ee_tools.o module_system.o taskman.o pad.o system.o strUtils.o 
 
 ATHENA_MODULES = ath_env.o ath_pads.o ath_system.o ath_archive.o ath_timer.o ath_task.o 
 

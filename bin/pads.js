@@ -39,7 +39,7 @@ const r3 = new Image("pads/r3.png", VRAM);
 var rumble = false;
 var pad = Pads.get();
 
-const loop = () => {
+Screen.display(() => {
     pad.update();
 
     font.print(220, 25, "\nAthena project: Controls demo\n");
@@ -109,6 +109,4 @@ const loop = () => {
     }
 
     font.print(10, 10, Screen.getFPS(360) + " FPS");
-}
-
-Screen.displayFunc(loop);
+});

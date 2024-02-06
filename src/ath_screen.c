@@ -190,7 +190,7 @@ static const JSCFunctionListEntry module_funcs[] = {
 	JS_CFUNC_DEF("cls", 0, athena_cls),
 
 	JS_CFUNC_DEF("clearColor", 1, athena_set_clear_color),
-	JS_CFUNC_DEF("displayFunc", 1, athena_displayfunc),
+	JS_CFUNC_DEF("display", 1, athena_displayfunc),
 
 	JS_PROP_INT32_DEF("NTSC", GS_MODE_NTSC, JS_PROP_CONFIGURABLE),
 	JS_PROP_INT32_DEF("DTV_480p", GS_MODE_DTV_480P, JS_PROP_CONFIGURABLE),
