@@ -103,12 +103,40 @@ static JSValue athena_drawbbox(JSContext *ctx, JSValue this_val, int argc, JSVal
 	return JS_UNDEFINED;
 }
 
+static JSValue athena_loadcube(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	JSImageData *image;
+
+	image = JS_GetOpaque2(ctx, argv[0], get_img_class_id());
+	prepare_cube(&(image->tex));
+
+	return JS_UNDEFINED;
+}
+
+static JSValue athena_drawcube(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	float pos_x, pos_y, pos_z, rot_x, rot_y, rot_z;
+
+	JS_ToFloat32(ctx, &pos_x, argv[0]);
+	JS_ToFloat32(ctx, &pos_y, argv[1]);
+	JS_ToFloat32(ctx, &pos_z, argv[2]);
+	JS_ToFloat32(ctx, &rot_x, argv[3]);
+	JS_ToFloat32(ctx, &rot_y, argv[4]);
+	JS_ToFloat32(ctx, &rot_z, argv[5]);
+	
+	draw_cube(pos_x, pos_y, pos_z, rot_x, rot_y, rot_z);
+
+	return JS_UNDEFINED;
+}
+
+
 static const JSCFunctionListEntry render_funcs[] = {
     JS_CFUNC_DEF( "init",      1,     		 athena_initrender),
   	JS_CFUNC_DEF( "loadOBJ",   2,        		athena_loadobj ),
     JS_CFUNC_DEF( "drawOBJ",   7,        		athena_drawobj ),
 	JS_CFUNC_DEF( "drawBbox",  8,         	    athena_drawbbox),
     JS_CFUNC_DEF( "freeOBJ",   1,        		athena_freeobj ),
+
+	JS_CFUNC_DEF( "loadCube",   1,        		athena_loadcube ),
+	JS_CFUNC_DEF( "drawCube",   6,        		athena_drawcube ),
 };
 
 

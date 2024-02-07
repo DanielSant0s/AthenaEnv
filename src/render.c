@@ -8,6 +8,13 @@
 
 #include "include/render.h"
 
+#include "mesh_data.c"
+
+#include "vif.h"
+
+extern u32 VU1Draw3D_CodeStart __attribute__((section(".vudata")));
+extern u32 VU1Draw3D_CodeEnd __attribute__((section(".vudata")));
+
 MATRIX view_screen;
 
 VECTOR camera_position = { 0.00f, 0.00f, 0.00f, 1.00f };
@@ -20,7 +27,7 @@ int* light_type;
 
 void init3D(float aspect)
 {
-	create_view_screen(view_screen, aspect, -0.20f, 0.20f, -0.20f, 0.20f, 1.00f, 2000.00f);
+	create_view_screen(view_screen, aspect,  -3.00f, 3.00f, -3.00f, 3.00f, 1.00f, 2000.00f);
 
 }
 
@@ -495,4 +502,155 @@ void draw_bbox(model* m, float pos_x, float pos_y, float pos_z, float rot_x, flo
 	
 	free(t_xyz);
 	free(xyz);
+}
+
+
+u64* vif_packets[2] __attribute__((aligned(64)));
+u64* curr_vif_packet;
+
+/** Cube data */
+u64 *cube_packet;
+
+u8 context = 0;
+
+VECTOR *c_verts __attribute__((aligned(128))), *c_sts __attribute__((aligned(128)));
+
+static inline u32 lzw(u32 val)
+{
+	u32 res;
+	__asm__ __volatile__ ("   plzcw   %0, %1    " : "=r" (res) : "r" (val));
+	return(res);
+}
+
+static inline void gsKit_set_tw_th(const GSTEXTURE *Texture, int *tw, int *th)
+{
+	*tw = 31 - (lzw(Texture->Width) + 1);
+	if(Texture->Width > (1<<*tw))
+		(*tw)++;
+
+	*th = 31 - (lzw(Texture->Height) + 1);
+	if(Texture->Height > (1<<*th))
+		(*th)++;
+}
+
+/** Calculate packet for cube data */
+void calculate_cube(GSGLOBAL* gsGlobal, GSTEXTURE* Texture)
+{
+	float fX = 2048.0f+gsGlobal->Width/2;
+	float fY = 2048.0f+gsGlobal->Height/2;
+	float fZ = ((float)0xFFFFFF) / 32.0F;
+
+	u64* p_data = cube_packet;
+
+	*p_data++ = (*(u32*)(&fX) | (u64)*(u32*)(&fY) << 32);
+	*p_data++ = (*(u32*)(&fZ) | (u64)faces_count << 32);
+
+	*p_data++ = GIF_TAG(1, 0, 0, 0, 0, 1);
+	*p_data++ = GIF_AD;
+
+	*p_data++ = GS_SETREG_TEX1(1, 0, 0, 0, 0, 0, 0);
+	*p_data++ = GS_TEX1_1;
+
+	int tw, th;
+	gsKit_set_tw_th(Texture, &tw, &th);
+
+	*p_data++ = GS_SETREG_TEX0(
+            Texture->Vram/256, Texture->TBW, Texture->PSM,
+            tw, th, gsGlobal->PrimAlphaEnable, 0,
+    		0, 0, 0, 0, GS_CLUT_STOREMODE_NOLOAD);
+	*p_data++ = GS_TEX0_1;
+
+	*p_data++ = VU_GS_GIFTAG(faces_count, 1, 1,
+    	VU_GS_PRIM(GS_PRIM_PRIM_TRIANGLE, 1, 1, gsGlobal->PrimFogEnable, 
+		0, gsGlobal->PrimAAEnable, 0, 0, 0),
+        0, 3);
+
+	*p_data++ = DRAW_STQ2_REGLIST;
+
+	*p_data++ = (128 | (u64)128 << 32);
+	*p_data++ = (128 | (u64)128 << 32);	
+}
+
+GSTEXTURE* mytex = NULL;
+
+void prepare_cube(GSTEXTURE* Texture)
+{
+	GSGLOBAL *gsGlobal = getGSGLOBAL();
+
+	// Initialize vif packets
+	cube_packet =    vifCreatePacket(6);
+	vif_packets[0] = vifCreatePacket(6);
+	vif_packets[1] = vifCreatePacket(6);
+
+	vu1_upload_micro_program(&VU1Draw3D_CodeStart, &VU1Draw3D_CodeEnd);
+	vu1_set_double_buffer_settings();
+
+	c_verts = (VECTOR *)memalign(128, sizeof(VECTOR) * faces_count);
+	c_sts = (VECTOR *)memalign(128, sizeof(VECTOR) * faces_count);
+
+	VECTOR* tmp1 = c_verts;
+	VECTOR* tmp2 = c_sts;
+
+	for (int i = 0; i < faces_count; i++, tmp1++, tmp2++)
+	{
+		memcpy(tmp1, &vertices[faces[i]], sizeof(VECTOR));
+		memcpy(tmp2, &sts[faces[i]], sizeof(VECTOR));
+	}
+
+	mytex = Texture;
+
+	calculate_cube(gsGlobal, Texture);
+}
+
+/** Calculate cube position and add packet with cube data */
+void draw_cube(float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z)
+{
+	VECTOR object_position = { pos_x, pos_y, pos_z, 1.00f };
+	VECTOR object_rotation = { rot_x, rot_y, rot_z, 1.00f };
+
+	MATRIX local_world;
+	MATRIX world_view;
+	MATRIX local_screen;
+
+	GSGLOBAL *gsGlobal = getGSGLOBAL();
+
+	gsGlobal->PrimAAEnable = GS_SETTING_ON;
+	gsKit_set_test(gsGlobal, GS_ZTEST_ON);
+
+	create_local_world(local_world, object_position, object_rotation);
+	create_world_view(world_view, camera_position, camera_rotation);
+	create_local_screen(local_screen, local_world, world_view, view_screen);
+	curr_vif_packet = vif_packets[context];
+
+	memset(curr_vif_packet, 0, 16*6);
+	
+	// Add matrix at the beggining of VU mem (skip TOP)
+	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 0, &local_screen, 8, 0);
+
+	u32 vif_added_bytes = 0; // zero because now we will use TOP register (double buffer)
+							 // we don't wan't to unpack at 8 + beggining of buffer, but at
+							 // the beggining of the buffer
+
+	// Merge packets
+	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, cube_packet, 6, 1);
+	vif_added_bytes += 6;
+
+	// Add vertices
+	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, c_verts, faces_count, 1);
+	vif_added_bytes += faces_count; // one VECTOR is size of qword
+
+	// Add sts
+	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, c_sts, faces_count, 1);
+	vif_added_bytes += faces_count;
+
+	*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
+	*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, VIF_MSCAL, 0) << 32));
+
+	*curr_vif_packet++ = DMA_TAG(0, 0, DMA_END, 0, 0 , 0);
+	*curr_vif_packet++ = (VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32);
+
+	vifSendPacket(vif_packets[context], 1);
+
+	// Switch packet, so we can proceed during DMA transfer
+	context = !context;
 }
