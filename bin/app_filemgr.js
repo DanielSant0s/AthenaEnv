@@ -29,10 +29,10 @@ function process_list_commands(control_var, list){
     if (control_var < 0){
         control_var = list.length-1;
     }
-    if (Pads.check(pad, Pads.DOWN) && !Pads.check(oldpad, Pads.DOWN)){
+    if (pad.pressed(pad, Pads.DOWN) && !pad.pressed(oldpad, Pads.DOWN)){
         control_var++;
     }
-    if (Pads.check(pad, Pads.UP) && !Pads.check(oldpad, Pads.UP)){
+    if (pad.pressed(pad, Pads.UP) && !pad.pressed(oldpad, Pads.UP)){
         control_var--;
     }
     return control_var;
@@ -61,16 +61,16 @@ function process_matrix_commands(x_var, y_var, x_limit, y_limit){
         x_var = x_limit-1;
         y_var = y_limit-1;
     }
-    if (Pads.check(pad, Pads.RIGHT) && !Pads.check(oldpad, Pads.RIGHT)){
+    if (pad.pressed(pad, Pads.RIGHT) && !pad.pressed(oldpad, Pads.RIGHT)){
         x_var++;
     }
-    if (Pads.check(pad, Pads.LEFT) && !Pads.check(oldpad, Pads.LEFT)){
+    if (pad.pressed(pad, Pads.LEFT) && !pad.pressed(oldpad, Pads.LEFT)){
         x_var--;
     }
-    if (Pads.check(pad, Pads.DOWN) && !Pads.check(oldpad, Pads.DOWN)){
+    if (pad.pressed(pad, Pads.DOWN) && !pad.pressed(oldpad, Pads.DOWN)){
         y_var++;
     }
-    if (Pads.check(pad, Pads.UP) && !Pads.check(oldpad, Pads.UP)){
+    if (pad.pressed(pad, Pads.UP) && !pad.pressed(oldpad, Pads.UP)){
         y_var--;
     }
     return [x_var, y_var];
@@ -166,7 +166,7 @@ file_manager.process = function() {
         }
     }
 
-    if ((Pads.check(pad, Pads.TRIANGLE) && !Pads.check(oldpad, Pads.TRIANGLE))){
+    if ((pad.pressed(pad, Pads.TRIANGLE) && !pad.pressed(oldpad, Pads.TRIANGLE))){
         var idxof = path.lastIndexOf("/");
         if(path[idxof-1] != ":" && idxof != -1){
             path = path.slice(0, idxof);
@@ -179,7 +179,7 @@ file_manager.process = function() {
         }
     }
 
-    if ((Pads.check(pad, Pads.CROSS) && !Pads.check(oldpad, Pads.CROSS))){
+    if ((pad.pressed(pad, Pads.CROSS) && !pad.pressed(oldpad, Pads.CROSS))){
         if(file_manager.data[3] == 1){
             if(file[file_manager.data[0]].dir){
                 if(path == ""){
@@ -247,7 +247,7 @@ file_manager.process = function() {
         }
     }
 
-    if (Pads.check(pad, Pads.R1) && !Pads.check(oldpad, Pads.R1)){
+    if (pad.pressed(pad, Pads.R1) && !pad.pressed(oldpad, Pads.R1)){
         file_manager.data[2] ^= 1;
         file_manager.data[3] ^= 1;
     }
@@ -290,12 +290,12 @@ var pad = Pads.get();
 
 while(true){
     oldpad = pad;
-    pad = Pads.get();
+    pad.update();
     Screen.clear(Color.new(0, 0, 0));
 
     file_manager.run();
 
-    if(Pads.check(pad, Pads.CIRCLE) && !Pads.check(oldpad, Pads.CIRCLE)) {
+    if(pad.pressed(pad, Pads.CIRCLE) && !pad.pressed(oldpad, Pads.CIRCLE)) {
         break;
     }
     

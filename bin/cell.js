@@ -54,11 +54,11 @@ let pad = Pads.get();
 const transparent = Color.new(255, 255, 255, 40);
 const purple = Color.new(64, 0, 128);
 
-while(running){
-    Screen.clear(purple);
+Screen.clearColor(purple);
 
-    pad.update();
+pad.setEventHandler();
 
+Screen.display(() => {
     if(game_state == MAIN_MENU){
         if(pad.justPressed(Pads.UP)){
             if(main_menu_ptr > 0){
@@ -195,8 +195,4 @@ while(running){
         }
 
     }
-
-    Screen.flip();
-}
-
-font = null;
+});

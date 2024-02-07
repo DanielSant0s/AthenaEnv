@@ -10,11 +10,10 @@
 #include <png.h>
 
 #include "include/graphics.h"
+#include "include/athena_math.h"
 #include "include/dbgprintf.h"
 
 #include "include/pad.h"
-
-#define PI 3.14159265359
 
 static const u64 BLACK_RGBAQ   = GS_SETREG_RGBAQ(0x00,0x00,0x00,0x80,0x00);
 
@@ -987,19 +986,18 @@ void drawCircle(float x, float y, float radius, u64 color, u8 filled)
 	int a;
 
 	for (a = 0; a < 36; a++) {
-		v[a*2] = (cosf(a * (PI*2)/36) * radius) + x;
-		v[a*2+1] = (sinf(a * (PI*2)/36) * radius) + y;
+		v[a*2] = (cosf(a * (M_PI*2)/36) * radius) + x;
+		v[a*2+1] = (sinf(a * (M_PI*2)/36) * radius) + y;
 	}
 
-	if (!filled) {
+	if (filled) {
+		gsKit_prim_triangle_fan(gsGlobal, v, 36, 1, color);
+	} else {
 		v[36*2] = radius + x;
 		v[36*2 + 1] = y;
-	}
-	
-	if (filled)
-		gsKit_prim_triangle_fan(gsGlobal, v, 36, 1, color);
-	else
+
 		gsKit_prim_line_strip(gsGlobal, v, 37, 1, color);
+	}
 }
 
 void InvalidateTexture(GSTEXTURE *txt)
@@ -1020,7 +1018,7 @@ int GetInterlacedFrameMode()
 
     return 0;
 }
-GSGLOBAL *getGSGLOBAL(){return gsGlobal;}
+GSGLOBAL *getGSGLOBAL(){ return gsGlobal; }
 
 void setVideoMode(s16 mode, int width, int height, int psm, s16 interlace, s16 field, bool zbuffering, int psmz, bool double_buffering, uint8_t pass_count) {
 	gsGlobal->Mode = mode;

@@ -14,5 +14,9 @@ let pad = Pads.get();
 pad.setEventHandler();
 
 Pads.newEvent(Pads.LEFT, Pads.JUST_PRESSED, () => { 
-    Screen.log(`DPad Left button was just pressed`); 
+    console.log(`DPad Left button was just pressed`); 
+});
+
+Pads.newEvent(Pads.RIGHT, Pads.JUST_PRESSED, () => { 
+    console.log(`DPad Right button was just pressed`); 
 });
