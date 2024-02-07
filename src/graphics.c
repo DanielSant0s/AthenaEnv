@@ -1178,6 +1178,24 @@ inline void processFrameCounter()
 	frames++;
 }
 
+void vu1_queue_init(GSGLOBAL *gsGlobal, GSQUEUE *Queue, u8 mode, int size)
+{
+	// Init pool 0
+	Queue->pool[0]		= gsKit_alloc_ucab(size);
+	Queue->pool_max[0]	= (u64 *)((u32)Queue->pool[0] + size);
+
+	Queue->pool[1]		= gsKit_alloc_ucab(size);
+	Queue->pool_max[1]	= (u64 *)((u32)Queue->pool[1] + size);
+
+	Queue->dma_tag		= Queue->pool[0];
+	Queue->pool_cur		= (u64 *)((u32)Queue->pool[0] + 16);
+	Queue->dbuf			= 0;
+	Queue->tag_size		= 0;
+	Queue->last_tag		= Queue->pool_cur;
+	Queue->last_type	= GIF_RESERVED;
+	Queue->mode			= mode;
+}
+
 void flipScreenSingleBuffering()
 {
 	//gsKit_set_finish(gsGlobal);
@@ -1202,10 +1220,10 @@ void flipScreenDoubleBuffering()
 {	
 	//gsKit_set_finish(gsGlobal);
 
-	gsKit_queue_exec(gsGlobal);
-	gsKit_finish();
 	gsKit_sync(gsGlobal);
 	gsKit_flip(gsGlobal);
+	gsKit_queue_exec(gsGlobal);
+	gsKit_finish();
 	
 	gsKit_TexManager_nextFrame(gsGlobal);
 }
@@ -1214,10 +1232,10 @@ void flipScreenDoubleBufferingPerf()
 {	
 	//gsKit_set_finish(gsGlobal);
 
-	gsKit_queue_exec(gsGlobal);
-	gsKit_finish();
 	gsKit_sync(gsGlobal);
 	gsKit_flip(gsGlobal);
+	gsKit_queue_exec(gsGlobal);
+	gsKit_finish();
 	
 	gsKit_TexManager_nextFrame(gsGlobal);
 
@@ -1243,17 +1261,17 @@ void flipScreenSingleBufferingPerfNoVSync()
 
 void flipScreenDoubleBufferingNoVSync()
 {	
+	gsKit_flip(gsGlobal);
 	gsKit_queue_exec(gsGlobal);
 	gsKit_finish();
-	gsKit_flip(gsGlobal);
 	gsKit_TexManager_nextFrame(gsGlobal);
 }
 
 void flipScreenDoubleBufferingPerfNoVSync()
 {	
+	gsKit_flip(gsGlobal);
 	gsKit_queue_exec(gsGlobal);
 	gsKit_finish();
-	gsKit_flip(gsGlobal);
 	gsKit_TexManager_nextFrame(gsGlobal);
 
 	processFrameCounter();

@@ -105,24 +105,34 @@ static JSValue athena_drawbbox(JSContext *ctx, JSValue this_val, int argc, JSVal
 
 static JSValue athena_loadcube(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	JSImageData *image;
+	model* res_m;
 
-	image = JS_GetOpaque2(ctx, argv[0], get_img_class_id());
-	prepare_cube(&(image->tex));
+	const char *file_tbo = JS_ToCString(ctx, argv[0]); //Model filename
+	
+	// Loading texture
+	if(argc == 2) {
+		image = JS_GetOpaque2(ctx, argv[1], get_img_class_id());
+		res_m = prepare_cube(file_tbo, &(image->tex));
+	} else {
+		res_m = prepare_cube(file_tbo, NULL);
+	}
 
-	return JS_UNDEFINED;
+	return JS_NewUint32(ctx, res_m);
 }
 
 static JSValue athena_drawcube(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	float pos_x, pos_y, pos_z, rot_x, rot_y, rot_z;
+	model* m;
+	JS_ToUint32(ctx, &m, argv[0]);
 
-	JS_ToFloat32(ctx, &pos_x, argv[0]);
-	JS_ToFloat32(ctx, &pos_y, argv[1]);
-	JS_ToFloat32(ctx, &pos_z, argv[2]);
-	JS_ToFloat32(ctx, &rot_x, argv[3]);
-	JS_ToFloat32(ctx, &rot_y, argv[4]);
-	JS_ToFloat32(ctx, &rot_z, argv[5]);
+	JS_ToFloat32(ctx, &pos_x, argv[1]);
+	JS_ToFloat32(ctx, &pos_y, argv[2]);
+	JS_ToFloat32(ctx, &pos_z, argv[3]);
+	JS_ToFloat32(ctx, &rot_x, argv[4]);
+	JS_ToFloat32(ctx, &rot_y, argv[5]);
+	JS_ToFloat32(ctx, &rot_z, argv[6]);
 	
-	draw_cube(pos_x, pos_y, pos_z, rot_x, rot_y, rot_z);
+	draw_cube(m, pos_x, pos_y, pos_z, rot_x, rot_y, rot_z);
 
 	return JS_UNDEFINED;
 }
@@ -135,8 +145,8 @@ static const JSCFunctionListEntry render_funcs[] = {
 	JS_CFUNC_DEF( "drawBbox",  8,         	    athena_drawbbox),
     JS_CFUNC_DEF( "freeOBJ",   1,        		athena_freeobj ),
 
-	JS_CFUNC_DEF( "loadCube",   1,        		athena_loadcube ),
-	JS_CFUNC_DEF( "drawCube",   6,        		athena_drawcube ),
+	JS_CFUNC_DEF( "loadCube",   2,        		athena_loadcube ),
+	JS_CFUNC_DEF( "drawCube",   7,        		athena_drawcube ),
 };
 
 

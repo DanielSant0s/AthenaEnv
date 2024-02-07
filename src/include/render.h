@@ -8,6 +8,6 @@ void calculate_vertices_clipped(VECTOR *output,  int count, VECTOR *vertices, MA
 
 int draw_convert_xyz(xyz_t *output, float x, float y, int z, int count, vertex_f_t *vertices);
 
-void prepare_cube(GSTEXTURE* Texture);
+model* prepare_cube(const char* path, GSTEXTURE* Texture);
 
-void draw_cube(float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z);
+void draw_cube(model* model_test, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z);

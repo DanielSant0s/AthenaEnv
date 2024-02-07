@@ -11,7 +11,7 @@ const canvas = Screen.getMode();
 
 canvas.zbuffering = true;
 canvas.psm = CT24;
-canvas.psmz = Z32;
+canvas.psmz = Z16S;
 
 Screen.setMode(canvas);
 
@@ -19,8 +19,8 @@ Render.init(4/3);
 
 os.chdir("render");
 
-let dragontex = new Image("tex1.png", VRAM);
-Render.loadCube(dragontex);
+let fish = Render.loadCube("cubes.obj");
+console.log(fish);
 
 Camera.position(0.0f, 0.0f, 100.0f);
 Camera.rotation(0.0f, 0.0f,  0.0f);
@@ -59,13 +59,13 @@ while(true){
     savedrx = savedrx - rx;
     savedry = savedry - ry;
 
-    //Camera.position(0.0f, savedry,  savedrx);
+    Camera.position(0.0f, savedry,  savedrx);
 
     if(pad.justPressed(Pads.TRIANGLE)) {
         break;
     }
 
-    Render.drawCube(0.0f, 0.0f, 0.0f, savedly, savedlx, 0.0f);
+    Render.drawCube(fish, 0.0f, 0.0f, 0.0f, savedly, savedlx, 0.0f);
 
     fntcpy.print(10, 10, Screen.getFPS(360) + " FPS | " + free_mem + " | Free VRAM: " + free_vram + "KB");
 

@@ -534,7 +534,7 @@ static inline void gsKit_set_tw_th(const GSTEXTURE *Texture, int *tw, int *th)
 }
 
 /** Calculate packet for cube data */
-void calculate_cube(GSGLOBAL* gsGlobal, GSTEXTURE* Texture)
+void calculate_cube(GSGLOBAL *gsGlobal, model* model_test)
 {
 	float fX = 2048.0f+gsGlobal->Width/2;
 	float fY = 2048.0f+gsGlobal->Height/2;
@@ -543,7 +543,7 @@ void calculate_cube(GSGLOBAL* gsGlobal, GSTEXTURE* Texture)
 	u64* p_data = cube_packet;
 
 	*p_data++ = (*(u32*)(&fX) | (u64)*(u32*)(&fY) << 32);
-	*p_data++ = (*(u32*)(&fZ) | (u64)faces_count << 32);
+	*p_data++ = (*(u32*)(&fZ) | (u64)model_test->indexCount << 32);
 
 	*p_data++ = GIF_TAG(1, 0, 0, 0, 0, 1);
 	*p_data++ = GIF_AD;
@@ -552,15 +552,15 @@ void calculate_cube(GSGLOBAL* gsGlobal, GSTEXTURE* Texture)
 	*p_data++ = GS_TEX1_1;
 
 	int tw, th;
-	gsKit_set_tw_th(Texture, &tw, &th);
+	gsKit_set_tw_th(model_test->textures[0], &tw, &th);
 
 	*p_data++ = GS_SETREG_TEX0(
-            Texture->Vram/256, Texture->TBW, Texture->PSM,
+            model_test->textures[0]->Vram/256, model_test->textures[0]->TBW, model_test->textures[0]->PSM,
             tw, th, gsGlobal->PrimAlphaEnable, 0,
     		0, 0, 0, 0, GS_CLUT_STOREMODE_NOLOAD);
 	*p_data++ = GS_TEX0_1;
 
-	*p_data++ = VU_GS_GIFTAG(faces_count, 1, 1,
+	*p_data++ = VU_GS_GIFTAG(model_test->indexCount, 1, 1,
     	VU_GS_PRIM(GS_PRIM_PRIM_TRIANGLE, 1, 1, gsGlobal->PrimFogEnable, 
 		0, gsGlobal->PrimAAEnable, 0, 0, 0),
         0, 3);
@@ -571,40 +571,25 @@ void calculate_cube(GSGLOBAL* gsGlobal, GSTEXTURE* Texture)
 	*p_data++ = (128 | (u64)128 << 32);	
 }
 
-GSTEXTURE* mytex = NULL;
-
-void prepare_cube(GSTEXTURE* Texture)
+model* prepare_cube(const char* path, GSTEXTURE* Texture)
 {
-	GSGLOBAL *gsGlobal = getGSGLOBAL();
-
-	// Initialize vif packets
-	cube_packet =    vifCreatePacket(6);
-	vif_packets[0] = vifCreatePacket(6);
-	vif_packets[1] = vifCreatePacket(6);
+	model* model_test = loadOBJ(path, Texture);
 
 	vu1_upload_micro_program(&VU1Draw3D_CodeStart, &VU1Draw3D_CodeEnd);
 	vu1_set_double_buffer_settings();
 
-	c_verts = (VECTOR *)memalign(128, sizeof(VECTOR) * faces_count);
-	c_sts = (VECTOR *)memalign(128, sizeof(VECTOR) * faces_count);
+	cube_packet =    vifCreatePacket(6);
+	vif_packets[0] = vifCreatePacket(6);
+	vif_packets[1] = vifCreatePacket(6);
 
-	VECTOR* tmp1 = c_verts;
-	VECTOR* tmp2 = c_sts;
-
-	for (int i = 0; i < faces_count; i++, tmp1++, tmp2++)
-	{
-		memcpy(tmp1, &vertices[faces[i]], sizeof(VECTOR));
-		memcpy(tmp2, &sts[faces[i]], sizeof(VECTOR));
-	}
-
-	mytex = Texture;
-
-	calculate_cube(gsGlobal, Texture);
+	return model_test;
 }
 
 /** Calculate cube position and add packet with cube data */
-void draw_cube(float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z)
+void draw_cube(model* model_test, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z)
 {
+	
+
 	VECTOR object_position = { pos_x, pos_y, pos_z, 1.00f };
 	VECTOR object_rotation = { rot_x, rot_y, rot_z, 1.00f };
 
@@ -620,6 +605,10 @@ void draw_cube(float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, 
 	create_local_world(local_world, object_position, object_rotation);
 	create_world_view(world_view, camera_position, camera_rotation);
 	create_local_screen(local_screen, local_world, world_view, view_screen);
+
+	gsKit_TexManager_bind(gsGlobal, model_test->textures[0]);
+	calculate_cube(gsGlobal, model_test);
+
 	curr_vif_packet = vif_packets[context];
 
 	memset(curr_vif_packet, 0, 16*6);
@@ -636,12 +625,12 @@ void draw_cube(float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, 
 	vif_added_bytes += 6;
 
 	// Add vertices
-	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, c_verts, faces_count, 1);
-	vif_added_bytes += faces_count; // one VECTOR is size of qword
+	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, model_test->positions, model_test->indexCount, 1);
+	vif_added_bytes += model_test->indexCount; // one VECTOR is size of qword
 
 	// Add sts
-	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, c_sts, faces_count, 1);
-	vif_added_bytes += faces_count;
+	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, model_test->texcoords, model_test->indexCount, 1);
+	vif_added_bytes += model_test->indexCount;
 
 	*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
 	*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, VIF_MSCAL, 0) << 32));
