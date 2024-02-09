@@ -652,13 +652,9 @@ void draw_cube(model* model_test, float pos_x, float pos_y, float pos_z, float r
 	// res_m->idx_ranges[res_m->idx_range_count] = i;
 	int last_idx = -1;
 	for (int i = 0; i < model_test->idx_range_count; i++) {
-		//asm(
-  		//	"vu1_active:\n"
-  		//	"bc2t vu1_active\n"
-  		//	"nop\n"
-  		//);
-
-		printf("Hello world\n");
+		for (int j = 0; j < 5; j++) {
+			asm("nop\n"); // Shitty workaround to wait for some program completion
+		}
 
 		calculate_cube(gsGlobal, model_test->textures[0], model_test->idx_ranges[i]-last_idx);
 
