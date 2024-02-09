@@ -90,7 +90,7 @@ while(true){
     }
 
     if(pad.justPressed(Pads.TRIANGLE)) {
-        break;
+        System.loadELF(System.boot_path + "/athena.elf");
     }
 
     if(pad.justPressed(Pads.SQUARE)) {

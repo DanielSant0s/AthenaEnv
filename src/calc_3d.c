@@ -123,3 +123,112 @@ int draw_convert_xyz(xyz_t *output, float x, float y, int z, int count, vertex_f
 	return 0;
 
 }
+
+unsigned int get_max_z(GSGLOBAL* gsGlobal)
+{
+
+	int z;
+	unsigned int max_z;
+
+	switch(gsGlobal->PSMZ){
+		case GS_PSMZ_32:
+			z = 32;
+			break;
+
+		case GS_PSMZ_24:
+			z = 24;
+			break;
+
+		case GS_PSMZ_16:
+		case GS_PSMZ_16S:
+			z = 16;
+			break;
+		
+		default:
+			return -1;
+	}
+
+	max_z = 1 << (z - 1);
+
+	// End function.
+	return max_z;
+
+}
+
+
+
+int athena_process_xyz_rgbaq(GSPRIMPOINT *output, GSGLOBAL* gsGlobal, int count, color_f_t *colours, vertex_f_t *vertices)
+{
+	unsigned int max_z;
+	float q = 1.00f;
+
+	int center_x = gsGlobal->Width/2;
+	int center_y = gsGlobal->Height/2;
+	max_z = get_max_z(gsGlobal);
+
+	for (int i = 0; i < count; i++)
+	{
+		// Calculate the Q value.
+		if (vertices[i].w != 0)
+		{
+			q = 1 / vertices[i].w;
+		}
+
+		output[i].rgbaq.color.r = (int)(colours[i].r * 128.0f);
+		output[i].rgbaq.color.g = (int)(colours[i].g * 128.0f);
+		output[i].rgbaq.color.b = (int)(colours[i].b * 128.0f);
+		output[i].rgbaq.color.a = 0x80;
+		output[i].rgbaq.color.q = q;
+		output[i].rgbaq.tag = GS_RGBAQ;
+
+		output[i].xyz2.xyz.x = gsKit_float_to_int_x(gsGlobal, (vertices[i].x + 1.0f) * center_x);
+		output[i].xyz2.xyz.y = gsKit_float_to_int_y(gsGlobal, (vertices[i].y + 1.0f) * center_y);
+		output[i].xyz2.xyz.z = (unsigned int)((vertices[i].z + 1.0f) * max_z);
+		output[i].xyz2.tag = GS_XYZ2;
+
+	}
+
+	// End function.
+	return 0;
+
+}
+
+int athena_process_xyz_rgbaq_st(GSPRIMSTQPOINT *output, GSGLOBAL* gsGlobal, int count, color_f_t *colours, vertex_f_t *vertices, texel_f_t *coords)
+{
+	unsigned int max_z;
+	float q = 1.00f;
+
+	int center_x = gsGlobal->Width/2;
+	int center_y = gsGlobal->Height/2;
+	max_z = get_max_z(gsGlobal);
+
+	for (int i = 0; i < count; i++)
+	{
+		// Calculate the Q value.
+		if (vertices[i].w != 0)
+		{
+			q = 1 / vertices[i].w;
+		}
+
+		output[i].rgbaq.color.r = (int)(colours[i].r * 128.0f);
+		output[i].rgbaq.color.g = (int)(colours[i].g * 128.0f);
+		output[i].rgbaq.color.b = (int)(colours[i].b * 128.0f);
+		output[i].rgbaq.color.a = 0x80;
+		output[i].rgbaq.color.q = q;
+		output[i].rgbaq.tag = GS_RGBAQ;
+
+		output[i].stq.st.s = coords[i].s * q;
+		output[i].stq.st.t = coords[i].t * q;
+		output[i].stq.tag = GS_ST;
+
+		output[i].xyz2.xyz.x = gsKit_float_to_int_x(gsGlobal, (vertices[i].x + 1.0f) * center_x);
+		output[i].xyz2.xyz.y = gsKit_float_to_int_y(gsGlobal, (vertices[i].y + 1.0f) * center_y);
+		output[i].xyz2.xyz.z = (unsigned int)((vertices[i].z + 1.0f) * max_z);
+		output[i].xyz2.tag = GS_XYZ2;
+
+	}
+
+	// End function.
+	return 0;
+
+}

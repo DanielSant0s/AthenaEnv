@@ -5,7 +5,7 @@ let fntcpy = new Font();
 fntcpy.scale = (0.4f);
 
 Screen.setFrameCounter(true);
-//Screen.setVSync(false);
+Screen.setVSync(false);
 
 const canvas = Screen.getMode();
 
@@ -21,7 +21,7 @@ os.chdir("render");
 
 let fish = Render.loadCube("Boombox.obj");
 
-Camera.position(0.0f, 0.0f, 100.0f);
+Camera.position(0.0f, 0.0f, 50.0f);
 Camera.rotation(0.0f, 0.0f,  0.0f);
 
 let pad = Pads.get();
@@ -61,10 +61,19 @@ while(true){
     Camera.position(0.0f, savedry,  savedrx);
 
     if(pad.justPressed(Pads.TRIANGLE)) {
-        break;
+        System.loadELF(System.boot_path + "/athena.elf");
     }
 
-    Render.drawCube(fish, 0.0f, 0.0f, 0.0f, savedly, savedlx, 0.0f);
+    if(pad.justPressed(Pads.SQUARE)) {
+        bbox ^= 1;
+    }
+
+    Render.drawCube(fish, 0.0f, 0.0f, 30.0f, savedly, savedlx, 0.0f);
+
+
+    if(bbox) {
+        Render.drawBbox(fish, 0.0f, 0.0f, 30.0f, savedly, savedlx, 0.0f, Color.new(128, 0, 255));
+    }
 
     fntcpy.print(10, 10, Screen.getFPS(360) + " FPS | " + free_mem + " | Free VRAM: " + free_vram + "KB");
 

@@ -66,124 +66,6 @@ void createLight(int lightid, float dir_x, float dir_y, float dir_z, int type, f
 	light_type[lightid-1] = type;
 }
 
-
-int athena_process_xyz_rgbaq(GSPRIMPOINT *output, GSGLOBAL* gsGlobal, int count, color_f_t *colours, vertex_f_t *vertices)
-{
-
-	int z;
-	unsigned int max_z;
-	float q = 1.00f;
-
-	switch(gsGlobal->PSMZ){
-		case GS_PSMZ_32:
-			z = 32;
-			break;
-
-		case GS_PSMZ_24:
-			z = 24;
-			break;
-
-		case GS_PSMZ_16:
-		case GS_PSMZ_16S:
-			z = 16;
-			break;
-		
-		default:
-			return -1;
-	}
-
-	int center_x = gsGlobal->Width/2;
-	int center_y = gsGlobal->Height/2;
-	max_z = 1 << (z - 1);
-
-	for (int i = 0; i < count; i++)
-	{
-		// Calculate the Q value.
-		if (vertices[i].w != 0)
-		{
-			q = 1 / vertices[i].w;
-		}
-
-		output[i].rgbaq.color.r = (int)(colours[i].r * 128.0f);
-		output[i].rgbaq.color.g = (int)(colours[i].g * 128.0f);
-		output[i].rgbaq.color.b = (int)(colours[i].b * 128.0f);
-		output[i].rgbaq.color.a = 0x80;
-		output[i].rgbaq.color.q = q;
-		output[i].rgbaq.tag = GS_RGBAQ;
-
-		output[i].xyz2.xyz.x = gsKit_float_to_int_x(gsGlobal, (vertices[i].x + 1.0f) * center_x);
-		output[i].xyz2.xyz.y = gsKit_float_to_int_y(gsGlobal, (vertices[i].y + 1.0f) * center_y);
-		output[i].xyz2.xyz.z = (unsigned int)((vertices[i].z + 1.0f) * max_z);
-		output[i].xyz2.tag = GS_XYZ2;
-
-	}
-
-	// End function.
-	return 0;
-
-}
-
-
-int athena_process_xyz_rgbaq_st(GSPRIMSTQPOINT *output, GSGLOBAL* gsGlobal, int count, color_f_t *colours, vertex_f_t *vertices, texel_f_t *coords)
-{
-
-	int z;
-	unsigned int max_z;
-	float q = 1.00f;
-
-	switch(gsGlobal->PSMZ){
-		case GS_PSMZ_32:
-			z = 32;
-			break;
-
-		case GS_PSMZ_24:
-			z = 24;
-			break;
-
-		case GS_PSMZ_16:
-		case GS_PSMZ_16S:
-			z = 16;
-			break;
-		
-		default:
-			return -1;
-	}
-
-	int center_x = gsGlobal->Width/2;
-	int center_y = gsGlobal->Height/2;
-	max_z = 1 << (z - 1);
-
-	for (int i = 0; i < count; i++)
-	{
-		// Calculate the Q value.
-		if (vertices[i].w != 0)
-		{
-			q = 1 / vertices[i].w;
-		}
-
-		output[i].rgbaq.color.r = (int)(colours[i].r * 128.0f);
-		output[i].rgbaq.color.g = (int)(colours[i].g * 128.0f);
-		output[i].rgbaq.color.b = (int)(colours[i].b * 128.0f);
-		output[i].rgbaq.color.a = 0x80;
-		output[i].rgbaq.color.q = q;
-		output[i].rgbaq.tag = GS_RGBAQ;
-
-		output[i].stq.st.s = coords[i].s * q;
-		output[i].stq.st.t = coords[i].t * q;
-		output[i].stq.tag = GS_ST;
-
-		output[i].xyz2.xyz.x = gsKit_float_to_int_x(gsGlobal, (vertices[i].x + 1.0f) * center_x);
-		output[i].xyz2.xyz.y = gsKit_float_to_int_y(gsGlobal, (vertices[i].y + 1.0f) * center_y);
-		output[i].xyz2.xyz.z = (unsigned int)((vertices[i].z + 1.0f) * max_z);
-		output[i].xyz2.tag = GS_XYZ2;
-
-	}
-
-	// End function.
-	return 0;
-
-}
-
 void render_notex(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z)
 {
 	VECTOR object_position = { pos_x, pos_y, pos_z, 1.00f };
@@ -545,37 +427,6 @@ static inline void gsKit_set_tw_th(const GSTEXTURE *Texture, int *tw, int *th)
 		(*th)++;
 }
 
-unsigned int get_max_z(GSGLOBAL* gsGlobal)
-{
-
-	int z;
-	unsigned int max_z;
-
-	switch(gsGlobal->PSMZ){
-		case GS_PSMZ_32:
-			z = 32;
-			break;
-
-		case GS_PSMZ_24:
-			z = 24;
-			break;
-
-		case GS_PSMZ_16:
-		case GS_PSMZ_16S:
-			z = 16;
-			break;
-		
-		default:
-			return -1;
-	}
-
-	max_z = 1 << (z - 1);
-
-	// End function.
-	return max_z;
-
-}
-
 /** Calculate packet for cube data */
 void calculate_cube(GSGLOBAL *gsGlobal, GSTEXTURE* tex, uint32_t idx_count)
 {
@@ -619,7 +470,6 @@ model* prepare_cube(const char* path, GSTEXTURE* Texture)
 {
 	model* model_test = loadOBJ(path, Texture);
 
-	vu1_upload_micro_program(&VU1Draw3D_CodeStart, &VU1Draw3D_CodeEnd);
 	vu1_set_double_buffer_settings();
 
 	cube_packet =    vifCreatePacket(6);
@@ -628,6 +478,8 @@ model* prepare_cube(const char* path, GSTEXTURE* Texture)
 
 	return model_test;
 }
+
+uint32_t last_microprogram = NULL;
 
 void draw_cube(model* model_test, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z)
 {
@@ -639,7 +491,12 @@ void draw_cube(model* model_test, float pos_x, float pos_y, float pos_z, float r
 	MATRIX local_screen;
 
 	GSGLOBAL *gsGlobal = getGSGLOBAL();
-
+	
+	if (last_microprogram != &VU1Draw3D_CodeStart) {
+		vu1_upload_micro_program(&VU1Draw3D_CodeStart, &VU1Draw3D_CodeEnd);
+		last_microprogram = &VU1Draw3D_CodeStart;
+	}
+	
 	gsGlobal->PrimAAEnable = GS_SETTING_ON;
 	gsKit_set_test(gsGlobal, GS_ZTEST_ON);
 
@@ -652,7 +509,7 @@ void draw_cube(model* model_test, float pos_x, float pos_y, float pos_z, float r
 	// res_m->idx_ranges[res_m->idx_range_count] = i;
 	int last_idx = -1;
 	for (int i = 0; i < model_test->idx_range_count; i++) {
-		//dmaKit_wait(DMA_CHANNEL_VIF1, 0);
+		dmaKit_wait(DMA_CHANNEL_VIF1, 0);
 
 		calculate_cube(gsGlobal, model_test->textures[0], model_test->idx_ranges[i]-last_idx);
 

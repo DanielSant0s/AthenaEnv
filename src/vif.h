@@ -1,5 +1,5 @@
-#ifndef VIF_H_
-#define VIF_H_
+#ifndef VIF_H
+#define VIF_H
 
 #include <gsKit.h>
 #include <dmaKit.h>
@@ -26,7 +26,7 @@ typedef struct {
     uint32_t FQC : 5;   // Amount of quadwords in FIFO
 } VIFn_STAT;
 
-enum {
+typedef enum {
     IDLE,
     WAIT_FOR_DATA_FOLLOWING_CMD,
     DECODING_CMD,
