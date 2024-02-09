@@ -652,11 +652,8 @@ void draw_cube(model* model_test, float pos_x, float pos_y, float pos_z, float r
 	// res_m->idx_ranges[res_m->idx_range_count] = i;
 	int last_idx = -1;
 	for (int i = 0; i < model_test->idx_range_count; i++) {
-		for (int j = 0; j < 5; j++) {
-			asm("nop\n"); // Shitty workaround to wait for some program completion
-		}
-
 		calculate_cube(gsGlobal, model_test->textures[0], model_test->idx_ranges[i]-last_idx);
+		printf("Hello VU1!\n");
 
 		curr_vif_packet = vif_packets[context];
 	
@@ -692,7 +689,7 @@ void draw_cube(model* model_test, float pos_x, float pos_y, float pos_z, float r
 	
 		*curr_vif_packet++ = DMA_TAG(0, 0, DMA_END, 0, 0 , 0);
 		*curr_vif_packet++ = (VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32);
-	
+
 		vifSendPacket(vif_packets[context], 1);
 		last_idx = model_test->idx_ranges[i];
 

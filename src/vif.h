@@ -5,9 +5,9 @@
 #include <dmaKit.h>
 #include <kernel.h>
 #include <malloc.h>
+#include <stdint.h>
 #include <tamtypes.h>
 
-// Definindo a estrutura para representar o registrador VIFn_STAT
 typedef struct {
     uint32_t VPS : 2;   // VIF command status
     uint32_t VEW : 1;   // VU is executing microprogram
@@ -24,9 +24,9 @@ typedef struct {
     uint32_t reserved2 : 9;
     uint32_t FDR : 1;   // FIFO direction (VIF1 only)
     uint32_t FQC : 5;   // Amount of quadwords in FIFO
-} VIFn_STAT_Register;
+} VIFn_STAT;
 
-#define VIF1_STAT ((VIFn_STAT_Register*)(0x10003C00))
+#define VIF1_STAT ((VIFn_STAT*)(0x10003C00))
 
 #define UNPACK_S_32 0x00
 #define UNPACK_S_16 0x01
