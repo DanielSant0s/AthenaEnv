@@ -1395,6 +1395,8 @@ void init_graphics()
 	gsKit_clear(gsGlobal, BLACK_RGBAQ);	
 	gsKit_vsync_wait();
 	flipScreen();
+
+	vu1_set_double_buffer_settings();
 }
 
 void graphicWaitVblankStart(){
