@@ -18,7 +18,7 @@ Render.init(4/3);
 
 os.chdir("render");
 
-let dragontex = new Image("dragon.png");
+/*let dragontex = new Image("dragon.png");
 dragontex.filter = LINEAR;
 let dragonmesh = Render.loadOBJ("dragon.obj", dragontex);
 
@@ -28,11 +28,11 @@ let monkeymesh = Render.loadOBJ("monkey.obj", monkeytex);
 
 let teapot = Render.loadOBJ("Car.obj");
 
-let mill = Render.loadOBJ("cubes.obj");
+let mill = Render.loadOBJ("cubes.obj");*/
 
 let boombox = Render.loadOBJ("Boombox.obj");
 
-let model = [dragonmesh, monkeymesh, teapot, mill, boombox];
+//let model = [dragonmesh, monkeymesh, teapot, mill, boombox];
 
 Camera.position(0.0f, 0.0f, 50.0f);
 Camera.rotation(0.0f, 0.0f,  0.0f);
@@ -97,10 +97,10 @@ while(true){
         bbox ^= 1;
     }
 
-    Render.drawOBJ(model[modeltodisplay], 0.0f, 0.0f, 30.0f, savedly, savedlx, 0.0f);
+    Render.drawOBJ(boombox, 0.0f, 0.0f, 30.0f, savedly, savedlx, 0.0f);
 
     if(bbox) {
-        Render.drawBbox(model[modeltodisplay], 0.0f, 0.0f, 30.0f, savedly, savedlx, 0.0f, Color.new(128, 0, 255));
+        Render.drawBbox(boombox, 0.0f, 0.0f, 30.0f, savedly, savedlx, 0.0f, Color.new(128, 0, 255));
     }
 
     fntcpy.print(10, 10, Screen.getFPS(360) + " FPS | " + free_mem + " | Free VRAM: " + free_vram + "KB");

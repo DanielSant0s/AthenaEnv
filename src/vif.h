@@ -7,6 +7,27 @@
 #include <malloc.h>
 #include <tamtypes.h>
 
+// Definindo a estrutura para representar o registrador VIFn_STAT
+typedef struct {
+    uint32_t VPS : 2;   // VIF command status
+    uint32_t VEW : 1;   // VU is executing microprogram
+    uint32_t VGW : 1;   // Stalled waiting for GIF (VIF1 only)
+    uint32_t reserved1 : 1;
+    uint32_t MRK : 1;   // MARK detected
+    uint32_t DBF : 1;   // Double buffer flag (VIF1 only)
+    uint32_t VSS : 1;   // Stalled after STOP was sent to FBRST
+    uint32_t VFS : 1;   // Stalled after force break was sent to FBRST
+    uint32_t VIS : 1;   // Stalled on interrupt ibt
+    uint32_t INT : 1;   // Interrupt bit detected
+    uint32_t ER0 : 1;   // DMAtag mismatch error
+    uint32_t ER1 : 1;   // Invalid VIF command was sent
+    uint32_t reserved2 : 9;
+    uint32_t FDR : 1;   // FIFO direction (VIF1 only)
+    uint32_t FQC : 5;   // Amount of quadwords in FIFO
+} VIFn_STAT_Register;
+
+#define VIF1_STAT ((VIFn_STAT_Register*)(0x10003C00))
+
 #define UNPACK_S_32 0x00
 #define UNPACK_S_16 0x01
 #define UNPACK_S_8 0x02

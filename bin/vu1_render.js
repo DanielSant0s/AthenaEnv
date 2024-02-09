@@ -19,8 +19,7 @@ Render.init(4/3);
 
 os.chdir("render");
 
-let fish = Render.loadCube("cubes.obj");
-console.log(fish);
+let fish = Render.loadCube("Boombox.obj");
 
 Camera.position(0.0f, 0.0f, 100.0f);
 Camera.rotation(0.0f, 0.0f,  0.0f);

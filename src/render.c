@@ -27,7 +27,7 @@ int* light_type;
 
 void init3D(float aspect)
 {
-	create_view_screen(view_screen, aspect,  -3.00f, 3.00f, -3.00f, 3.00f, 1.00f, 2000.00f);
+	create_view_screen(view_screen, aspect,  -0.20f, 0.20f, -0.20f, 0.20f, 1.00f, 2000.00f);
 
 }
 
@@ -330,8 +330,8 @@ model* loadOBJ(const char* path, GSTEXTURE* text) {
         c_texcoords[i][0] = m->texcoords[(2 * i) + 0];
         oneMinusTexcoord = 1.0f - m->texcoords[(2 * i) + 1];
         c_texcoords[i][1] = oneMinusTexcoord;
-        c_texcoords[i][2] = 0.0f;
-        c_texcoords[i][3] = 0.0f;
+        c_texcoords[i][2] = 1.0f;
+        c_texcoords[i][3] = 1.0f;
     }
 
     res_m->facesCount = m->face_count;
@@ -380,6 +380,18 @@ model* loadOBJ(const char* path, GSTEXTURE* text) {
     }
 
     memcpy(res_m->colours, c_colours, indexCount * sizeof(VECTOR));
+
+	res_m->idx_range_count = 0;
+	for (int i = 0; i < res_m->indexCount; i++) {
+		if ((i+1) % 108 == 0) {
+			res_m->idx_ranges[res_m->idx_range_count] = i;
+			res_m->idx_range_count++;
+			
+		} else if (i == (res_m->indexCount-1)) {
+			res_m->idx_ranges[res_m->idx_range_count] = i;
+			res_m->idx_range_count++;
+		}
+	}
 
     free(c_verts);
     free(c_colours);
@@ -533,17 +545,49 @@ static inline void gsKit_set_tw_th(const GSTEXTURE *Texture, int *tw, int *th)
 		(*th)++;
 }
 
-/** Calculate packet for cube data */
-void calculate_cube(GSGLOBAL *gsGlobal, model* model_test)
+unsigned int get_max_z(GSGLOBAL* gsGlobal)
 {
+
+	int z;
+	unsigned int max_z;
+
+	switch(gsGlobal->PSMZ){
+		case GS_PSMZ_32:
+			z = 32;
+			break;
+
+		case GS_PSMZ_24:
+			z = 24;
+			break;
+
+		case GS_PSMZ_16:
+		case GS_PSMZ_16S:
+			z = 16;
+			break;
+		
+		default:
+			return -1;
+	}
+
+	max_z = 1 << (z - 1);
+
+	// End function.
+	return max_z;
+
+}
+
+/** Calculate packet for cube data */
+void calculate_cube(GSGLOBAL *gsGlobal, GSTEXTURE* tex, uint32_t idx_count)
+{
+
 	float fX = 2048.0f+gsGlobal->Width/2;
 	float fY = 2048.0f+gsGlobal->Height/2;
-	float fZ = ((float)0xFFFFFF) / 32.0F;
+	float fZ = ((float)get_max_z(gsGlobal));
 
 	u64* p_data = cube_packet;
 
 	*p_data++ = (*(u32*)(&fX) | (u64)*(u32*)(&fY) << 32);
-	*p_data++ = (*(u32*)(&fZ) | (u64)model_test->indexCount << 32);
+	*p_data++ = (*(u32*)(&fZ) | (u64)idx_count << 32);
 
 	*p_data++ = GIF_TAG(1, 0, 0, 0, 0, 1);
 	*p_data++ = GIF_AD;
@@ -552,15 +596,15 @@ void calculate_cube(GSGLOBAL *gsGlobal, model* model_test)
 	*p_data++ = GS_TEX1_1;
 
 	int tw, th;
-	gsKit_set_tw_th(model_test->textures[0], &tw, &th);
+	gsKit_set_tw_th(tex, &tw, &th);
 
 	*p_data++ = GS_SETREG_TEX0(
-            model_test->textures[0]->Vram/256, model_test->textures[0]->TBW, model_test->textures[0]->PSM,
+            tex->Vram/256, tex->TBW, tex->PSM,
             tw, th, gsGlobal->PrimAlphaEnable, 0,
     		0, 0, 0, 0, GS_CLUT_STOREMODE_NOLOAD);
 	*p_data++ = GS_TEX0_1;
 
-	*p_data++ = VU_GS_GIFTAG(model_test->indexCount, 1, 1,
+	*p_data++ = VU_GS_GIFTAG(idx_count, 1, 1,
     	VU_GS_PRIM(GS_PRIM_PRIM_TRIANGLE, 1, 1, gsGlobal->PrimFogEnable, 
 		0, gsGlobal->PrimAAEnable, 0, 0, 0),
         0, 3);
@@ -579,17 +623,14 @@ model* prepare_cube(const char* path, GSTEXTURE* Texture)
 	vu1_set_double_buffer_settings();
 
 	cube_packet =    vifCreatePacket(6);
-	vif_packets[0] = vifCreatePacket(6);
-	vif_packets[1] = vifCreatePacket(6);
+	vif_packets[0] = vifCreatePacket(7);
+	vif_packets[1] = vifCreatePacket(7);
 
 	return model_test;
 }
 
-/** Calculate cube position and add packet with cube data */
 void draw_cube(model* model_test, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z)
 {
-	
-
 	VECTOR object_position = { pos_x, pos_y, pos_z, 1.00f };
 	VECTOR object_rotation = { rot_x, rot_y, rot_z, 1.00f };
 
@@ -607,38 +648,59 @@ void draw_cube(model* model_test, float pos_x, float pos_y, float pos_z, float r
 	create_local_screen(local_screen, local_world, world_view, view_screen);
 
 	gsKit_TexManager_bind(gsGlobal, model_test->textures[0]);
-	calculate_cube(gsGlobal, model_test);
 
-	curr_vif_packet = vif_packets[context];
+	// res_m->idx_ranges[res_m->idx_range_count] = i;
+	int last_idx = -1;
+	for (int i = 0; i < model_test->idx_range_count; i++) {
+		//asm(
+  		//	"vu1_active:\n"
+  		//	"bc2t vu1_active\n"
+  		//	"nop\n"
+  		//);
 
-	memset(curr_vif_packet, 0, 16*6);
+		printf("Hello world\n");
+
+		calculate_cube(gsGlobal, model_test->textures[0], model_test->idx_ranges[i]-last_idx);
+
+		curr_vif_packet = vif_packets[context];
 	
-	// Add matrix at the beggining of VU mem (skip TOP)
-	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 0, &local_screen, 8, 0);
+		memset(curr_vif_packet, 0, 16*6);
 
-	u32 vif_added_bytes = 0; // zero because now we will use TOP register (double buffer)
-							 // we don't wan't to unpack at 8 + beggining of buffer, but at
-							 // the beggining of the buffer
 
-	// Merge packets
-	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, cube_packet, 6, 1);
-	vif_added_bytes += 6;
+		//if (i) {
+		//	*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
+		//	*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32));
+		//}
+		
+		// Add matrix at the beggining of VU mem (skip TOP)
+		curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 0, &local_screen, 8, 0);
+	
+		u32 vif_added_bytes = 0; // zero because now we will use TOP register (double buffer)
+								 // we don't wan't to unpack at 8 + beggining of buffer, but at
+								 // the beggining of the buffer
+	
+		// Merge packets
+		curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, cube_packet, 6, 1);
+		vif_added_bytes += 6;
+	
+		// Add vertices
+		curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &model_test->positions[last_idx+1], model_test->idx_ranges[i]-last_idx, 1);
+		vif_added_bytes += model_test->idx_ranges[i]-last_idx; // one VECTOR is size of qword
+	
+		// Add sts
+		curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &model_test->texcoords[last_idx+1], model_test->idx_ranges[i]-last_idx, 1);
+		vif_added_bytes += model_test->idx_ranges[i]-last_idx;
+	
+		*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
+		*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, VIF_MSCAL, 0) << 32));
+	
+		*curr_vif_packet++ = DMA_TAG(0, 0, DMA_END, 0, 0 , 0);
+		*curr_vif_packet++ = (VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32);
+	
+		vifSendPacket(vif_packets[context], 1);
+		last_idx = model_test->idx_ranges[i];
 
-	// Add vertices
-	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, model_test->positions, model_test->indexCount, 1);
-	vif_added_bytes += model_test->indexCount; // one VECTOR is size of qword
-
-	// Add sts
-	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, model_test->texcoords, model_test->indexCount, 1);
-	vif_added_bytes += model_test->indexCount;
-
-	*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
-	*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, VIF_MSCAL, 0) << 32));
-
-	*curr_vif_packet++ = DMA_TAG(0, 0, DMA_END, 0, 0 , 0);
-	*curr_vif_packet++ = (VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32);
-
-	vifSendPacket(vif_packets[context], 1);
+	}
 
 	// Switch packet, so we can proceed during DMA transfer
 	context = !context;
