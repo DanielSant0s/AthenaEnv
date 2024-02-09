@@ -132,7 +132,7 @@ static JSValue athena_drawcube(JSContext *ctx, JSValue this_val, int argc, JSVal
 	JS_ToFloat32(ctx, &rot_y, argv[5]);
 	JS_ToFloat32(ctx, &rot_z, argv[6]);
 	
-	draw_cube(m, pos_x, pos_y, pos_z, rot_x, rot_y, rot_z);
+	draw_vu1_with_lights(m, pos_x, pos_y, pos_z, rot_x, rot_y, rot_z);
 
 	return JS_UNDEFINED;
 }
