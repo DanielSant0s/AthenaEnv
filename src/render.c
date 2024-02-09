@@ -470,6 +470,7 @@ model* prepare_cube(const char* path, GSTEXTURE* Texture)
 {
 	model* model_test = loadOBJ(path, Texture);
 
+	vu1_upload_micro_program(&VU1Draw3D_CodeStart, &VU1Draw3D_CodeEnd);
 	vu1_set_double_buffer_settings();
 
 	cube_packet =    vifCreatePacket(6);
@@ -478,8 +479,6 @@ model* prepare_cube(const char* path, GSTEXTURE* Texture)
 
 	return model_test;
 }
-
-uint32_t last_microprogram = NULL;
 
 void draw_cube(model* model_test, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z)
 {
@@ -491,12 +490,7 @@ void draw_cube(model* model_test, float pos_x, float pos_y, float pos_z, float r
 	MATRIX local_screen;
 
 	GSGLOBAL *gsGlobal = getGSGLOBAL();
-	
-	if (last_microprogram != &VU1Draw3D_CodeStart) {
-		vu1_upload_micro_program(&VU1Draw3D_CodeStart, &VU1Draw3D_CodeEnd);
-		last_microprogram = &VU1Draw3D_CodeStart;
-	}
-	
+
 	gsGlobal->PrimAAEnable = GS_SETTING_ON;
 	gsKit_set_test(gsGlobal, GS_ZTEST_ON);
 

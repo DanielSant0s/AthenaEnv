@@ -1395,7 +1395,6 @@ void init_graphics()
 	gsKit_clear(gsGlobal, BLACK_RGBAQ);	
 	gsKit_vsync_wait();
 	flipScreen();
-
 }
 
 void graphicWaitVblankStart(){

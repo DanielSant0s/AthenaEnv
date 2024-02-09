@@ -66,6 +66,8 @@ endif
 
 BIN2S = $(PS2SDK)/bin/bin2c
 EE_DVP = dvp-as
+EE_VCL = vcl
+EE_VCLPP = vclpp
 
 EXT_LIBS = modules/ds34usb/ee/libds34usb.a modules/ds34bt/ee/libds34bt.a
 
@@ -149,7 +151,7 @@ EE_BIN_PKD := $(EE_BIN_PKD)$(EE_EXT)
 
 #-------------------------- App Content ---------------------------#
 
-all: $(EXT_LIBS) $(EE_BIN) $(EE_ASM_DIR) $(EE_OBJS_DIR)
+all: mpgs $(EXT_LIBS) $(EE_BIN) $(EE_ASM_DIR) $(EE_OBJS_DIR)
 	@echo "$$HEADER"
 
 	echo "Building $(EE_BIN)..."
@@ -160,6 +162,8 @@ all: $(EXT_LIBS) $(EE_BIN) $(EE_ASM_DIR) $(EE_OBJS_DIR)
 	
 	mv $(EE_BIN) bin/
 	mv $(EE_BIN_PKD) bin/
+
+mpgs: src/draw_3D.vsm 
 
 debug: $(EXT_LIBS) $(EE_BIN)
 	echo "Building $(EE_BIN) with debug symbols..."
@@ -197,6 +201,16 @@ $(EE_OBJS_DIR)%.o: $(EE_SRC_DIR)%.vsm | $(EE_OBJS_DIR)
 	@echo DVP - $<
 	$(DIR_GUARD)
 	$(EE_DVP) $< -o $@
+
+$(EE_SRC_DIR)%.vcl: $(EE_SRC_DIR)%.vclpp | $(EE_SRC_DIR)
+	@echo VCLPP - $<
+	$(DIR_GUARD)
+	$(EE_VCLPP) $< $@.vcl
+	
+$(EE_SRC_DIR)%.vsm: $(EE_SRC_DIR)%.vcl | $(EE_SRC_DIR)
+	@echo VCL - $<
+	$(DIR_GUARD)
+	$(EE_VCL) $< >> $@
 
 $(EE_OBJS_DIR)%.o: $(EE_ASM_DIR)%.c | $(EE_OBJS_DIR)
 	@echo BIN2C - $<
