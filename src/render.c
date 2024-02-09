@@ -652,18 +652,16 @@ void draw_cube(model* model_test, float pos_x, float pos_y, float pos_z, float r
 	// res_m->idx_ranges[res_m->idx_range_count] = i;
 	int last_idx = -1;
 	for (int i = 0; i < model_test->idx_range_count; i++) {
+		//dmaKit_wait(DMA_CHANNEL_VIF1, 0);
+
 		calculate_cube(gsGlobal, model_test->textures[0], model_test->idx_ranges[i]-last_idx);
-		printf("Hello VU1!\n");
 
 		curr_vif_packet = vif_packets[context];
 	
 		memset(curr_vif_packet, 0, 16*6);
 
-
-		//if (i) {
-		//	*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
-		//	*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32));
-		//}
+		*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
+		*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32));
 		
 		// Add matrix at the beggining of VU mem (skip TOP)
 		curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 0, &local_screen, 8, 0);
@@ -685,16 +683,21 @@ void draw_cube(model* model_test, float pos_x, float pos_y, float pos_z, float r
 		vif_added_bytes += model_test->idx_ranges[i]-last_idx;
 	
 		*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
-		*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, VIF_MSCAL, 0) << 32));
+		*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, VIF_MSCALF, 0) << 32));
 	
 		*curr_vif_packet++ = DMA_TAG(0, 0, DMA_END, 0, 0 , 0);
 		*curr_vif_packet++ = (VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32);
+		
+		asm volatile("nop":::"memory");
 
-		vifSendPacket(vif_packets[context], 1);
+		vifSendPacket(vif_packets[context], DMA_CHANNEL_VIF1);
 		last_idx = model_test->idx_ranges[i];
+
 
 	}
 
 	// Switch packet, so we can proceed during DMA transfer
 	context = !context;
+
+
 }

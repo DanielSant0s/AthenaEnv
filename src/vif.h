@@ -12,7 +12,7 @@ typedef struct {
     uint32_t VPS : 2;   // VIF command status
     uint32_t VEW : 1;   // VU is executing microprogram
     uint32_t VGW : 1;   // Stalled waiting for GIF (VIF1 only)
-    uint32_t reserved1 : 1;
+    uint32_t reserved1 : 2;
     uint32_t MRK : 1;   // MARK detected
     uint32_t DBF : 1;   // Double buffer flag (VIF1 only)
     uint32_t VSS : 1;   // Stalled after STOP was sent to FBRST
@@ -25,6 +25,13 @@ typedef struct {
     uint32_t FDR : 1;   // FIFO direction (VIF1 only)
     uint32_t FQC : 5;   // Amount of quadwords in FIFO
 } VIFn_STAT;
+
+enum {
+    IDLE,
+    WAIT_FOR_DATA_FOLLOWING_CMD,
+    DECODING_CMD,
+    DECOMPRESSING_OR_TRANSFERRING_DATA,
+} VIF_CMD_STATUS;
 
 #define VIF1_STAT ((VIFn_STAT*)(0x10003C00))
 
