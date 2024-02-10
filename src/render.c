@@ -15,8 +15,8 @@
 extern u32 VU1Draw3D_CodeStart __attribute__((section(".vudata")));
 extern u32 VU1Draw3D_CodeEnd __attribute__((section(".vudata")));
 
-extern u32 VU1Draw3DLights_CodeStart __attribute__((section(".vudata")));
-extern u32 VU1Draw3DLights_CodeEnd __attribute__((section(".vudata")));
+extern u32 VU1Draw3DColorsNoMath_CodeStart __attribute__((section(".vudata")));
+extern u32 VU1Draw3DColorsNoMath_CodeEnd __attribute__((section(".vudata")));
 
 MATRIX view_screen;
 
@@ -610,25 +610,31 @@ float vu0_innerproduct(VECTOR v0, VECTOR v1)
 
 
 void vu0_calculate_lights(VECTOR *output, int count, VECTOR *normals, VECTOR *light_direction, VECTOR *light_colour, const int *light_type, int light_count) {	
-	int loop0, loop1; float intensity;
+	float intensity;
+
 	memset(output, 0, sizeof(VECTOR) * count);
-	for (loop0=0;loop0<count;loop0++) {
-		for (loop1=0;loop1<light_count;loop1++) {
-   			if (light_type[loop1] == LIGHT_AMBIENT)  {
+
+	for (int i = 0;i < count; i++) {
+		for (int j = 0; j < light_count; j++) {
+   			if (light_type[j] == LIGHT_AMBIENT)  {
     			intensity = 1.00f;
-   			} else if (light_type[loop1] == LIGHT_DIRECTIONAL)  {
-    			intensity = -vu0_innerproduct(normals[loop0], light_direction[loop1]);
+
+   			} else if (light_type[j] == LIGHT_DIRECTIONAL)  {
+    			intensity = -vu0_innerproduct(normals[i], light_direction[j]);
     			// Clamp the minimum intensity.
     			if (intensity < 0.00f) { intensity = 0.00f; }
    				// Else, this is an invalid light type.
-   			} else { intensity = 0.00f; }
+
+   			} else { 
+				intensity = 0.00f; 
+			}
    				// If the light has intensity...
    			if (intensity > 0.00f) {
     			// Add the light value.
-    			output[loop0][0] += (light_colour[loop1][0] * intensity);
-    			output[loop0][1] += (light_colour[loop1][1] * intensity);
-    			output[loop0][2] += (light_colour[loop1][2] * intensity);
-    			output[loop0][3] = 1.00f;
+    			output[i][0] += (light_colour[j][0] * intensity);
+    			output[i][1] += (light_colour[j][1] * intensity);
+    			output[i][2] += (light_colour[j][2] * intensity);
+    			output[i][3] = 1.00f;
    			}
   		}
  	}
@@ -649,20 +655,16 @@ void vu0_vector_clamp(VECTOR v0, VECTOR v1, float min, float max)
 }
 
 void vu0_calculate_colours(VECTOR *output, int count, VECTOR *colours, VECTOR *lights) {
-  	int loop0;
-
-  	// For each colour...
-  	for (loop0=0;loop0<count;loop0++) {
+  	for (int i = 0; i < count; i++) {
    		// Apply the light value to the colour.
 		__asm__ __volatile__(
 			"lqc2     $vf4, 0(%1)\n"
 			"lqc2     $vf5, 0(%2)\n"
 			"vmul.xyz $vf6, $vf4,  $vf5\n"
 			"sqc2     $vf6, 0(%0)\n"
-		: :"r" (output[loop0]) , "r" (colours[loop0]) ,"r" (lights[loop0]) : "memory" );
+		: :"r" (output[i]) , "r" (colours[i]) ,"r" (lights[i]) : "memory" );
 
-   		// Clamp the colour value.
-   		vu0_vector_clamp(output[loop0], output[loop0], 0.00f, 1.99f);
+   		vu0_vector_clamp(output[i], output[i], 0.00f, 1.99f);
 	}
 
 }
@@ -679,9 +681,9 @@ void draw_vu1_with_lights(model* model_test, float pos_x, float pos_y, float pos
 
 	GSGLOBAL *gsGlobal = getGSGLOBAL();
 
-	if (last_mpg != &VU1Draw3DLights_CodeStart) {
-		vu1_upload_micro_program(&VU1Draw3DLights_CodeStart, &VU1Draw3DLights_CodeEnd);
-		last_mpg = &VU1Draw3DLights_CodeStart;
+	if (last_mpg != &VU1Draw3DColorsNoMath_CodeStart) {
+		vu1_upload_micro_program(&VU1Draw3DColorsNoMath_CodeStart, &VU1Draw3DColorsNoMath_CodeEnd);
+		last_mpg = &VU1Draw3DColorsNoMath_CodeStart;
 	}
 
 	gsGlobal->PrimAAEnable = GS_SETTING_ON;
