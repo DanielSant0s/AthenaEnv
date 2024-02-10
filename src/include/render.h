@@ -23,4 +23,14 @@ int athena_process_xyz_rgbaq(GSPRIMPOINT *output, GSGLOBAL* gsGlobal, int count,
 
 int athena_process_xyz_rgbaq_st(GSPRIMSTQPOINT *output, GSGLOBAL* gsGlobal, int count, color_f_t *colours, vertex_f_t *vertices, texel_f_t *coords);
 
+void vu0_calculate_colours(VECTOR *output, int count, VECTOR *colours, VECTOR *lights);
+
+void vu0_vector_clamp(VECTOR v0, VECTOR v1, float min, float max);
+
+void vu0_calculate_lights(VECTOR *output, int count, VECTOR *normals, VECTOR *light_direction, VECTOR *light_colour, const int *light_type, int light_count);
+
+float vu0_innerproduct(VECTOR v0, VECTOR v1);
+
+void athena_set_tw_th(const GSTEXTURE *Texture, int *tw, int *th);
+
 #endif

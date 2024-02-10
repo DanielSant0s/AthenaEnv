@@ -15,15 +15,15 @@ canvas.psmz = Z16S;
 
 Screen.setMode(canvas);
 
-Render.init(4/3);
+Render.setView(4/3);
 
 Camera.position(0.0f, 0.0f, 50.0f);
 Camera.rotation(0.0f, 0.0f,  0.0f);
 
-Lights.create(1);
+Lights.create(2);
 
 //Lights.set(1,  0.0,  0.0,  0.0, 1.0, 1.0, 1.0,     AMBIENT);
-//Lights.set(2,  1.0,  0.0, -1.0, 1.0, 1.0, 1.0, DIRECTIONAL);
+Lights.set(2,  1.0,  0.0, -1.0, 0.5, 0.0, 1.0, DIRECTIONAL);
 Lights.set(1,  0.0,  1.0, -1.0, 0.8, 0.8, 0.8, DIRECTIONAL);
 //Lights.set(4, -1.0, -1.0, -1.0, 0.5, 0.5, 0.5, DIRECTIONAL);
 

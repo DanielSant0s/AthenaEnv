@@ -232,3 +232,132 @@ int athena_process_xyz_rgbaq_st(GSPRIMSTQPOINT *output, GSGLOBAL* gsGlobal, int 
 	return 0;
 
 }
+
+static inline u32 lzw(u32 val)
+{
+	u32 res;
+	__asm__ __volatile__ ("   plzcw   %0, %1    " : "=r" (res) : "r" (val));
+	return(res);
+}
+
+void athena_set_tw_th(const GSTEXTURE *Texture, int *tw, int *th)
+{
+	*tw = 31 - (lzw(Texture->Width) + 1);
+	if(Texture->Width > (1<<*tw))
+		(*tw)++;
+
+	*th = 31 - (lzw(Texture->Height) + 1);
+	if(Texture->Height > (1<<*th))
+		(*th)++;
+}
+
+
+/*
+typedef struct {
+	VECTOR direction[3];
+	int intensity[3];
+	int ambient;
+
+} LightData;
+
+void SetRow(MATRIX output, int row, VECTOR vec) {
+    for (int i = 0; i < 4; i++) {
+        output[row * 4 + i] = vec[i];
+    }
+}
+
+void SetColumn(MATRIX output, int col, VECTOR vec) {
+    for (int i = 0; i < 4; i++) {
+        output[i * 4 + col] = vec[i];
+    }
+}
+
+void InitLightMatrix(MATRIX output, MATRIX local_light, LightData lights, MATRIX objecttoworld)
+{
+	matrix_unit(local_light);
+ 	SetRow(local_light, 0, lights.direction[0]);
+ 	SetRow(local_light, 1, lights.direction[1]);
+ 	SetRow(local_light, 2, lights.direction[2]);
+
+	matrix_multiply(output, local_light, objecttoworld);
+
+	//SetColumn(output, 3, Vec4(lights.intensity[0], lights.intensity[1], lights.intensity[2], lights.ambient));
+}*/
+
+float vu0_innerproduct(VECTOR v0, VECTOR v1)
+{
+    float ret;
+
+    __asm__ __volatile__(
+		"lqc2     $vf4, 0(%1)\n"
+		"lqc2     $vf5, 0(%2)\n"
+		"vmul.xyz $vf5, $vf4,  $vf5\n"
+		"vaddy.x  $vf5, $vf5,  $vf5\n"
+		"vaddz.x  $vf5, $vf5,  $vf5\n"
+		"qmfc2    $2,   $vf5\n"
+		"mtc1     $2,   %0\n"
+	: "=f" (ret) :"r" (v0) ,"r" (v1) :"$2", "memory" );
+
+    return ret;
+}
+
+
+void vu0_calculate_lights(VECTOR *output, int count, VECTOR *normals, VECTOR *light_direction, VECTOR *light_colour, const int *light_type, int light_count) {	
+	float intensity;
+
+	memset(output, 0, sizeof(VECTOR) * count);
+
+	for (int i = 0;i < count; i++) {
+		for (int j = 0; j < light_count; j++) {
+   			if (light_type[j] == LIGHT_AMBIENT)  {
+    			intensity = 1.00f;
+
+   			} else if (light_type[j] == LIGHT_DIRECTIONAL)  {
+    			intensity = -vu0_innerproduct(normals[i], light_direction[j]);
+    			// Clamp the minimum intensity.
+    			if (intensity < 0.00f) { intensity = 0.00f; }
+   				// Else, this is an invalid light type.
+
+   			} else { 
+				intensity = 0.00f; 
+			}
+   				// If the light has intensity...
+   			if (intensity > 0.00f) {
+    			// Add the light value.
+    			output[i][0] += (light_colour[j][0] * intensity);
+    			output[i][1] += (light_colour[j][1] * intensity);
+    			output[i][2] += (light_colour[j][2] * intensity);
+    			output[i][3] = 1.00f;
+   			}
+  		}
+ 	}
+}
+
+void vu0_vector_clamp(VECTOR v0, VECTOR v1, float min, float max)
+{
+    __asm__ __volatile__(
+        "mfc1         $8,    %2\n"
+        "mfc1         $9,    %3\n"
+		"lqc2         $vf6,  0(%1)\n"
+        "qmtc2        $8,    $vf4\n"
+        "qmtc2        $9,    $vf5\n"
+		"vmaxx.xyzw   $vf6, $vf6, $vf4\n"
+		"vminix.xyzw  $vf6, $vf6, $vf5\n"
+		"sqc2         $vf6,  0(%0)\n"
+	: : "r" (v0) , "r" (v1), "f" (min), "f" (max):"$8","$9","memory");
+}
+
+void vu0_calculate_colours(VECTOR *output, int count, VECTOR *colours, VECTOR *lights) {
+  	for (int i = 0; i < count; i++) {
+   		// Apply the light value to the colour.
+		__asm__ __volatile__(
+			"lqc2     $vf4, 0(%1)\n"
+			"lqc2     $vf5, 0(%2)\n"
+			"vmul.xyz $vf6, $vf4,  $vf5\n"
+			"sqc2     $vf6, 0(%0)\n"
+		: :"r" (output[i]) , "r" (colours[i]) ,"r" (lights[i]) : "memory" );
+
+   		vu0_vector_clamp(output[i], output[i], 0.00f, 1.99f);
+	}
+
+}

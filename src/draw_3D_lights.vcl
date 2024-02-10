@@ -80,7 +80,7 @@
                                     ; any32 : Q = 1     ; 1, because we will mul this by 1/vert[w] and this
                                                         ; will be our q for texture perspective correction
                                     ; any32 : _ = 0 
-        lq.xyzw color,  0(colorData)                      
+        lq.xyzw color,  0(colorData) ; load colors                     
         ;////////////////////////////////////////////    
 
 

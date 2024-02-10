@@ -123,7 +123,7 @@ void printFontMText(const char* text, float x, float y, float scale, Color color
 void unloadFontM();
 
 
-void init3D(float aspect);
+void init3D(float aspect, float fov);
 
 void setCameraPosition(float x, float y, float z);
 void setCameraRotation(float x, float y, float z);

@@ -14,7 +14,7 @@ canvas.psmz = Z16S;
 
 Screen.setMode(canvas);
 
-Render.init(4/3);
+Render.setView(4/3);
 
 os.chdir("render");
 
