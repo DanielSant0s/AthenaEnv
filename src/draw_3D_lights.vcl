@@ -32,10 +32,8 @@
 
     ;//////////// --- Load data 1 --- /////////////
     ; Updated once per mesh
-
-    MatrixLoad	localScreen,  0,   vi00 ; load view-projection matrix
-    MatrixLoad	lights,       4,   vi00
-    /////////////////////////////////////////////
+    MatrixLoad	ObjectToScreen, 0, vi00 ; load view-projection matrix
+    ;/////////////////////////////////////////////
 
 	fcset   0x000000	; VCL won't let us use CLIP without first zeroing
 				; the clip flags
@@ -56,9 +54,9 @@
     iaddiu  vertexData,     iBase,      6           ; pointer to vertex data
     ilw.w   vertCount,      0(iBase)                ; load vert count from scale vector
     iadd    stqData,        vertexData, vertCount   ; pointer to stq
-    iadd    normalData,     stqData,    vertCount   ; pointer to stq
-    iadd    kickAddress,    normalData,    vertCount   ; pointer for XGKICK
-    iadd    destAddress,    normalData,    vertCount   ; helper pointer for data inserting
+    iadd    colorData,      stqData,    vertCount   ; pointer to colors
+    iadd    kickAddress,    colorData,  vertCount   ; pointer for XGKICK
+    iadd    destAddress,    colorData,  vertCount   ; helper pointer for data inserting
     ;////////////////////////////////////////////
 
     ;/////////// --- Store tags --- /////////////
@@ -82,12 +80,12 @@
                                     ; any32 : Q = 1     ; 1, because we will mul this by 1/vert[w] and this
                                                         ; will be our q for texture perspective correction
                                     ; any32 : _ = 0 
-        lq normal,    0(normalData)       ; load normal                      
+        lq.xyzw color,  0(colorData)                      
         ;////////////////////////////////////////////    
 
 
         ;////////////// --- Vertex --- //////////////
-        MatrixMultiplyVertex	vertex, localScreen, vertex   ; transform each vertex by the matrix
+        MatrixMultiplyVertex	vertex, ObjectToScreen, vertex ; transform each vertex by the matrix
        
         clipw.xyz	vertex, vertex			; Dr. Fortuna: This instruction checks if the vertex is outside
 							; the viewing frustum. If it is, then the appropriate
@@ -110,29 +108,26 @@
         ftoi4.xyz   vertex, vertex                  ; convert vertex to 12:4 fixed point format
         ;////////////////////////////////////////////
 
-        ;//////////////// - NORMAL - ////////////////
-        ;mula           acc,           lightsRow3, vf00[w]
-        ;madda          acc,           lightsRow0, normal[x]
-        ;madda          acc,           lightsRow1, normal[y]
-        ;madd           rgba,          lightsRow2, normal[z]
-        ;div            q,             vf00[w], rgba[w]
-        ;mulq           modRGBA,       rgba, q
-        ;////////////////////////////////////////////
 
         ;//////////////// --- ST --- ////////////////
         mulq modStq, stq, q
         ;////////////////////////////////////////////
 
+        ;//////////////// - COLOR - ////////////////
+        mul color, color, rgba
+        ColorFPtoGsRGBAQ intColor, color
+        ;///////////////////////////////////////////
+
 
         ;//////////// --- Store data --- ////////////
         sq modStq,      0(destAddress)      ; STQ
-        sq rgba,     1(destAddress)      ; RGBA ; q is grabbed from stq
+        sq intColor,    1(destAddress)      ; RGBA ; q is grabbed from stq
         sq.xyz vertex,  2(destAddress)      ; XYZ2
         ;////////////////////////////////////////////
 
         iaddiu          vertexData,     vertexData,     1                         
         iaddiu          stqData,        stqData,        1  
-        iaddiu          normalData,     normalData,     1
+        iaddiu          colorData,      colorData,        1  
         iaddiu          destAddress,    destAddress,    3
 
         iaddi   vertexCounter,  vertexCounter,  -1	; decrement the loop counter 

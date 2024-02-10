@@ -5,7 +5,7 @@ let fntcpy = new Font();
 fntcpy.scale = (0.4f);
 
 Screen.setFrameCounter(true);
-//Screen.setVSync(false);
+Screen.setVSync(false);
 
 const canvas = Screen.getMode();
 
@@ -22,7 +22,7 @@ Camera.rotation(0.0f, 0.0f,  0.0f);
 
 Lights.create(1);
 
-Lights.set(1,  0.0,  0.0,  0.0, 1.0, 1.0, 1.0,     AMBIENT);
+//Lights.set(1,  0.0,  0.0,  0.0, 1.0, 1.0, 1.0,     AMBIENT);
 //Lights.set(2,  1.0,  0.0, -1.0, 1.0, 1.0, 1.0, DIRECTIONAL);
 Lights.set(1,  0.0,  1.0, -1.0, 0.8, 0.8, 0.8, DIRECTIONAL);
 //Lights.set(4, -1.0, -1.0, -1.0, 0.5, 0.5, 0.5, DIRECTIONAL);

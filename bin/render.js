@@ -39,9 +39,9 @@ Camera.rotation(0.0f, 0.0f,  0.0f);
 
 Lights.create(1);
 
-Lights.set(1,  0.0,  0.0,  0.0, 1.0, 1.0, 1.0,     AMBIENT);
+//Lights.set(1,  0.0,  0.0,  0.0, 1.0, 1.0, 1.0,     AMBIENT);
 //Lights.set(2,  1.0,  0.0, -1.0, 1.0, 1.0, 1.0, DIRECTIONAL);
-//Lights.set(1,  0.0,  1.0, -1.0, 0.8, 0.8, 0.8, DIRECTIONAL);
+Lights.set(1,  0.0,  1.0, -1.0, 0.8, 0.8, 0.8, DIRECTIONAL);
 //Lights.set(4, -1.0, -1.0, -1.0, 0.5, 0.5, 0.5, DIRECTIONAL);
 
 let pad = Pads.get();
