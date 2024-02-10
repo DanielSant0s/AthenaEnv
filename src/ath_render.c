@@ -147,6 +147,9 @@ static const JSCFunctionListEntry render_funcs[] = {
 
 	JS_CFUNC_DEF( "loadCube",   2,        		athena_loadcube ),
 	JS_CFUNC_DEF( "drawCube",   7,        		athena_drawcube ),
+
+	JS_PROP_INT32_DEF("PL_NO_LIGHTS", 0, JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("PL_DEFAULT", 0, JS_PROP_CONFIGURABLE ),
 };
 
 
