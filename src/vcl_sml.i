@@ -947,6 +947,26 @@
 ;// Note:
 ;//--------------------------------------------------------------------
 
+   .macro LoadFloat output, immediate
+   loi            \immediate                            ;//
+   addi           output,     vf00,      i              ;//
+   .endm
+
+;//--------------------------------------------------------------------
+;// VectorClamp - Clamp vector to a range
+;//
+;// Note:
+;//--------------------------------------------------------------------
+
+   .macro   VectorClamp output, input, min, max
+   loi            \min                                  ;//
+   addi           minvec,  vf00,         i              ;//
+   loi            \max                                  ;//
+   addi           maxvec,  vf00,         i              ;//
+   maxx.xyzw      \output, \input,  minvec              ;//
+   minix.xyzw     \output, \output, maxvec              ;//
+   .endm
+
 ;//--------------------------------------------------------------------
 ;// Name Here - Description here
 ;//

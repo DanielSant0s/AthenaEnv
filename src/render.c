@@ -21,10 +21,7 @@ MATRIX view_screen;
 VECTOR camera_position = { 0.00f, 0.00f, 0.00f, 1.00f };
 VECTOR camera_rotation = { 0.00f, 0.00f, 0.00f, 1.00f };
 
-int light_count;
-VECTOR* light_direction;
-VECTOR* light_colour;
-int* light_type;
+static LightData lights;
 
 void init3D(float aspect, float fov)
 {
@@ -46,28 +43,28 @@ void setCameraRotation(float x, float y, float z){
 	camera_rotation[3] = 1.00f;
 }
 
-void setLightQuantity(int quantity){
-	light_count = quantity;
-	light_direction = (VECTOR*)memalign(128, sizeof(VECTOR) * light_count);
-	light_colour = (VECTOR*)memalign(128, sizeof(VECTOR) * light_count);
-	light_type = (int*)memalign(128, sizeof(int) * light_count);
+void SetLightAttribute(int id, float x, float y, float z, int attr){
+	switch (attr) {
+		case ATHENA_LIGHT_DIRECTION:
+			lights.direction[id][0] = x;
+			lights.direction[id][1] = y;
+			lights.direction[id][2] = z;
+			lights.direction[id][3] = 1.00f;
+			break;
+		case ATHENA_LIGHT_AMBIENT:
+			lights.ambient[id][0] = x;
+			lights.ambient[id][1] = y;
+			lights.ambient[id][2] = z;
+			lights.ambient[id][3] = 1.00f;
+			break;
+		case ATHENA_LIGHT_DIFFUSE:
+			lights.diffuse[id][0] = x;
+			lights.diffuse[id][1] = y;
+			lights.diffuse[id][2] = z;
+			lights.diffuse[id][3] = 1.00f;
+			break;
+	}
 }
-
-void createLight(int lightid, float dir_x, float dir_y, float dir_z, int type, float r, float g, float b){
-	light_direction[lightid-1][0] = dir_x;
-	light_direction[lightid-1][1] = dir_y;
-	light_direction[lightid-1][2] = dir_z;
-	light_direction[lightid-1][3] = 1.00f;
-
-	light_colour[lightid-1][0] = r;
-	light_colour[lightid-1][1] = g;
-	light_colour[lightid-1][2] = b;
-	light_colour[lightid-1][3] = 1.00f;
-
-	light_type[lightid-1] = type;
-}
-
-
 
 void render_notex(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z)
 {
@@ -96,7 +93,7 @@ void render_notex(model* m, float pos_x, float pos_y, float pos_z, float rot_x, 
 
 	// Calculate the normal values.
 	calculate_normals(m->tmp_normals, m->indexCount, m->normals, local_light);
-	calculate_lights(m->tmp_lights, m->indexCount, m->tmp_normals, light_direction, light_colour, light_type, light_count);
+	vu0_build_lights(m->tmp_lights, m->indexCount, m->tmp_normals, &lights);
 	calculate_colours((VECTOR *)m->tmp_colours, m->indexCount, m->colours, m->tmp_lights);
 	calculate_vertices_clipped((VECTOR *)m->tmp_xyz, m->indexCount, m->positions, local_screen);
 
@@ -131,7 +128,7 @@ void render_singletex(model* m, float pos_x, float pos_y, float pos_z, float rot
 
 	// Calculate the normal values.
 	calculate_normals(m->tmp_normals, m->indexCount, m->normals, local_light);
-	calculate_lights(m->tmp_lights, m->indexCount, m->tmp_normals, light_direction, light_colour, light_type, light_count);
+	vu0_build_lights(m->tmp_lights, m->indexCount, m->tmp_normals, &lights);
 	calculate_colours((VECTOR *)m->tmp_colours, m->indexCount, m->colours, m->tmp_lights);
 	calculate_vertices_clipped((VECTOR *)m->tmp_xyz, m->indexCount, m->positions, local_screen);
 
@@ -167,7 +164,7 @@ void render_multitex(model* m, float pos_x, float pos_y, float pos_z, float rot_
 
 	// Calculate the normal values.
 	calculate_normals(m->tmp_normals, m->indexCount, m->normals, local_light);
-	calculate_lights(m->tmp_lights, m->indexCount, m->tmp_normals, light_direction, light_colour, light_type, light_count);
+	vu0_build_lights(m->tmp_lights, m->indexCount, m->tmp_normals, &lights);
 	calculate_colours((VECTOR *)m->tmp_colours, m->indexCount, m->colours, m->tmp_lights);
 	calculate_vertices_clipped((VECTOR *)m->tmp_xyz, m->indexCount, m->positions, local_screen);
 
@@ -454,8 +451,8 @@ model* prepare_cube(const char* path, GSTEXTURE* Texture)
 	model* model_test = loadOBJ(path, Texture);
 
 	cube_packet =    vifCreatePacket(6);
-	vif_packets[0] = vifCreatePacket(9);
-	vif_packets[1] = vifCreatePacket(9);
+	vif_packets[0] = vifCreatePacket(22);
+	vif_packets[1] = vifCreatePacket(22);
 
 	return model_test;
 }
@@ -566,8 +563,8 @@ void draw_vu1_with_lights(model* model_test, float pos_x, float pos_y, float pos
 
 	// Calculate the normal values.
 	calculate_normals(model_test->tmp_normals, model_test->indexCount, model_test->normals, local_light);
-	vu0_calculate_lights(model_test->tmp_lights, model_test->indexCount, model_test->tmp_normals, light_direction, light_colour, light_type, light_count);
-	vu0_calculate_colours((VECTOR *)model_test->tmp_colours, model_test->indexCount, model_test->colours, model_test->tmp_lights);
+	//vu0_build_lights(model_test->tmp_lights, model_test->indexCount, model_test->tmp_normals, &lights);
+	//vu0_calculate_colours((VECTOR *)model_test->tmp_colours, model_test->indexCount, model_test->colours, model_test->tmp_lights);
 
 	gsKit_TexManager_bind(gsGlobal, model_test->textures[0]);
 
@@ -639,9 +636,16 @@ void draw_vu1_with_lights(model* model_test, float pos_x, float pos_y, float pos
 		curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &model_test->texcoords[last_idx+1], model_test->idx_ranges[i]-last_idx, 1);
 		vif_added_bytes += model_test->idx_ranges[i]-last_idx;
 	
-		// Add normals
-		curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &model_test->tmp_lights[last_idx+1], model_test->idx_ranges[i]-last_idx, 1);
+		// Add colors
+		curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &model_test->colours[last_idx+1], model_test->idx_ranges[i]-last_idx, 1);
 		vif_added_bytes += model_test->idx_ranges[i]-last_idx;
+
+		// Add normals
+		curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &model_test->tmp_normals[last_idx+1], model_test->idx_ranges[i]-last_idx, 1);
+		vif_added_bytes += model_test->idx_ranges[i]-last_idx;
+
+		curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &lights, 12, 1);
+		vif_added_bytes += 12;
 
 		*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
 		*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, VIF_MSCALF, 0) << 32));

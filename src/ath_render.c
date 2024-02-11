@@ -155,43 +155,29 @@ static const JSCFunctionListEntry render_funcs[] = {
 	JS_PROP_INT32_DEF("PL_DEFAULT", 0, JS_PROP_CONFIGURABLE ),
 };
 
+static JSValue athena_setlight(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	if (argc != 5) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
 
-static JSValue athena_lightnumber(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-	if (argc != 1) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
-
-	int lightcount;
-	JS_ToInt32(ctx, &lightcount, argv[0]);
-
-	setLightQuantity(lightcount);
-
-	return JS_UNDEFINED;
-}
-
-static JSValue athena_createlight(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-	if (argc != 8) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
-
-	float dir_x, dir_y, dir_z, r, g, b;
-	int id, type;
+	float x, y, z;
+	int id, attr;
 
 	JS_ToInt32(ctx, &id, argv[0]);
-	JS_ToFloat32(ctx, &dir_x, argv[1]);
-	JS_ToFloat32(ctx, &dir_y, argv[2]);
-	JS_ToFloat32(ctx, &dir_z, argv[3]);
-	JS_ToFloat32(ctx, &r, argv[4]);
-	JS_ToFloat32(ctx, &g, argv[5]);
-	JS_ToFloat32(ctx, &b, argv[6]);
-	JS_ToInt32(ctx, &type, argv[7]);
+	JS_ToInt32(ctx, &attr, argv[1]);
+	JS_ToFloat32(ctx, &x, argv[2]);
+	JS_ToFloat32(ctx, &y, argv[3]);
+	JS_ToFloat32(ctx, &z, argv[4]);
 	
-	createLight(id, dir_x, dir_y, dir_z, type, r, g, b);
+
+	SetLightAttribute(id, x, y, z, attr);
 
 	return JS_UNDEFINED;
 }
 
 static const JSCFunctionListEntry light_funcs[] = {
-  JS_CFUNC_DEF( "set",  	8, athena_createlight),
-  JS_CFUNC_DEF( "create", 	1, athena_lightnumber),
-  JS_PROP_INT32_DEF("AMBIENT", LIGHT_AMBIENT, JS_PROP_CONFIGURABLE ),
-  JS_PROP_INT32_DEF("DIRECTIONAL", LIGHT_DIRECTIONAL, JS_PROP_CONFIGURABLE ),
+  JS_CFUNC_DEF( "set",  	5, athena_setlight),
+  JS_PROP_INT32_DEF("AMBIENT", ATHENA_LIGHT_AMBIENT, JS_PROP_CONFIGURABLE ),
+  JS_PROP_INT32_DEF("DIFFUSE", ATHENA_LIGHT_DIFFUSE, JS_PROP_CONFIGURABLE ),
+  JS_PROP_INT32_DEF("DIRECTION", ATHENA_LIGHT_DIRECTION, JS_PROP_CONFIGURABLE ),
 };
 
 

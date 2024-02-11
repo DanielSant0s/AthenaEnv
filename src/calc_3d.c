@@ -251,15 +251,6 @@ void athena_set_tw_th(const GSTEXTURE *Texture, int *tw, int *th)
 		(*th)++;
 }
 
-
-/*
-typedef struct {
-	VECTOR direction[3];
-	int intensity[3];
-	int ambient;
-
-} LightData;
-
 void SetRow(MATRIX output, int row, VECTOR vec) {
     for (int i = 0; i < 4; i++) {
         output[row * 4 + i] = vec[i];
@@ -271,18 +262,6 @@ void SetColumn(MATRIX output, int col, VECTOR vec) {
         output[i * 4 + col] = vec[i];
     }
 }
-
-void InitLightMatrix(MATRIX output, MATRIX local_light, LightData lights, MATRIX objecttoworld)
-{
-	matrix_unit(local_light);
- 	SetRow(local_light, 0, lights.direction[0]);
- 	SetRow(local_light, 1, lights.direction[1]);
- 	SetRow(local_light, 2, lights.direction[2]);
-
-	matrix_multiply(output, local_light, objecttoworld);
-
-	//SetColumn(output, 3, Vec4(lights.intensity[0], lights.intensity[1], lights.intensity[2], lights.ambient));
-}*/
 
 float vu0_innerproduct(VECTOR v0, VECTOR v1)
 {
@@ -301,13 +280,45 @@ float vu0_innerproduct(VECTOR v0, VECTOR v1)
     return ret;
 }
 
+void vu0_build_lights(VECTOR *output, int count, VECTOR *normals, LightData* lights) {	
+	float intensity;
+
+	for (int i = 0; i < count; i++) {
+		output[i][0] = 0.0f;
+		output[i][1] = 0.0f;
+		output[i][2] = 0.0f;
+		output[i][3] = 0.0f;
+		
+		for (int j = 0; j < 4; j++) {
+    		output[i][0] += lights->ambient[j][0];
+    		output[i][1] += lights->ambient[j][1];
+    		output[i][2] += lights->ambient[j][2];
+    		output[i][3] = 1.00f;
+
+    		intensity = -vu0_innerproduct(normals[i], lights->direction[j]);
+    		// Clamp the minimum intensity.
+    		if (intensity < 0.00f) { intensity = 0.00f; }
+
+   			// If the light has intensity...
+   			if (intensity > 0.00f) {
+    			// Add the light value.
+    			output[i][0] += (lights->diffuse[j][0] * intensity);
+    			output[i][1] += (lights->diffuse[j][1] * intensity);
+    			output[i][2] += (lights->diffuse[j][2] * intensity);
+    			output[i][3] = 1.00f;
+   			}
+  		}
+ 	}
+}
 
 void vu0_calculate_lights(VECTOR *output, int count, VECTOR *normals, VECTOR *light_direction, VECTOR *light_colour, const int *light_type, int light_count) {	
 	float intensity;
 
-	memset(output, 0, sizeof(VECTOR) * count);
-
-	for (int i = 0;i < count; i++) {
+	for (int i = 0; i < count; i++) {
+		output[i][0] = 0.0f;
+		output[i][1] = 0.0f;
+		output[i][2] = 0.0f;
+		output[i][3] = 0.0f;
 		for (int j = 0; j < light_count; j++) {
    			if (light_type[j] == LIGHT_AMBIENT)  {
     			intensity = 1.00f;
@@ -321,7 +332,8 @@ void vu0_calculate_lights(VECTOR *output, int count, VECTOR *normals, VECTOR *li
    			} else { 
 				intensity = 0.00f; 
 			}
-   				// If the light has intensity...
+
+   			// If the light has intensity...
    			if (intensity > 0.00f) {
     			// Add the light value.
     			output[i][0] += (light_colour[j][0] * intensity);

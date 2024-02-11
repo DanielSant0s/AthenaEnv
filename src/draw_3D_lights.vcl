@@ -55,8 +55,13 @@
     ilw.w   vertCount,      0(iBase)                ; load vert count from scale vector
     iadd    stqData,        vertexData, vertCount   ; pointer to stq
     iadd    colorData,      stqData,    vertCount   ; pointer to colors
-    iadd    kickAddress,    colorData,  vertCount   ; pointer for XGKICK
-    iadd    destAddress,    colorData,  vertCount   ; helper pointer for data inserting
+    iadd    normalData,      colorData,  vertCount   ; pointer to colors
+    iadd    lightsData,     normalData,  vertCount
+    MatrixLoad	LightDirection,   0,   lightsData   ; load light directions
+    MatrixLoad	LightAmbient,     4,   lightsData   ; load light ambients
+    MatrixLoad	LightDiffuse,     8,   lightsData   ; load light diffuses
+    iaddiu    kickAddress,    lightsData,  12       ; pointer for XGKICK
+    iaddiu    destAddress,    lightsData,  12       ; helper pointer for data inserting
     ;////////////////////////////////////////////
 
     ;/////////// --- Store tags --- /////////////
@@ -80,7 +85,8 @@
                                     ; any32 : Q = 1     ; 1, because we will mul this by 1/vert[w] and this
                                                         ; will be our q for texture perspective correction
                                     ; any32 : _ = 0 
-        lq.xyzw color,  0(colorData) ; load colors                     
+        lq.xyzw color,  0(colorData) ; load color
+        lq.xyzw normal,  0(normalData) ; load normal                    
         ;////////////////////////////////////////////    
 
 
@@ -113,9 +119,54 @@
         mulq modStq, stq, q
         ;////////////////////////////////////////////
 
-        ;//////////////// - COLOR - ////////////////
-        mul color, color, rgba
-        ColorFPtoGsRGBAQ intColor, color
+        ;//////////////// - COLOR - /////////////////
+        add light, vf00, vf00
+        add light, light, LightAmbient[0]
+        add light, light, LightAmbient[1]
+        add light, light, LightAmbient[2]
+        add light, light, LightAmbient[3]
+
+        add intensity, vf00, vf00
+
+        loi  -1.0              
+        addi minusOne, vf00, i
+
+        VectorDotProduct intensity, normal, LightDirection[0]
+        
+        mul intensity, intensity, minusOne
+        maxx.xyzw  intensity, intensity, vf00
+
+        mul diffuse, LightDiffuse[0], intensity[x]
+        add light, light, diffuse
+
+        VectorDotProduct intensity, normal, LightDirection[1]
+        
+        mul intensity, intensity, minusOne
+        maxx.xyzw  intensity, intensity, vf00
+
+        mul diffuse, LightDiffuse[1], intensity[x]
+        add light, light, diffuse
+
+        VectorDotProduct intensity, normal, LightDirection[2]
+        
+        mul intensity, intensity, minusOne
+        maxx.xyzw  intensity, intensity, vf00
+
+        mul diffuse, LightDiffuse[2], intensity[x]
+        add light, light, diffuse
+
+        VectorDotProduct intensity, normal, LightDirection[3]
+        
+        mul intensity, intensity, minusOne
+        maxx.xyzw  intensity, intensity, vf00
+
+        mul diffuse, LightDiffuse[3], intensity[x]
+        add light, light, diffuse
+
+        mul.xyz    color, color,  light            ; color = color * light
+        VectorClamp color, color 0.0 1.99
+        mul color, color, rgba                     ; normalize RGBA
+        ColorFPtoGsRGBAQ intColor, color           ; convert to int
         ;///////////////////////////////////////////
 
 
@@ -127,7 +178,8 @@
 
         iaddiu          vertexData,     vertexData,     1                         
         iaddiu          stqData,        stqData,        1  
-        iaddiu          colorData,      colorData,        1  
+        iaddiu          colorData,      colorData,      1  
+        iaddiu          normalData,     normalData,      1
         iaddiu          destAddress,    destAddress,    3
 
         iaddi   vertexCounter,  vertexCounter,  -1	; decrement the loop counter 

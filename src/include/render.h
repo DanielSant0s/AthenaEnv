@@ -1,9 +1,21 @@
-#ifndef RENDER_H
-#define RENDER_H
+#ifndef ATHENA_RENDER_H
+#define ATHENA_RENDER_H
 
 #include "graphics.h"
 
 //3D math
+
+typedef struct {
+	VECTOR direction[4];
+	VECTOR ambient[4];
+	VECTOR diffuse[4];
+} LightData;
+
+typedef enum {
+	ATHENA_LIGHT_DIRECTION,
+	ATHENA_LIGHT_AMBIENT,
+	ATHENA_LIGHT_DIFFUSE,
+} eLightAttributes;
 
 int clip_bounding_box(MATRIX local_clip, VECTOR *bounding_box);
 
@@ -27,10 +39,11 @@ void vu0_calculate_colours(VECTOR *output, int count, VECTOR *colours, VECTOR *l
 
 void vu0_vector_clamp(VECTOR v0, VECTOR v1, float min, float max);
 
-void vu0_calculate_lights(VECTOR *output, int count, VECTOR *normals, VECTOR *light_direction, VECTOR *light_colour, const int *light_type, int light_count);
+void vu0_build_lights(VECTOR *output, int count, VECTOR *normals, LightData* lights);
 
 float vu0_innerproduct(VECTOR v0, VECTOR v1);
 
 void athena_set_tw_th(const GSTEXTURE *Texture, int *tw, int *th);
+
 
 #endif
