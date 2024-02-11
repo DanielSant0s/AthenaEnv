@@ -562,7 +562,7 @@ void draw_vu1_with_lights(model* model_test, float pos_x, float pos_y, float pos
 	create_local_screen(local_screen, local_world, world_view, view_screen);
 
 	// Calculate the normal values.
-	calculate_normals(model_test->tmp_normals, model_test->indexCount, model_test->normals, local_light);
+	//calculate_normals(model_test->tmp_normals, model_test->indexCount, model_test->normals, local_light);
 	//vu0_build_lights(model_test->tmp_lights, model_test->indexCount, model_test->tmp_normals, &lights);
 	//vu0_calculate_colours((VECTOR *)model_test->tmp_colours, model_test->indexCount, model_test->colours, model_test->tmp_lights);
 
@@ -641,7 +641,7 @@ void draw_vu1_with_lights(model* model_test, float pos_x, float pos_y, float pos
 		vif_added_bytes += model_test->idx_ranges[i]-last_idx;
 
 		// Add normals
-		curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &model_test->tmp_normals[last_idx+1], model_test->idx_ranges[i]-last_idx, 1);
+		curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &model_test->normals[last_idx+1], model_test->idx_ranges[i]-last_idx, 1);
 		vif_added_bytes += model_test->idx_ranges[i]-last_idx;
 
 		curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &lights, 12, 1);

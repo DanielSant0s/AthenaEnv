@@ -33,6 +33,7 @@
     ;//////////// --- Load data 1 --- /////////////
     ; Updated once per mesh
     MatrixLoad	ObjectToScreen, 0, vi00 ; load view-projection matrix
+    MatrixLoad	LocalLight,     4, vi00     ; load local light matrix
     ;/////////////////////////////////////////////
 
 	fcset   0x000000	; VCL won't let us use CLIP without first zeroing
@@ -119,7 +120,11 @@
         mulq modStq, stq, q
         ;////////////////////////////////////////////
 
-        ;//////////////// - COLOR - /////////////////
+        ;//////////////// - NORMALS - /////////////////
+        MatrixMultiplyVertex	normal, LocalLight, normal ; transform each normal by the matrix
+        div         q,      vf00[w],    normal[w]   ; perspective divide (1/vert[w]):
+        mul.xyz     normal, normal,     q
+        
         add light, vf00, vf00
         add light, light, LightAmbient[0]
         add light, light, LightAmbient[1]
