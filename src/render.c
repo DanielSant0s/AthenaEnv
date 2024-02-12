@@ -432,6 +432,7 @@ void draw_vu1_with_lights(model* model_test, float pos_x, float pos_y, float pos
 		VECTOR* texcoords = &model_test->texcoords[lastIdx+1];
 		VECTOR* normals = &model_test->normals[lastIdx+1];
 		VECTOR* colours = &model_test->colours[lastIdx+1];
+		GSTEXTURE* tex = model_test->textures[i];
 
 		int idxs_to_draw = (model_test->tex_ranges[i]-lastIdx);
 		int idxs_drawn = 0;
@@ -459,14 +460,14 @@ void draw_vu1_with_lights(model* model_test, float pos_x, float pos_y, float pos
 			*p_data++ = GIF_TAG(1, 0, 0, 0, 0, 1);
 			*p_data++ = GIF_AD;
 
-			*p_data++ = GS_SETREG_TEX1(1, 0, model_test->textures[i]->Filter, model_test->textures[i]->Filter, 0, 0, 0);
+			*p_data++ = GS_SETREG_TEX1(1, 0, tex->Filter, tex->Filter, 0, 0, 0);
 			*p_data++ = GS_TEX1_1;
 
 			int tw, th;
-			athena_set_tw_th(model_test->textures[i], &tw, &th);
+			athena_set_tw_th(tex, &tw, &th);
 
 			*p_data++ = GS_SETREG_TEX0(
-    		        model_test->textures[i]->Vram/256, model_test->textures[i]->TBW, model_test->textures[i]->PSM,
+    		        tex->Vram/256, tex->TBW, tex->PSM,
     		        tw, th, gsGlobal->PrimAlphaEnable, 0,
     				0, 0, 0, 0, GS_CLUT_STOREMODE_NOLOAD);
 			*p_data++ = GS_TEX0_1;
