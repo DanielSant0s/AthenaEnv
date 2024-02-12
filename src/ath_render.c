@@ -47,18 +47,11 @@ static JSValue athena_freeobj(JSContext *ctx, JSValue this_val, int argc, JSValu
 	model* m;
 	JS_ToUint32(ctx, &m, argv[0]);
 
-    free(m->tmp_colours);
-    free(m->tmp_lights);
-    free(m->tmp_normals);
-    free(m->tmp_xyz);
-
 	free(m->positions);
     free(m->colours);
     free(m->normals);
     free(m->texcoords);
 
-	free(m->vertices);
-	
 	free(m);
 	m = NULL;
 
@@ -106,50 +99,12 @@ static JSValue athena_drawbbox(JSContext *ctx, JSValue this_val, int argc, JSVal
 	return JS_UNDEFINED;
 }
 
-static JSValue athena_loadcube(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-	JSImageData *image;
-	model* res_m;
-
-	const char *file_tbo = JS_ToCString(ctx, argv[0]); //Model filename
-	
-	// Loading texture
-	if(argc == 2) {
-		image = JS_GetOpaque2(ctx, argv[1], get_img_class_id());
-		res_m = prepare_cube(file_tbo, &(image->tex));
-	} else {
-		res_m = prepare_cube(file_tbo, NULL);
-	}
-
-	return JS_NewUint32(ctx, res_m);
-}
-
-static JSValue athena_drawcube(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-	float pos_x, pos_y, pos_z, rot_x, rot_y, rot_z;
-	model* m;
-	JS_ToUint32(ctx, &m, argv[0]);
-
-	JS_ToFloat32(ctx, &pos_x, argv[1]);
-	JS_ToFloat32(ctx, &pos_y, argv[2]);
-	JS_ToFloat32(ctx, &pos_z, argv[3]);
-	JS_ToFloat32(ctx, &rot_x, argv[4]);
-	JS_ToFloat32(ctx, &rot_y, argv[5]);
-	JS_ToFloat32(ctx, &rot_z, argv[6]);
-	
-	draw_vu1_with_lights(m, pos_x, pos_y, pos_z, rot_x, rot_y, rot_z);
-
-	return JS_UNDEFINED;
-}
-
-
 static const JSCFunctionListEntry render_funcs[] = {
     JS_CFUNC_DEF( "setView",   2,             athena_initrender),
   	JS_CFUNC_DEF( "loadOBJ",   2,        		athena_loadobj ),
     JS_CFUNC_DEF( "drawOBJ",   7,        		athena_drawobj ),
 	JS_CFUNC_DEF( "drawBbox",  8,         	    athena_drawbbox),
     JS_CFUNC_DEF( "freeOBJ",   1,        		athena_freeobj ),
-
-	JS_CFUNC_DEF( "loadCube",   2,       		athena_loadcube ),
-	JS_CFUNC_DEF( "drawCube",   7,        		athena_drawcube ),
 
 	JS_PROP_INT32_DEF("PL_NO_LIGHTS", 0, JS_PROP_CONFIGURABLE ),
 	JS_PROP_INT32_DEF("PL_DEFAULT", 0, JS_PROP_CONFIGURABLE ),

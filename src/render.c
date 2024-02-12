@@ -313,12 +313,6 @@ void calculate_cube(GSGLOBAL *gsGlobal, GSTEXTURE* tex, uint32_t idx_count)
 	*p_data++ = (128 | (u64)128 << 32);	
 }
 
-model* prepare_cube(const char* path, GSTEXTURE* Texture)
-{
-	model* model_test = loadOBJ(path, Texture);
-	return model_test;
-}
-
 static u32* last_mpg = NULL;
 
 void draw_cube(model* model_test, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z)
