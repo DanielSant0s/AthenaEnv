@@ -424,10 +424,6 @@ void draw_vu1_with_lights(model* model_test, float pos_x, float pos_y, float pos
 	create_world_view(world_view, camera_position, camera_rotation);
 	create_local_screen(local_screen, local_world, world_view, view_screen);
 
-	gsKit_TexManager_bind(gsGlobal, model_test->textures[0]);
-
-
-
 	int lastIdx = -1;
 	for(int i = 0; i < model_test->tex_count; i++) {
 		gsKit_TexManager_bind(gsGlobal, model_test->textures[i]);
@@ -463,7 +459,7 @@ void draw_vu1_with_lights(model* model_test, float pos_x, float pos_y, float pos
 			*p_data++ = GIF_TAG(1, 0, 0, 0, 0, 1);
 			*p_data++ = GIF_AD;
 
-			*p_data++ = GS_SETREG_TEX1(1, 0, 0, 0, 0, 0, 0);
+			*p_data++ = GS_SETREG_TEX1(1, 0, model_test->textures[i]->Filter, model_test->textures[i]->Filter, 0, 0, 0);
 			*p_data++ = GS_TEX1_1;
 
 			int tw, th;
