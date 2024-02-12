@@ -20,7 +20,7 @@
 ;---------------------------------------------------------------
 
 .syntax new
-.name VU1Draw3DColorsNoMath
+.name VU1Draw3DColors
 .vu
 .init_vf_all
 .init_vi_all

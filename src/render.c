@@ -13,8 +13,11 @@
 extern u32 VU1Draw3D_CodeStart __attribute__((section(".vudata")));
 extern u32 VU1Draw3D_CodeEnd __attribute__((section(".vudata")));
 
-extern u32 VU1Draw3DColorsNoMath_CodeStart __attribute__((section(".vudata")));
-extern u32 VU1Draw3DColorsNoMath_CodeEnd __attribute__((section(".vudata")));
+extern u32 VU1Draw3DNoTex_CodeStart __attribute__((section(".vudata")));
+extern u32 VU1Draw3DNoTex_CodeEnd __attribute__((section(".vudata")));
+
+extern u32 VU1Draw3DColors_CodeStart __attribute__((section(".vudata")));
+extern u32 VU1Draw3DColors_CodeEnd __attribute__((section(".vudata")));
 
 extern u32 VU1Draw3DColorsNoTex_CodeStart __attribute__((section(".vudata")));
 extern u32 VU1Draw3DColorsNoTex_CodeEnd __attribute__((section(".vudata")));
@@ -69,8 +72,22 @@ void SetLightAttribute(int id, float x, float y, float z, int attr){
 	}
 }
 
+void draw_vu1_notex(model* model_test, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z);
+void draw_vu1(model* model_test, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z);
+
 void draw_vu1_with_lights_notex(model* model_test, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z);
 void draw_vu1_with_lights(model* model_test, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z);
+
+void athena_render_set_pipeline(model* m, int pl_id) {
+	switch (pl_id) {
+		case PL_NO_LIGHTS:
+			m->render = (m->tex_count? draw_vu1 : draw_vu1_notex);
+			break;
+		case PL_DEFAULT:
+			m->render = (m->tex_count? draw_vu1_with_lights : draw_vu1_with_lights_notex);
+			break;
+	}
+}
 
 model* loadOBJ(const char* path, GSTEXTURE* text) {
     model* res_m = (model*)malloc(sizeof(model));
@@ -283,7 +300,7 @@ void calculate_cube(GSGLOBAL *gsGlobal, GSTEXTURE* tex, uint32_t idx_count)
 
 static u32* last_mpg = NULL;
 
-void draw_cube(model* model_test, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z)
+void draw_vu1(model* model_test, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z)
 {
 	VECTOR object_position = { pos_x, pos_y, pos_z, 1.00f };
 	VECTOR object_rotation = { rot_x, rot_y, rot_z, 1.00f };
@@ -306,7 +323,98 @@ void draw_cube(model* model_test, float pos_x, float pos_y, float pos_z, float r
 	create_world_view(world_view, camera_position, camera_rotation);
 	create_local_screen(local_screen, local_world, world_view, view_screen);
 
-	gsKit_TexManager_bind(gsGlobal, model_test->textures[0]);
+	int lastIdx = -1;
+	for(int i = 0; i < model_test->tex_count; i++) {
+		gsKit_TexManager_bind(gsGlobal, model_test->textures[i]);
+
+		VECTOR* positions = &model_test->positions[lastIdx+1];
+		VECTOR* texcoords = &model_test->texcoords[lastIdx+1];
+		GSTEXTURE* tex = model_test->textures[i];
+
+		int idxs_to_draw = (model_test->tex_ranges[i]-lastIdx);
+		int idxs_drawn = 0;
+
+		while (idxs_to_draw > 0) {
+			dmaKit_wait(DMA_CHANNEL_VIF1, 0);
+
+			int count = BATCH_SIZE;
+			if (idxs_to_draw < BATCH_SIZE)
+			{
+				count = idxs_to_draw;
+			}
+
+			calculate_cube(gsGlobal, tex, count);
+
+			curr_vif_packet = vif_packets[context];
+
+			memset(curr_vif_packet, 0, 16*22);
+
+			*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
+			*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32));
+
+			// Add matrix at the beggining of VU mem (skip TOP)
+			curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 0, &local_screen, 8, 0);
+
+			u32 vif_added_bytes = 0; // zero because now we will use TOP register (double buffer)
+									 // we don't wan't to unpack at 8 + beggining of buffer, but at
+									 // the beggining of the buffer
+
+			// Merge packets
+			curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, cube_packet, 6, 1);
+			vif_added_bytes += 6;
+
+			// Add vertices
+			curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &positions[idxs_drawn], count, 1);
+			vif_added_bytes += count; // one VECTOR is size of qword
+
+			// Add sts
+			curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &texcoords[idxs_drawn], count, 1);
+			vif_added_bytes += count;
+
+			*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
+			*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, VIF_MSCALF, 0) << 32));
+
+			*curr_vif_packet++ = DMA_TAG(0, 0, DMA_END, 0, 0 , 0);
+			*curr_vif_packet++ = (VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32);
+
+			asm volatile("nop":::"memory");
+
+			vifSendPacket(vif_packets[context], DMA_CHANNEL_VIF1);
+
+			idxs_to_draw -= count;
+			idxs_drawn += count;
+		}
+
+		lastIdx = model_test->tex_ranges[i];
+	}
+
+
+	// Switch packet, so we can proceed during DMA transfer
+	context = !context;
+}
+
+void draw_vu1_notex(model* model_test, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z)
+{
+	VECTOR object_position = { pos_x, pos_y, pos_z, 1.00f };
+	VECTOR object_rotation = { rot_x, rot_y, rot_z, 1.00f };
+
+	MATRIX local_world;
+	MATRIX world_view;
+	MATRIX local_screen;
+
+	GSGLOBAL *gsGlobal = getGSGLOBAL();
+
+	if (last_mpg != &VU1Draw3DNoTex_CodeStart) {
+		vu1_upload_micro_program(&VU1Draw3DNoTex_CodeStart, &VU1Draw3DNoTex_CodeEnd);
+		last_mpg = &VU1Draw3DNoTex_CodeStart;
+	}
+
+	gsGlobal->PrimAAEnable = GS_SETTING_ON;
+	gsKit_set_test(gsGlobal, GS_ZTEST_ON);
+
+	create_local_world(local_world, object_position, object_rotation);
+	create_world_view(world_view, camera_position, camera_rotation);
+	create_local_screen(local_screen, local_world, world_view, view_screen);
 
 	int idxs_to_draw = model_test->indexCount;
 	int idxs_drawn = 0;
@@ -320,7 +428,29 @@ void draw_cube(model* model_test, float pos_x, float pos_y, float pos_z, float r
 			count = idxs_to_draw;
 		}
 
-		calculate_cube(gsGlobal, model_test->textures[0], count);
+		float fX = 2048.0f+gsGlobal->Width/2;
+		float fY = 2048.0f+gsGlobal->Height/2;
+		float fZ = ((float)get_max_z(gsGlobal));
+
+		float texCol = 128.0f;
+
+		u64* p_data = cube_packet;
+
+		*p_data++ = (*(u32*)(&fX) | (u64)*(u32*)(&fY) << 32);
+		*p_data++ = (*(u32*)(&fZ) | (u64)(count) << 32);
+
+		*p_data++ = GIF_TAG(1, 0, 0, 0, 0, 1);
+		*p_data++ = GIF_AD;
+
+		*p_data++ = VU_GS_GIFTAG(count, 1, 1,
+    		VU_GS_PRIM(GS_PRIM_PRIM_TRIANGLE, 1, 0, gsGlobal->PrimFogEnable, 
+			0, gsGlobal->PrimAAEnable, 0, 0, 0),
+    	    0, 2);
+
+		*p_data++ = DRAW_NOTEX_REGLIST;
+
+		*p_data++ = (128 | (u64)128 << 32);
+		*p_data++ = (128 | (u64)128 << 32);	
 
 		curr_vif_packet = vif_packets[context];
 	
@@ -337,19 +467,15 @@ void draw_cube(model* model_test, float pos_x, float pos_y, float pos_z, float r
 								 // the beggining of the buffer
 	
 		// Merge packets
-		curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, cube_packet, 6, 1);
-		vif_added_bytes += 6;
+		curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, cube_packet, 4, 1);
+		vif_added_bytes += 4;
 	
 		// Add vertices
 		curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &model_test->positions[idxs_drawn], count, 1);
 		vif_added_bytes += count; // one VECTOR is size of qword
-	
-		// Add sts
-		curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &model_test->texcoords[idxs_drawn], count, 1);
-		vif_added_bytes += count;
-	
+
 		*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
-		*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, VIF_MSCALF, 0) << 32));
+		*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, VIF_MSCAL, 0) << 32));
 	
 		*curr_vif_packet++ = DMA_TAG(0, 0, DMA_END, 0, 0 , 0);
 		*curr_vif_packet++ = (VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32);
@@ -361,6 +487,7 @@ void draw_cube(model* model_test, float pos_x, float pos_y, float pos_z, float r
 		idxs_to_draw -= count;
 		idxs_drawn += count;
 	}
+
 
 	// Switch packet, so we can proceed during DMA transfer
 	context = !context;
@@ -379,9 +506,9 @@ void draw_vu1_with_lights(model* model_test, float pos_x, float pos_y, float pos
 
 	GSGLOBAL *gsGlobal = getGSGLOBAL();
 
-	if (last_mpg != &VU1Draw3DColorsNoMath_CodeStart) {
-		vu1_upload_micro_program(&VU1Draw3DColorsNoMath_CodeStart, &VU1Draw3DColorsNoMath_CodeEnd);
-		last_mpg = &VU1Draw3DColorsNoMath_CodeStart;
+	if (last_mpg != &VU1Draw3DColors_CodeStart) {
+		vu1_upload_micro_program(&VU1Draw3DColors_CodeStart, &VU1Draw3DColors_CodeEnd);
+		last_mpg = &VU1Draw3DColors_CodeStart;
 	}
 
 	gsGlobal->PrimAAEnable = GS_SETTING_ON;

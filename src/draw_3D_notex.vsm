@@ -1,0 +1,50 @@
+; =================================================
+; flowMon::Emit() vcl 1.4beta7 produced this code:
+		.vu
+		.align 4
+		.global	VU1Draw3DNoTex_CodeStart
+		.global	VU1Draw3DNoTex_CodeEnd
+VU1Draw3DNoTex_CodeStart:
+__v_src_draw_3D_notex_vcl_4:
+; _LNOPT_w=[ normal2 ] 15 [15 0] 15   [__v_src_draw_3D_notex_vcl_4]
+         NOP                                                        lq            VF01,0(VI00)                        
+         NOP                                                        xtop          VI02                                
+         NOP                                                        lq            VF02,1(VI00)                        
+         NOP                                                        lq            VF07,2(VI02)                        
+         NOP                                                        lq            VF03,2(VI00)                        
+         NOP                                                        iaddiu        VI03,VI02,0x00000004                
+         NOP                                                        ilw.w         VI06,0(VI02)                        
+         NOP                                                        lq            VF04,3(VI00)                        
+         NOP                                                        fcset         0                                   
+         NOP                                                        lq.xyz        VF05,0(VI02)                        
+         NOP                                                        iadd          VI05,VI03,VI06                      
+         NOP                                                        lq            VF06,3(VI02)                        
+         NOP                                                        iadd          VI04,VI03,VI06                      
+         NOP                                                        sqi           VF07,(VI05++)                       
+         NOP                                                        iadd          VI06,VI02,VI06                      
+vertexLoop:
+; _LNOPT_w=[ normal2 ] 14 [31 12] 31   [vertexLoop]
+         NOP                                                        lq            VF07,0(VI03)                        
+         mulax         ACC,VF01,VF07x                               iaddiu        VI03,VI03,0x00000001                       ;	STALL_LATENCY ?3
+         madday        ACC,VF02,VF07y                               iaddiu        VI05,VI05,0x00000002                
+         maddaz        ACC,VF03,VF07z                               isubiu        VI06,VI06,1                         
+         maddw         VF07,VF04,VF07w                              NOP                                               
+         clipw.xyz     VF07xyz,VF07w                                div           Q,VF00w,VF07w                              ;	STALL_LATENCY ?3
+         mulq.xyz      VF07,VF07,Q                                  waitq                                                    ;	STALL_LATENCY ?6
+         mulaw.xyz     ACC,VF05,VF00w                               NOP                                               
+         madd.xyz      VF07,VF07,VF05                               sq            VF06,-2(VI05)                              ;	STALL_LATENCY ?2
+         ftoi4.xyz     VF07,VF07                                    fcand         VI01,262143                                ;	STALL_LATENCY ?3
+         NOP                                                        iaddiu        VI01,VI01,0x00007fff                
+         NOP                                                        isw.w         VI01,0(VI05)                        
+         NOP                                                        ibne          VI06,VI02,vertexLoop                
+         NOP                                                        sq.xyz        VF07,-1(VI05)                       
+; _LNOPT_w=[ normal2 ] 3 [1 0] 3   [__v_src_draw_3D_notex_vcl_7]
+         NOP                                                        xgkick        VI04                                
+         NOP[E]                                                     NOP                                               
+         NOP                                                        NOP                                               
+		.align 4
+VU1Draw3DNoTex_CodeEnd:
+;	iCount=32
+; register stats:
+;   7 VU User integer
+;   8 VU User floating point

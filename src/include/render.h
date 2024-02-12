@@ -17,6 +17,13 @@ typedef enum {
 	ATHENA_LIGHT_DIFFUSE,
 } eLightAttributes;
 
+typedef enum {
+	PL_NO_LIGHTS,
+	PL_DEFAULT
+} eRenderPipelines;
+
+void athena_render_set_pipeline(model* m, int pl_id);
+
 #define BATCH_SIZE 48
 
 int clip_bounding_box(MATRIX local_clip, VECTOR *bounding_box);

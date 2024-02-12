@@ -2,9 +2,9 @@
 ; flowMon::Emit() vcl 1.4beta7 produced this code:
 		.vu
 		.align 4
-		.global	VU1Draw3DColorsNoMath_CodeStart
-		.global	VU1Draw3DColorsNoMath_CodeEnd
-VU1Draw3DColorsNoMath_CodeStart:
+		.global	VU1Draw3DColors_CodeStart
+		.global	VU1Draw3DColors_CodeEnd
+VU1Draw3DColors_CodeStart:
 __v_src_draw_3D_lights_vcl_4:
 ; _LNOPT_w=[ normal2 ] 42 [42 0] 42   [__v_src_draw_3D_lights_vcl_4]
          NOP                                                        lq            VF01,0(VI00)                        
@@ -116,7 +116,7 @@ vertexLoop:
          NOP[E]                                                     NOP                                               
          NOP                                                        NOP                                               
 		.align 4
-VU1Draw3DColorsNoMath_CodeEnd:
+VU1Draw3DColors_CodeEnd:
 ;	iCount=105
 ; register stats:
 ;  10 VU User integer
