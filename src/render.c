@@ -101,8 +101,7 @@ void athena_render_set_pipeline(model* m, int pl_id) {
 	}
 }
 
-model* loadOBJ(const char* path, GSTEXTURE* text) {
-    model* res_m = (model*)malloc(sizeof(model));
+void loadOBJ(model* res_m, const char* path, GSTEXTURE* text) {
     fastObjMesh* m = fast_obj_read(path);
 
     int positionCount = m->position_count;
@@ -221,8 +220,6 @@ model* loadOBJ(const char* path, GSTEXTURE* text) {
 	} else {
 		res_m->render = draw_vu1_with_lights_notex;
 	}
-
-    return res_m;
 }
 
 

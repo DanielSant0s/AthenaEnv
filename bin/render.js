@@ -20,17 +20,17 @@ os.chdir("render");
 
 let dragontex = new Image("dragon.png");
 dragontex.filter = LINEAR;
-let dragonmesh = Render.loadOBJ("dragon.obj", dragontex);
+let dragonmesh = new WavefrontObj("dragon.obj", dragontex);
 
 let monkeytex = new Image("monkey.png");
 monkeytex.filter = LINEAR;
-let monkeymesh = Render.loadOBJ("monkey.obj", monkeytex);
+let monkeymesh = new WavefrontObj("monkey.obj", monkeytex);
 
-let teapot = Render.loadOBJ("Car.obj");
+let teapot = new WavefrontObj("Car.obj");
 
-let mill = Render.loadOBJ("cubes.obj");
+let mill = new WavefrontObj("cubes.obj");
 
-let boombox = Render.loadOBJ("Boombox.obj");
+let boombox = new WavefrontObj("Boombox.obj");
 
 let model = [dragonmesh, monkeymesh, teapot, mill, boombox];
 
@@ -93,10 +93,10 @@ while(true){
         bbox ^= 1;
     }
 
-    Render.drawOBJ(model[modeltodisplay], 0.0f, 0.0f, 30.0f, savedly, savedlx, 0.0f);
+    model[modeltodisplay].draw(0.0f, 0.0f, 30.0f, savedly, savedlx, 0.0f);
 
     if(bbox) {
-        Render.drawBbox(model[modeltodisplay], 0.0f, 0.0f, 30.0f, savedly, savedlx, 0.0f, Color.new(128, 0, 255));
+        model[modeltodisplay].drawCorners(0.0f, 0.0f, 30.0f, savedly, savedlx, 0.0f, Color.new(128, 0, 255));
     }
 
     fntcpy.print(10, 10, Screen.getFPS(360) + " FPS | " + free_mem + " | Free VRAM: " + free_vram + "KB");

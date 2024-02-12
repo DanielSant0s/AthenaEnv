@@ -120,7 +120,7 @@ void setCameraRotation(float x, float y, float z);
 
 void SetLightAttribute(int id, float x, float y, float z, int attr);
 
-model* loadOBJ(const char* path, GSTEXTURE* text);
+void loadOBJ(model* res_m, const char* path, GSTEXTURE* text);
 void draw_bbox(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z, Color color);
 
 
