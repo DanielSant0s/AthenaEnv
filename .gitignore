@@ -9,3 +9,4 @@ src/main.js.c
 
 obj/
 embed/
+bin/brew_data.json

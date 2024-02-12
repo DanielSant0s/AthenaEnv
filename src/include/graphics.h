@@ -49,13 +49,7 @@ typedef struct ath_model {
     VECTOR bounding_box[8];
 
     void (*render)(struct ath_model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z);
-
-    VECTOR *tmp_normals;
-    VECTOR *tmp_lights;
-    color_f_t *tmp_colours;
-    vertex_f_t *tmp_xyz;
-
-    void* vertices;
+    int pipeline;
 
     GSTEXTURE* textures[10];
 	int tex_ranges[10];
@@ -120,15 +114,14 @@ void printFontMText(const char* text, float x, float y, float scale, Color color
 void unloadFontM();
 
 
-void init3D(float aspect);
+void init3D(float aspect, float fov);
 
 void setCameraPosition(float x, float y, float z);
 void setCameraRotation(float x, float y, float z);
 
-void setLightQuantity(int quantity);
-void createLight(int lightid, float dir_x, float dir_y, float dir_z, int type, float r, float g, float b);
+void SetLightAttribute(int id, float x, float y, float z, int attr);
 
-model* loadOBJ(const char* path, GSTEXTURE* text);
+void loadOBJ(model* res_m, const char* path, GSTEXTURE* text);
 void draw_bbox(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z, Color color);
 
 

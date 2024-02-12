@@ -5,7 +5,7 @@ let fntcpy = new Font();
 fntcpy.scale = (0.4f);
 
 Screen.setFrameCounter(true);
-Screen.setVSync(false);
+//Screen.setVSync(false);
 
 const canvas = Screen.getMode();
 
@@ -14,35 +14,35 @@ canvas.psmz = Z16S;
 
 Screen.setMode(canvas);
 
-Render.init(4/3);
+Render.setView(4/3);
 
 os.chdir("render");
 
 let dragontex = new Image("dragon.png");
 dragontex.filter = LINEAR;
-let dragonmesh = Render.loadOBJ("dragon.obj", dragontex);
+let dragonmesh = new WavefrontObj("dragon.obj", dragontex);
 
 let monkeytex = new Image("monkey.png");
 monkeytex.filter = LINEAR;
-let monkeymesh = Render.loadOBJ("monkey.obj", monkeytex);
+let monkeymesh = new WavefrontObj("monkey.obj", monkeytex);
+monkeymesh.setPipeline(Render.PL_NO_LIGHTS_COLORS);
 
-let teapot = Render.loadOBJ("Car.obj");
+let teapot = new WavefrontObj("Car.obj");
 
-let mill = Render.loadOBJ("cubes.obj");
+let mill = new WavefrontObj("cubes.obj");
 
-let boombox = Render.loadOBJ("Boombox.obj");
+let boombox = new WavefrontObj("Boombox.obj");
 
 let model = [dragonmesh, monkeymesh, teapot, mill, boombox];
 
 Camera.position(0.0f, 0.0f, 50.0f);
 Camera.rotation(0.0f, 0.0f,  0.0f);
 
-Lights.create(1);
+Lights.set(0, Lights.DIRECTION, 0.0,  1.0, -1.0);
+Lights.set(0, Lights.DIFFUSE, 0.8, 0.8, 0.8);
 
-Lights.set(1,  0.0,  0.0,  0.0, 1.0, 1.0, 1.0,     AMBIENT);
-//Lights.set(2,  1.0,  0.0, -1.0, 1.0, 1.0, 1.0, DIRECTIONAL);
-Lights.set(1,  0.0,  1.0, -1.0, 0.8, 0.8, 0.8, DIRECTIONAL);
-//Lights.set(4, -1.0, -1.0, -1.0, 0.5, 0.5, 0.5, DIRECTIONAL);
+Lights.set(1, Lights.DIRECTION, 0.0,  1.0, 1.0);
+Lights.set(1, Lights.DIFFUSE, 0.4, 0.0, 0.8);
 
 let pad = Pads.get();
 let modeltodisplay = 0;
@@ -90,17 +90,17 @@ while(true){
     }
 
     if(pad.justPressed(Pads.TRIANGLE)) {
-        break;
+        System.loadELF(System.boot_path + "/athena.elf");
     }
 
     if(pad.justPressed(Pads.SQUARE)) {
         bbox ^= 1;
     }
 
-    Render.drawOBJ(model[modeltodisplay], 0.0f, 0.0f, 30.0f, savedly, savedlx, 0.0f);
+    model[modeltodisplay].draw(0.0f, 0.0f, 30.0f, savedly, savedlx, 0.0f);
 
     if(bbox) {
-        Render.drawBbox(model[modeltodisplay], 0.0f, 0.0f, 30.0f, savedly, savedlx, 0.0f, Color.new(128, 0, 255));
+        model[modeltodisplay].drawBounds(0.0f, 0.0f, 30.0f, savedly, savedlx, 0.0f, Color.new(128, 0, 255));
     }
 
     fntcpy.print(10, 10, Screen.getFPS(360) + " FPS | " + free_mem + " | Free VRAM: " + free_vram + "KB");

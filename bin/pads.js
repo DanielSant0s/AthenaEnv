@@ -2,11 +2,11 @@
 
 const canvas = Screen.getMode();
 
-canvas.psm = CT24;
-canvas.zbuffering = false;
-canvas.double_buffering = false;
+//canvas.psm = CT24;
+//canvas.zbuffering = false;
+//canvas.double_buffering = false;
 
-Screen.setMode(canvas);
+//Screen.setMode(canvas);
 
 Screen.setVSync(false);
 Screen.setFrameCounter(true);

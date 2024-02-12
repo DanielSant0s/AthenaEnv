@@ -1178,6 +1178,24 @@ inline void processFrameCounter()
 	frames++;
 }
 
+void vu1_queue_init(GSGLOBAL *gsGlobal, GSQUEUE *Queue, u8 mode, int size)
+{
+	// Init pool 0
+	Queue->pool[0]		= gsKit_alloc_ucab(size);
+	Queue->pool_max[0]	= (u64 *)((u32)Queue->pool[0] + size);
+
+	Queue->pool[1]		= gsKit_alloc_ucab(size);
+	Queue->pool_max[1]	= (u64 *)((u32)Queue->pool[1] + size);
+
+	Queue->dma_tag		= Queue->pool[0];
+	Queue->pool_cur		= (u64 *)((u32)Queue->pool[0] + 16);
+	Queue->dbuf			= 0;
+	Queue->tag_size		= 0;
+	Queue->last_tag		= Queue->pool_cur;
+	Queue->last_type	= GIF_RESERVED;
+	Queue->mode			= mode;
+}
+
 void flipScreenSingleBuffering()
 {
 	//gsKit_set_finish(gsGlobal);
@@ -1202,10 +1220,10 @@ void flipScreenDoubleBuffering()
 {	
 	//gsKit_set_finish(gsGlobal);
 
-	gsKit_queue_exec(gsGlobal);
-	gsKit_finish();
 	gsKit_sync(gsGlobal);
 	gsKit_flip(gsGlobal);
+	gsKit_queue_exec(gsGlobal);
+	gsKit_finish();
 	
 	gsKit_TexManager_nextFrame(gsGlobal);
 }
@@ -1214,10 +1232,10 @@ void flipScreenDoubleBufferingPerf()
 {	
 	//gsKit_set_finish(gsGlobal);
 
-	gsKit_queue_exec(gsGlobal);
-	gsKit_finish();
 	gsKit_sync(gsGlobal);
 	gsKit_flip(gsGlobal);
+	gsKit_queue_exec(gsGlobal);
+	gsKit_finish();
 	
 	gsKit_TexManager_nextFrame(gsGlobal);
 
@@ -1243,17 +1261,17 @@ void flipScreenSingleBufferingPerfNoVSync()
 
 void flipScreenDoubleBufferingNoVSync()
 {	
+	gsKit_flip(gsGlobal);
 	gsKit_queue_exec(gsGlobal);
 	gsKit_finish();
-	gsKit_flip(gsGlobal);
 	gsKit_TexManager_nextFrame(gsGlobal);
 }
 
 void flipScreenDoubleBufferingPerfNoVSync()
 {	
+	gsKit_flip(gsGlobal);
 	gsKit_queue_exec(gsGlobal);
 	gsKit_finish();
-	gsKit_flip(gsGlobal);
 	gsKit_TexManager_nextFrame(gsGlobal);
 
 	processFrameCounter();
@@ -1349,6 +1367,10 @@ void init_graphics()
 
 	dmaKit_init(D_CTRL_RELE_OFF, D_CTRL_MFD_OFF, D_CTRL_STS_UNSPEC, D_CTRL_STD_OFF, D_CTRL_RCYC_8, 1 << DMA_CHANNEL_GIF);
 	dmaKit_chan_init(DMA_CHANNEL_GIF);
+	dmaKit_chan_init(DMA_CHANNEL_VIF1);
+	dmaKit_wait(DMA_CHANNEL_GIF, 0);
+	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
+
 
 	flipScreen = flipScreenDoubleBuffering;
 
@@ -1374,6 +1396,7 @@ void init_graphics()
 	gsKit_vsync_wait();
 	flipScreen();
 
+	vu1_set_double_buffer_settings();
 }
 
 void graphicWaitVblankStart(){
