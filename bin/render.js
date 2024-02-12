@@ -18,13 +18,10 @@ Render.setView(4/3);
 
 os.chdir("render");
 
-let dragontex = new Image("dragon.png");
-dragontex.filter = LINEAR;
-let dragonmesh = new WavefrontObj("dragon.obj", dragontex);
 
-let monkeytex = new Image("monkey.png");
-monkeytex.filter = LINEAR;
-let monkeymesh = new WavefrontObj("monkey.obj", monkeytex);
+let dragonmesh = new WavefrontObj("dragon.obj", "dragon.png");
+
+let monkeymesh = new WavefrontObj("monkey.obj", "monkey.png");
 monkeymesh.setPipeline(Render.PL_NO_LIGHTS_COLORS);
 
 let teapot = new WavefrontObj("Car.obj");
@@ -65,9 +62,8 @@ const gray = Color.new(40, 40, 40, 128);
 
 let bbox = false;
 
-Screen.clearColor(gray);
-
-const main_loop = () => {
+while(true){
+    Screen.clear(gray);
     pad.update();
 
     lx = ((pad.lx > 25 || pad.lx < -25)? pad.lx : 0) / 1024.0f;
@@ -105,6 +101,6 @@ const main_loop = () => {
     }
 
     fntcpy.print(10, 10, Screen.getFPS(360) + " FPS | " + free_mem + " | Free VRAM: " + free_vram + "KB");
-}
 
-Screen.display(main_loop);
+    Screen.flip();
+}

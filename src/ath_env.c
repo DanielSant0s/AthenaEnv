@@ -326,7 +326,7 @@ const char* runScript(const char* script, bool isBuffer)
     js_std_init_handlers(rt);
 
 	JS_SetMemoryLimit(rt, memoryLimit);
-	JS_SetGCThreshold(rt, memoryLimit >> 3);
+	JS_SetGCThreshold(rt, memoryLimit - 4194304);
 
     JSContext *ctx = JS_NewCustomContext(rt); if (!ctx) { return "Context creation"; }
 

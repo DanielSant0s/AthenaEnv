@@ -110,6 +110,19 @@ static void athena_object_dtor(JSRuntime *rt, JSValue val){
     free(m->normals);
     free(m->texcoords);
 
+	for (int i = 0; i < m->tex_count; i++) {
+		UnloadTexture(&(m->textures[i]));
+
+		free(m->textures[i]->Mem);
+		m->textures[i]->Mem = NULL;
+
+		if(m->textures[i]->Clut != NULL)
+		{
+			free(m->textures[i]->Clut);
+			m->textures[i]->Clut = NULL;
+		}
+	}
+
 	js_free_rt(rt, m);
 }
 
@@ -186,12 +199,16 @@ static JSValue athena_object_ctor(JSContext *ctx, JSValueConst new_target, int a
     if (!res_m)
         return JS_EXCEPTION;
 
-	const char *file_tbo = JS_ToCString(ctx, argv[0]); //Model filename
+	const char *file_tbo = JS_ToCString(ctx, argv[0]); // Model filename
 	
 	// Loading texture
 	if(argc == 2) {
-		image = JS_GetOpaque2(ctx, argv[1], get_img_class_id());
-		loadOBJ(res_m, file_tbo, &(image->tex));
+		GSTEXTURE *tex = malloc(sizeof(GSTEXTURE));
+		const char *tex_path = JS_ToCString(ctx, argv[1]); // Texture filename
+		load_image(tex, tex_path, true);
+		tex->Filter = GS_FILTER_LINEAR;
+
+		loadOBJ(res_m, file_tbo, tex);
 	} else {
 		loadOBJ(res_m, file_tbo, NULL);
 	}
