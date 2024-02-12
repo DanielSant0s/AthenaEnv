@@ -165,54 +165,22 @@ model* loadOBJ(const char* path, GSTEXTURE* text) {
     lowY = hiY = res_m->positions[0][1];
     lowZ = hiZ = res_m->positions[0][2];
 	
-    for (int i = 0; i < res_m->facesCount; i++) {
-        if (lowX > res_m->positions[i][0]) lowX = res_m->positions[i][0];
-        if (hiX < res_m->positions[i][0]) hiX = res_m->positions[i][0];
-        if (lowY > res_m->positions[i][1]) lowY = res_m->positions[i][1];
-        if (hiY < res_m->positions[i][1]) hiY = res_m->positions[i][1];
-        if (lowZ > res_m->positions[i][2]) lowZ = res_m->positions[i][2];
-        if (hiZ < res_m->positions[i][2]) hiZ = res_m->positions[i][2];
+    for (int i = 0; i < res_m->indexCount; i++) {
+        float* pos = res_m->positions[i];
+        lowX = fmin(lowX, pos[0]);
+        hiX = fmax(hiX, pos[0]);
+        lowY = fmin(lowY, pos[1]);
+        hiY = fmax(hiY, pos[1]);
+        lowZ = fmin(lowZ, pos[2]);
+        hiZ = fmax(hiZ, pos[2]);
     }
 
-    res_m->bounding_box[0][0] = lowX;
-    res_m->bounding_box[0][1] = lowY;
-    res_m->bounding_box[0][2] = lowZ;
-    res_m->bounding_box[0][3] = 1.00f;
+    VECTOR bbox[8] = {
+        {lowX, lowY, lowZ, 1.0f}, {lowX, lowY, hiZ, 1.0f}, {lowX, hiY, lowZ, 1.0f}, {lowX, hiY, hiZ, 1.0f},
+        {hiX, lowY, lowZ, 1.0f}, {hiX, lowY, hiZ, 1.0f}, {hiX, hiY, lowZ, 1.0f}, {hiX, hiY, hiZ, 1.0f}
+    };
 
-    res_m->bounding_box[1][0] = lowX;
-    res_m->bounding_box[1][1] = lowY;
-    res_m->bounding_box[1][2] = hiZ;
-    res_m->bounding_box[1][3] = 1.00f;
-
-    res_m->bounding_box[2][0] = lowX;
-    res_m->bounding_box[2][1] = hiY;
-    res_m->bounding_box[2][2] = lowZ;
-    res_m->bounding_box[2][3] = 1.00f;
-
-    res_m->bounding_box[3][0] = lowX;
-    res_m->bounding_box[3][1] = hiY;
-    res_m->bounding_box[3][2] = hiZ;
-    res_m->bounding_box[3][3] = 1.00f;
-
-    res_m->bounding_box[4][0] = hiX;
-    res_m->bounding_box[4][1] = lowY;
-    res_m->bounding_box[4][2] = lowZ;
-    res_m->bounding_box[4][3] = 1.00f;
-
-    res_m->bounding_box[5][0] = hiX;
-    res_m->bounding_box[5][1] = lowY;
-    res_m->bounding_box[5][2] = hiZ;
-    res_m->bounding_box[5][3] = 1.00f;
-
-    res_m->bounding_box[6][0] = hiX;
-    res_m->bounding_box[6][1] = hiY;
-    res_m->bounding_box[6][2] = lowZ;
-    res_m->bounding_box[6][3] = 1.00f;
-
-    res_m->bounding_box[7][0] = hiX;
-    res_m->bounding_box[7][1] = hiY;
-    res_m->bounding_box[7][2] = hiZ;
-    res_m->bounding_box[7][3] = 1.00f;
+    memcpy(res_m->bounding_box, bbox, sizeof(bbox));
 
 	if(text) {
 		res_m->textures[0] = text;
