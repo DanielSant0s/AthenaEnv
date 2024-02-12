@@ -5,7 +5,7 @@ let fntcpy = new Font();
 fntcpy.scale = (0.4f);
 
 Screen.setFrameCounter(true);
-//Screen.setVSync(false);
+Screen.setVSync(false);
 
 const canvas = Screen.getMode();
 
@@ -53,8 +53,9 @@ const gray = Color.new(40, 40, 40, 128);
 
 let bbox = false;
 
-while(true){
-    Screen.clear(gray);
+Screen.clearColor(Color.new(0x40, 0x40, 0x40));
+
+Screen.display(() => {
     pad.update();
 
     lx = ((pad.lx > 25 || pad.lx < -25)? pad.lx : 0) / 1024.0f;
@@ -86,5 +87,4 @@ while(true){
 
     fntcpy.print(10, 10, Screen.getFPS(360) + " FPS | " + free_mem + " | Free VRAM: " + free_vram + "KB");
 
-    Screen.flip();
-}
+});
