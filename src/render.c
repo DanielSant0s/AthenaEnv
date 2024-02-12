@@ -69,121 +69,6 @@ void SetLightAttribute(int id, float x, float y, float z, int attr){
 	}
 }
 
-/*void render_notex(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z)
-{
-	VECTOR object_position = { pos_x, pos_y, pos_z, 1.00f };
-	VECTOR object_rotation = { rot_x, rot_y, rot_z, 1.00f };
-
-    GSGLOBAL *gsGlobal = getGSGLOBAL();
-
-	// Matrices to setup the 3D environment and camera
-	MATRIX local_world;
-	MATRIX local_light;
-	MATRIX world_view;
-	MATRIX local_screen;
-
-	//gsGlobal->PrimAlphaEnable = GS_SETTING_OFF;
-	//gsKit_set_test(gsGlobal, GS_ATEST_OFF);
-	gsGlobal->PrimAAEnable = GS_SETTING_ON;
-	gsKit_set_test(gsGlobal, GS_ZTEST_ON);
-
-	// Create the local_world matrix.
-	create_local_world(local_world, object_position, object_rotation);
-	create_local_light(local_light, object_rotation);
-	create_world_view(world_view, camera_position, camera_rotation);
-	create_local_screen(local_screen, local_world, world_view, view_screen);
-	if(clip_bounding_box(local_screen, m->bounding_box)) return;
-
-	// Calculate the normal values.
-	calculate_normals(m->tmp_normals, m->indexCount, m->normals, local_light);
-	vu0_build_lights(m->tmp_lights, m->indexCount, m->tmp_normals, &lights);
-	calculate_colours((VECTOR *)m->tmp_colours, m->indexCount, m->colours, m->tmp_lights);
-	calculate_vertices_clipped((VECTOR *)m->tmp_xyz, m->indexCount, m->positions, local_screen);
-
-	athena_process_xyz_rgbaq(m->vertices, gsGlobal, m->indexCount, m->tmp_colours, m->tmp_xyz);
-	gsKit_prim_list_triangle_gouraud_3d(gsGlobal, m->indexCount, m->vertices);
-}
-
-void render_singletex(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z)
-{
-	VECTOR object_position = { pos_x, pos_y, pos_z, 1.00f };
-	VECTOR object_rotation = { rot_x, rot_y, rot_z, 1.00f };
-
-    GSGLOBAL *gsGlobal = getGSGLOBAL();
-
-	// Matrices to setup the 3D environment and camera
-	MATRIX local_world;
-	MATRIX local_light;
-	MATRIX world_view;
-	MATRIX local_screen;
-
-	//gsGlobal->PrimAlphaEnable = GS_SETTING_OFF;
-	//gsKit_set_test(gsGlobal, GS_ATEST_OFF);
-	gsGlobal->PrimAAEnable = GS_SETTING_ON;
-	gsKit_set_test(gsGlobal, GS_ZTEST_ON);
-
-	// Create the local_world matrix.
-	create_local_world(local_world, object_position, object_rotation);
-	create_local_light(local_light, object_rotation);
-	create_world_view(world_view, camera_position, camera_rotation);
-	create_local_screen(local_screen, local_world, world_view, view_screen);
-	if(clip_bounding_box(local_screen, m->bounding_box)) return;
-
-	// Calculate the normal values.
-	calculate_normals(m->tmp_normals, m->indexCount, m->normals, local_light);
-	vu0_build_lights(m->tmp_lights, m->indexCount, m->tmp_normals, &lights);
-	calculate_colours((VECTOR *)m->tmp_colours, m->indexCount, m->colours, m->tmp_lights);
-	calculate_vertices_clipped((VECTOR *)m->tmp_xyz, m->indexCount, m->positions, local_screen);
-
-	athena_process_xyz_rgbaq_st(m->vertices, gsGlobal, m->indexCount, m->tmp_colours, m->tmp_xyz, (texel_f_t *)m->texcoords);
-	gsKit_TexManager_bind(gsGlobal, m->textures[0]);
-	gsKit_prim_list_triangle_goraud_texture_stq_3d(gsGlobal, m->textures[0], m->indexCount, m->vertices);
-}
-
-void render_multitex(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z)
-{
-	VECTOR object_position = { pos_x, pos_y, pos_z, 1.00f };
-	VECTOR object_rotation = { rot_x, rot_y, rot_z, 1.00f };
-
-    GSGLOBAL *gsGlobal = getGSGLOBAL();
-
-	// Matrices to setup the 3D environment and camera
-	MATRIX local_world;
-	MATRIX local_light;
-	MATRIX world_view;
-	MATRIX local_screen;
-
-	//gsGlobal->PrimAlphaEnable = GS_SETTING_OFF;
-	//gsKit_set_test(gsGlobal, GS_ATEST_OFF);
-	gsGlobal->PrimAAEnable = GS_SETTING_ON;
-	gsKit_set_test(gsGlobal, GS_ZTEST_ON);
-
-	// Create the local_world matrix.
-	create_local_world(local_world, object_position, object_rotation);
-	create_local_light(local_light, object_rotation);
-	create_world_view(world_view, camera_position, camera_rotation);
-	create_local_screen(local_screen, local_world, world_view, view_screen);
-	if(clip_bounding_box(local_screen, m->bounding_box)) return;
-
-	// Calculate the normal values.
-	calculate_normals(m->tmp_normals, m->indexCount, m->normals, local_light);
-	vu0_build_lights(m->tmp_lights, m->indexCount, m->tmp_normals, &lights);
-	calculate_colours((VECTOR *)m->tmp_colours, m->indexCount, m->colours, m->tmp_lights);
-	calculate_vertices_clipped((VECTOR *)m->tmp_xyz, m->indexCount, m->positions, local_screen);
-
-	athena_process_xyz_rgbaq_st(m->vertices, gsGlobal, m->indexCount, m->tmp_colours, m->tmp_xyz, (texel_f_t *)m->texcoords);
-
-	GSPRIMSTQPOINT* vertices = m->vertices;
-	
-	int lastIdx = -1;
-	for(int i = 0; i < m->tex_count; i++) {
-		gsKit_TexManager_bind(gsGlobal, m->textures[i]);
-		gsKit_prim_list_triangle_goraud_texture_stq_3d(gsGlobal, m->textures[i], (m->tex_ranges[i]-lastIdx), &vertices[lastIdx+1]);
-		lastIdx = m->tex_ranges[i];
-	}
-}
-*/
-
 void draw_vu1_with_lights_notex(model* model_test, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z);
 void draw_vu1_with_lights(model* model_test, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z);
 
@@ -331,20 +216,14 @@ model* loadOBJ(const char* path, GSTEXTURE* text) {
 
 	if(text) {
 		res_m->textures[0] = text;
+		res_m->tex_count = 1;
+		res_m->tex_ranges[0] = res_m->indexCount;
 		res_m->render = draw_vu1_with_lights;
-		//res_m->vertices = memalign(128, sizeof(GSPRIMSTQPOINT)*m->index_count);
 	} else if (res_m->tex_count > 0) {
 		res_m->render = draw_vu1_with_lights;
-		//res_m->vertices = memalign(128, sizeof(GSPRIMSTQPOINT)*m->index_count);
 	} else {
 		res_m->render = draw_vu1_with_lights_notex;
-		//res_m->vertices = memalign(128, sizeof(GSPRIMPOINT)*m->index_count);
 	}
-
-	//res_m->tmp_normals  = (VECTOR*)memalign(128, sizeof(VECTOR)*(res_m->indexCount));
-	//res_m->tmp_lights  = (VECTOR*)memalign(128, sizeof(VECTOR)*(res_m->indexCount));
-	//res_m->tmp_colours  = (color_f_t*)memalign(128, sizeof(color_f_t)*(res_m->indexCount));
-	//res_m->tmp_xyz  = (vertex_f_t*)memalign(128, sizeof(vertex_f_t)*(res_m->indexCount));
 
     return res_m;
 }
@@ -553,104 +432,118 @@ void draw_vu1_with_lights(model* model_test, float pos_x, float pos_y, float pos
 
 	gsKit_TexManager_bind(gsGlobal, model_test->textures[0]);
 
-	int idxs_to_draw = model_test->indexCount;
-	int idxs_drawn = 0;
 
-	while (idxs_to_draw > 0) {
-		dmaKit_wait(DMA_CHANNEL_VIF1, 0);
 
-		int count = BATCH_SIZE;
-		if (idxs_to_draw < BATCH_SIZE)
-		{
-			count = idxs_to_draw;
+	int lastIdx = -1;
+	for(int i = 0; i < model_test->tex_count; i++) {
+		gsKit_TexManager_bind(gsGlobal, model_test->textures[i]);
+
+		VECTOR* positions = &model_test->positions[lastIdx+1];
+		VECTOR* texcoords = &model_test->texcoords[lastIdx+1];
+		VECTOR* normals = &model_test->normals[lastIdx+1];
+		VECTOR* colours = &model_test->colours[lastIdx+1];
+
+		int idxs_to_draw = (model_test->tex_ranges[i]-lastIdx);
+		int idxs_drawn = 0;
+
+		while (idxs_to_draw > 0) {
+			dmaKit_wait(DMA_CHANNEL_VIF1, 0);
+
+			int count = BATCH_SIZE;
+			if (idxs_to_draw < BATCH_SIZE)
+			{
+				count = idxs_to_draw;
+			}
+
+			float fX = 2048.0f+gsGlobal->Width/2;
+			float fY = 2048.0f+gsGlobal->Height/2;
+			float fZ = ((float)get_max_z(gsGlobal));
+
+			float texCol = 128.0f;
+
+			u64* p_data = cube_packet;
+
+			*p_data++ = (*(u32*)(&fX) | (u64)*(u32*)(&fY) << 32);
+			*p_data++ = (*(u32*)(&fZ) | (u64)(count) << 32);
+
+			*p_data++ = GIF_TAG(1, 0, 0, 0, 0, 1);
+			*p_data++ = GIF_AD;
+
+			*p_data++ = GS_SETREG_TEX1(1, 0, 0, 0, 0, 0, 0);
+			*p_data++ = GS_TEX1_1;
+
+			int tw, th;
+			athena_set_tw_th(model_test->textures[i], &tw, &th);
+
+			*p_data++ = GS_SETREG_TEX0(
+    		        model_test->textures[i]->Vram/256, model_test->textures[i]->TBW, model_test->textures[i]->PSM,
+    		        tw, th, gsGlobal->PrimAlphaEnable, 0,
+    				0, 0, 0, 0, GS_CLUT_STOREMODE_NOLOAD);
+			*p_data++ = GS_TEX0_1;
+
+			*p_data++ = VU_GS_GIFTAG(count, 1, 1,
+    			VU_GS_PRIM(GS_PRIM_PRIM_TRIANGLE, 1, 1, gsGlobal->PrimFogEnable, 
+				0, gsGlobal->PrimAAEnable, 0, 0, 0),
+    		    0, 3);
+
+			*p_data++ = DRAW_STQ2_REGLIST;
+
+			*p_data++ = (*(u32*)(&texCol) | (u64)*(u32*)(&texCol) << 32);
+			*p_data++ = (*(u32*)(&texCol) | (u64)*(u32*)(&texCol) << 32);	
+
+			curr_vif_packet = vif_packets[context];
+
+			memset(curr_vif_packet, 0, 16*22);
+
+			*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
+			*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32));
+
+			// Add matrix at the beggining of VU mem (skip TOP)
+			curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 0, &local_screen, 4, 0);
+			curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 4, &local_light, 4, 0);
+
+			u32 vif_added_bytes = 0; // zero because now we will use TOP register (double buffer)
+									 // we don't wan't to unpack at 8 + beggining of buffer, but at
+									 // the beggining of the buffer
+
+			// Merge packets
+			curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, cube_packet, 6, 1);
+			vif_added_bytes += 6;
+
+			// Add vertices
+			curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &positions[idxs_drawn], count, 1);
+			vif_added_bytes += count; // one VECTOR is size of qword
+
+			// Add sts
+			curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &texcoords[idxs_drawn], count, 1);
+			vif_added_bytes += count;
+
+			// Add colors
+			curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &colours[idxs_drawn], count, 1);
+			vif_added_bytes += count;
+
+			// Add normals
+			curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &normals[idxs_drawn], count, 1);
+			vif_added_bytes += count;
+
+			curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &lights, 12, 1);
+			vif_added_bytes += 12;
+
+			*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
+			*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, VIF_MSCAL, 0) << 32));
+
+			*curr_vif_packet++ = DMA_TAG(0, 0, DMA_END, 0, 0 , 0);
+			*curr_vif_packet++ = (VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32);
+
+			asm volatile("nop":::"memory");
+
+			vifSendPacket(vif_packets[context], DMA_CHANNEL_VIF1);
+
+			idxs_to_draw -= count;
+			idxs_drawn += count;
 		}
 
-		float fX = 2048.0f+gsGlobal->Width/2;
-		float fY = 2048.0f+gsGlobal->Height/2;
-		float fZ = ((float)get_max_z(gsGlobal));
-
-		float texCol = 128.0f;
-
-		u64* p_data = cube_packet;
-
-		*p_data++ = (*(u32*)(&fX) | (u64)*(u32*)(&fY) << 32);
-		*p_data++ = (*(u32*)(&fZ) | (u64)(count) << 32);
-
-		*p_data++ = GIF_TAG(1, 0, 0, 0, 0, 1);
-		*p_data++ = GIF_AD;
-
-		*p_data++ = GS_SETREG_TEX1(1, 0, 0, 0, 0, 0, 0);
-		*p_data++ = GS_TEX1_1;
-
-		int tw, th;
-		athena_set_tw_th(model_test->textures[0], &tw, &th);
-
-		*p_data++ = GS_SETREG_TEX0(
-    	        model_test->textures[0]->Vram/256, model_test->textures[0]->TBW, model_test->textures[0]->PSM,
-    	        tw, th, gsGlobal->PrimAlphaEnable, 0,
-    			0, 0, 0, 0, GS_CLUT_STOREMODE_NOLOAD);
-		*p_data++ = GS_TEX0_1;
-
-		*p_data++ = VU_GS_GIFTAG(count, 1, 1,
-    		VU_GS_PRIM(GS_PRIM_PRIM_TRIANGLE, 1, 1, gsGlobal->PrimFogEnable, 
-			0, gsGlobal->PrimAAEnable, 0, 0, 0),
-    	    0, 3);
-
-		*p_data++ = DRAW_STQ2_REGLIST;
-
-		*p_data++ = (*(u32*)(&texCol) | (u64)*(u32*)(&texCol) << 32);
-		*p_data++ = (*(u32*)(&texCol) | (u64)*(u32*)(&texCol) << 32);	
-
-		curr_vif_packet = vif_packets[context];
-	
-		memset(curr_vif_packet, 0, 16*22);
-
-		*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
-		*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32));
-		
-		// Add matrix at the beggining of VU mem (skip TOP)
-		curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 0, &local_screen, 4, 0);
-		curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 4, &local_light, 4, 0);
-	
-		u32 vif_added_bytes = 0; // zero because now we will use TOP register (double buffer)
-								 // we don't wan't to unpack at 8 + beggining of buffer, but at
-								 // the beggining of the buffer
-	
-		// Merge packets
-		curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, cube_packet, 6, 1);
-		vif_added_bytes += 6;
-	
-		// Add vertices
-		curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &model_test->positions[idxs_drawn], count, 1);
-		vif_added_bytes += count; // one VECTOR is size of qword
-	
-		// Add sts
-		curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &model_test->texcoords[idxs_drawn], count, 1);
-		vif_added_bytes += count;
-	
-		// Add colors
-		curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &model_test->colours[idxs_drawn], count, 1);
-		vif_added_bytes += count;
-
-		// Add normals
-		curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &model_test->normals[idxs_drawn], count, 1);
-		vif_added_bytes += count;
-
-		curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &lights, 12, 1);
-		vif_added_bytes += 12;
-
-		*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
-		*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, VIF_MSCAL, 0) << 32));
-	
-		*curr_vif_packet++ = DMA_TAG(0, 0, DMA_END, 0, 0 , 0);
-		*curr_vif_packet++ = (VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32);
-		
-		asm volatile("nop":::"memory");
-
-		vifSendPacket(vif_packets[context], DMA_CHANNEL_VIF1);
-
-		idxs_to_draw -= count;
-		idxs_drawn += count;
+		lastIdx = model_test->tex_ranges[i];
 	}
 
 	// Switch packet, so we can proceed during DMA transfer
