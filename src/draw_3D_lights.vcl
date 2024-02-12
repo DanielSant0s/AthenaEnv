@@ -20,7 +20,7 @@
 ;---------------------------------------------------------------
 
 .syntax new
-.name VU1Draw3DColors
+.name VU1Draw3DLightsColors
 .vu
 .init_vf_all
 .init_vi_all

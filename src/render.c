@@ -22,6 +22,12 @@ extern u32 VU1Draw3DColors_CodeEnd __attribute__((section(".vudata")));
 extern u32 VU1Draw3DColorsNoTex_CodeStart __attribute__((section(".vudata")));
 extern u32 VU1Draw3DColorsNoTex_CodeEnd __attribute__((section(".vudata")));
 
+extern u32 VU1Draw3DLightsColors_CodeStart __attribute__((section(".vudata")));
+extern u32 VU1Draw3DLightsColors_CodeEnd __attribute__((section(".vudata")));
+
+extern u32 VU1Draw3DLightsColorsNoTex_CodeStart __attribute__((section(".vudata")));
+extern u32 VU1Draw3DLightsColorsNoTex_CodeEnd __attribute__((section(".vudata")));
+
 MATRIX view_screen;
 
 VECTOR camera_position = { 0.00f, 0.00f, 0.00f, 1.00f };
@@ -75,13 +81,19 @@ void SetLightAttribute(int id, float x, float y, float z, int attr){
 void draw_vu1_notex(model* model_test, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z);
 void draw_vu1(model* model_test, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z);
 
+void draw_vu1_with_colors_notex(model* model_test, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z);
+void draw_vu1_with_colors(model* model_test, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z);
+
 void draw_vu1_with_lights_notex(model* model_test, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z);
 void draw_vu1_with_lights(model* model_test, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z);
 
 void athena_render_set_pipeline(model* m, int pl_id) {
 	switch (pl_id) {
-		case PL_NO_LIGHTS:
+		case PL_NO_LIGHTS_COLORS:
 			m->render = (m->tex_count? draw_vu1 : draw_vu1_notex);
+			break;
+		case PL_NO_LIGHTS:
+			m->render = (m->tex_count? draw_vu1_with_colors : draw_vu1_with_colors_notex);
 			break;
 		case PL_DEFAULT:
 			m->render = (m->tex_count? draw_vu1_with_lights : draw_vu1_with_lights_notex);
@@ -494,7 +506,7 @@ void draw_vu1_notex(model* model_test, float pos_x, float pos_y, float pos_z, fl
 }
 
 
-void draw_vu1_with_lights(model* model_test, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z)
+void draw_vu1_with_colors(model* model_test, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z)
 {
 	VECTOR object_position = { pos_x, pos_y, pos_z, 1.00f };
 	VECTOR object_rotation = { rot_x, rot_y, rot_z, 1.00f };
@@ -509,6 +521,243 @@ void draw_vu1_with_lights(model* model_test, float pos_x, float pos_y, float pos
 	if (last_mpg != &VU1Draw3DColors_CodeStart) {
 		vu1_upload_micro_program(&VU1Draw3DColors_CodeStart, &VU1Draw3DColors_CodeEnd);
 		last_mpg = &VU1Draw3DColors_CodeStart;
+	}
+
+	gsGlobal->PrimAAEnable = GS_SETTING_ON;
+	gsKit_set_test(gsGlobal, GS_ZTEST_ON);
+
+	create_local_world(local_world, object_position, object_rotation);
+	create_world_view(world_view, camera_position, camera_rotation);
+	create_local_screen(local_screen, local_world, world_view, view_screen);
+
+	int lastIdx = -1;
+	for(int i = 0; i < model_test->tex_count; i++) {
+		gsKit_TexManager_bind(gsGlobal, model_test->textures[i]);
+
+		VECTOR* positions = &model_test->positions[lastIdx+1];
+		VECTOR* texcoords = &model_test->texcoords[lastIdx+1];
+		VECTOR* colours = &model_test->colours[lastIdx+1];
+		GSTEXTURE* tex = model_test->textures[i];
+
+		int idxs_to_draw = (model_test->tex_ranges[i]-lastIdx);
+		int idxs_drawn = 0;
+
+		while (idxs_to_draw > 0) {
+			dmaKit_wait(DMA_CHANNEL_VIF1, 0);
+
+			int count = BATCH_SIZE;
+			if (idxs_to_draw < BATCH_SIZE)
+			{
+				count = idxs_to_draw;
+			}
+
+			float fX = 2048.0f+gsGlobal->Width/2;
+			float fY = 2048.0f+gsGlobal->Height/2;
+			float fZ = ((float)get_max_z(gsGlobal));
+
+			float texCol = 128.0f;
+
+			u64* p_data = cube_packet;
+
+			*p_data++ = (*(u32*)(&fX) | (u64)*(u32*)(&fY) << 32);
+			*p_data++ = (*(u32*)(&fZ) | (u64)(count) << 32);
+
+			*p_data++ = GIF_TAG(1, 0, 0, 0, 0, 1);
+			*p_data++ = GIF_AD;
+
+			*p_data++ = GS_SETREG_TEX1(1, 0, tex->Filter, tex->Filter, 0, 0, 0);
+			*p_data++ = GS_TEX1_1;
+
+			int tw, th;
+			athena_set_tw_th(tex, &tw, &th);
+
+			*p_data++ = GS_SETREG_TEX0(
+    		        tex->Vram/256, tex->TBW, tex->PSM,
+    		        tw, th, gsGlobal->PrimAlphaEnable, 0,
+    				0, 0, 0, 0, GS_CLUT_STOREMODE_NOLOAD);
+			*p_data++ = GS_TEX0_1;
+
+			*p_data++ = VU_GS_GIFTAG(count, 1, 1,
+    			VU_GS_PRIM(GS_PRIM_PRIM_TRIANGLE, 1, 1, gsGlobal->PrimFogEnable, 
+				0, gsGlobal->PrimAAEnable, 0, 0, 0),
+    		    0, 3);
+
+			*p_data++ = DRAW_STQ2_REGLIST;
+
+			*p_data++ = (*(u32*)(&texCol) | (u64)*(u32*)(&texCol) << 32);
+			*p_data++ = (*(u32*)(&texCol) | (u64)*(u32*)(&texCol) << 32);	
+
+			curr_vif_packet = vif_packets[context];
+
+			memset(curr_vif_packet, 0, 16*22);
+
+			*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
+			*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32));
+
+			// Add matrix at the beggining of VU mem (skip TOP)
+			curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 0, &local_screen, 8, 0);
+
+			u32 vif_added_bytes = 0; // zero because now we will use TOP register (double buffer)
+									 // we don't wan't to unpack at 8 + beggining of buffer, but at
+									 // the beggining of the buffer
+
+			// Merge packets
+			curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, cube_packet, 6, 1);
+			vif_added_bytes += 6;
+
+			// Add vertices
+			curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &positions[idxs_drawn], count, 1);
+			vif_added_bytes += count; // one VECTOR is size of qword
+
+			// Add sts
+			curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &texcoords[idxs_drawn], count, 1);
+			vif_added_bytes += count;
+
+			// Add colors
+			curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &colours[idxs_drawn], count, 1);
+			vif_added_bytes += count;
+
+			*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
+			*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, VIF_MSCAL, 0) << 32));
+
+			*curr_vif_packet++ = DMA_TAG(0, 0, DMA_END, 0, 0 , 0);
+			*curr_vif_packet++ = (VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32);
+
+			asm volatile("nop":::"memory");
+
+			vifSendPacket(vif_packets[context], DMA_CHANNEL_VIF1);
+
+			idxs_to_draw -= count;
+			idxs_drawn += count;
+		}
+
+		lastIdx = model_test->tex_ranges[i];
+	}
+
+	// Switch packet, so we can proceed during DMA transfer
+	context = !context;
+}
+
+
+void draw_vu1_with_colors_notex(model* model_test, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z)
+{
+	VECTOR object_position = { pos_x, pos_y, pos_z, 1.00f };
+	VECTOR object_rotation = { rot_x, rot_y, rot_z, 1.00f };
+
+	MATRIX local_world;
+	MATRIX local_light;
+	MATRIX world_view;
+	MATRIX local_screen;
+
+	GSGLOBAL *gsGlobal = getGSGLOBAL();
+
+	if (last_mpg != &VU1Draw3DColorsNoTex_CodeStart) {
+		vu1_upload_micro_program(&VU1Draw3DColorsNoTex_CodeStart, &VU1Draw3DColorsNoTex_CodeEnd);
+		last_mpg = &VU1Draw3DColorsNoTex_CodeStart;
+	}
+
+	gsGlobal->PrimAAEnable = GS_SETTING_ON;
+	gsKit_set_test(gsGlobal, GS_ZTEST_ON);
+
+	create_local_world(local_world, object_position, object_rotation);
+	create_world_view(world_view, camera_position, camera_rotation);
+	create_local_screen(local_screen, local_world, world_view, view_screen);
+
+	int idxs_to_draw = model_test->indexCount;
+	int idxs_drawn = 0;
+
+	while (idxs_to_draw > 0) {
+		dmaKit_wait(DMA_CHANNEL_VIF1, 0);
+
+		int count = BATCH_SIZE;
+		if (idxs_to_draw < BATCH_SIZE)
+		{
+			count = idxs_to_draw;
+		}
+
+		float fX = 2048.0f+gsGlobal->Width/2;
+		float fY = 2048.0f+gsGlobal->Height/2;
+		float fZ = ((float)get_max_z(gsGlobal));
+
+		float texCol = 128.0f;
+
+		u64* p_data = cube_packet;
+
+		*p_data++ = (*(u32*)(&fX) | (u64)*(u32*)(&fY) << 32);
+		*p_data++ = (*(u32*)(&fZ) | (u64)(count) << 32);
+
+		*p_data++ = GIF_TAG(1, 0, 0, 0, 0, 1);
+		*p_data++ = GIF_AD;
+
+		*p_data++ = VU_GS_GIFTAG(count, 1, 1,
+    		VU_GS_PRIM(GS_PRIM_PRIM_TRIANGLE, 1, 0, gsGlobal->PrimFogEnable, 
+			0, gsGlobal->PrimAAEnable, 0, 0, 0),
+    	    0, 2);
+
+		*p_data++ = DRAW_NOTEX_REGLIST;
+
+		*p_data++ = (*(u32*)(&texCol) | (u64)*(u32*)(&texCol) << 32);
+		*p_data++ = (*(u32*)(&texCol) | (u64)*(u32*)(&texCol) << 32);	
+
+		curr_vif_packet = vif_packets[context];
+	
+		memset(curr_vif_packet, 0, 16*22);
+
+		*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
+		*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32));
+		
+		// Add matrix at the beggining of VU mem (skip TOP)
+		curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 0, &local_screen, 8, 0);
+	
+		u32 vif_added_bytes = 0; // zero because now we will use TOP register (double buffer)
+								 // we don't wan't to unpack at 8 + beggining of buffer, but at
+								 // the beggining of the buffer
+	
+		// Merge packets
+		curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, cube_packet, 4, 1);
+		vif_added_bytes += 4;
+	
+		// Add vertices
+		curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &model_test->positions[idxs_drawn], count, 1);
+		vif_added_bytes += count; // one VECTOR is size of qword
+	
+		// Add colors
+		curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &model_test->colours[idxs_drawn], count, 1);
+		vif_added_bytes += count;
+
+		*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
+		*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, VIF_MSCAL, 0) << 32));
+	
+		*curr_vif_packet++ = DMA_TAG(0, 0, DMA_END, 0, 0 , 0);
+		*curr_vif_packet++ = (VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32);
+		
+		asm volatile("nop":::"memory");
+
+		vifSendPacket(vif_packets[context], DMA_CHANNEL_VIF1);
+
+		idxs_to_draw -= count;
+		idxs_drawn += count;
+	}
+
+	// Switch packet, so we can proceed during DMA transfer
+	context = !context;
+}
+
+void draw_vu1_with_lights(model* model_test, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z)
+{
+	VECTOR object_position = { pos_x, pos_y, pos_z, 1.00f };
+	VECTOR object_rotation = { rot_x, rot_y, rot_z, 1.00f };
+
+	MATRIX local_world;
+	MATRIX local_light;
+	MATRIX world_view;
+	MATRIX local_screen;
+
+	GSGLOBAL *gsGlobal = getGSGLOBAL();
+
+	if (last_mpg != &VU1Draw3DLightsColors_CodeStart) {
+		vu1_upload_micro_program(&VU1Draw3DLightsColors_CodeStart, &VU1Draw3DLightsColors_CodeEnd);
+		last_mpg = &VU1Draw3DLightsColors_CodeStart;
 	}
 
 	gsGlobal->PrimAAEnable = GS_SETTING_ON;
@@ -649,9 +898,9 @@ void draw_vu1_with_lights_notex(model* model_test, float pos_x, float pos_y, flo
 
 	GSGLOBAL *gsGlobal = getGSGLOBAL();
 
-	if (last_mpg != &VU1Draw3DColorsNoTex_CodeStart) {
-		vu1_upload_micro_program(&VU1Draw3DColorsNoTex_CodeStart, &VU1Draw3DColorsNoTex_CodeEnd);
-		last_mpg = &VU1Draw3DColorsNoTex_CodeStart;
+	if (last_mpg != &VU1Draw3DLightsColorsNoTex_CodeStart) {
+		vu1_upload_micro_program(&VU1Draw3DLightsColorsNoTex_CodeStart, &VU1Draw3DLightsColorsNoTex_CodeEnd);
+		last_mpg = &VU1Draw3DLightsColorsNoTex_CodeStart;
 	}
 
 	gsGlobal->PrimAAEnable = GS_SETTING_ON;

@@ -18,8 +18,9 @@ typedef enum {
 } eLightAttributes;
 
 typedef enum {
+	PL_NO_LIGHTS_COLORS,
 	PL_NO_LIGHTS,
-	PL_DEFAULT
+	PL_DEFAULT,
 } eRenderPipelines;
 
 void athena_render_set_pipeline(model* m, int pl_id);

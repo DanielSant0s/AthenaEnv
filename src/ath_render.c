@@ -121,6 +121,7 @@ static const JSCFunctionListEntry render_funcs[] = {
 	JS_CFUNC_DEF( "drawBbox",    8,         	athena_drawbbox),
     JS_CFUNC_DEF( "freeOBJ",     1,        		athena_freeobj ),
 
+	JS_PROP_INT32_DEF("PL_NO_LIGHTS_COLORS", PL_NO_LIGHTS_COLORS, JS_PROP_CONFIGURABLE ),
 	JS_PROP_INT32_DEF("PL_NO_LIGHTS", PL_NO_LIGHTS, JS_PROP_CONFIGURABLE ),
 	JS_PROP_INT32_DEF("PL_DEFAULT", PL_DEFAULT, JS_PROP_CONFIGURABLE ),
 };

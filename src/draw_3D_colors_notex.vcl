@@ -20,7 +20,7 @@
 ;---------------------------------------------------------------
 
 .syntax new
-.name VU1Draw3DLightsColorsNoTex
+.name VU1Draw3DColorsNoTex
 .vu
 .init_vf_all
 .init_vi_all
@@ -33,7 +33,6 @@
     ;//////////// --- Load data 1 --- /////////////
     ; Updated once per mesh
     MatrixLoad	ObjectToScreen, 0, vi00 ; load view-projection matrix
-    MatrixLoad	LocalLight,     4, vi00     ; load local light matrix
     ;/////////////////////////////////////////////
 
 	fcset   0x000000	; VCL won't let us use CLIP without first zeroing
@@ -53,13 +52,8 @@
     iaddiu  vertexData,     iBase,      4           ; pointer to vertex data
     ilw.w   vertCount,      0(iBase)                ; load vert count from scale vector
     iadd    colorData,      vertexData, vertCount   ; pointer to colors
-    iadd    normalData,      colorData, vertCount   ; pointer to colors
-    iadd    lightsData,     normalData,  vertCount
-    MatrixLoad	LightDirection,   0,   lightsData   ; load light directions
-    MatrixLoad	LightAmbient,     4,   lightsData   ; load light ambients
-    MatrixLoad	LightDiffuse,     8,   lightsData   ; load light diffuses
-    iaddiu    kickAddress,    lightsData,  12       ; pointer for XGKICK
-    iaddiu    destAddress,    lightsData,  12       ; helper pointer for data inserting
+    iadd    kickAddress,    colorData,  vertCount       ; pointer for XGKICK
+    iadd    destAddress,    colorData,  vertCount       ; helper pointer for data inserting
     ;////////////////////////////////////////////
 
     ;/////////// --- Store tags --- /////////////
@@ -74,8 +68,7 @@
         lq vertex, 0(vertexData)    ; load xyz
                                     ; float : X, Y, Z
                                     ; any32 : _ = 0
-        lq.xyzw color,  0(colorData) ; load color
-        lq.xyzw normal,  0(normalData) ; load normal                    
+        lq.xyzw color,  0(colorData) ; load color                  
         ;////////////////////////////////////////////    
 
 
@@ -103,56 +96,7 @@
         ftoi4.xyz   vertex, vertex                  ; convert vertex to 12:4 fixed point format
         ;////////////////////////////////////////////
 
-        ;//////////////// - NORMALS - /////////////////
-        MatrixMultiplyVertex	normal, LocalLight, normal ; transform each normal by the matrix
-        div         q,      vf00[w],    normal[w]   ; perspective divide (1/vert[w]):
-        mul.xyz     normal, normal,     q
-        
-        add light, vf00, vf00
-        add light, light, LightAmbient[0]
-        add light, light, LightAmbient[1]
-        add light, light, LightAmbient[2]
-        add light, light, LightAmbient[3]
-
-        add intensity, vf00, vf00
-
-        loi  -1.0              
-        addi minusOne, vf00, i
-
-        VectorDotProduct intensity, normal, LightDirection[0]
-        
-        mul intensity, intensity, minusOne
-        maxx.xyzw  intensity, intensity, vf00
-
-        mul diffuse, LightDiffuse[0], intensity[x]
-        add light, light, diffuse
-
-        VectorDotProduct intensity, normal, LightDirection[1]
-        
-        mul intensity, intensity, minusOne
-        maxx.xyzw  intensity, intensity, vf00
-
-        mul diffuse, LightDiffuse[1], intensity[x]
-        add light, light, diffuse
-
-        VectorDotProduct intensity, normal, LightDirection[2]
-        
-        mul intensity, intensity, minusOne
-        maxx.xyzw  intensity, intensity, vf00
-
-        mul diffuse, LightDiffuse[2], intensity[x]
-        add light, light, diffuse
-
-        VectorDotProduct intensity, normal, LightDirection[3]
-        
-        mul intensity, intensity, minusOne
-        maxx.xyzw  intensity, intensity, vf00
-
-        mul diffuse, LightDiffuse[3], intensity[x]
-        add light, light, diffuse
-
-        mul.xyz    color, color,  light            ; color = color * light
-        VectorClamp color, color 0.0 1.99
+        ;//////////////// - COLORS - /////////////////
         mul color, color, rgba                     ; normalize RGBA
         ColorFPtoGsRGBAQ intColor, color           ; convert to int
         ;///////////////////////////////////////////
@@ -165,7 +109,6 @@
 
         iaddiu          vertexData,     vertexData,     1                         
         iaddiu          colorData,      colorData,      1  
-        iaddiu          normalData,     normalData,     1
         iaddiu          destAddress,    destAddress,    2
 
         iaddi   vertexCounter,  vertexCounter,  -1	; decrement the loop counter 
