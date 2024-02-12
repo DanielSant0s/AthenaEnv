@@ -18,27 +18,15 @@ static JSValue athena_initrender(JSContext *ctx, JSValue this_val, int argc, JSV
 	return JS_UNDEFINED;
 }
 
-static JSValue athena_setpipeline(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-	if (argc != 2) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
-
-	int pipeline;
-	model* m;
-
-	JS_ToUint32(ctx, &m, argv[0]);
-	JS_ToUint32(ctx, &pipeline, argv[1]);
-	
-	athena_render_set_pipeline(m, pipeline);
-
-	return JS_UNDEFINED;
-}
-
 static const JSCFunctionListEntry render_funcs[] = {
     JS_CFUNC_DEF( "setView",     2,           athena_initrender),
-	JS_CFUNC_DEF( "setPipeline", 2,         athena_setpipeline ),
 
 	JS_PROP_INT32_DEF("PL_NO_LIGHTS_COLORS", PL_NO_LIGHTS_COLORS, JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("PL_NO_LIGHTS_COLORS_TEX", PL_NO_LIGHTS_COLORS_TEX, JS_PROP_CONFIGURABLE ),
 	JS_PROP_INT32_DEF("PL_NO_LIGHTS", PL_NO_LIGHTS, JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("PL_NO_LIGHTS_TEX", PL_NO_LIGHTS_TEX, JS_PROP_CONFIGURABLE ),
 	JS_PROP_INT32_DEF("PL_DEFAULT", PL_DEFAULT, JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("PL_DEFAULT_NO_TEX", PL_DEFAULT_NO_TEX, JS_PROP_CONFIGURABLE ),
 };
 
 static JSValue athena_setlight(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
@@ -166,10 +154,27 @@ static JSValue athena_drawbbox(JSContext *ctx, JSValue this_val, int argc, JSVal
 	return JS_UNDEFINED;
 }
 
+static JSValue athena_setpipeline(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	int pipeline;
+	model* m = JS_GetOpaque2(ctx, this_val, js_object_class_id);
+
+	JS_ToUint32(ctx, &pipeline, argv[0]);
+
+	return JS_NewUint32(ctx, athena_render_set_pipeline(m, pipeline));
+}
+
+static JSValue athena_getpipeline(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	int pipeline;
+	model* m = JS_GetOpaque2(ctx, this_val, js_object_class_id);
+
+	return JS_NewUint32(ctx, m->pipeline);
+}
 
 static const JSCFunctionListEntry js_object_proto_funcs[] = {
     JS_CFUNC_DEF("draw", 6, athena_drawobject),
-	JS_CFUNC_DEF("drawCorners", 7, athena_drawbbox),
+	JS_CFUNC_DEF("drawBounds", 7, athena_drawbbox),
+	JS_CFUNC_DEF("setPipeline", 1, athena_setpipeline ),
+	JS_CFUNC_DEF("getPipeline", 0, athena_getpipeline ),
 };
 
 static JSValue athena_object_ctor(JSContext *ctx, JSValueConst new_target, int argc, JSValueConst *argv) {

@@ -87,18 +87,49 @@ void draw_vu1_with_colors(model* model_test, float pos_x, float pos_y, float pos
 void draw_vu1_with_lights_notex(model* model_test, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z);
 void draw_vu1_with_lights(model* model_test, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z);
 
-void athena_render_set_pipeline(model* m, int pl_id) {
+int athena_render_set_pipeline(model* m, int pl_id) {
 	switch (pl_id) {
 		case PL_NO_LIGHTS_COLORS:
-			m->render = (m->tex_count? draw_vu1 : draw_vu1_notex);
+			if (m->tex_count) {
+				m->render = draw_vu1;
+				m->pipeline = PL_NO_LIGHTS_COLORS;
+			} else {
+				m->render = draw_vu1_notex;
+				m->pipeline = PL_NO_LIGHTS_COLORS_TEX;
+			}
+			break;
+		case PL_NO_LIGHTS_COLORS_TEX:
+			m->render = draw_vu1_notex;
+			m->pipeline = PL_NO_LIGHTS_COLORS_TEX;
 			break;
 		case PL_NO_LIGHTS:
-			m->render = (m->tex_count? draw_vu1_with_colors : draw_vu1_with_colors_notex);
+			if (m->tex_count) {
+				m->render = draw_vu1_with_colors;
+				m->pipeline = PL_NO_LIGHTS;
+			} else {
+				m->render = draw_vu1_with_colors_notex;
+				m->pipeline = PL_NO_LIGHTS_TEX;
+			}
+			break;
+		case PL_NO_LIGHTS_TEX:
+			m->render = draw_vu1_with_colors_notex;
+			m->pipeline = PL_NO_LIGHTS_TEX;
 			break;
 		case PL_DEFAULT:
-			m->render = (m->tex_count? draw_vu1_with_lights : draw_vu1_with_lights_notex);
+			if (m->tex_count) {
+				m->render = draw_vu1_with_lights;
+				m->pipeline = PL_DEFAULT;
+			} else {
+				m->render = draw_vu1_with_lights_notex;
+				m->pipeline = PL_DEFAULT_NO_TEX;
+			}
+			break;
+		case PL_DEFAULT_NO_TEX:
+			m->render = draw_vu1_with_lights_notex;
+			m->pipeline = PL_DEFAULT_NO_TEX;
 			break;
 	}
+	return m->pipeline;
 }
 
 void loadOBJ(model* res_m, const char* path, GSTEXTURE* text) {
@@ -215,10 +246,13 @@ void loadOBJ(model* res_m, const char* path, GSTEXTURE* text) {
 		res_m->tex_count = 1;
 		res_m->tex_ranges[0] = res_m->indexCount;
 		res_m->render = draw_vu1_with_lights;
+		res_m->pipeline = PL_DEFAULT;
 	} else if (res_m->tex_count > 0) {
 		res_m->render = draw_vu1_with_lights;
+		res_m->pipeline = PL_DEFAULT;
 	} else {
 		res_m->render = draw_vu1_with_lights_notex;
+		res_m->pipeline = PL_DEFAULT_NO_TEX;
 	}
 }
 
