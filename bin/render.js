@@ -65,8 +65,9 @@ const gray = Color.new(40, 40, 40, 128);
 
 let bbox = false;
 
-while(true){
-    Screen.clear(gray);
+Screen.clearColor(gray);
+
+const main_loop = () => {
     pad.update();
 
     lx = ((pad.lx > 25 || pad.lx < -25)? pad.lx : 0) / 1024.0f;
@@ -104,6 +105,6 @@ while(true){
     }
 
     fntcpy.print(10, 10, Screen.getFPS(360) + " FPS | " + free_mem + " | Free VRAM: " + free_vram + "KB");
-
-    Screen.flip();
 }
+
+Screen.display(main_loop);
