@@ -5,7 +5,7 @@ let fntcpy = new Font();
 fntcpy.scale = (0.4f);
 
 Screen.setFrameCounter(true);
-Screen.setVSync(false);
+//Screen.setVSync(false);
 
 const canvas = Screen.getMode();
 

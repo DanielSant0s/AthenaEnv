@@ -50,13 +50,6 @@ typedef struct ath_model {
 
     void (*render)(struct ath_model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z);
 
-    VECTOR *tmp_normals;
-    VECTOR *tmp_lights;
-    color_f_t *tmp_colours;
-    vertex_f_t *tmp_xyz;
-
-    void* vertices;
-
     GSTEXTURE* textures[10];
 	int tex_ranges[10];
 	int tex_count;
