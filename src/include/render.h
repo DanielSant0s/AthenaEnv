@@ -47,5 +47,7 @@ float vu0_innerproduct(VECTOR v0, VECTOR v1);
 
 void athena_set_tw_th(const GSTEXTURE *Texture, int *tw, int *th);
 
+void athena_line_goraud_3d(GSGLOBAL *gsGlobal, float x1, float y1, int iz1, float x2, float y2, int iz2, u64 color1, u64 color2);
+
 
 #endif

@@ -159,12 +159,11 @@ unsigned int get_max_z(GSGLOBAL* gsGlobal)
 
 int athena_process_xyz_rgbaq(GSPRIMPOINT *output, GSGLOBAL* gsGlobal, int count, color_f_t *colours, vertex_f_t *vertices)
 {
-	unsigned int max_z;
 	float q = 1.00f;
 
 	int center_x = gsGlobal->Width/2;
 	int center_y = gsGlobal->Height/2;
-	max_z = get_max_z(gsGlobal);
+	unsigned int max_z = get_max_z(gsGlobal);
 
 	for (int i = 0; i < count; i++)
 	{
@@ -195,12 +194,11 @@ int athena_process_xyz_rgbaq(GSPRIMPOINT *output, GSGLOBAL* gsGlobal, int count,
 
 int athena_process_xyz_rgbaq_st(GSPRIMSTQPOINT *output, GSGLOBAL* gsGlobal, int count, color_f_t *colours, vertex_f_t *vertices, texel_f_t *coords)
 {
-	unsigned int max_z;
 	float q = 1.00f;
 
-	int center_x = gsGlobal->Width/2;
-	int center_y = gsGlobal->Height/2;
-	max_z = get_max_z(gsGlobal);
+	int center_x = 2048.0f+gsGlobal->Width/2;
+	int center_y = 2048.0f+gsGlobal->Height/2;
+	unsigned int max_z = get_max_z(gsGlobal);
 
 	for (int i = 0; i < count; i++)
 	{
@@ -221,8 +219,8 @@ int athena_process_xyz_rgbaq_st(GSPRIMSTQPOINT *output, GSGLOBAL* gsGlobal, int 
 		output[i].stq.st.t = coords[i].t * q;
 		output[i].stq.tag = GS_ST;
 
-		output[i].xyz2.xyz.x = gsKit_float_to_int_x(gsGlobal, (vertices[i].x + 1.0f) * center_x);
-		output[i].xyz2.xyz.y = gsKit_float_to_int_y(gsGlobal, (vertices[i].y + 1.0f) * center_y);
+		output[i].xyz2.xyz.x = (int)(((vertices[i].x + 1.0f) * center_x) * 16.0f) ;
+		output[i].xyz2.xyz.y = (int)(((vertices[i].y + 1.0f) * center_y) * 16.0f) ;
 		output[i].xyz2.xyz.z = (unsigned int)((vertices[i].z + 1.0f) * max_z);
 		output[i].xyz2.tag = GS_XYZ2;
 
@@ -231,6 +229,42 @@ int athena_process_xyz_rgbaq_st(GSPRIMSTQPOINT *output, GSGLOBAL* gsGlobal, int 
 	// End function.
 	return 0;
 
+}
+
+void athena_line_goraud_3d(GSGLOBAL *gsGlobal, float x1, float y1, int iz1, float x2, float y2, int iz2, u64 color1, u64 color2)
+{
+	u64* p_store;
+	u64* p_data;
+	int qsize = 3;
+	int bsize = 48;
+
+	int center_x = 2048.0f+gsGlobal->Width/2;
+	int center_y = 2048.0f+gsGlobal->Height/2;
+	unsigned int max_z = get_max_z(gsGlobal);
+
+	int ix1 = (int)(((x1 + 1.0f) * center_x) * 16.0f);
+	int iy1 = (int)(((y1 + 1.0f) * center_y) * 16.0f);
+
+	int ix2 = (int)(((x2 + 1.0f) * center_x) * 16.0f);
+	int iy2 = (int)(((y2 + 1.0f) * center_y) * 16.0f);
+
+	p_store = p_data = gsKit_heap_alloc(gsGlobal, qsize, bsize, GSKIT_GIF_PRIM_LINE);
+
+	if(p_store == gsGlobal->CurQueue->last_tag)
+	{
+		*p_data++ = GIF_TAG_LINE_GORAUD(0);
+		*p_data++ = GIF_TAG_LINE_GORAUD_REGS;
+	}
+
+	*p_data++ = GS_SETREG_PRIM( GS_PRIM_PRIM_LINE, 1, 0, gsGlobal->PrimFogEnable,
+				gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable,
+				0, gsGlobal->PrimContext, 0) ;
+
+	*p_data++ = color1;
+	*p_data++ = GS_SETREG_XYZ2( ix1, iy1, (unsigned int)((iz1 + 1.0f) * max_z) );
+
+	*p_data++ = color2;
+	*p_data++ = GS_SETREG_XYZ2( ix2, iy2, (unsigned int)((iz2 + 1.0f) * max_z) );
 }
 
 static inline u32 lzw(u32 val)
