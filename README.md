@@ -416,17 +416,20 @@ Properties:
 * Camera.rotation(x, y, z)
 
 **Lights**  
-* Lights.create(count)
-* Lights.set(light, dir_x, dir_y, dir_z, r, g, b, type)  
-  • Avaiable light types: AMBIENT, DIRECTIONAL  
+You have 4 lights to use in 3D scenes, use set to configure them.
 
+* Lights.set(id, attribute, x, y, z)  
+  • Avaiable light attributes: Lights.DIRECTION, Lights.AMBIENT, Lights.DIFFUSE    
+  
 ### Screen module
-* Screen.clear(*color*) - Clears screen with the specified color. If you don't specify any argument, it will use black as default.
-* Screen.flip() - Run the render queue and jump to the next frame, i.e.: Updates your screen.
-* var freevram = Screen.getFreeVRAM() - Returns the total of free Video Memory.
-* Screen.setVSync(bool) - Toggles VSync, which makes the framerate stable in 15, 30, 60(depending on the mode) on screen.
-* Screen.setFrameCounter(bool) - Toggles frame counting and FPS collecting.
-* Screen.waitVblankStart() - Waits for a vertical sync.
+* Screen.display(func) - Makes the specified function behave like a main loop, when you don't need to clear or flip the screen because it's done automatically.  
+* Screen.clearColor(*color*) - Sets a constant clear color for Screen.display function.
+* Screen.clear(*color*) - Clears screen with the specified color. If you don't specify any argument, it will use black as default.  
+* Screen.flip() - Run the render queue and jump to the next frame, i.e.: Updates your screen.  
+* var freevram = Screen.getFreeVRAM() - Returns the total of free Video Memory.  
+* Screen.setVSync(bool) - Toggles VSync, which makes the framerate stable in 15, 30, 60(depending on the mode) on screen.  
+* Screen.setFrameCounter(bool) - Toggles frame counting and FPS collecting.  
+* Screen.waitVblankStart() - Waits for a vertical sync.  
 * var fps = Screen.getFPS(frame_interval) - Get Frames per second measure within the specified frame_interval in msec. Dependant on Screen.setFrameCounter(true) to work.
 * const canvas = Screen.getMode() - Get actual video mode parameters. Returns an object.
   • canvas.mode - Available modes: NTSC, DTV_480p, PAL, DTV_576p, DTV_720p, DTV_1080i.  
