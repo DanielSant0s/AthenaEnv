@@ -1,6 +1,15 @@
 // {"name": "Render demo", "author": "Daniel Santos", "version": "04072023", "icon": "render_icon.png", "file": "render.js"}
 
 
+const pipelines = [
+    "NO_LIGHTS_COLORS",
+    "NO_LIGHTS_COLORS_TEX",
+    "NO_LIGHTS",
+    "NO_LIGHTS_TEX",
+    "DEFAULT",
+    "DEFAULT_NO_TEX"
+];
+
 let fntcpy = new Font();
 fntcpy.scale = (0.4f);
 
@@ -16,13 +25,14 @@ Screen.setMode(canvas);
 
 Render.setView(4/3);
 
+// Change your root folder to "render" so we can work with file path magic :p
 os.chdir("render");
 
 const vertList = [
-    Render.vertex(0.5f, 0.5f, 0.5f,         // Position
-                  1.0f, 1.0f, 1.0f,         // Normal
-                  0.0f, 0.0f,               // Texture coordinate
-                  1.0f, 0.0f, 0.0f, 1.0f),  // Color
+    Render.vertex(0.5f, 0.5f, 0.5f,         // Position - X Y Z
+                  1.0f, 1.0f, 1.0f,         // Normal - N1 N2 N3
+                  0.0f, 0.0f,               // Texture coordinate - S T
+                  1.0f, 0.0f, 0.0f, 1.0f),  // Color - R G B A
 
     Render.vertex(0.5f, 0.8f, 0.5f, 
                   1.0f, 1.0f, 1.0f, 
@@ -116,6 +126,14 @@ while(true){
         modeltodisplay += 1;
     }
 
+    if(pad.justPressed(Pads.UP) && model[modeltodisplay].getPipeline() > 0){
+        model[modeltodisplay].setPipeline(model[modeltodisplay].getPipeline()-1);
+    }
+
+    if(pad.justPressed(Pads.DOWN) && model[modeltodisplay].getPipeline() < 5){
+        model[modeltodisplay].setPipeline(model[modeltodisplay].getPipeline()+1);
+    }
+    
     if(pad.justPressed(Pads.TRIANGLE)) {
         System.loadELF(System.boot_path + "/athena.elf");
     }
@@ -130,7 +148,7 @@ while(true){
         model[modeltodisplay].drawBounds(0.0f, 0.0f, 30.0f, savedly, savedlx, 0.0f, Color.new(128, 0, 255));
     }
 
-    fntcpy.print(10, 10, Screen.getFPS(360) + " FPS | " + free_mem + " | Free VRAM: " + free_vram + "KB");
+    fntcpy.print(10, 10, Screen.getFPS(360) + " FPS | " + free_mem + " | Free VRAM: " + free_vram + "KB" + " | Pipeline: " + pipelines[model[modeltodisplay].getPipeline()]);
 
     Screen.flip();
 }
