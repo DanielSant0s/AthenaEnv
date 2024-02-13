@@ -47,7 +47,7 @@ AthenaEnv is a project that seeks to facilitate and at the same time brings a co
 * Image: Image drawing.
 * ImageList: Load and manage multiple images while your code is running, multithreaded loading!
 * Draw: Shape drawing, triangles, circles etc.
-* Render: Basic 3D support.
+* Render: Basic 3D support powered by a VU1 renderer.
 * Screen: The entire screen of your project (2D and 3D), being able to change the resolution, enable or disable parameters.
 * Font: Functions that control the texts that appear on the screen, loading texts, drawing and unloading from memory.
 * Pads: Above being able to draw and everything else, A human interface is important. Supports rumble and pressure sensitivity.
@@ -502,13 +502,13 @@ Methods:
   • setEventHandler() - Sets the pad object to listen events defined by Pads.newEvent, so it doesn't need to be updated.  
   
 * let event_id = Pads.newEvent(button, kind, function) - Creates an asynchronous pad event, returns the event id. Remember to set the pad object event handler first!
-* Pad event kinds:
+* Pad event kinds:  
   • Pads.PRESSED  
   • Pads.JUST_PRESSED  
   • Pads.NON_PRESSED  
 * Pads.deleteEvent(event_id) - Deletes the event created by Pads.newEvent.
 * let type = Pads.getType(*port*) - Gets gamepad type in the specified port.
-* Pad Types:
+* Pad Types:  
   • Pads.DIGITAL  
   • Pads.ANALOG  
   • Pads.DUALSHOCK  
