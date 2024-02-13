@@ -18,19 +18,49 @@ Render.setView(4/3);
 
 os.chdir("render");
 
+const vertList = [
+    Render.vertex(0.5f, 0.5f, 0.5f,         // Position
+                  1.0f, 1.0f, 1.0f,         // Normal
+                  0.0f, 0.0f,               // Texture coordinate
+                  1.0f, 0.0f, 0.0f, 1.0f),  // Color
 
-let dragonmesh = new WavefrontObj("dragon.obj", "dragon.png");
+    Render.vertex(0.5f, 0.8f, 0.5f, 
+                  1.0f, 1.0f, 1.0f, 
+                  1.0f, 0.0f, 
+                  0.0f, 1.0f, 0.0f, 1.0f),
 
-let monkeymesh = new WavefrontObj("monkey.obj", "monkey.png");
+    Render.vertex(0.8f, 0.8f, 0.5f, 
+                  1.0f, 1.0f, 1.0f, 
+                  1.0f, 1.0f, 
+                  0.0f, 0.0f, 1.0f, 1.0f),
+];
+
+let listtest = new RenderObject(vertList, "tex2.png");
+
+let dragonmesh = new RenderObject("dragon.obj", "dragon.png");
+
+let monkeymesh = new RenderObject("monkey.obj", "monkey.png");
 monkeymesh.setPipeline(Render.PL_NO_LIGHTS_COLORS);
 
-let teapot = new WavefrontObj("Car.obj");
+let teapot = new RenderObject("Car.obj");
 
-let mill = new WavefrontObj("cubes.obj");
+let car_vertices = teapot.vertices;
 
-let boombox = new WavefrontObj("Boombox.obj");
+car_vertices.forEach(vertex => {
+    if (vertex.r > 0.45f && vertex.g < 0.2f && vertex.b < 0.2f) {
+        vertex.r = 0.4f;
+        vertex.g = 0.0f;
+        vertex.b = 0.8f;
+    }
+});
 
-let model = [dragonmesh, monkeymesh, teapot, mill, boombox];
+teapot.vertices = car_vertices;
+
+let mill = new RenderObject("cubes.obj");
+
+let boombox = new RenderObject("Boombox.obj");
+
+let model = [dragonmesh, monkeymesh, teapot, mill, boombox, listtest];
 
 Camera.position(0.0f, 0.0f, 50.0f);
 Camera.rotation(0.0f, 0.0f,  0.0f);
