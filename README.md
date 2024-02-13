@@ -499,14 +499,21 @@ Methods:
   • update() - Updates all pads pressed and stick positions data.  
   • pressed(button) - Checks if a button is being pressed (continuously).  
   • justPressed(button) - Checks if a button was pressed only once.  
-
-* var type = Pads.getType(*port*) - Gets gamepad type in the specified port.
+  • setEventHandler() - Sets the pad object to listen events defined by Pads.newEvent, so it doesn't need to be updated.  
+  
+* let event_id = Pads.newEvent(button, kind, function) - Creates an asynchronous pad event, returns the event id. Remember to set the pad object event handler first!
+* Pad event kinds:
+  • Pads.PRESSED  
+  • Pads.JUST_PRESSED  
+  • Pads.NON_PRESSED  
+* Pads.deleteEvent(event_id) - Deletes the event created by Pads.newEvent.
+* let type = Pads.getType(*port*) - Gets gamepad type in the specified port.
 * Pad Types:
   • Pads.DIGITAL  
   • Pads.ANALOG  
   • Pads.DUALSHOCK  
 
-* var press = Pads.getPressure(*port*, button) - Get button pressure level.
+* let press = Pads.getPressure(*port*, button) - Get button pressure level.
 * Pads.rumble(port, big, small) - Rumble your gamepad.
   
 ### Keyboard module
