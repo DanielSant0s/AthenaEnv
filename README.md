@@ -375,11 +375,42 @@ canvas.psmz = Z16S;
 Screen.setMode(canvas);
 ```
 
-* Render.init(aspect) - Initializes rendering routines. *default aspect is 4/3, widescreen is 16/9
-* var model = Render.loadOBJ(path, *texture*) - Load simple obj 3d data files. MTL is supported (including per-vertex colors and multi-texturing). If you don't have a MTL file but you want to bind a texture on it, just load it using an Image class and pass as a second argument if you want to use it.
-* Render.drawOBJ(model, pos_x, pos_y, pos_z, rot_x, rot_y, rot_z) - Draws the loaded OBJ on the screen.
-* Render.freeOBJ(model)  - Frees the model from memory.
+* Render.setView(aspect, *fov*) - Initializes rendering routines. *default aspect is 4/3, widescreen is 16/9. FOV isn't mandatory, default: 0.2
+* Render.vertex(x, y, z, n1, n2, n3, s, t, r, g, b, a) - Returns a vertex to build a 3D mesh. It should be used to create vertex arrays.  
+  • x, y, z - Vertex position on 3D world.  
+  • n1, n2, n3 - Vertex normal.  
+  • s, t - Vertex texture coordinates.  
+  • r, g, b, a - Vertex color.  
+  
+### RenderObject module
 
+Construction:
+
+```js
+var model = new RenderObject(mesh, *texture_path*)
+/* Load simple WaveFront OBJ files or vertex arrays.
+MTL is supported on OBJs (including per-vertex colors and multi-texturing).
+If you don't have a MTL file but you want to bind a texture on it,
+just pass the image path as a second argument if you want to use it. */
+```
+Methods:  
+
+* draw(pos_x, pos_y, pos_z, rot_x, rot_y, rot_z) - Draws the object on screen.
+* drawBounds(pos_x, pos_y, pos_z, rot_x, rot_y, rot_z) - Draws object bounding box.
+* setTexture(id, path, *range*) - Changes or sets the nth texture on models.
+* getPipeline() - Returns the current rendering pipeline loaded for the model.
+* setPipeline(pipeline) - Sets the current pipeline for the model. Available pipelines:  
+  • Render.PL_NO_LIGHTS_COLORS  - Colors and lights disabled.  
+  • Render.PL_NO_LIGHTS_COLORS_TEX - Colors, lights and textures disabled.  
+  • Render.PL_NO_LIGHTS - Lights disabled, colors still working.  
+  • Render.PL_NO_LIGHTS_TEX - Textures and lights disabled, colors still working.  
+  • Render.PL_DEFAULT - Default for textured models. Lights and colors enabled.  
+  • Render.PL_DEFAULT_NO_TEX - Default for non-textured models. Lights and colors enabled.  
+  
+Properties:
+
+* vertices - A Render.vertex array that can be modified and read.
+  
 **Camera**   
 * Camera.position(x, y, z)
 * Camera.rotation(x, y, z)
