@@ -90,9 +90,11 @@ int athena_load_png(GSTEXTURE* tex, FILE* File, bool delayed)
 
 	png_get_IHDR(png_ptr, info_ptr, &width, &height, &bit_depth, &color_type,&interlace_type, NULL, NULL);
 
-	if (bit_depth == 16) png_set_strip_16(png_ptr);
-	if (color_type == PNG_COLOR_TYPE_GRAY || bit_depth < 4) png_set_expand(png_ptr);
-	if (png_get_valid(png_ptr, info_ptr, PNG_INFO_tRNS)) png_set_tRNS_to_alpha(png_ptr);
+	if (bit_depth == 16) 
+		png_set_strip_16(png_ptr);
+
+	if (color_type == PNG_COLOR_TYPE_GRAY || color_type == PNG_COLOR_TYPE_GRAY_ALPHA || bit_depth < 4) 
+		png_set_expand(png_ptr);
 
 	png_set_filler(png_ptr, 0xff, PNG_FILLER_AFTER);
 
@@ -104,7 +106,9 @@ int athena_load_png(GSTEXTURE* tex, FILE* File, bool delayed)
     tex->VramClut = 0;
     tex->Clut = NULL;
 
-	if(png_get_color_type(png_ptr, info_ptr) == PNG_COLOR_TYPE_RGB_ALPHA)
+	color_type = png_get_color_type(png_ptr, info_ptr);
+
+	if(color_type == PNG_COLOR_TYPE_RGB_ALPHA)
 	{
 		int row_bytes = png_get_rowbytes(png_ptr, info_ptr);
 		tex->PSM = GS_PSM_CT32;
@@ -130,7 +134,7 @@ int athena_load_png(GSTEXTURE* tex, FILE* File, bool delayed)
 
 		free(row_pointers);
 	}
-	else if(png_get_color_type(png_ptr, info_ptr) == PNG_COLOR_TYPE_RGB)
+	else if(color_type == PNG_COLOR_TYPE_RGB)
 	{
 		int row_bytes = png_get_rowbytes(png_ptr, info_ptr);
 		tex->PSM = GS_PSM_CT24;
@@ -155,7 +159,7 @@ int athena_load_png(GSTEXTURE* tex, FILE* File, bool delayed)
 
 		free(row_pointers);
 	}
-	else if(png_get_color_type(png_ptr, info_ptr) == PNG_COLOR_TYPE_PALETTE){
+	else if(color_type == PNG_COLOR_TYPE_PALETTE){
 
 		struct png_clut { u8 r, g, b, a; };
 
