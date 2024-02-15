@@ -98,7 +98,7 @@ let savedry = 0.0f;
 
 let ee_info = System.getCPUInfo();
 
-let free_mem = `RAM Usage: ${Math.floor(System.getMemoryStats().used / 1048576)}MB / ${Math.floor(ee_info.RAMSize / 1048576)}MB`;
+let free_mem = `RAM: ${Math.floor(System.getMemoryStats().used / 1048576)}MB / ${Math.floor(ee_info.RAMSize / 1048576)}MB`;
 let free_vram = Screen.getFreeVRAM();
 
 const gray = Color.new(40, 40, 40, 128);
@@ -152,7 +152,8 @@ while(true){
         model[modeltodisplay].drawBounds(0.0f, 0.0f, 30.0f, savedly, savedlx, 0.0f, Color.new(128, 0, 255));
     }
 
-    fntcpy.print(10, 10, Screen.getFPS(360) + " FPS | " + free_mem + " | Free VRAM: " + free_vram + "KB" + " | Pipeline: " + pipelines[model[modeltodisplay].getPipeline()]);
+    fntcpy.print(10, 10, Screen.getFPS(360) + " FPS | " + free_mem + " | Free VRAM: " + free_vram + "KB");
+    fntcpy.print(10, 25, model[modeltodisplay].size + " Vertices | " + "Pipeline: " + pipelines[model[modeltodisplay].getPipeline()]);
 
     Screen.flip();
 }

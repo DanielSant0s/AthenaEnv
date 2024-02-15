@@ -348,6 +348,8 @@ static JSValue js_object_get(JSContext *ctx, JSValueConst this_val, int magic)
 		}
 		
 		return array;
+	} else if (magic == 1) {
+		return JS_NewUint32(ctx, ro->m.indexCount);
 	}
 }
 
@@ -407,6 +409,7 @@ static const JSCFunctionListEntry js_object_proto_funcs[] = {
 	JS_CFUNC_DEF("setTexture", 3, athena_settexture ),
 	JS_CFUNC_DEF("getTexture", 1, athena_gettexture ),
 	JS_CGETSET_MAGIC_DEF("vertices", js_object_get, js_object_set, 0),
+	JS_CGETSET_MAGIC_DEF("size", js_object_get, js_object_set, 1),
 };
 
 static JSValue athena_object_ctor(JSContext *ctx, JSValueConst new_target, int argc, JSValueConst *argv) {
