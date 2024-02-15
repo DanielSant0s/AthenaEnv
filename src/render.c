@@ -433,7 +433,7 @@ void calculate_cube(GSGLOBAL *gsGlobal, GSTEXTURE* tex, uint32_t idx_count)
 	*p_data++ = GIF_TAG(1, 0, 0, 0, 0, 1);
 	*p_data++ = GIF_AD;
 
-	*p_data++ = GS_SETREG_TEX1(1, 0, 0, 0, 0, 0, 0);
+	*p_data++ = GS_SETREG_TEX1(1, 0, tex->Filter, tex->Filter, 0, 0, 0);
 	*p_data++ = GS_TEX1_1;
 
 	int tw, th;

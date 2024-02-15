@@ -301,6 +301,20 @@ static JSValue athena_settexture(JSContext *ctx, JSValue this_val, int argc, JSV
 	return JS_UNDEFINED;
 }
 
+static JSValue athena_gettexture(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	int tex_idx;
+	JSRenderObject* ro = JS_GetOpaque2(ctx, this_val, js_object_class_id);
+
+	JS_ToUint32(ctx, &tex_idx, argv[0]);
+
+	if (ro->m.tex_count > tex_idx) {
+		return ro->textures[tex_idx];
+	}
+
+	return JS_UNDEFINED;
+}
+
+
 
 static JSValue js_object_get(JSContext *ctx, JSValueConst this_val, int magic)
 {
@@ -391,6 +405,7 @@ static const JSCFunctionListEntry js_object_proto_funcs[] = {
 	JS_CFUNC_DEF("setPipeline", 1, athena_setpipeline ),
 	JS_CFUNC_DEF("getPipeline", 0, athena_getpipeline ),
 	JS_CFUNC_DEF("setTexture", 3, athena_settexture ),
+	JS_CFUNC_DEF("getTexture", 1, athena_gettexture ),
 	JS_CGETSET_MAGIC_DEF("vertices", js_object_get, js_object_set, 0),
 };
 
