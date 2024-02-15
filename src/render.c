@@ -251,16 +251,13 @@ void loadOBJ(model* res_m, const char* path, GSTEXTURE* text) {
 
     int positionCount = m->position_count;
     int texcoordCount = m->texcoord_count;
-    int normalCount = m->normal_count;
-    int indexCount = m->index_count;
+    int normalCount =   m->normal_count;
+    int indexCount =    m->index_count;
 
-    VECTOR* c_verts = (VECTOR*)malloc(positionCount * sizeof(VECTOR));
+    VECTOR* c_verts =     (VECTOR*)malloc(positionCount * sizeof(VECTOR));
     VECTOR* c_texcoords = (VECTOR*)malloc(texcoordCount * sizeof(VECTOR));
-    VECTOR* c_normals = (VECTOR*)malloc(normalCount * sizeof(VECTOR));
-    VECTOR* c_colours = (VECTOR*)malloc(indexCount * sizeof(VECTOR));
-
-	char* tex_names[10];
-	res_m->tex_count = 0;
+    VECTOR* c_normals =   (VECTOR*)malloc(normalCount * sizeof(VECTOR));
+    VECTOR* c_colours =   (VECTOR*)malloc(indexCount * sizeof(VECTOR));
 
     for (int i = 0; i < positionCount; i++) {
         memcpy(c_verts[i], m->positions + (3 * i), sizeof(VECTOR));
@@ -283,13 +280,17 @@ void loadOBJ(model* res_m, const char* path, GSTEXTURE* text) {
 
     res_m->facesCount = m->face_count;
 	res_m->indexCount = m->index_count;
+
     res_m->positions = (VECTOR*)malloc(indexCount * sizeof(VECTOR));
     res_m->texcoords = (VECTOR*)malloc(indexCount * sizeof(VECTOR));
-    res_m->normals = (VECTOR*)malloc(indexCount * sizeof(VECTOR));
-    res_m->colours = (VECTOR*)malloc(indexCount * sizeof(VECTOR));
+    res_m->normals =   (VECTOR*)malloc(indexCount * sizeof(VECTOR));
+    res_m->colours =   (VECTOR*)malloc(indexCount * sizeof(VECTOR));
 
     int faceMaterialIndex;
 	char* oldTex = NULL;
+	char* curTex = NULL;
+	res_m->tex_count = 0;
+
     for (int i = 0, j = 0; i < indexCount; i++, j += 3) {
         int vertIndex = m->indices[i].p;
         int texcoordIndex = m->indices[i].t;
@@ -303,10 +304,10 @@ void loadOBJ(model* res_m, const char* path, GSTEXTURE* text) {
 			faceMaterialIndex = m->face_materials[i / 3];
 
 			if(oldTex != m->materials[faceMaterialIndex].map_Kd.name) {
-				tex_names[res_m->tex_count] = m->materials[faceMaterialIndex].map_Kd.name;
-				oldTex = tex_names[res_m->tex_count];
+				curTex = m->materials[faceMaterialIndex].map_Kd.name;
+				oldTex = curTex;
 				res_m->textures[res_m->tex_count] = malloc(sizeof(GSTEXTURE));
-				load_image(res_m->textures[res_m->tex_count], tex_names[res_m->tex_count], true);
+				load_image(res_m->textures[res_m->tex_count], curTex, true);
 				res_m->tex_ranges[res_m->tex_count] = i;
 				res_m->tex_count++;
 			} else if (m->materials[faceMaterialIndex].map_Kd.name) {
@@ -341,16 +342,16 @@ void loadOBJ(model* res_m, const char* path, GSTEXTURE* text) {
     for (int i = 0; i < res_m->indexCount; i++) {
         float* pos = res_m->positions[i];
         lowX = fmin(lowX, pos[0]);
-        hiX = fmax(hiX, pos[0]);
+        hiX =  fmax(hiX,  pos[0]);
         lowY = fmin(lowY, pos[1]);
-        hiY = fmax(hiY, pos[1]);
+        hiY =  fmax(hiY,  pos[1]);
         lowZ = fmin(lowZ, pos[2]);
-        hiZ = fmax(hiZ, pos[2]);
+        hiZ =  fmax(hiZ,  pos[2]);
     }
 
     VECTOR bbox[8] = {
         {lowX, lowY, lowZ, 1.0f}, {lowX, lowY, hiZ, 1.0f}, {lowX, hiY, lowZ, 1.0f}, {lowX, hiY, hiZ, 1.0f},
-        {hiX, lowY, lowZ, 1.0f}, {hiX, lowY, hiZ, 1.0f}, {hiX, hiY, lowZ, 1.0f}, {hiX, hiY, hiZ, 1.0f}
+        {hiX,  lowY, lowZ, 1.0f}, {hiX,  lowY, hiZ, 1.0f}, {hiX,  hiY, lowZ, 1.0f}, {hiX,  hiY, hiZ, 1.0f}
     };
 
     memcpy(res_m->bounding_box, bbox, sizeof(bbox));
@@ -368,6 +369,8 @@ void loadOBJ(model* res_m, const char* path, GSTEXTURE* text) {
 		res_m->render = draw_vu1_with_lights_notex;
 		res_m->pipeline = PL_DEFAULT_NO_TEX;
 	}
+
+	fast_obj_destroy(m);
 }
 
 

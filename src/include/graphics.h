@@ -37,25 +37,6 @@ typedef struct
     GSTEXTURE *txt;
 } rm_quad_t;
 
-typedef struct ath_model {
-	uint32_t facesCount;
-    uint32_t indexCount;
-
-    VECTOR* positions;
-	VECTOR* texcoords;
-	VECTOR* normals;
-    VECTOR* colours;
-
-    VECTOR bounding_box[8];
-
-    void (*render)(struct ath_model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z);
-    int pipeline;
-
-    GSTEXTURE* textures[10];
-	int tex_ranges[10];
-	int tex_count;
-} model;
-
 typedef u64 Color;
 #define A(color) ((u8)(color >> 24 & 0xFF))
 #define B(color) ((u8)(color >> 16 & 0xFF))
@@ -112,18 +93,6 @@ void unloadFont(GSFONT* font);
 void loadFontM();
 void printFontMText(const char* text, float x, float y, float scale, Color color);
 void unloadFontM();
-
-
-void init3D(float aspect, float fov, float near, float far);
-
-void setCameraPosition(float x, float y, float z);
-void setCameraRotation(float x, float y, float z);
-
-void SetLightAttribute(int id, float x, float y, float z, int attr);
-
-void loadOBJ(model* res_m, const char* path, GSTEXTURE* text);
-void draw_bbox(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z, Color color);
-
 
 void athena_error_screen(const char* errMsg, bool dark_mode);
 

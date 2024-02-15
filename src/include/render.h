@@ -26,6 +26,25 @@ typedef enum {
 	PL_DEFAULT_NO_TEX,
 } eRenderPipelines;
 
+typedef struct ath_model {
+	uint32_t facesCount;
+    uint32_t indexCount;
+
+    VECTOR* positions;
+	VECTOR* texcoords;
+	VECTOR* normals;
+    VECTOR* colours;
+
+    VECTOR bounding_box[8];
+
+    void (*render)(struct ath_model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z);
+    eLightAttributes pipeline;
+
+    GSTEXTURE* textures[10];
+	int tex_ranges[10];
+	int tex_count;
+} model;
+
 int athena_render_set_pipeline(model* m, int pl_id);
 
 typedef enum {
@@ -74,5 +93,16 @@ void CreateViewingMatrix(MATRIX world_view, VECTOR view, VECTOR inInterest);
 void setCameraTarget(float x, float y, float z);
 
 void orbitCamera(float yaw, float pitch);
+
+void init3D(float aspect, float fov, float near, float far);
+
+void setCameraPosition(float x, float y, float z);
+void setCameraRotation(float x, float y, float z);
+
+void SetLightAttribute(int id, float x, float y, float z, int attr);
+
+void loadOBJ(model* res_m, const char* path, GSTEXTURE* text);
+void draw_bbox(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z, Color color);
+
 
 #endif
