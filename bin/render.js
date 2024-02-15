@@ -45,11 +45,14 @@ const vertList = [
                   0.0f, 0.0f, 1.0f, 1.0f),
 ];
 
-let listtest = new RenderObject(vertList, "tex2.png");
+let testtex = new Image("tex2.png");
+let listtest = new RenderObject(vertList, testtex);
 
-let dragonmesh = new RenderObject("dragon.obj", "dragon.png");
+let dragontex = new Image("dragon.png");
+let dragonmesh = new RenderObject("dragon.obj", dragontex);
 
-let monkeymesh = new RenderObject("monkey.obj", "monkey.png");
+let monkeytex = new Image("monkey.png");
+let monkeymesh = new RenderObject("monkey.obj", monkeytex);
 monkeymesh.setPipeline(Render.PL_NO_LIGHTS_COLORS);
 
 let teapot = new RenderObject("Car.obj");
