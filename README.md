@@ -390,17 +390,18 @@ Screen.setMode(canvas);
 Construction:
 
 ```js
-var model = new RenderObject(mesh, *texture_path*)
+var model = new RenderObject(mesh, *texture*)
 /* Load simple WaveFront OBJ files or vertex arrays.
 MTL is supported on OBJs (including per-vertex colors and multi-texturing).
 If you don't have a MTL file but you want to bind a texture on it,
-just pass the image path as a second argument if you want to use it. */
+just pass the image as a second argument if you want to use it. */
 ```
 Methods:  
 
 * draw(pos_x, pos_y, pos_z, rot_x, rot_y, rot_z) - Draws the object on screen.
 * drawBounds(pos_x, pos_y, pos_z, rot_x, rot_y, rot_z) - Draws object bounding box.
-* setTexture(id, path, *range*) - Changes or sets the nth texture on models.
+* getTexture(id) - Gets the nth texture object from the model.
+* setTexture(id, texture, *range*) - Changes or sets the nth texture on models.
 * getPipeline() - Returns the current rendering pipeline loaded for the model.
 * setPipeline(pipeline) - Sets the current pipeline for the model. Available pipelines:  
   • Render.PL_NO_LIGHTS_COLORS  - Colors and lights disabled.  
