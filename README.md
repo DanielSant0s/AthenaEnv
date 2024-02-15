@@ -330,11 +330,14 @@ Properties:
 * endx, endy - End of the area that will be drawn from the image, the default value is the original image size.
 * angle - Define image rotation angle, default value is 0.0.
 * color - Define image tinting, default value is Color.new(255, 255, 255, 128).
-* filter - Choose between **LINEAR** or **NEAREST**, default value is NEAREST.  
+* filter - Choose between **LINEAR** or **NEAREST**, default value is NEAREST.
+* size - Returns image real size occupied in memory.
+* bpp - Returns image bits per-pixel qantity
 
 Methods:
 
 * draw(x, y) - Draw loaded image onscreen(call it every frame). Example: image.draw(15.0, 100.0);
+* optimize() - If your image has 24 bits per-pixel (aka RGB), you can use this to make it 16 bits per-pixel, saving some memory!
 * ready() - Returns true if an asynchronous image was successfully loaded in memory. 
 ```js
 var loaded = image.ready();  
