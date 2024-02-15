@@ -7,6 +7,7 @@
 #include "fast_obj/fast_obj.h"
 
 #include "include/render.h"
+#include "include/vector.h"
 
 #include "vif.h"
 
@@ -29,23 +30,67 @@ extern u32 VU1Draw3DLightsColorsNoTex_CodeStart __attribute__((section(".vudata"
 extern u32 VU1Draw3DLightsColorsNoTex_CodeEnd __attribute__((section(".vudata")));
 
 MATRIX view_screen;
+MATRIX world_view;
 
-VECTOR camera_position = { 0.00f, 0.00f, 0.00f, 1.00f };
-VECTOR camera_rotation = { 0.00f, 0.00f, 0.00f, 1.00f };
+VECTOR camera_position = { 0.00f, 0.00f, 0.00f, 0.00f };
+
+VECTOR camera_target =   { 0.00f, 0.00f, 0.00f, 0.00f };
+
+VECTOR camera_yd =       { 0.00f, 1.00f, 0.00f, 0.00f };
+
+VECTOR camera_zd =       { 0.00f, 0.00f, 1.00f, 0.00f };
+
+VECTOR camera_up =       { 0.00f, 0.00f, 1.00f, 0.00f };
+
+VECTOR camera_rotation = { 0.00f, 0.00f, 0.00f, 0.00f };
+
+eCameraTypes camera_type = CAMERA_DEFAULT;
 
 static LightData lights;
 
-void init3D(float aspect, float fov)
+void init3D(float aspect, float fov, float near, float far)
 {
-	create_view_screen(view_screen, aspect,  -fov, fov, -fov, fov, 1.00f, 2000.00f);
+	create_view_screen(view_screen, aspect, -fov, fov, -fov, fov, near, far);
 
+}
+
+void setCameraType(eCameraTypes type) {
+	camera_type = type;
+}
+
+void cameraUpdate() {
+	switch (camera_type) {
+		case CAMERA_DEFAULT:
+			RotCameraMatrix(world_view, camera_position, camera_zd, camera_yd, camera_rotation);
+			break;
+		case CAMERA_LOOKAT:
+			LookAtCameraMatrix(world_view, camera_position, camera_target, camera_up);
+			break;
+	}
+	//printf("Camera matrix:\n");
+	//printf("%g %g %g %g\n", world_view[0], world_view[1], world_view[2], world_view[3]);
+	//printf("%g %g %g %g\n", world_view[4], world_view[5], world_view[6], world_view[7]);
+	//printf("%g %g %g %g\n", world_view[8], world_view[9], world_view[10], world_view[11]);
+	//printf("%g %g %g %g\n", world_view[12], world_view[13], world_view[14], world_view[15]);
 }
 
 void setCameraPosition(float x, float y, float z){
 	camera_position[0] = x;
 	camera_position[1] = y;
 	camera_position[2] = z;
-	camera_position[3] = 1.00f;
+	camera_position[3] = 0.00f;
+}
+
+void setCameraTarget(float x, float y, float z){
+	VECTOR tmp_target = { x, y, z, 0.0f };
+
+	SubVector(camera_target, camera_target, tmp_target);
+	SubVector(camera_position, camera_position, camera_target);
+
+	camera_target[0] = x;
+	camera_target[1] = y;
+	camera_target[2] = z;
+	camera_target[3] = 0.00f;
 }
 
 void setCameraRotation(float x, float y, float z){
@@ -53,6 +98,75 @@ void setCameraRotation(float x, float y, float z){
 	camera_rotation[1] = y;
 	camera_rotation[2] = z;
 	camera_rotation[3] = 1.00f;
+}
+
+typedef struct {
+    float w, x, y, z;
+} Quat;
+
+Quat Quat_rotation(float rotation, VECTOR axis) {
+    Quat result;
+
+	Normalize(axis, axis);
+
+    float halfAngle = rotation * 0.5f;
+    float sinHalfAngle = sinf(halfAngle);
+
+    result.w = cosf(halfAngle);
+    result.x = axis[0] * sinHalfAngle;
+    result.y = axis[1] * sinHalfAngle;
+    result.z = axis[2] * sinHalfAngle;
+
+    return result;
+}
+
+void rotate(VECTOR output, VECTOR input, Quat r) {
+    Quat v = {0.0f, input[0], input[1], input[2]};
+
+    Quat conjR = {r.w, -r.x, -r.y, -r.z};
+
+    Quat rotatedV = {
+        v.w * conjR.w - v.x * conjR.x - v.y * conjR.y - v.z * conjR.z,
+        v.w * conjR.x + v.x * conjR.w + v.y * conjR.z - v.z * conjR.y,
+        v.w * conjR.y - v.x * conjR.z + v.y * conjR.w + v.z * conjR.x,
+        v.w * conjR.z + v.x * conjR.y - v.y * conjR.x + v.z * conjR.w
+    };
+
+    output[0] = rotatedV.x;
+	output[1] = rotatedV.y;
+	output[2] = rotatedV.z;
+}
+
+VECTOR local_up = {0.0f, 1.0f, 0.0f, 1.0f};
+
+void orbitCamera(float yaw, float pitch)
+{
+	VECTOR dir;
+	SubVector(dir, camera_target, camera_position);
+
+	VECTOR dy = {0.0f, 1.0f, 0.0f, 1.0f};
+
+	Quat r = Quat_rotation(yaw, dy);
+	rotate(dir, dir, r);
+	rotate(camera_up, camera_up, r);
+
+	VECTOR right;
+	OuterProduct(right, dir, camera_up);
+	Normalize(right, right);
+
+	r = Quat_rotation(-pitch, right);
+	rotate(dir, dir, r);
+
+	OuterProduct(camera_up, right, dir);
+	Normalize(camera_up, camera_up);
+
+	if(local_up[1] >= 0.0f) {
+		camera_up[1] = 1.0f; 
+	} else {
+		camera_up[1] = -1.0f;
+	}
+
+	SubVector(camera_position, camera_target, dir);
 }
 
 void SetLightAttribute(int id, float x, float y, float z, int attr){
@@ -266,11 +380,9 @@ void draw_bbox(model* m, float pos_x, float pos_y, float pos_z, float rot_x, flo
 
 	// Matrices to setup the 3D environment and camera
 	MATRIX local_world;
-	MATRIX world_view;
 	MATRIX local_screen;
 
 	create_local_world(local_world, object_position, object_rotation);
-	create_world_view(world_view, camera_position, camera_rotation);
 	create_local_screen(local_screen, local_world, world_view, view_screen);
 	if(clip_bounding_box(local_screen, m->bounding_box)) return;
 
@@ -324,10 +436,19 @@ void calculate_cube(GSGLOBAL *gsGlobal, GSTEXTURE* tex, uint32_t idx_count)
 	int tw, th;
 	athena_set_tw_th(tex, &tw, &th);
 
-	*p_data++ = GS_SETREG_TEX0(
-            tex->Vram/256, tex->TBW, tex->PSM,
-            tw, th, gsGlobal->PrimAlphaEnable, 0,
-    		0, 0, 0, 0, GS_CLUT_STOREMODE_NOLOAD);
+	if(tex->VramClut == 0)
+	{
+		*p_data++ = GS_SETREG_TEX0(tex->Vram/256, tex->TBW, tex->PSM,
+			tw, th, gsGlobal->PrimAlphaEnable, 0,
+			0, 0, 0, 0, GS_CLUT_STOREMODE_NOLOAD);
+	}
+	else
+	{
+		*p_data++ = GS_SETREG_TEX0(tex->Vram/256, tex->TBW, tex->PSM,
+			tw, th, gsGlobal->PrimAlphaEnable, 0,
+			tex->VramClut/256, tex->ClutPSM, 0, 0, GS_CLUT_STOREMODE_LOAD);
+	}
+	
 	*p_data++ = GS_TEX0_1;
 
 	*p_data++ = VU_GS_GIFTAG(idx_count, 1, 1,
@@ -349,7 +470,6 @@ void draw_vu1(model* model_test, float pos_x, float pos_y, float pos_z, float ro
 	VECTOR object_rotation = { rot_x, rot_y, rot_z, 1.00f };
 
 	MATRIX local_world;
-	MATRIX world_view;
 	MATRIX local_screen;
 
 	GSGLOBAL *gsGlobal = getGSGLOBAL();
@@ -363,7 +483,6 @@ void draw_vu1(model* model_test, float pos_x, float pos_y, float pos_z, float ro
 	gsKit_set_test(gsGlobal, GS_ZTEST_ON);
 
 	create_local_world(local_world, object_position, object_rotation);
-	create_world_view(world_view, camera_position, camera_rotation);
 	create_local_screen(local_screen, local_world, world_view, view_screen);
 
 	int lastIdx = -1;
@@ -442,7 +561,6 @@ void draw_vu1_notex(model* model_test, float pos_x, float pos_y, float pos_z, fl
 	VECTOR object_rotation = { rot_x, rot_y, rot_z, 1.00f };
 
 	MATRIX local_world;
-	MATRIX world_view;
 	MATRIX local_screen;
 
 	GSGLOBAL *gsGlobal = getGSGLOBAL();
@@ -456,7 +574,6 @@ void draw_vu1_notex(model* model_test, float pos_x, float pos_y, float pos_z, fl
 	gsKit_set_test(gsGlobal, GS_ZTEST_ON);
 
 	create_local_world(local_world, object_position, object_rotation);
-	create_world_view(world_view, camera_position, camera_rotation);
 	create_local_screen(local_screen, local_world, world_view, view_screen);
 
 	int idxs_to_draw = model_test->indexCount;
@@ -544,7 +661,6 @@ void draw_vu1_with_colors(model* model_test, float pos_x, float pos_y, float pos
 
 	MATRIX local_world;
 	MATRIX local_light;
-	MATRIX world_view;
 	MATRIX local_screen;
 
 	GSGLOBAL *gsGlobal = getGSGLOBAL();
@@ -558,7 +674,6 @@ void draw_vu1_with_colors(model* model_test, float pos_x, float pos_y, float pos
 	gsKit_set_test(gsGlobal, GS_ZTEST_ON);
 
 	create_local_world(local_world, object_position, object_rotation);
-	create_world_view(world_view, camera_position, camera_rotation);
 	create_local_screen(local_screen, local_world, world_view, view_screen);
 
 	int lastIdx = -1;
@@ -602,10 +717,19 @@ void draw_vu1_with_colors(model* model_test, float pos_x, float pos_y, float pos
 			int tw, th;
 			athena_set_tw_th(tex, &tw, &th);
 
-			*p_data++ = GS_SETREG_TEX0(
-    		        tex->Vram/256, tex->TBW, tex->PSM,
-    		        tw, th, gsGlobal->PrimAlphaEnable, 0,
-    				0, 0, 0, 0, GS_CLUT_STOREMODE_NOLOAD);
+			if(tex->VramClut == 0)
+			{
+				*p_data++ = GS_SETREG_TEX0(tex->Vram/256, tex->TBW, tex->PSM,
+					tw, th, gsGlobal->PrimAlphaEnable, 0,
+					0, 0, 0, 0, GS_CLUT_STOREMODE_NOLOAD);
+			}
+			else
+			{
+				*p_data++ = GS_SETREG_TEX0(tex->Vram/256, tex->TBW, tex->PSM,
+					tw, th, gsGlobal->PrimAlphaEnable, 0,
+					tex->VramClut/256, tex->ClutPSM, 0, 0, GS_CLUT_STOREMODE_LOAD);
+			}
+	
 			*p_data++ = GS_TEX0_1;
 
 			*p_data++ = VU_GS_GIFTAG(count, 1, 1,
@@ -677,7 +801,6 @@ void draw_vu1_with_colors_notex(model* model_test, float pos_x, float pos_y, flo
 
 	MATRIX local_world;
 	MATRIX local_light;
-	MATRIX world_view;
 	MATRIX local_screen;
 
 	GSGLOBAL *gsGlobal = getGSGLOBAL();
@@ -691,7 +814,6 @@ void draw_vu1_with_colors_notex(model* model_test, float pos_x, float pos_y, flo
 	gsKit_set_test(gsGlobal, GS_ZTEST_ON);
 
 	create_local_world(local_world, object_position, object_rotation);
-	create_world_view(world_view, camera_position, camera_rotation);
 	create_local_screen(local_screen, local_world, world_view, view_screen);
 
 	int idxs_to_draw = model_test->indexCount;
@@ -776,14 +898,6 @@ void draw_vu1_with_colors_notex(model* model_test, float pos_x, float pos_y, flo
 
 void draw_vu1_with_lights(model* model_test, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z)
 {
-	VECTOR object_position = { pos_x, pos_y, pos_z, 1.00f };
-	VECTOR object_rotation = { rot_x, rot_y, rot_z, 1.00f };
-
-	MATRIX local_world;
-	MATRIX local_light;
-	MATRIX world_view;
-	MATRIX local_screen;
-
 	GSGLOBAL *gsGlobal = getGSGLOBAL();
 
 	if (last_mpg != &VU1Draw3DLightsColors_CodeStart) {
@@ -794,10 +908,28 @@ void draw_vu1_with_lights(model* model_test, float pos_x, float pos_y, float pos
 	gsGlobal->PrimAAEnable = GS_SETTING_ON;
 	gsKit_set_test(gsGlobal, GS_ZTEST_ON);
 
-	create_local_world(local_world, object_position, object_rotation);
-	create_local_light(local_light, object_rotation);
-	create_world_view(world_view, camera_position, camera_rotation);
-	create_local_screen(local_screen, local_world, world_view, view_screen);
+	VECTOR object_position = { pos_x, pos_y, pos_z, 1.00f };
+	VECTOR object_rotation = { rot_x, rot_y, rot_z, 1.00f };
+
+	MATRIX local_world;
+	MATRIX local_light;
+	MATRIX local_screen;
+
+  	// Create the local_world matrix.
+  	matrix_unit(local_world);
+  	matrix_rotate(local_world, local_world, object_rotation);
+  	matrix_translate(local_world, local_world, object_position);
+
+  	// Create the local_light matrix.
+  	matrix_unit(local_light);
+  	matrix_rotate(local_light, local_light, object_rotation);
+
+  	// Create the local_screen matrix.
+  	matrix_unit(local_screen);
+
+  	matrix_multiply(local_screen, local_screen, local_world);
+  	matrix_multiply(local_screen, local_screen, world_view);
+  	matrix_multiply(local_screen, local_screen, view_screen);
 
 	int lastIdx = -1;
 	for(int i = 0; i < model_test->tex_count; i++) {
@@ -841,10 +973,19 @@ void draw_vu1_with_lights(model* model_test, float pos_x, float pos_y, float pos
 			int tw, th;
 			athena_set_tw_th(tex, &tw, &th);
 
-			*p_data++ = GS_SETREG_TEX0(
-    		        tex->Vram/256, tex->TBW, tex->PSM,
-    		        tw, th, gsGlobal->PrimAlphaEnable, 0,
-    				0, 0, 0, 0, GS_CLUT_STOREMODE_NOLOAD);
+			if(tex->VramClut == 0)
+			{
+				*p_data++ = GS_SETREG_TEX0(tex->Vram/256, tex->TBW, tex->PSM,
+					tw, th, gsGlobal->PrimAlphaEnable, 0,
+					0, 0, 0, 0, GS_CLUT_STOREMODE_NOLOAD);
+			}
+			else
+			{
+				*p_data++ = GS_SETREG_TEX0(tex->Vram/256, tex->TBW, tex->PSM,
+					tw, th, gsGlobal->PrimAlphaEnable, 0,
+					tex->VramClut/256, tex->ClutPSM, 0, 0, GS_CLUT_STOREMODE_LOAD);
+			}
+	
 			*p_data++ = GS_TEX0_1;
 
 			*p_data++ = VU_GS_GIFTAG(count, 1, 1,
@@ -924,7 +1065,6 @@ void draw_vu1_with_lights_notex(model* model_test, float pos_x, float pos_y, flo
 
 	MATRIX local_world;
 	MATRIX local_light;
-	MATRIX world_view;
 	MATRIX local_screen;
 
 	GSGLOBAL *gsGlobal = getGSGLOBAL();
@@ -939,7 +1079,6 @@ void draw_vu1_with_lights_notex(model* model_test, float pos_x, float pos_y, flo
 
 	create_local_world(local_world, object_position, object_rotation);
 	create_local_light(local_light, object_rotation);
-	create_world_view(world_view, camera_position, camera_rotation);
 	create_local_screen(local_screen, local_world, world_view, view_screen);
 
 	int idxs_to_draw = model_test->indexCount;

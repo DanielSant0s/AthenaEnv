@@ -28,6 +28,15 @@ typedef enum {
 
 int athena_render_set_pipeline(model* m, int pl_id);
 
+typedef enum {
+	CAMERA_DEFAULT,
+	CAMERA_LOOKAT,
+} eCameraTypes;
+
+void setCameraType(eCameraTypes type);
+
+void cameraUpdate();
+
 #define BATCH_SIZE 48
 
 int clip_bounding_box(MATRIX local_clip, VECTOR *bounding_box);
@@ -54,5 +63,16 @@ void athena_set_tw_th(const GSTEXTURE *Texture, int *tw, int *th);
 
 void athena_line_goraud_3d(GSGLOBAL *gsGlobal, float x1, float y1, int iz1, float x2, float y2, int iz2, u64 color1, u64 color2);
 
+void CameraMatrix(MATRIX m, VECTOR p, VECTOR zd, VECTOR yd);
+
+void RotCameraMatrix(MATRIX m, VECTOR p, VECTOR zd, VECTOR yd, VECTOR rot);
+
+void LookAtCameraMatrix(MATRIX m, VECTOR position, VECTOR target, VECTOR up);
+
+void CreateViewingMatrix(MATRIX world_view, VECTOR view, VECTOR inInterest);
+
+void setCameraTarget(float x, float y, float z);
+
+void orbitCamera(float yaw, float pitch);
 
 #endif

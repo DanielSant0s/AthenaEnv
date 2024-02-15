@@ -104,6 +104,7 @@ let bbox = false;
 
 while(true){
     Screen.clear(gray);
+    Camera.update();
     pad.update();
 
     lx = ((pad.lx > 25 || pad.lx < -25)? pad.lx : 0) / 1024.0f;

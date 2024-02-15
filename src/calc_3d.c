@@ -1,4 +1,5 @@
 #include "include/render.h"
+#include <math.h>
 
 int clip_bounding_box(MATRIX local_clip, VECTOR *bounding_box)
 {
@@ -407,3 +408,399 @@ void vu0_calculate_colours(VECTOR *output, int count, VECTOR *colours, VECTOR *l
 	}
 
 }
+
+void UnitMatrix(MATRIX m0)
+{
+    __asm__ __volatile__(
+	"vsub.xyzw	$vf4,$vf0,$vf0 #vf4.xyzw=0;\n"
+	"vadd.w	$vf4,$vf4,$vf0\n"
+	"vmr32.xyzw	$vf5,$vf4\n"
+	"vmr32.xyzw	$vf6,$vf5\n"
+	"vmr32.xyzw	$vf7,$vf6\n"
+	"sqc2   $vf4,0x30(%0)\n"
+	"sqc2   $vf5,0x20(%0)\n"
+	"sqc2   $vf6,0x10(%0)\n"
+	"sqc2   $vf7,0x0(%0)\n"
+	: : "r" (m0) : "memory");
+}
+
+void OuterProduct(VECTOR v0, VECTOR v1, VECTOR v2)
+{
+    __asm__ __volatile__
+	(
+	"lqc2   $vf4,0x0(%1)\n"
+	"lqc2   $vf5,0x0(%2)\n"
+	"vopmula.xyz	$ACC,$vf4,$vf5\n"
+	"vopmsub.xyz	$vf6,$vf5,$vf4\n"
+	"vsub.w $vf6,$vf6,$vf6		#vf6.xyz=0;\n"
+	"sqc2    $vf6,0x0(%0)\n"
+	: : "r" (v0) , "r" (v1) ,"r" (v2) : "memory");
+}
+
+void Normalize(VECTOR v0, VECTOR v1)
+{
+    __asm__ __volatile__(
+        "lqc2    $vf4,0x0(%1)\n"
+        "vmul.xyz $vf5,$vf4,$vf4\n"
+        "vaddy.x $vf5,$vf5,$vf5\n"
+        "vaddz.x $vf5,$vf5,$vf5\n"
+
+        "vsqrt $Q,$vf5x\n"
+        "vwaitq\n"
+        "vaddq.x $vf5x,$vf0x,$Q\n"
+        "vnop\n"
+        "vnop\n"
+        "vdiv    $Q,$vf0w,$vf5x\n"
+        "vsub.xyzw $vf6,$vf0,$vf0           #vf6.xyzw=0;\n"
+        "vwaitq\n"
+
+        "vmulq.xyz  $vf6,$vf4,$Q\n"
+        "sqc2    $vf6,0x0(%0)\n"
+        : : "r" (v0) , "r" (v1) : "memory");
+}
+
+void TransMatrix(MATRIX m0, MATRIX m1, VECTOR tv)
+{
+    __asm__ __volatile__(
+	"lqc2    $vf4,0x0(%2)\n"
+	"lqc2    $vf5,0x30(%1)\n"
+
+	"lq    $7,0x0(%1)\n"
+	"lq    $8,0x10(%1)\n"
+	"lq    $9,0x20(%1)\n"
+	"vadd.xyz	$vf5,$vf5,$vf4\n"
+	"sq    $7,0x0(%0)\n"
+	"sq    $8,0x10(%0)\n"
+	"sq    $9,0x20(%0)\n"
+	"sqc2    $vf5,0x30(%0)\n"
+	: : "r" (m0) , "r" (m1), "r" (tv):"$7","$8","$9","memory");
+}
+
+void InversMatrix(MATRIX m0, MATRIX m1)
+{
+    __asm__ __volatile__(
+	"lq $8,0x0000(%1)\n"
+	"lq $9,0x0010(%1)\n"
+	"lq $10,0x0020(%1)\n"
+	"lqc2 $vf4,0x0030(%1)\n"
+
+	"vmove.xyzw $vf5,$vf4\n"
+	"vsub.xyz $vf4,$vf4,$vf4		#vf4.xyz=0;\n"
+	"vmove.xyzw $vf9,$vf4\n"
+	"qmfc2    $11,$vf4\n"
+
+	"pextlw     $12,$9,$8\n"
+	"pextuw     $13,$9,$8\n"
+	"pextlw     $14,$11,$10\n"
+	"pextuw     $15,$11,$10\n"
+	"pcpyld     $8,$14,$12\n"
+	"pcpyud     $9,$12,$14\n"
+	"pcpyld     $10,$15,$13\n"
+
+	"qmtc2    $8,$vf6\n"
+	"qmtc2    $9,$vf7\n"
+	"qmtc2    $10,$vf8\n"
+
+	"vmulax.xyz	$ACC,   $vf6,$vf5\n"
+	"vmadday.xyz	$ACC,   $vf7,$vf5\n"
+	"vmaddz.xyz	$vf4,$vf8,$vf5\n"
+	"vsub.xyz	$vf4,$vf9,$vf4\n"
+	"\n"
+	"sq $8,0x0000(%0)\n"
+	"sq $9,0x0010(%0)\n"
+	"sq $10,0x0020(%0)\n"
+	"sqc2 $vf4,0x0030(%0)\n"
+	: : "r" (m0) , "r" (m1):"$8","$9","$10","$11","$12","$13","$14","$15", "memory");
+}
+
+void ApplyMatrix(VECTOR v0, MATRIX m0,VECTOR v1)
+{
+    __asm__ __volatile__(
+	"lqc2   $vf4,0x0(%1)\n"
+	"lqc2   $vf5,0x10(%1)\n"
+	"lqc2   $vf6,0x20(%1)\n"
+	"lqc2   $vf7,0x30(%1)\n"
+	"lqc2   $vf8,0x0(%2)\n"
+	"vmulax.xyzw	$ACC,  $vf4,$vf8\n"
+	"vmadday.xyzw	$ACC,  $vf5,$vf8\n"
+	"vmaddaz.xyzw	$ACC,  $vf6,$vf8\n"
+	"vmaddw.xyzw	$vf9,$vf7,$vf8\n"
+	"sqc2   $vf9,0x0(%0)\n"
+	: : "r" (v0) , "r" (m0) ,"r" (v1): "memory");
+}
+
+/*void RotMatrixZ(MATRIX m0, MATRIX m1, float rz)
+{
+    __asm__ __volatile__(
+"	mtc1	$0,$f0\n"
+"	c.olt.s %2,$f0\n"
+"	li.s    $f0,1.57079637050628662109e0	\n"
+"	bc1f    _RotMatrixZ_01\n"
+"	add.s   %2,$f0,%2			#rx=rx+π/2\n"
+"	li 	$7,1				#cos(rx)=sin(rx+π/2)\n"
+"	j	_RotMatrixZ_02\n"
+"_RotMatrixZ_01:\n"
+"	sub.s   %2,$f0,%2			#rx=π/2-rx\n"
+"	move	$7,$0\n"
+"_RotMatrixZ_02:\n"
+
+"        mfc1    $8,%2\n"
+"        qmtc2    $8,$vf6\n"
+"	move	$6,$31	# ra 保存 (本当はスタックを使うべき)\n"
+
+"	jal	_ecossin	# sin(roll), cos(roll)\n"
+"	move	$31,$6	# ra 回復\n"
+"			#vf05:0,0,0,0 |x,y,z,w\n"
+"	vmove.xyzw $vf06,$vf05\n"
+"	vmove.xyzw $vf07,$vf05\n"
+"	vmove.xyzw $vf09,$vf00\n"
+"	vsub.xyz $vf09,$vf09,$vf09 	#0,0,0,1 |x,y,z,w\n"
+"	vmr32.xyzw $vf08,$vf09	#0,0,1,0 |x,y,z,w\n"
+
+"	vsub.zw $vf04,$vf04,$vf04 #vf04.zw=0 s,c,0,0 |x,y,z,w\n"
+"	vaddx.y $vf06,$vf05,$vf04 #vf06 0,s,0,0 |x,y,z,w\n"
+"	vaddy.x $vf06,$vf05,$vf04 #vf06 c,s,0,0 |x,y,z,w\n"
+"	vsubx.x $vf07,$vf05,$vf04 #vf07 -s,0,0,0 |x,y,z,w\n"
+"	vaddy.y $vf07,$vf05,$vf04 #vf07 -s,c,0,0 |x,y,z,w\n"
+
+"	li    $7,4\n"
+"	_loopRotMatrixZ:\n"
+"	lqc2    $vf4,0x0(%1)\n"
+"	vmulax.xyzw	$ACC,   $vf6,$vf4\n"
+"	vmadday.xyzw	$ACC,   $vf7,$vf4\n"
+"	vmaddaz.xyzw	$ACC,   $vf8,$vf4\n"
+"	vmaddw.xyzw	$vf5,  $vf9,$vf4\n"
+"	sqc2    $vf5,0x0(%0)\n"
+"	addi    $7,-1\n"
+"	addi    %1,0x10\n"
+"	addi    %0,0x10\n"
+"	bne    $0,$7,_loopRotMatrixZ\n"
+	: : "r" (m0) , "r" (m1), "f" (rz):"$6","$7","$8","$f0", "memory");
+}
+
+void RotMatrixX(MATRIX m0, MATRIX m1, float rx)
+{
+    __asm__ __volatile__(
+	"mtc1	$0,$f0\n"
+	"c.olt.s %2,$f0\n"
+	"li.s    $f0,1.57079637050628662109e0	\n"
+	"bc1f    _RotMatrixX_01\n"
+	"add.s   %2,$f0,%2			#rx=rx+π/2\n"
+	"li 	$7,1				#cos(rx)=sin(rx+π/2)\n"
+	"j	_RotMatrixX_02\n"
+"_RotMatrixX_01:\n"
+"	sub.s   %2,$f0,%2			#rx=π/2-rx\n"
+"	move	$7,$0\n"
+"_RotMatrixX_02:\n"
+
+	"mfc1    $8,%2\n"
+	"qmtc2    $8,$vf6\n"
+	"move	$6,$31	# ra 保存 (本当はスタックを使うべき)\n"
+	"jal	_ecossin	# sin(roll), cos(roll)\n"
+	"move	$31,$6	# ra 回復\n"
+	"		#vf05:0,0,0,0 |x,y,z,w\n"
+	"vmove.xyzw $vf06,$vf05\n"
+	"vmove.xyzw $vf07,$vf05\n"
+	"vmove.xyzw $vf08,$vf05\n"
+	"vmove.xyzw $vf09,$vf05\n"
+	"vaddw.x $vf06,$vf05,$vf00 #vf06 1,0,0,0 |x,y,z,w\n"
+	"vaddw.w $vf09,$vf05,$vf00 #vf09 0,0,0,1 |x,y,z,w\n"
+
+	"vsub.zw $vf04,$vf04,$vf04 #vf04.zw=0 s,c,0,0 |x,y,z,w\n"
+	"vaddx.z $vf07,$vf05,$vf04 #vf07.zw=0 0,0,s,0 |x,y,z,w\n"
+	"vaddy.y $vf07,$vf05,$vf04 #vf07.zw=0 0,c,s,0 |x,y,z,w\n"
+	"vsubx.y $vf08,$vf05,$vf04 #vf08.zw=0 0,-s,0,0 |x,y,z,w\n"
+	"vaddy.z $vf08,$vf05,$vf04 #vf08.zw=0 0,-s,c,0 |x,y,z,w\n"
+
+	"li    $7,4\n"
+	"_loopRotMatrixX:\n"
+	"lqc2    $vf4,0x0(%1)\n"
+	"vmulax.xyzw	$ACC,   $vf6,$vf4\n"
+	"vmadday.xyzw	$ACC,   $vf7,$vf4\n"
+	"vmaddaz.xyzw	$ACC,   $vf8,$vf4\n"
+	"vmaddw.xyzw	$vf5,  $vf9,$vf4\n"
+	"sqc2    $vf5,0x0(%0)\n"
+	"addi    $7,-1\n"
+	"addi    %1,0x10\n"
+	"addi    %0,0x10\n"
+	"bne    $0,$7,_loopRotMatrixX\n"
+	: : "r" (m0) , "r" (m1), "f" (rx):"$6","$7","$8","$f0","memory");
+}
+	
+void RotMatrixY(MATRIX m0, MATRIX m1, float ry)
+{
+    __asm__ __volatile__(
+	"mtc1	$0,$f0\n"
+	"c.olt.s %2,$f0\n"
+	"li.s    $f0,1.57079637050628662109e0	\n"
+	"bc1f    _RotMatrixY_01\n"
+	"add.s   %2,$f0,%2			#rx=rx+π/2\n"
+	"li 	$7,1				#cos(rx)=sin(rx+π/2)\n"
+	"j	_RotMatrixY_02\n"
+"_RotMatrixY_01:\n"
+	"sub.s   %2,$f0,%2			#rx=π/2-rx\n"
+	"move	$7,$0\n"
+"_RotMatrixY_02:\n"
+
+	"mfc1    $8,%2\n"
+	"qmtc2    $8,$vf6\n"
+	"move	$6,$31	# ra 保存 (本当はスタックを使うべき)\n"
+	"jal	_ecossin	# sin(roll), cos(roll)\n"
+	"move	$31,$6	# ra 回復\n"
+	"		#vf05:0,0,0,0 |x,y,z,w\n"
+	"vmove.xyzw $vf06,$vf05\n"
+	"vmove.xyzw $vf07,$vf05\n"
+	"vmove.xyzw $vf08,$vf05\n"
+	"vmove.xyzw $vf09,$vf05\n"
+	"vaddw.y $vf07,$vf05,$vf00 #vf07 0,1,0,0 |x,y,z,w\n"
+	"vaddw.w $vf09,$vf05,$vf00 #vf09 0,0,0,1 |x,y,z,w\n"
+
+	"vsub.zw $vf04,$vf04,$vf04 #vf04.zw=0 s,c,0,0 |x,y,z,w\n"
+	"vsubx.z $vf06,$vf05,$vf04 #vf06 0,0,-s,0 |x,y,z,w\n"
+	"vaddy.x $vf06,$vf05,$vf04 #vf06 c,0,-s,0 |x,y,z,w\n"
+	"vaddx.x $vf08,$vf05,$vf04 #vf08 s,0,0,0 |x,y,z,w\n"
+	"vaddy.z $vf08,$vf05,$vf04 #vf08 s,0,c,0 |x,y,z,w\n"
+
+	"li    $7,4\n"
+	"_loopRotMatrixY:\n"
+	"lqc2    $vf4,0x0(%1)\n"
+	"vmulax.xyzw	$ACC,   $vf6,$vf4\n"
+	"vmadday.xyzw	$ACC,   $vf7,$vf4\n"
+	"vmaddaz.xyzw	$ACC,   $vf8,$vf4\n"
+	"vmaddw.xyzw	$vf5,  $vf9,$vf4\n"
+	"sqc2    $vf5,0x0(%0)\n"
+	"addi    $7,-1\n"
+	"addi    %1,0x10\n"
+	"addi    %0,0x10\n"
+	"bne    $0,$7,_loopRotMatrixY\n"
+	: : "r" (m0) , "r" (m1), "f" (ry):"$6","$7","$8","$f0","memory");
+}*/
+
+void SubVector(VECTOR v0, VECTOR v1, VECTOR v2)
+{
+    __asm__ __volatile__(
+	"lqc2    $vf4,0x0(%1)\n"
+	"lqc2    $vf5,0x0(%2)\n"
+	"vsub.xyzw	$vf6,$vf4,$vf5\n"
+	"sqc2    $vf6,0x0(%0)\n"
+	: : "r" (v0) , "r" (v1), "r" (v2) : "memory");
+}
+
+void CameraMatrix(MATRIX m, VECTOR position, VECTOR target, VECTOR up)
+{
+	MATRIX	m0;
+	VECTOR	xd;
+
+	UnitMatrix(m0);	
+
+	OuterProduct(xd, up, target);
+
+	VECTOR left;
+	Normalize(left, xd);
+
+	VECTOR forward;
+	Normalize(forward, target);
+
+	VECTOR nup;
+	OuterProduct(nup, forward, left);
+
+	m0[0] = left[0];
+	m0[1] = left[1];
+	m0[2] = left[2];
+	m0[3] = left[3];
+
+	m0[4] = nup[0];
+	m0[5] = nup[1];
+	m0[6] = nup[2];
+	m0[7] = nup[3];
+
+	m0[8] = forward[0];
+	m0[9] = forward[1];
+	m0[10] = forward[2];
+	m0[11] = forward[3];
+
+	m0[12] = position[0];
+	m0[13] = position[1];
+	m0[14] = position[2];
+	m0[15] = 1.0f;
+
+	//TransMatrix(m0, m0, p);
+	InversMatrix(m, m0);
+}
+
+void RotCameraMatrix(MATRIX m, VECTOR p, VECTOR zd, VECTOR yd, VECTOR rot)
+{
+    MATRIX work;
+    VECTOR direction, vertical, position;
+    UnitMatrix(work);
+	matrix_rotate(work, work, rot);
+    //RotMatrixX(work,work,rot[0]);
+    //RotMatrixY(work,work,rot[1]);
+    //RotMatrixZ(work,work,rot[2]);
+    ApplyMatrix(direction, work, zd);
+    ApplyMatrix(vertical, work, yd);
+    ApplyMatrix(position, work, p);
+    CameraMatrix(m, position, direction, vertical);
+}
+
+//void LookAtCameraMatrix(MATRIX m, VECTOR p, VECTOR target, VECTOR yd, VECTOR rot)
+//{
+//    MATRIX work;
+//    VECTOR direction, vertical, position;
+//    UnitMatrix(work);
+//	//matrix_rotate(work, work, rot);
+//    //RotMatrixX(work,work,rot[0]);
+//    //RotMatrixY(work,work,rot[1]);
+//    //RotMatrixZ(work,work,rot[2]);
+//    ApplyMatrix(direction, work, target);
+//    ApplyMatrix(vertical, work, yd);
+//    ApplyMatrix(position, work, p);
+//
+//	SubVector(direction, direction, position);
+//
+//    CameraMatrix(m, position, direction, vertical);
+//}
+
+void LookAtCameraMatrix(MATRIX m, VECTOR position, VECTOR target, VECTOR up)
+{
+	MATRIX	m0;
+	VECTOR	work;
+
+	VECTOR left, forward, nup;
+
+	UnitMatrix(m0);	
+
+	SubVector(work, target, position);
+	Normalize(forward, work);
+
+	OuterProduct(work, up, forward);
+	Normalize(left, work);
+
+	OuterProduct(nup, forward, left);
+
+	m0[0] = left[0];
+	m0[1] = left[1];
+	m0[2] = left[2];
+	m0[3] = left[3];
+
+	m0[4] = nup[0];
+	m0[5] = nup[1];
+	m0[6] = nup[2];
+	m0[7] = nup[3];
+
+	m0[8] =  -forward[0];
+	m0[9] =  -forward[1];
+	m0[10] = -forward[2];
+	m0[11] = forward[3];
+
+	m0[12] = position[0];
+	m0[13] = position[1];
+	m0[14] = position[2];
+	m0[15] = 1.0f;
+
+	//TransMatrix(m0, m0, p);
+	InversMatrix(m, m0);
+}
+
+
+
