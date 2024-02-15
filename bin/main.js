@@ -9,6 +9,8 @@ IOP.loadDefaultModule(IOP.keyboard);
 Keyboard.init();
 
 let bg = new Image("dash/bg.png");
+bg.optimize();
+console.log("Image size: " + bg.size + " | bits per pixel: " + bg.bpp);
 
 const unsel_color = Color.new(255, 255, 255, 64);
 const sel_color = Color.new(255, 255, 255);
