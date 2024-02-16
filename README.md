@@ -332,7 +332,10 @@ Properties:
 * color - Define image tinting, default value is Color.new(255, 255, 255, 128).
 * filter - Choose between **LINEAR** or **NEAREST**, default value is NEAREST.
 * size - Returns image real size occupied in memory.
-* bpp - Returns image bits per-pixel qantity
+* bpp - Returns image bits per-pixel qantity.
+* delayed - If true, your texture was loaded in RAM, else, VRAM.
+* pixels - The image pixel ArrayBuffer.
+* palette - If is a palette image, it has a palette ArrayBuffer right here.
 
 Methods:
 
