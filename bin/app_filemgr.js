@@ -2,8 +2,6 @@
 
 var font = new Font();
 
-let boot_path = System.currentDir();
-
 function getStringSize(string, scale){
     return string.length * (scale*15);
 };
@@ -29,10 +27,10 @@ function process_list_commands(control_var, list){
     if (control_var < 0){
         control_var = list.length-1;
     }
-    if (pad.pressed(pad, Pads.DOWN) && !pad.pressed(oldpad, Pads.DOWN)){
+    if (pad.justPressed(Pads.DOWN)){
         control_var++;
     }
-    if (pad.pressed(pad, Pads.UP) && !pad.pressed(oldpad, Pads.UP)){
+    if (pad.justPressed(Pads.UP)){
         control_var--;
     }
     return control_var;
@@ -61,16 +59,16 @@ function process_matrix_commands(x_var, y_var, x_limit, y_limit){
         x_var = x_limit-1;
         y_var = y_limit-1;
     }
-    if (pad.pressed(pad, Pads.RIGHT) && !pad.pressed(oldpad, Pads.RIGHT)){
+    if (pad.justPressed(Pads.RIGHT)){
         x_var++;
     }
-    if (pad.pressed(pad, Pads.LEFT) && !pad.pressed(oldpad, Pads.LEFT)){
+    if (pad.justPressed(Pads.LEFT)){
         x_var--;
     }
-    if (pad.pressed(pad, Pads.DOWN) && !pad.pressed(oldpad, Pads.DOWN)){
+    if (pad.justPressed(Pads.DOWN)){
         y_var++;
     }
-    if (pad.pressed(pad, Pads.UP) && !pad.pressed(oldpad, Pads.UP)){
+    if (pad.justPressed(Pads.UP)){
         y_var--;
     }
     return [x_var, y_var];
@@ -166,7 +164,7 @@ file_manager.process = function() {
         }
     }
 
-    if ((pad.pressed(pad, Pads.TRIANGLE) && !pad.pressed(oldpad, Pads.TRIANGLE))){
+    if ((pad.justPressed(Pads.TRIANGLE))){
         var idxof = path.lastIndexOf("/");
         if(path[idxof-1] != ":" && idxof != -1){
             path = path.slice(0, idxof);
@@ -179,7 +177,7 @@ file_manager.process = function() {
         }
     }
 
-    if ((pad.pressed(pad, Pads.CROSS) && !pad.pressed(oldpad, Pads.CROSS))){
+    if ((pad.justPressed(Pads.CROSS))){
         if(file_manager.data[3] == 1){
             if(file[file_manager.data[0]].dir){
                 if(path == ""){
@@ -190,8 +188,7 @@ file_manager.process = function() {
                 file = System.listDir(path);
 
             } else if(file[file_manager.data[0]].name.endsWith(".js")){
-                System.currentDir(path + "/");
-                std.loadScript(file[file_manager.data[0]].name);
+                System.loadELF(System.boot_path + "/athena.elf", [path + "/" + file[file_manager.data[0]].name]);
             } else if(file[file_manager.data[0]].name.endsWith(".elf") || file[file_manager.data[0]].name.endsWith(".ELF")){
                 System.loadELF(path + "/"+ file[file_manager.data[0]].name);
             } else if(file[file_manager.data[0]].name.endsWith(".zip")){
@@ -247,7 +244,7 @@ file_manager.process = function() {
         }
     }
 
-    if (pad.pressed(pad, Pads.R1) && !pad.pressed(oldpad, Pads.R1)){
+    if (pad.justPressed(Pads.R1)){
         file_manager.data[2] ^= 1;
         file_manager.data[3] ^= 1;
     }
@@ -285,21 +282,19 @@ let render_filelist = function() {
 
 file_manager.gfx.add(render_filelist);
 
-var oldpad = Pads.get();
 var pad = Pads.get();
 
 while(true){
-    oldpad = pad;
     pad.update();
     Screen.clear(Color.new(0, 0, 0));
 
     file_manager.run();
 
-    if(pad.pressed(pad, Pads.CIRCLE) && !pad.pressed(oldpad, Pads.CIRCLE)) {
+    if(pad.justPressed(Pads.CIRCLE)) {
         break;
     }
     
     Screen.flip();
 };
 
-System.loadELF(boot_path + "athena_pkd.elf");
+System.loadELF(System.boot_path + "/athena_pkd.elf");

@@ -71,6 +71,8 @@ car.vertices = car_vertices;
 let mill = new RenderObject("cubes.obj");
 
 let boombox = new RenderObject("Boombox.obj");
+let boomboxtex = boombox.getTexture(0);
+boomboxtex.filter = LINEAR;
 
 let model = [dragonmesh, monkeymesh, car, boombox, mill, listtest];
 
