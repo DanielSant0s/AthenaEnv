@@ -394,6 +394,19 @@ static JSValue js_object_get(JSContext *ctx, JSValueConst this_val, int magic)
 		return array;
 	} else if (magic == 1) {
 		return JS_NewUint32(ctx, ro->m.indexCount);
+	} else if (magic == 2) {
+		JSValue array = JS_NewArray(ctx);
+
+		for (int i = 0; i < 8; i++) {
+			JSValue obj = JS_NewObject(ctx);
+		
+			JS_DefinePropertyValueStr(ctx, obj, "x", JS_NewFloat32(ctx, ro->m.bounding_box[i][0]), JS_PROP_C_W_E);
+			JS_DefinePropertyValueStr(ctx, obj, "y", JS_NewFloat32(ctx, ro->m.bounding_box[i][1]), JS_PROP_C_W_E);
+			JS_DefinePropertyValueStr(ctx, obj, "z", JS_NewFloat32(ctx, ro->m.bounding_box[i][2]), JS_PROP_C_W_E);
+			JS_DefinePropertyValueUint32(ctx, array, i, obj, JS_PROP_C_W_E);
+		}
+		
+		return array;
 	}
 }
 
@@ -418,7 +431,7 @@ static JSValue js_object_set(JSContext *ctx, JSValueConst this_val, JSValue val,
 		ro->m.texcoords = malloc(sizeof(VECTOR)*ro->m.indexCount);
 		ro->m.colours = malloc(sizeof(VECTOR)*ro->m.indexCount);
 
-		for (int i = 0; i < ro->m.indexCount; i++) {
+		for (int i = 0; i < length; i++) {
 			JSValue vertex = JS_GetPropertyUint32(ctx, val, i);
 
 			JS_ToFloat32(ctx, &ro->m.positions[i][0], JS_GetPropertyStr(ctx, vertex, "x"));
@@ -441,7 +454,17 @@ static JSValue js_object_set(JSContext *ctx, JSValueConst this_val, JSValue val,
 			JS_ToFloat32(ctx, &ro->m.colours[i][2], JS_GetPropertyStr(ctx, vertex, "b"));
 			JS_ToFloat32(ctx, &ro->m.colours[i][3], JS_GetPropertyStr(ctx, vertex, "a"));
 		}
-	}
+	} else if (magic == 2) {
+
+		for (int i = 0; i < 8; i++) {
+			JSValue vertex = JS_GetPropertyUint32(ctx, val, i);
+
+			JS_ToFloat32(ctx, &ro->m.bounding_box[i][0], JS_GetPropertyStr(ctx, vertex, "x"));
+			JS_ToFloat32(ctx, &ro->m.bounding_box[i][1], JS_GetPropertyStr(ctx, vertex, "y"));
+			JS_ToFloat32(ctx, &ro->m.bounding_box[i][2], JS_GetPropertyStr(ctx, vertex, "z"));
+			ro->m.bounding_box[i][3] = 1.0f;
+		}
+	}	
     return JS_UNDEFINED;
 }
 
@@ -454,6 +477,7 @@ static const JSCFunctionListEntry js_object_proto_funcs[] = {
 	JS_CFUNC_DEF("getTexture", 1, athena_gettexture ),
 	JS_CGETSET_MAGIC_DEF("vertices", js_object_get, js_object_set, 0),
 	JS_CGETSET_MAGIC_DEF("size", js_object_get, js_object_set, 1),
+	JS_CGETSET_MAGIC_DEF("bounds", js_object_get, js_object_set, 2),
 };
 
 static JSValue athena_object_ctor(JSContext *ctx, JSValueConst new_target, int argc, JSValueConst *argv) {

@@ -583,7 +583,7 @@ void draw_vu1(model* model_test, float pos_x, float pos_y, float pos_z, float ro
 
 			curr_vif_packet = vif_packets[context];
 
-			memset(curr_vif_packet, 0, 16*22);
+			//memset(curr_vif_packet, 0, 16*22);
 
 			*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
 			*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32));
@@ -688,7 +688,7 @@ void draw_vu1_notex(model* model_test, float pos_x, float pos_y, float pos_z, fl
 
 		curr_vif_packet = vif_packets[context];
 	
-		memset(curr_vif_packet, 0, 16*22);
+		//memset(curr_vif_packet, 0, 16*22);
 
 		*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
 		*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32));
@@ -818,7 +818,7 @@ void draw_vu1_with_colors(model* model_test, float pos_x, float pos_y, float pos
 
 			curr_vif_packet = vif_packets[context];
 
-			memset(curr_vif_packet, 0, 16*22);
+			//memset(curr_vif_packet, 0, 16*22);
 
 			*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
 			*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32));
@@ -928,7 +928,7 @@ void draw_vu1_with_colors_notex(model* model_test, float pos_x, float pos_y, flo
 
 		curr_vif_packet = vif_packets[context];
 	
-		memset(curr_vif_packet, 0, 16*22);
+		//memset(curr_vif_packet, 0, 16*22);
 
 		*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
 		*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32));
@@ -1074,7 +1074,7 @@ void draw_vu1_with_lights(model* model_test, float pos_x, float pos_y, float pos
 
 			curr_vif_packet = vif_packets[context];
 
-			memset(curr_vif_packet, 0, 16*22);
+			//memset(curr_vif_packet, 0, 16*22);
 
 			*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
 			*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32));
@@ -1193,7 +1193,7 @@ void draw_vu1_with_lights_notex(model* model_test, float pos_x, float pos_y, flo
 
 		curr_vif_packet = vif_packets[context];
 	
-		memset(curr_vif_packet, 0, 16*22);
+		////memset(curr_vif_packet, 0, 16*22);
 
 		*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
 		*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32));
