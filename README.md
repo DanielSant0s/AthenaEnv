@@ -414,6 +414,7 @@ Methods:
 Properties:
 
 * vertices - A Render.vertex array that can be modified and read.
+* size - Vertex quantity.
   
 **Camera**   
 * Camera.position(x, y, z)
