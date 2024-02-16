@@ -979,7 +979,7 @@ void draw_vu1_with_lights(model* model_test, float pos_x, float pos_y, float pos
 			if(tex->VramClut == 0)
 			{
 				*p_data++ = GS_SETREG_TEX0(tex->Vram/256, tex->TBW, tex->PSM,
-					tw, th, gsGlobal->PrimAlphaEnable, 0,
+					tw, th, gsGlobal->PrimAlphaEnable, COLOR_MODULATE,
 					0, 0, 0, 0, GS_CLUT_STOREMODE_NOLOAD);
 			}
 			else
@@ -993,7 +993,7 @@ void draw_vu1_with_lights(model* model_test, float pos_x, float pos_y, float pos
 
 			*p_data++ = VU_GS_GIFTAG(count, 1, 1,
     			VU_GS_PRIM(GS_PRIM_PRIM_TRIANGLE, 1, 1, gsGlobal->PrimFogEnable, 
-				0, gsGlobal->PrimAAEnable, 0, 0, 0),
+				gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 0, 0, 0),
     		    0, 3);
 
 			*p_data++ = DRAW_STQ2_REGLIST;

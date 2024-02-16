@@ -318,6 +318,7 @@ static const JSCFunctionListEntry js_image_proto_funcs[] = {
 	JS_CGETSET_MAGIC_DEF("filter", athena_image_get_uint, athena_image_set_uint, 1),
 	JS_CGETSET_MAGIC_DEF("size", athena_image_get_uint, athena_image_set_uint, 2),
 	JS_CGETSET_MAGIC_DEF("bpp", athena_image_get_uint, athena_image_set_uint, 3),
+	JS_CGETSET_MAGIC_DEF("delayed", athena_image_get_uint, athena_image_set_uint, 4),
 	JS_CGETSET_MAGIC_DEF("pixels", athena_image_get_uint, athena_image_set_uint, 5),
 	JS_CGETSET_MAGIC_DEF("palette", athena_image_get_uint, athena_image_set_uint, 6),
 };

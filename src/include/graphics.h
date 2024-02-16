@@ -37,6 +37,13 @@ typedef struct
     GSTEXTURE *txt;
 } rm_quad_t;
 
+typedef enum {
+    COLOR_MODULATE,
+    COLOR_DECAL,
+    COLOR_HIGHLIGHT,
+    COLOR_HIGHLIGHT2
+} eColorFunctions;
+
 typedef u64 Color;
 #define A(color) ((u8)(color >> 24 & 0xFF))
 #define B(color) ((u8)(color >> 16 & 0xFF))

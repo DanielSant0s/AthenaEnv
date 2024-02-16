@@ -45,8 +45,7 @@ const vertList = [
                   0.0f, 0.0f, 1.0f, 1.0f),
 ];
 
-let testtex = new Image("tex2.png");
-let listtest = new RenderObject(vertList, testtex);
+let listtest = new RenderObject(vertList);
 
 let dragontex = new Image("dragon.png");
 let dragonmesh = new RenderObject("dragon.obj", dragontex);
@@ -55,9 +54,9 @@ let monkeytex = new Image("monkey.png");
 let monkeymesh = new RenderObject("monkey.obj", monkeytex);
 monkeymesh.setPipeline(Render.PL_NO_LIGHTS_COLORS);
 
-let teapot = new RenderObject("Car.obj");
+let car = new RenderObject("Car.obj");
 
-let car_vertices = teapot.vertices;
+let car_vertices = car.vertices;
 
 car_vertices.forEach(vertex => {
     if (vertex.r > 0.45f && vertex.g < 0.2f && vertex.b < 0.2f) {
@@ -67,13 +66,13 @@ car_vertices.forEach(vertex => {
     }
 });
 
-teapot.vertices = car_vertices;
+car.vertices = car_vertices;
 
 let mill = new RenderObject("cubes.obj");
 
 let boombox = new RenderObject("Boombox.obj");
 
-let model = [dragonmesh, monkeymesh, teapot, mill, boombox, listtest];
+let model = [dragonmesh, monkeymesh, car, boombox, mill, listtest];
 
 Camera.position(0.0f, 0.0f, 50.0f);
 Camera.rotation(0.0f, 0.0f,  0.0f);
