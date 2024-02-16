@@ -85,14 +85,6 @@ IOP_MODULES = iomanx.o filexio.o sio2man.o mcman.o mcserv.o padman.o  \
 
 EMBEDDED_ASSETS = quicksand_regular.o
 
-ifeq ($(CLI),1)
-  EE_BIN := $(EE_BIN)_cli
-  EE_BIN_PKD := $(EE_BIN_PKD)_cli
-  EE_CFLAGS += -DATHENA_CLI
-  ATHENA_MODULES += ath_cli.o
-  GRAPHICS = 0
-endif
-
 ifeq ($(GRAPHICS),1)
   EE_CFLAGS += -DATHENA_GRAPHICS
   APP_CORE += graphics.o atlas.o fntsys.o render.o calc_3d.o fast_obj/fast_obj.o

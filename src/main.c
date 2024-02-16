@@ -24,59 +24,6 @@
 #include "include/fntsys.h"
 #endif
 
-#ifdef ATHENA_CLI
-#include <debug.h>
-
-void athena_error_screen(const char* errMsg, bool dark_mode) {
-    uint32_t color = 0x000000;
-    uint32_t color2 = 0xFFFFFF;
-
-    if (errMsg != NULL)
-    {
-        dbgprintf("AthenaEnv ERROR!\n%s", errMsg);
-
-        if (strstr(errMsg, "EvalError") != NULL) {
-            color = 0x7D7156;
-        } else if (strstr(errMsg, "SyntaxError") != NULL) {
-            color = 0xB06020;
-        } else if (strstr(errMsg, "TypeError") != NULL) {
-            color = 0x32813b;
-        } else if (strstr(errMsg, "ReferenceError") != NULL) {
-            color = 0x00DEE5; 
-        } else if (strstr(errMsg, "RangeError") != NULL) {
-            color = 0x3D31D0; 
-        } else if (strstr(errMsg, "InternalError") != NULL) {
-            color = 0xC2008A;
-        } else if(strstr(errMsg, "URIError") != NULL) {
-            color = 0x1F78FF;
-        } else if(strstr(errMsg, "AggregateError") != NULL) {
-            color = 0x9F61E2; 
-        }
-
-        if(dark_mode) {
-            color2 = color;
-            color = 0x000000;
-        } else {
-            color2 = 0xFFFFFF;
-        }
-
-        scr_clear();
-
-        scr_setbgcolor(color);
-        scr_setCursor(0);
-        scr_setfontcolor(color2);
-
-		scr_printf("AthenaEnv ERROR!\n");
-		scr_printf("%s\n", errMsg);
-	   	scr_printf("\n\nPress [start] to restart");
-
-    	while (!isButtonPressed(PAD_START)) {
-            nopdelay();
-		} 
-    }
-}
-#endif
-
 char boot_path[255];
 bool dark_mode;
 
@@ -128,10 +75,6 @@ int main(int argc, char **argv) {
 	init_graphics();
     fntInit();
     loadFontM();
-    #else
-    #ifdef ATHENA_CLI
-    init_scr();
-    #endif
     #endif
 
     init_taskman();

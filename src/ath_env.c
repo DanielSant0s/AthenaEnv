@@ -196,12 +196,6 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 
 				"globalThis.Camera = Camera;\n"
 
-				#else
-
-				#ifdef ATHENA_CLI
-				"import * as Console from 'Console';\n"
-				"globalThis.Console = Console;\n"
-				#endif
 				#endif
 
 				"import * as std from 'std';\n"
@@ -286,10 +280,6 @@ static JSContext *JS_NewCustomContext(JSRuntime *rt)
 	athena_shape_init(ctx);
 	athena_screen_init(ctx);
 	athena_render_init(ctx);
-	#else
-	#ifdef ATHENA_CLI
-	athena_console_init(ctx);
-	#endif
 	#endif
 
 	#ifdef ATHENA_KEYBOARD
