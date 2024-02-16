@@ -207,6 +207,7 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"import * as IOP from 'IOP';\n"
 				"import * as Archive from 'Archive';\n"
 				"import * as Vector2 from 'Vector2';\n"
+				"import * as Vector3 from 'Vector3';\n"
 
                 "globalThis.std = std;\n"
                 "globalThis.os = os;\n"
@@ -216,7 +217,8 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"globalThis.System = System;\n"
 				"globalThis.Archive = Archive;\n"
 				"globalThis.IOP = IOP;\n"
-				"globalThis.Vector2 = Vector2;\n";
+				"globalThis.Vector2 = Vector2;\n"
+				"globalThis.Vector3 = Vector3;\n";
 
 				
             rc = qjs_eval_buf(ctx, str, strlen(str), "<input>", JS_EVAL_TYPE_MODULE);

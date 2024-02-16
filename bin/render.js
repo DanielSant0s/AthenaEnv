@@ -54,7 +54,7 @@ let monkeytex = new Image("monkey.png");
 let monkeymesh = new RenderObject("monkey.obj", monkeytex);
 monkeymesh.setPipeline(Render.PL_NO_LIGHTS_COLORS);
 
-let car = new RenderObject("grove.obj");
+let car = new RenderObject("Car.obj");
 
 let car_vertices = car.vertices;
 
