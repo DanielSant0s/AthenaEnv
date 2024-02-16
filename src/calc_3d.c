@@ -156,8 +156,7 @@ unsigned int get_max_z(GSGLOBAL* gsGlobal)
 
 }
 
-
-
+/*
 int athena_process_xyz_rgbaq(GSPRIMPOINT *output, GSGLOBAL* gsGlobal, int count, color_f_t *colours, vertex_f_t *vertices)
 {
 	float q = 1.00f;
@@ -230,7 +229,7 @@ int athena_process_xyz_rgbaq_st(GSPRIMSTQPOINT *output, GSGLOBAL* gsGlobal, int 
 	// End function.
 	return 0;
 
-}
+}*/
 
 void athena_line_goraud_3d(GSGLOBAL *gsGlobal, float x1, float y1, int iz1, float x2, float y2, int iz2, u64 color1, u64 color2)
 {
@@ -314,7 +313,7 @@ float vu0_innerproduct(VECTOR v0, VECTOR v1)
 
     return ret;
 }
-
+/*
 void vu0_build_lights(VECTOR *output, int count, VECTOR *normals, LightData* lights) {	
 	float intensity;
 
@@ -378,7 +377,7 @@ void vu0_calculate_lights(VECTOR *output, int count, VECTOR *normals, VECTOR *li
    			}
   		}
  	}
-}
+}*/
 
 void vu0_vector_clamp(VECTOR v0, VECTOR v1, float min, float max)
 {
@@ -394,7 +393,7 @@ void vu0_vector_clamp(VECTOR v0, VECTOR v1, float min, float max)
 	: : "r" (v0) , "r" (v1), "f" (min), "f" (max):"$8","$9","memory");
 }
 
-void vu0_calculate_colours(VECTOR *output, int count, VECTOR *colours, VECTOR *lights) {
+/*void vu0_calculate_colours(VECTOR *output, int count, VECTOR *colours, VECTOR *lights) {
   	for (int i = 0; i < count; i++) {
    		// Apply the light value to the colour.
 		__asm__ __volatile__(
@@ -407,7 +406,7 @@ void vu0_calculate_colours(VECTOR *output, int count, VECTOR *colours, VECTOR *l
    		vu0_vector_clamp(output[i], output[i], 0.00f, 1.99f);
 	}
 
-}
+}*/
 
 void UnitMatrix(MATRIX m0)
 {
@@ -742,24 +741,6 @@ void RotCameraMatrix(MATRIX m, VECTOR p, VECTOR zd, VECTOR yd, VECTOR rot)
     ApplyMatrix(position, work, p);
     CameraMatrix(m, position, direction, vertical);
 }
-
-//void LookAtCameraMatrix(MATRIX m, VECTOR p, VECTOR target, VECTOR yd, VECTOR rot)
-//{
-//    MATRIX work;
-//    VECTOR direction, vertical, position;
-//    UnitMatrix(work);
-//	//matrix_rotate(work, work, rot);
-//    //RotMatrixX(work,work,rot[0]);
-//    //RotMatrixY(work,work,rot[1]);
-//    //RotMatrixZ(work,work,rot[2]);
-//    ApplyMatrix(direction, work, target);
-//    ApplyMatrix(vertical, work, yd);
-//    ApplyMatrix(position, work, p);
-//
-//	SubVector(direction, direction, position);
-//
-//    CameraMatrix(m, position, direction, vertical);
-//}
 
 void LookAtCameraMatrix(MATRIX m, VECTOR position, VECTOR target, VECTOR up)
 {

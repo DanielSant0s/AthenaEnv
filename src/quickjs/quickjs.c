@@ -2179,7 +2179,6 @@ JSContext *JS_NewContextRaw(JSRuntime *rt)
 {
     JSContext *ctx;
     int i;
-
     ctx = js_mallocz_rt(rt, sizeof(JSContext));
     if (!ctx)
         return NULL;

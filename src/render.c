@@ -40,7 +40,7 @@ VECTOR camera_yd =       { 0.00f, 1.00f, 0.00f, 0.00f };
 
 VECTOR camera_zd =       { 0.00f, 0.00f, 1.00f, 0.00f };
 
-VECTOR camera_up =       { 0.00f, 0.00f, 1.00f, 0.00f };
+VECTOR camera_up =       { 0.00f, 1.00f, 0.00f, 0.00f };
 
 VECTOR camera_rotation = { 0.00f, 0.00f, 0.00f, 0.00f };
 
@@ -148,17 +148,17 @@ void orbitCamera(float yaw, float pitch)
 
 	Quat r = Quat_rotation(yaw, dy);
 	rotate(dir, dir, r);
-	rotate(camera_up, camera_up, r);
+	rotate(local_up, local_up, r);
 
 	VECTOR right;
-	OuterProduct(right, dir, camera_up);
+	OuterProduct(right, dir, local_up);
 	Normalize(right, right);
 
 	r = Quat_rotation(-pitch, right);
 	rotate(dir, dir, r);
 
-	OuterProduct(camera_up, right, dir);
-	Normalize(camera_up, camera_up);
+	OuterProduct(local_up, right, dir);
+	Normalize(local_up, local_up);
 
 	if(local_up[1] >= 0.0f) {
 		camera_up[1] = 1.0f; 
@@ -417,54 +417,6 @@ u64 cube_packet[12] __attribute__((aligned(64)));
 
 u8 context = 0;
 
-/** Calculate packet for cube data */
-void calculate_cube(GSGLOBAL *gsGlobal, GSTEXTURE* tex, uint32_t idx_count)
-{
-
-	float fX = 2048.0f+gsGlobal->Width/2;
-	float fY = 2048.0f+gsGlobal->Height/2;
-	float fZ = ((float)get_max_z(gsGlobal));
-
-	u64* p_data = cube_packet;
-
-	*p_data++ = (*(u32*)(&fX) | (u64)*(u32*)(&fY) << 32);
-	*p_data++ = (*(u32*)(&fZ) | (u64)idx_count << 32);
-
-	*p_data++ = GIF_TAG(1, 0, 0, 0, 0, 1);
-	*p_data++ = GIF_AD;
-
-	*p_data++ = GS_SETREG_TEX1(1, 0, tex->Filter, tex->Filter, 0, 0, 0);
-	*p_data++ = GS_TEX1_1;
-
-	int tw, th;
-	athena_set_tw_th(tex, &tw, &th);
-
-	if(tex->VramClut == 0)
-	{
-		*p_data++ = GS_SETREG_TEX0(tex->Vram/256, tex->TBW, tex->PSM,
-			tw, th, gsGlobal->PrimAlphaEnable, 0,
-			0, 0, 0, 0, GS_CLUT_STOREMODE_NOLOAD);
-	}
-	else
-	{
-		*p_data++ = GS_SETREG_TEX0(tex->Vram/256, tex->TBW, tex->PSM,
-			tw, th, gsGlobal->PrimAlphaEnable, 0,
-			tex->VramClut/256, tex->ClutPSM, 0, 0, GS_CLUT_STOREMODE_LOAD);
-	}
-	
-	*p_data++ = GS_TEX0_1;
-
-	*p_data++ = VU_GS_GIFTAG(idx_count, 1, 1,
-    	VU_GS_PRIM(GS_PRIM_PRIM_TRIANGLE, 1, 1, gsGlobal->PrimFogEnable, 
-		0, gsGlobal->PrimAAEnable, 0, 0, 0),
-        0, 3);
-
-	*p_data++ = DRAW_STQ2_REGLIST;
-
-	*p_data++ = (128 | (u64)128 << 32);
-	*p_data++ = (128 | (u64)128 << 32);	
-}
-
 static u32* last_mpg = NULL;
 
 void draw_vu1(model* model_test, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z)
@@ -508,7 +460,48 @@ void draw_vu1(model* model_test, float pos_x, float pos_y, float pos_z, float ro
 				count = idxs_to_draw;
 			}
 
-			calculate_cube(gsGlobal, tex, count);
+			float fX = 2048.0f+gsGlobal->Width/2;
+			float fY = 2048.0f+gsGlobal->Height/2;
+			float fZ = ((float)get_max_z(gsGlobal));
+		
+			u64* p_data = cube_packet;
+		
+			*p_data++ = (*(u32*)(&fX) | (u64)*(u32*)(&fY) << 32);
+			*p_data++ = (*(u32*)(&fZ) | (u64)count << 32);
+		
+			*p_data++ = GIF_TAG(1, 0, 0, 0, 0, 1);
+			*p_data++ = GIF_AD;
+		
+			*p_data++ = GS_SETREG_TEX1(1, 0, tex->Filter, tex->Filter, 0, 0, 0);
+			*p_data++ = GS_TEX1_1;
+		
+			int tw, th;
+			athena_set_tw_th(tex, &tw, &th);
+		
+			if(tex->VramClut == 0)
+			{
+				*p_data++ = GS_SETREG_TEX0(tex->Vram/256, tex->TBW, tex->PSM,
+					tw, th, gsGlobal->PrimAlphaEnable, 0,
+					0, 0, 0, 0, GS_CLUT_STOREMODE_NOLOAD);
+			}
+			else
+			{
+				*p_data++ = GS_SETREG_TEX0(tex->Vram/256, tex->TBW, tex->PSM,
+					tw, th, gsGlobal->PrimAlphaEnable, 0,
+					tex->VramClut/256, tex->ClutPSM, 0, 0, GS_CLUT_STOREMODE_LOAD);
+			}
+			
+			*p_data++ = GS_TEX0_1;
+		
+			*p_data++ = VU_GS_GIFTAG(count, 1, 1,
+    			VU_GS_PRIM(GS_PRIM_PRIM_TRIANGLE, 1, 1, gsGlobal->PrimFogEnable, 
+				0, gsGlobal->PrimAAEnable, 0, 0, 0),
+    		    0, 3);
+		
+			*p_data++ = DRAW_STQ2_REGLIST;
+		
+			*p_data++ = (128 | (u64)128 << 32);
+			*p_data++ = (128 | (u64)128 << 32);	
 
 			curr_vif_packet = vif_packets[context];
 
