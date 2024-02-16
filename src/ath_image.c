@@ -241,6 +241,17 @@ static JSValue athena_image_get_uint(JSContext *ctx, JSValueConst this_val, int 
 				case GS_PSM_CT32:
 					return JS_NewUint32(ctx, 32);
 			}
+		case 4:
+			return JS_NewBool(ctx, s->delayed);
+		case 5:
+			return JS_NewArrayBuffer(ctx, s->tex.Mem, gsKit_texture_size_ee(s->tex.Width, s->tex.Height, s->tex.PSM), NULL, NULL, 1);
+		case 6:
+			if (s->tex.PSM == GS_PSM_T4) {
+				return JS_NewArrayBuffer(ctx, s->tex.Clut, gsKit_texture_size_ee(8, 2, GS_PSM_CT32), NULL, NULL, 1);
+			} else if (s->tex.PSM == GS_PSM_T8) {
+					return JS_NewArrayBuffer(ctx, s->tex.Clut, gsKit_texture_size_ee(16, 16, GS_PSM_CT32), NULL, NULL, 1);
+			}
+			
 	}
 
 	return JS_UNDEFINED;
@@ -249,7 +260,7 @@ static JSValue athena_image_get_uint(JSContext *ctx, JSValueConst this_val, int 
 static JSValue athena_image_set_uint(JSContext *ctx, JSValueConst this_val, JSValue val, int magic)
 {
     JSImageData *s = JS_GetOpaque2(ctx, this_val, js_image_class_id);
-    uint32_t value;
+    uint32_t value, arr_size;
     if (!s)
         return JS_EXCEPTION;
     if (JS_ToUint32(ctx, &value, val))
@@ -262,6 +273,26 @@ static JSValue athena_image_set_uint(JSContext *ctx, JSValueConst this_val, JSVa
 		case 1:
 			s->tex.Filter = value;
 			break;
+		case 5:
+			if (s->tex.Delayed) {
+				void *pixels = JS_GetArrayBuffer(ctx, &arr_size, val);
+				if (pixels != s->tex.Mem) {
+					free(s->tex.Mem);
+					s->tex.Mem = pixels;
+				}
+			}
+			break;
+		case 6:
+			if (s->tex.Clut && s->tex.Delayed) {
+				void *palette = JS_GetArrayBuffer(ctx, &arr_size, val);
+				if (palette != s->tex.Clut) {
+					free(s->tex.Clut);
+					s->tex.Clut = palette;
+				}
+			}
+			break;
+			
+
 	}
 
     return JS_UNDEFINED;
@@ -287,6 +318,8 @@ static const JSCFunctionListEntry js_image_proto_funcs[] = {
 	JS_CGETSET_MAGIC_DEF("filter", athena_image_get_uint, athena_image_set_uint, 1),
 	JS_CGETSET_MAGIC_DEF("size", athena_image_get_uint, athena_image_set_uint, 2),
 	JS_CGETSET_MAGIC_DEF("bpp", athena_image_get_uint, athena_image_set_uint, 3),
+	JS_CGETSET_MAGIC_DEF("pixels", athena_image_get_uint, athena_image_set_uint, 5),
+	JS_CGETSET_MAGIC_DEF("palette", athena_image_get_uint, athena_image_set_uint, 6),
 };
 
 static int image_init(JSContext *ctx, JSModuleDef *m) {

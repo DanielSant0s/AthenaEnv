@@ -9,6 +9,17 @@ IOP.loadDefaultModule(IOP.keyboard);
 Keyboard.init();
 
 let bg = new Image("dash/bg.png");
+
+const bg_palette = new Uint8Array(bg.palette);
+
+for (let i = 0; i < bg_palette.length; i += 4) {
+    bg_palette[i+0] = Math.trunc(bg_palette[i+0] * 0.2f);
+    bg_palette[i+1] = Math.trunc(bg_palette[i+1] * 0.0f);
+    bg_palette[i+2] = Math.trunc(bg_palette[i+2] * 1.0f);
+}
+
+bg.palette = bg_palette.buffer;
+
 console.log("Image size: " + bg.size + " | bits per pixel: " + bg.bpp);
 
 const unsel_color = Color.new(255, 255, 255, 64);
