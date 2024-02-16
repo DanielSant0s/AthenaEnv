@@ -685,12 +685,14 @@ void SubVector(VECTOR v0, VECTOR v1, VECTOR v2)
 	: : "r" (v0) , "r" (v1), "r" (v2) : "memory");
 }
 
-
-void AddVector(VECTOR res, VECTOR v1, VECTOR v2) {
-    res[0] = v1[0] + v2[0];
-    res[1] = v1[1] + v2[1];
-    res[2] = v1[2] + v2[2];
-	res[3] = 0.0f;
+void AddVector(VECTOR v0, VECTOR v1, VECTOR v2)
+{
+    __asm__ __volatile__(
+	"lqc2    $vf4,0x0(%1)\n"
+	"lqc2    $vf5,0x0(%2)\n"
+	"vadd.xyzw	$vf6,$vf4,$vf5\n"
+	"sqc2    $vf6,0x0(%0)\n"
+	: : "r" (v0) , "r" (v1), "r" (v2) : "memory");
 }
 
 float LenVector(VECTOR v) {
