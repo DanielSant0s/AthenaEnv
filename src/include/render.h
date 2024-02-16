@@ -59,22 +59,12 @@ void cameraUpdate();
 #define BATCH_SIZE 48
 
 int clip_bounding_box(MATRIX local_clip, VECTOR *bounding_box);
-
 void calculate_vertices_clipped(VECTOR *output,  int count, VECTOR *vertices, MATRIX local_screen);
-
 int draw_convert_xyz(xyz_t *output, float x, float y, int z, int count, vertex_f_t *vertices);
 
 unsigned int get_max_z(GSGLOBAL* gsGlobal);
 
-int athena_process_xyz_rgbaq(GSPRIMPOINT *output, GSGLOBAL* gsGlobal, int count, color_f_t *colours, vertex_f_t *vertices);
-
-int athena_process_xyz_rgbaq_st(GSPRIMSTQPOINT *output, GSGLOBAL* gsGlobal, int count, color_f_t *colours, vertex_f_t *vertices, texel_f_t *coords);
-
-void vu0_calculate_colours(VECTOR *output, int count, VECTOR *colours, VECTOR *lights);
-
 void vu0_vector_clamp(VECTOR v0, VECTOR v1, float min, float max);
-
-void vu0_build_lights(VECTOR *output, int count, VECTOR *normals, LightData* lights);
 
 float vu0_innerproduct(VECTOR v0, VECTOR v1);
 
@@ -88,21 +78,29 @@ void RotCameraMatrix(MATRIX m, VECTOR p, VECTOR zd, VECTOR yd, VECTOR rot);
 
 void LookAtCameraMatrix(MATRIX m, VECTOR position, VECTOR target, VECTOR up);
 
-void CreateViewingMatrix(MATRIX world_view, VECTOR view, VECTOR inInterest);
-
-void setCameraTarget(float x, float y, float z);
-
-void orbitCamera(float yaw, float pitch);
-
 void init3D(float aspect, float fov, float near, float far);
 
 void setCameraPosition(float x, float y, float z);
 void setCameraRotation(float x, float y, float z);
+
+void setCameraTarget(float x, float y, float z);
+void turnCamera(float yaw, float pitch);
+void orbitCamera(float yaw, float pitch);
+void dollyCamera(float dist);
+void zoomCamera(float dist);
+void panCamera(float x, float y);
 
 void SetLightAttribute(int id, float x, float y, float z, int attr);
 
 void loadOBJ(model* res_m, const char* path, GSTEXTURE* text);
 void draw_bbox(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z, Color color);
 
+void SubVector(VECTOR v0, VECTOR v1, VECTOR v2);
+void AddVector(VECTOR res, VECTOR v1, VECTOR v2);
+float LenVector(VECTOR v);
+void SetLenVector(VECTOR v, float newLength);
+void Normalize(VECTOR v0, VECTOR v1);
+void OuterProduct(VECTOR v0, VECTOR v1, VECTOR v2);
+void ScaleVector(VECTOR res, VECTOR v, float size);
 
 #endif

@@ -685,6 +685,32 @@ void SubVector(VECTOR v0, VECTOR v1, VECTOR v2)
 	: : "r" (v0) , "r" (v1), "r" (v2) : "memory");
 }
 
+
+void AddVector(VECTOR res, VECTOR v1, VECTOR v2) {
+    res[0] = v1[0] + v2[0];
+    res[1] = v1[1] + v2[1];
+    res[2] = v1[2] + v2[2];
+	res[3] = 0.0f;
+}
+
+float LenVector(VECTOR v) {
+    return sqrtf(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+}
+
+void SetLenVector(VECTOR v, float newLength) {
+    Normalize(v, v);
+    v[0] *= newLength;
+    v[1] *= newLength;
+    v[2] *= newLength;
+}
+
+void ScaleVector(VECTOR res, VECTOR v, float size) {
+    res[0] = v[0] * size;
+    res[1] = v[1] * size;
+    res[2] = v[2] * size;
+	res[3] = 0.0f;
+}
+
 void CameraMatrix(MATRIX m, VECTOR position, VECTOR target, VECTOR up)
 {
 	MATRIX	m0;

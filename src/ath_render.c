@@ -148,6 +148,44 @@ static JSValue athena_camorbit(JSContext *ctx, JSValue this_val, int argc, JSVal
 	return JS_UNDEFINED;
 }
 
+static JSValue athena_camturn(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	float yaw, pitch;
+	JS_ToFloat32(ctx, &yaw, argv[0]);
+	JS_ToFloat32(ctx, &pitch, argv[1]);
+	
+	turnCamera(yaw, pitch);
+
+	return JS_UNDEFINED;
+}
+
+static JSValue athena_campan(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	float x, y;
+	JS_ToFloat32(ctx, &x, argv[0]);
+	JS_ToFloat32(ctx, &y, argv[1]);
+	
+	panCamera(x, y);
+
+	return JS_UNDEFINED;
+}
+
+static JSValue athena_camdolly(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	float dist;
+	JS_ToFloat32(ctx, &dist, argv[0]);
+	
+	dollyCamera(dist);
+
+	return JS_UNDEFINED;
+}
+
+static JSValue athena_camzoom(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	float dist;
+	JS_ToFloat32(ctx, &dist, argv[0]);
+	
+	zoomCamera(dist);
+
+	return JS_UNDEFINED;
+}
+
 static JSValue athena_camupdate(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	cameraUpdate();
 
@@ -167,8 +205,14 @@ static JSValue athena_camtype(JSContext *ctx, JSValue this_val, int argc, JSValu
 static const JSCFunctionListEntry camera_funcs[] = {
   JS_CFUNC_DEF("position", 3, athena_camposition),
   JS_CFUNC_DEF("rotation", 3, athena_camrotation),
+
   JS_CFUNC_DEF("target", 3, athena_camtarget),
   JS_CFUNC_DEF("orbit", 2, athena_camorbit),
+  JS_CFUNC_DEF("turn", 2, athena_camturn),
+  JS_CFUNC_DEF("dolly", 1, athena_camdolly),
+  JS_CFUNC_DEF("zoom", 1, athena_camzoom),
+  JS_CFUNC_DEF("pan", 2, athena_campan),
+
   JS_CFUNC_DEF("update", 0, athena_camupdate),
   JS_CFUNC_DEF("type", 1, athena_camtype),
 

@@ -139,6 +139,36 @@ void rotate(VECTOR output, VECTOR input, Quat r) {
 
 VECTOR local_up = {0.0f, 1.0f, 0.0f, 1.0f};
 
+void turnCamera(float yaw, float pitch)
+{
+	VECTOR dir;
+	SubVector(dir, camera_target, camera_position);
+
+	VECTOR dy = {0.0f, 1.0f, 0.0f, 1.0f};
+
+	Quat r = Quat_rotation(yaw, dy);
+	rotate(dir, dir, r);
+	rotate(local_up, local_up, r);
+
+	VECTOR right;
+	OuterProduct(right, dir, local_up);
+	Normalize(right, right);
+
+	r = Quat_rotation(pitch, right);
+	rotate(dir, dir, r);
+
+	OuterProduct(local_up, right, dir);
+	Normalize(local_up, local_up);
+
+	if(local_up[1] >= 0.0f) {
+		camera_up[1] = 1.0f; 
+	} else {
+		camera_up[1] = -1.0f;
+	}
+
+	AddVector(camera_target, camera_position, dir);
+}
+
 void orbitCamera(float yaw, float pitch)
 {
 	VECTOR dir;
@@ -168,6 +198,54 @@ void orbitCamera(float yaw, float pitch)
 
 	SubVector(camera_position, camera_target, dir);
 }
+
+void dollyCamera(float dist)
+{
+	VECTOR dir;
+	SubVector(dir, camera_target, camera_position);
+	SetLenVector(dir, dist);
+
+	AddVector(camera_position, camera_position, dir);
+	AddVector(camera_target, camera_target, dir);
+}
+
+void zoomCamera(float dist)
+{
+	VECTOR dir;
+	SubVector(dir, camera_target, camera_position);
+	float curdist = LenVector(dir);
+
+	if(dist >= curdist)
+		dist = curdist - 0.01f;
+
+	SetLenVector(dir, dist);
+
+	AddVector(camera_position, camera_position, dir);
+}
+
+void panCamera(float x, float y)
+{
+	VECTOR dir;
+	SubVector(dir, camera_target, camera_position);
+	Normalize(dir, dir);
+
+	VECTOR right;
+	OuterProduct(right, dir, camera_up);
+	Normalize(right, right);
+	
+	OuterProduct(local_up, right, dir);
+	Normalize(local_up, local_up);
+
+	VECTOR work0, work1;
+	ScaleVector(work0, right, x);
+	ScaleVector(work1, local_up, y);
+
+	AddVector(dir, work0, work1);
+
+	AddVector(camera_position, camera_position, dir);
+	AddVector(camera_target, camera_target, dir);
+}
+
 
 void SetLightAttribute(int id, float x, float y, float z, int attr){
 	switch (attr) {
