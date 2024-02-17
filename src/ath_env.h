@@ -62,6 +62,7 @@ JSModuleDef *athena_task_init(JSContext* ctx);
 JSModuleDef *athena_pads_init(JSContext* ctx);
 
 JSModuleDef *athena_vector_init(JSContext *ctx);
+JSModuleDef *athena_physics_init(JSContext *ctx);
 
 #ifdef ATHENA_GRAPHICS
 JSModuleDef *athena_render_init(JSContext* ctx);
