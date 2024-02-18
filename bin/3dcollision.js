@@ -22,8 +22,6 @@ let dragontex = new Image("dragon.png");
 let dragonmesh = new RenderObject("dragon.obj", dragontex);
 let dragonbounds = Physics.createBox(4, 4, 4);
 
-console.log(JSON.stringify(dragonbounds));
-
 let car = new RenderObject("Car.obj");
 let carbounds = Physics.createBox(2, 2, 2);
 
@@ -92,7 +90,8 @@ while(true){
 
     dragonmesh.drawBounds(0.0f, 0.0f, 25.0f, 3.14f, 0.0f, 0.0f, Color.new(128, 0, 255));
 
-    fntcpy.print(10, 10, Screen.getFPS(360) + " FPS | " + `RAM: ${Math.floor(System.getMemoryStats().used / 1048576)}MB`);
+    fntcpy.print(10, 10, Screen.getFPS(360) + " FPS | " + `RAM: ${Math.floor(System.getMemoryStats().used / 1048576)}MB` + 
+     ` | Collision: ${JSON.stringify(collision)}`);
 
     Screen.flip();
 }

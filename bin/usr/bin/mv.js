@@ -1,1 +1,0 @@
-System.moveFile(args[0], args[1]);

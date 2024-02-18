@@ -269,10 +269,10 @@ static JSValue js_physics_box_create(JSContext *ctx, JSValue this_val, int argc,
 }
 
 static const JSCFunctionListEntry js_physics_funcs[] = {
-    JS_CFUNC_DEF("createBox",     3,   js_physics_box_create),
-    JS_CFUNC_DEF("createSphere",  4,   js_physics_sphere_create),
-    JS_CFUNC_DEF("boxBoxCollide", 8, js_physics_bbox_collide),
-    JS_CFUNC_DEF("sphereBoxCollide", 5, js_physics_spherebox_collide),
+    JS_CFUNC_DEF("createBox",           3, js_physics_box_create),
+    JS_CFUNC_DEF("createSphere",        4, js_physics_sphere_create),
+    JS_CFUNC_DEF("boxBoxCollide",       8, js_physics_bbox_collide),
+    JS_CFUNC_DEF("sphereBoxCollide",    5, js_physics_spherebox_collide),
     JS_CFUNC_DEF("sphereSphereCollide", 2, js_physics_spheresphere_collide),
 };
 
