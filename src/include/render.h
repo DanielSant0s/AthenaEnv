@@ -40,8 +40,8 @@ typedef struct ath_model {
     void (*render)(struct ath_model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z);
     eLightAttributes pipeline;
 
-    GSTEXTURE* textures[10];
-	int tex_ranges[10];
+    GSTEXTURE** textures;
+	int *tex_ranges;
 	int tex_count;
 } model;
 

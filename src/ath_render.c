@@ -239,7 +239,7 @@ static JSClassID js_object_class_id;
 
 typedef struct {
 	model m;
-	JSValue textures[10];
+	JSValue *textures;
 } JSRenderObject;
 
 static void athena_object_dtor(JSRuntime *rt, JSValue val){
@@ -253,6 +253,10 @@ static void athena_object_dtor(JSRuntime *rt, JSValue val){
 	for (int i = 0; i < ro->m.tex_count; i++) {
 		JS_FreeValueRT(rt, ro->textures[i]);
 	}
+
+	free(ro->m.textures);
+	free(ro->m.tex_ranges);
+	free(ro->textures);
 
 	js_free_rt(rt, ro);
 }
@@ -326,6 +330,11 @@ static JSValue athena_settexture(JSContext *ctx, JSValue this_val, int argc, JSV
 
 	JS_DupValue(ctx, argv[1]);
 	JSImageData* image = JS_GetOpaque2(ctx, argv[1], get_img_class_id());
+
+	if (ro->m.tex_count < (tex_idx+1)) {
+		ro->m.textures =   realloc(ro->m.textures,   sizeof(GSTEXTURE*)*(ro->m.tex_count+1));
+		ro->m.tex_ranges = realloc(ro->m.tex_ranges,        sizeof(int)*(ro->m.tex_count+1));
+	}
 
 	ro->textures[tex_idx] = argv[1];
 	ro->m.textures[tex_idx] = &(image->tex);
@@ -531,6 +540,10 @@ static JSValue athena_object_ctor(JSContext *ctx, JSValueConst new_target, int a
 
 			image->tex.Filter = GS_FILTER_LINEAR;
 	
+			ro->m.textures = malloc(sizeof(GSTEXTURE*));
+			ro->m.tex_ranges = malloc(sizeof(int));
+			ro->textures = malloc(sizeof(JSValue));
+
 			ro->m.textures[0] = &(image->tex);
 			ro->m.tex_count = 1;
 			ro->m.tex_ranges[0] = ro->m.indexCount;
@@ -550,13 +563,19 @@ static JSValue athena_object_ctor(JSContext *ctx, JSValueConst new_target, int a
 		JS_DupValue(ctx, argv[1]);
 		image = JS_GetOpaque2(ctx, argv[1], get_img_class_id());
 
+		ro->textures = malloc(sizeof(JSValue));
+
 		ro->textures[0] = argv[1];
 
 		image->tex.Filter = GS_FILTER_LINEAR;
+
 		loadOBJ(&ro->m, file_tbo, &(image->tex));
 
 	} else if (argc > 0) {
 		loadOBJ(&ro->m, file_tbo, NULL);
+
+		ro->textures = malloc(sizeof(JSValue)*ro->m.tex_count);
+
 		for (int i = 0; i < ro->m.tex_count; i++) {
 			JSImageData* image;
     		JSValue img_obj = JS_UNDEFINED;

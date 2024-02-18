@@ -367,7 +367,10 @@ void loadOBJ(model* res_m, const char* path, GSTEXTURE* text) {
     int faceMaterialIndex;
 	char* oldTex = NULL;
 	char* curTex = NULL;
+
 	res_m->tex_count = 0;
+	res_m->textures = NULL;
+	res_m->tex_ranges = NULL;
 
     for (int i = 0, j = 0; i < indexCount; i++, j += 3) {
         int vertIndex = m->indices[i].p;
@@ -382,12 +385,20 @@ void loadOBJ(model* res_m, const char* path, GSTEXTURE* text) {
 			faceMaterialIndex = m->face_materials[i / 3];
 
 			if(oldTex != m->materials[faceMaterialIndex].map_Kd.name) {
+
 				curTex = m->materials[faceMaterialIndex].map_Kd.name;
 				oldTex = curTex;
+
+				res_m->textures =   realloc(res_m->textures,   sizeof(GSTEXTURE*)*(res_m->tex_count+1));
+				res_m->tex_ranges = realloc(res_m->tex_ranges, sizeof(int)*(res_m->tex_count+1));
+
 				res_m->textures[res_m->tex_count] = malloc(sizeof(GSTEXTURE));
+
 				load_image(res_m->textures[res_m->tex_count], curTex, true);
+
 				res_m->tex_ranges[res_m->tex_count] = i;
 				res_m->tex_count++;
+				
 			} else if (m->materials[faceMaterialIndex].map_Kd.name) {
 				res_m->tex_ranges[res_m->tex_count-1] = i;
 			}
@@ -435,6 +446,9 @@ void loadOBJ(model* res_m, const char* path, GSTEXTURE* text) {
     memcpy(res_m->bounding_box, bbox, sizeof(bbox));
 
 	if(text) {
+		res_m->textures = malloc(sizeof(GSTEXTURE*));
+		res_m->tex_ranges = malloc(sizeof(int));
+
 		res_m->textures[0] = text;
 		res_m->tex_count = 1;
 		res_m->tex_ranges[0] = res_m->indexCount;
