@@ -1,6 +1,6 @@
 // {"name": "3D collision", "author": "Daniel Santos", "version": "04072023", "icon": "render_icon.png", "file": "3dcollision.js"}
 
-let fntcpy = new Font();
+let fntcpy = new Font("default");
 fntcpy.scale = (0.4f);
 
 const canvas = Screen.getMode();

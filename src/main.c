@@ -52,7 +52,7 @@ int main(int argc, char **argv) {
     char newCWD[255];
 
     dbginit(); // if we are using serial port. initialize it here before the fun starts
-    
+
     prepare_IOP();
     init_drivers();
 
@@ -79,7 +79,6 @@ int main(int argc, char **argv) {
     #ifdef ATHENA_GRAPHICS
 	init_graphics();
     fntInit();
-    loadFontM();
     #endif
 
     init_taskman();

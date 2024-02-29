@@ -331,7 +331,7 @@ void fntInit()
     for (; i < FNT_MAX_COUNT; ++i)
         fntInitSlot(&fonts[i]);
 
-    fntLoadDefault(NULL);
+    //fntLoadDefault(NULL);
 
     fntUpdateAspectRatio();
 }

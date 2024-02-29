@@ -10,7 +10,7 @@ const pipelines = [
     "DEFAULT_NO_TEX"
 ];
 
-let fntcpy = new Font();
+let fntcpy = new Font("default");
 fntcpy.scale = (0.4f);
 
 Screen.setFrameCounter(true);

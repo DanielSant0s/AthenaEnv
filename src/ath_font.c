@@ -15,6 +15,9 @@ enum {
     truetype_font
 } FontTypes;
 
+bool osdsysfnt_loaded = false;
+bool truetypefnt_loaded = false;
+
 enum {
     ALIGN_LEFT,
     ALIGN_CENTER,
@@ -42,10 +45,15 @@ static JSClassID js_fontrender_class_id;
 static void athena_font_dtor(JSRuntime *rt, JSValue val){
     JSFontData *font = JS_GetOpaque(val, js_font_class_id);
 
-    if (font->type == 1) {
+    if (font->type == image_font) {
 	    unloadFont(font->data);
-    } else {
+    } else if (font->type == truetype_font) {
         fntRelease(font->id);
+    } else {
+        if (osdsysfnt_loaded) {
+            unloadFontM();
+            osdsysfnt_loaded = false;
+        }
     }
 
     js_free_rt(rt, font);
@@ -67,6 +75,11 @@ static JSValue athena_font_ctor(JSContext *ctx, JSValueConst new_target, int arg
         if (strcmp(path, "default") == 0) {
             font->id = 0;
             font->type = truetype_font;
+            if (!truetypefnt_loaded) {
+                fntLoadDefault(NULL);
+                truetypefnt_loaded = true;
+            }
+            
         } else {
             dbgprintf("%s\n", path);
             font->id = fntLoadFile(path);
@@ -81,6 +94,10 @@ static JSValue athena_font_ctor(JSContext *ctx, JSValueConst new_target, int arg
         
         JS_FreeCString(ctx, path);
     } else {
+        if (!osdsysfnt_loaded) {
+            loadFontM();
+            osdsysfnt_loaded = true;
+        }
         font->type = osdsys_font;
     }
 

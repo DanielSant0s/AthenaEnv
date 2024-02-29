@@ -1,6 +1,8 @@
 // {"name": "File manager", "author": "Daniel Santos", "version": "04072023", "icon": "lfm_icon.png", "file": "app_filemgr.js"}
 
-var font = new Font();
+var font = new Font("default");
+
+font.scale = 0.55f;
 
 function getStringSize(string, scale){
     return string.length * (scale*15);
@@ -15,8 +17,8 @@ function range(end) {
 };
 
 function printCentered(x, y, scale, string){
-    font.scale = scale;
-    font.print(x-(getStringSize(string, scale)/2), y, string);
+    //font.scale = scale;
+    font.print(x-(getStringSize(string, scale)/2), y-12, string);
 };
 
 
@@ -258,25 +260,25 @@ let render_filelist = function() {
     Draw.rect(file_manager.gfx.x, file_manager.gfx.y+(20), file_manager.gfx.w, 20, Color.new(64, 64, 64, 64));
     printCentered(file_manager.gfx.x+(file_manager.gfx.w/2), file_manager.gfx.y+(3+(20)), 0.55f, path);
     for (var i = 0; i < file.length; i++) {
-        if(i+file_manager.comp < 21 && i+file_manager.comp >= 0){
-            font.scale = 0.55f;
-            font.print(file_manager.gfx.x+10, file_manager.gfx.y+(3+(20*(i+2+file_manager.comp))),
+        if(i+file_manager.comp < 20 && i+file_manager.comp >= 0){
+            //font.scale = 0.55f;
+            font.print(file_manager.gfx.x+10, file_manager.gfx.y+(3+(19*(i+2+file_manager.comp)))-12,
             file[i].name);
             if(!file[i].dir){
-                font.print(file_manager.gfx.x+200, file_manager.gfx.y+(3+(20*(i+2+file_manager.comp))),
+                font.print(file_manager.gfx.x+200, file_manager.gfx.y+(3+(19*(i+2+file_manager.comp)))-12,
                 String(file[i].size));
             }
         }
     };
     if(file_manager.data[2] == 1) {
-        font.scale = 0.55f;
+        //font.scale = 0.55f;
         Draw.rect(file_manager.gfx.x+file_manager.gfx.w-75, file_manager.gfx.y+40, 75, 20*5, Color.new(0, 0, 0, 100));
         Draw.rect(file_manager.gfx.x+file_manager.gfx.w-75, file_manager.gfx.y+20+20*(file_manager.data[1]+1), 75, 20, Color.new(64, 0, 128, 64));
-        font.print(file_manager.gfx.x+file_manager.gfx.w-75+5, file_manager.gfx.y+(23+(20*(1))), "Copy");
-        font.print(file_manager.gfx.x+file_manager.gfx.w-75+5, file_manager.gfx.y+(23+(20*(2))), "Move");
-        font.print(file_manager.gfx.x+file_manager.gfx.w-75+5, file_manager.gfx.y+(23+(20*(3))), "Paste");
-        font.print(file_manager.gfx.x+file_manager.gfx.w-75+5, file_manager.gfx.y+(23+(20*(4))), "Rename");
-        font.print(file_manager.gfx.x+file_manager.gfx.w-75+5, file_manager.gfx.y+(23+(20*(5))), "Delete");
+        font.print(file_manager.gfx.x+file_manager.gfx.w-75+5, file_manager.gfx.y+(23+(20*(1)))-12, "Copy");
+        font.print(file_manager.gfx.x+file_manager.gfx.w-75+5, file_manager.gfx.y+(23+(20*(2)))-12, "Move");
+        font.print(file_manager.gfx.x+file_manager.gfx.w-75+5, file_manager.gfx.y+(23+(20*(3)))-12, "Paste");
+        font.print(file_manager.gfx.x+file_manager.gfx.w-75+5, file_manager.gfx.y+(23+(20*(4)))-12, "Rename");
+        font.print(file_manager.gfx.x+file_manager.gfx.w-75+5, file_manager.gfx.y+(23+(20*(5)))-12, "Delete");
     };
 };
 

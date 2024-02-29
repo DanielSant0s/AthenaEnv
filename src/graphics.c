@@ -1164,6 +1164,7 @@ void athena_error_screen(const char* errMsg, bool dark_mode) {
             color2 = GS_SETREG_RGBAQ(0x80,0x80,0x80,0x80,0x00);
         }
 
+		fntLoadDefault(NULL);
 		fntSetCharSize(0, FNTSYS_CHAR_SIZE*64*0.8f, FNTSYS_CHAR_SIZE*64*0.8f);
 
     	while (!isButtonPressed(PAD_START)) {

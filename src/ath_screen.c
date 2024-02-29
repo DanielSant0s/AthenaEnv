@@ -140,6 +140,7 @@ static JSValue athena_scrlog(JSContext *ctx, JSValue this_val, int argc, JSValue
 		str_buf = malloc(512);
 		buf_len = 512;
 		memset(str_buf, 0, buf_len);
+		fntLoadDefault(NULL);
 	}
 
 	old_len = str_len;
@@ -158,8 +159,10 @@ static JSValue athena_scrlog(JSContext *ctx, JSValue this_val, int argc, JSValue
 
 	clearScreen(GS_SETREG_RGBAQ(0x00, 0x00, 0x00, 0x80, 0x00));
 
+	fntSetCharSize(0, FNTSYS_CHAR_SIZE*64*0.8f, FNTSYS_CHAR_SIZE*64*0.8f);
+
 	if (str_len > 0) {
-		printFontMText(str_buf, 0, 0, 0.5f, 0x80808080);
+		fntRenderString(0, 0, 0, 0, 640, 448, str_buf, 0x80808080);
 	}
 
 	flipScreen();
