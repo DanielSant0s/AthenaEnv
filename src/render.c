@@ -33,15 +33,10 @@ MATRIX view_screen;
 MATRIX world_view;
 
 VECTOR camera_position = { 0.00f, 0.00f, 0.00f, 0.00f };
-
 VECTOR camera_target =   { 0.00f, 0.00f, 0.00f, 0.00f };
-
 VECTOR camera_yd =       { 0.00f, 1.00f, 0.00f, 0.00f };
-
 VECTOR camera_zd =       { 0.00f, 0.00f, 1.00f, 0.00f };
-
 VECTOR camera_up =       { 0.00f, 1.00f, 0.00f, 0.00f };
-
 VECTOR camera_rotation = { 0.00f, 0.00f, 0.00f, 0.00f };
 
 eCameraTypes camera_type = CAMERA_DEFAULT;

@@ -80,7 +80,7 @@ os.setInterval(() => {
 
     bg.draw(0, 0);
 
-    font_bold.print(15, 5, "Athena dash alpha v0.1");
+    font_bold.print(15, 5, "Athena dash");
 
     font.print(15, 420, `Temp: ${System.getTemperature() === undefined? "NaN" : System.getTemperature()} C | RAM Usage: ${Math.floor(System.getMemoryStats().used / 1048576)}MB / ${Math.floor(ee_info.RAMSize / 1048576)}MB`);
 
