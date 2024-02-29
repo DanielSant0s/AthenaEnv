@@ -13,7 +13,7 @@ JSClassID get_img_class_id(){
 	return js_image_class_id;
 }
 
-int append_img(JSImageData* img, JSImgList* list)
+static int append_img(JSImageData* img, JSImgList* list)
 {
     JSImageData** aux = malloc((list->size+1)*sizeof(JSImageData*));
 

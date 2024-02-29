@@ -4,11 +4,11 @@
 
 #include "include/render.h"
 
-bool overlap(float min1, float max1, float min2, float max2) {
+static bool overlap(float min1, float max1, float min2, float max2) {
     return max1 >= min2 && max2 >= min1;
 }
 
-bool boxBoxCollide(VECTOR bbox1[8], VECTOR bbox2[8], float coords1[3], float coords2[3], float collision[3]) {
+static bool boxBoxCollide(VECTOR bbox1[8], VECTOR bbox2[8], float coords1[3], float coords2[3], float collision[3]) {
     for (int i = 0; i < 3; ++i) {
         float min1 = bbox1[0][i] + coords1[i], max1 = bbox1[0][i] + coords1[i];
         float min2 = bbox2[0][i] + coords2[i], max2 = bbox2[0][i] + coords2[i];
@@ -31,14 +31,14 @@ bool boxBoxCollide(VECTOR bbox1[8], VECTOR bbox2[8], float coords1[3], float coo
 }
 
 
-float distanceSquared(float x1, float y1, float z1, float x2, float y2, float z2) {
+static float distanceSquared(float x1, float y1, float z1, float x2, float y2, float z2) {
     float dx = x2 - x1;
     float dy = y2 - y1;
     float dz = z2 - z1;
     return dx * dx + dy * dy + dz * dz;
 }
 
-bool sphereBoxCollide(float sphereCenterX, float sphereCenterY, float sphereCenterZ, float sphereRadius,
+static bool sphereBoxCollide(float sphereCenterX, float sphereCenterY, float sphereCenterZ, float sphereRadius,
                       VECTOR bbox[8], float coords[3], float collision[3]) {
 
     float closestX = fminf(fmaxf(sphereCenterX, bbox[0][0] + coords[0]), bbox[1][0] + coords[0]);
@@ -60,7 +60,7 @@ bool sphereBoxCollide(float sphereCenterX, float sphereCenterY, float sphereCent
 }
 
 
-bool sphereSphereCollide(float sphere1X, float sphere1Y, float sphere1Z, float sphere1Radius,
+static bool sphereSphereCollide(float sphere1X, float sphere1Y, float sphere1Z, float sphere1Radius,
                         float sphere2X, float sphere2Y, float sphere2Z, float sphere2Radius,
                         float collision[3]) {
 
@@ -81,7 +81,7 @@ bool sphereSphereCollide(float sphere1X, float sphere1Y, float sphere1Z, float s
     return false; 
 }
 
-void createBox(VECTOR bbox[8], float size[3]) {
+static void createBox(VECTOR bbox[8], float size[3]) {
     float halfSize[3] = { size[0] / 2.0f, size[1] / 2.0f, size[2] / 2.0f };
 
     bbox[0][0] = -halfSize[0];

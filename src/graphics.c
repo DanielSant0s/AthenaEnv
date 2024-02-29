@@ -1024,6 +1024,8 @@ int GetInterlacedFrameMode()
 }
 GSGLOBAL *getGSGLOBAL(){ return gsGlobal; }
 
+static void switchFlipScreenFunction();
+
 void setVideoMode(s16 mode, int width, int height, int psm, s16 interlace, s16 field, bool zbuffering, int psmz, bool double_buffering, uint8_t pass_count) {
 	gsGlobal->Mode = mode;
 	gsGlobal->Width = width;
@@ -1200,7 +1202,7 @@ void vu1_queue_init(GSGLOBAL *gsGlobal, GSQUEUE *Queue, u8 mode, int size)
 	Queue->mode			= mode;
 }
 
-void flipScreenSingleBuffering()
+static void flipScreenSingleBuffering()
 {
 	//gsKit_set_finish(gsGlobal);
 	gsKit_sync(gsGlobal);
@@ -1209,7 +1211,7 @@ void flipScreenSingleBuffering()
 	gsKit_TexManager_nextFrame(gsGlobal);
 }
 
-void flipScreenSingleBufferingPerf()
+static void flipScreenSingleBufferingPerf()
 {
 	//gsKit_set_finish(gsGlobal);
 	gsKit_sync(gsGlobal);
@@ -1220,7 +1222,7 @@ void flipScreenSingleBufferingPerf()
 	processFrameCounter();
 }
 
-void flipScreenDoubleBuffering()
+static void flipScreenDoubleBuffering()
 {	
 	//gsKit_set_finish(gsGlobal);
 
@@ -1232,7 +1234,7 @@ void flipScreenDoubleBuffering()
 	gsKit_TexManager_nextFrame(gsGlobal);
 }
 
-void flipScreenDoubleBufferingPerf()
+static void flipScreenDoubleBufferingPerf()
 {	
 	//gsKit_set_finish(gsGlobal);
 
@@ -1248,13 +1250,13 @@ void flipScreenDoubleBufferingPerf()
 
 //////////////////////////////////////////////////////////////////////////////////////////////
 
-void flipScreenSingleBufferingNoVSync()
+static void flipScreenSingleBufferingNoVSync()
 {
 	gsKit_queue_exec(gsGlobal);
 	gsKit_TexManager_nextFrame(gsGlobal);
 }
 
-void flipScreenSingleBufferingPerfNoVSync()
+static void flipScreenSingleBufferingPerfNoVSync()
 {
 
 	gsKit_queue_exec(gsGlobal);
@@ -1263,7 +1265,7 @@ void flipScreenSingleBufferingPerfNoVSync()
 	processFrameCounter();
 }
 
-void flipScreenDoubleBufferingNoVSync()
+static void flipScreenDoubleBufferingNoVSync()
 {	
 	gsKit_flip(gsGlobal);
 	gsKit_queue_exec(gsGlobal);
@@ -1271,7 +1273,7 @@ void flipScreenDoubleBufferingNoVSync()
 	gsKit_TexManager_nextFrame(gsGlobal);
 }
 
-void flipScreenDoubleBufferingPerfNoVSync()
+static void flipScreenDoubleBufferingPerfNoVSync()
 {	
 	gsKit_flip(gsGlobal);
 	gsKit_queue_exec(gsGlobal);
@@ -1283,7 +1285,7 @@ void flipScreenDoubleBufferingPerfNoVSync()
 
 //////////////////////////////////////////////////////////////////////////////////////////////
 
-void flipScreenHiRes()
+static void flipScreenHiRes()
 {
 	gsKit_hires_sync(gsGlobal);
 	gsKit_hires_flip(gsGlobal);
@@ -1291,7 +1293,7 @@ void flipScreenHiRes()
 
 }
 
-void flipScreenHiResPerf()
+static void flipScreenHiResPerf()
 {
 	gsKit_hires_sync(gsGlobal);
 	gsKit_hires_flip(gsGlobal);
@@ -1300,7 +1302,7 @@ void flipScreenHiResPerf()
 	processFrameCounter();
 }
 
-void switchFlipScreenFunction()
+static void switchFlipScreenFunction()
 {
 	if (hires) {
 		if(perf) {
