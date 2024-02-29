@@ -127,6 +127,7 @@ static JSValue athena_font_print(JSContext *ctx, JSValue this_val, int argc, JSV
 
     JS_ToFloat32(ctx, &x, argv[0]);
 	JS_ToFloat32(ctx, &y, argv[1]);
+    
     const char* text = JS_ToCString(ctx, argv[2]);
 
     if (font->type == 1){

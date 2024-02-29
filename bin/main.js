@@ -70,6 +70,8 @@ const VK_RETURN = 10;
 
 var ee_info = System.getCPUInfo();
 
+let mem = undefined;
+
 os.setInterval(() => {
     pad.update();
 
@@ -82,7 +84,9 @@ os.setInterval(() => {
 
     font_bold.print(15, 5, "Athena dash");
 
-    font.print(15, 420, `Temp: ${System.getTemperature() === undefined? "NaN" : System.getTemperature()} C | RAM Usage: ${Math.floor(System.getMemoryStats().used / 1048576)}MB / ${Math.floor(ee_info.RAMSize / 1048576)}MB`);
+    mem = System.getMemoryStats();
+
+    font.print(15, 420, `Temp: ${System.getTemperature() === undefined? "NaN" : System.getTemperature()} C | RAM Usage: ${Math.floor(mem.used / 1024)}KB / ${Math.floor(ee_info.RAMSize / 1024)}KB`);
 
     if(pad.justPressed(Pads.UP) || old_kbd_char == VK_OLD_UP && kbd_char == VK_NEW_UP) {
         app_table.unshift(app_table.pop());
@@ -99,8 +103,6 @@ os.setInterval(() => {
             bin = app_table[0].bin;
         }
 
-        
-
         System.loadELF(System.boot_path + "/" + bin, [app_table[0].file, ]); // Doing this to reset all the stuff
     }
 
@@ -110,6 +112,6 @@ os.setInterval(() => {
     for(let i = 1; i < (app_table.length < 10? app_table.length : 10); i++) {
         font.print(210, 125+(23*i), app_table[i].name);
     }
-
+    
     Screen.flip();
 }, 0);
