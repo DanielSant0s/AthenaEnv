@@ -10,6 +10,8 @@
 
 #define TRUE 1
 
+#define JSFILE_NOTFOUND -5656
+
 JSModuleDef *athena_push_module(JSContext* ctx, JSModuleInitFunc *func, const JSCFunctionListEntry *func_list, int len, const char* module_name){
     JSModuleDef *m;
     m = JS_NewCModule(ctx, module_name, func);
@@ -236,17 +238,12 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 static int qjs_handle_file(JSContext *ctx, const char *filename, const char *bytecode_filename) {
 	FILE *f = NULL;
 	int retval;
-	char fnbuf[256];
 
-	snprintf(fnbuf, sizeof(fnbuf), "%s", filename);
-
-	fnbuf[sizeof(fnbuf) - 1] = (char) 0;
-
-	f = fopen(fnbuf, "r");
+	f = fopen(filename, "r");
 	if (!f) {
-		fprintf(stderr, "failed to open source file: %s\n", filename);
-		fflush(stderr);
-		return -1;
+		//fprintf(stderr, "failed to open source file: %s\n", filename);
+		//fflush(stderr);
+		return JSFILE_NOTFOUND;
 	}
 
 	retval = qjs_handle_fh(ctx, f, filename, bytecode_filename);
@@ -329,26 +326,30 @@ const char* runScript(const char* script, bool isBuffer)
 
     int s = qjs_handle_file(ctx, script, NULL);
 
-	js_std_loop(ctx);
-
     if (s < 0) { 
-		JSValue exception_val = JS_GetException(ctx);
-		const char* exception = JS_ToCString(ctx, exception_val);
-		JSValue stack_val = JS_GetPropertyStr(ctx, exception_val, "stack");
-		const char* stack = JS_ToCString(ctx, stack_val);
-		JS_FreeValue(ctx, exception_val);
-		JS_FreeValue(ctx, stack_val);
-		
-		strcpy(error_buf, exception);
-		strcat(error_buf, "\n");
-		strcat(error_buf, stack);
+		if (s == JSFILE_NOTFOUND) {
+			sprintf(error_buf, "AthenaError: Fail when opening %s\n"
+							   "Tip: If you are on PCSX2, check Host filesystem!\n", script);
+		} else {
+			JSValue exception_val = JS_GetException(ctx);
+			const char* exception = JS_ToCString(ctx, exception_val);
+			JSValue stack_val = JS_GetPropertyStr(ctx, exception_val, "stack");
+			const char* stack = JS_ToCString(ctx, stack_val);
+			JS_FreeValue(ctx, exception_val);
+			JS_FreeValue(ctx, stack_val);
 
+			strcpy(error_buf, exception);
+			strcat(error_buf, "\n");
+			strcat(error_buf, stack);
+		}
+		
 		js_std_free_handlers(rt);
 		JS_FreeContext(ctx);
 		JS_FreeRuntime(rt);
 
-		printf("%s\n", error_buf);
 		return error_buf; 
+	} else {
+		js_std_loop(ctx);
 	}
 	
 	js_std_free_handlers(rt);

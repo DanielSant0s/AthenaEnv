@@ -8,6 +8,8 @@
 
 #include "include/render.h"
 
+#include "include/dbgprintf.h"
+
 #include "vif.h"
 
 extern u32 VU1Draw3D_CodeStart __attribute__((section(".vudata")));
@@ -62,11 +64,11 @@ void cameraUpdate() {
 			LookAtCameraMatrix(world_view, camera_position, camera_target, camera_up);
 			break;
 	}
-	//printf("Camera matrix:\n");
-	//printf("%g %g %g %g\n", world_view[0], world_view[1], world_view[2], world_view[3]);
-	//printf("%g %g %g %g\n", world_view[4], world_view[5], world_view[6], world_view[7]);
-	//printf("%g %g %g %g\n", world_view[8], world_view[9], world_view[10], world_view[11]);
-	//printf("%g %g %g %g\n", world_view[12], world_view[13], world_view[14], world_view[15]);
+	dbgprintf("Camera matrix:\n");
+	dbgprintf("%f %f %f %f\n", world_view[0], world_view[1], world_view[2], world_view[3]);
+	dbgprintf("%f %f %f %f\n", world_view[4], world_view[5], world_view[6], world_view[7]);
+	dbgprintf("%f %f %f %f\n", world_view[8], world_view[9], world_view[10], world_view[11]);
+	dbgprintf("%f %f %f %f\n", world_view[12], world_view[13], world_view[14], world_view[15]);
 }
 
 void setCameraPosition(float x, float y, float z){

@@ -53,7 +53,9 @@ int main(int argc, char **argv) {
     dbginit(); // if we are using serial port. initialize it here before the fun starts
     prepare_IOP();
     init_drivers();
+
     getcwd(boot_path, sizeof(boot_path));
+
     if ((!strncmp(boot_path, "hdd0:", 5)) && (strstr(boot_path, ":pfs:") != NULL) && HDD_USABLE) // we booted from HDD and our modules are loaded and running...
     {
         if (getMountInfo(boot_path, NULL, MountPoint, newCWD)) // ...if we can parse the boot path...
@@ -69,6 +71,7 @@ int main(int argc, char **argv) {
 
         }
     }
+    
     waitUntilDeviceIsReady(boot_path);
 
     #ifdef ATHENA_GRAPHICS

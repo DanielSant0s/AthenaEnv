@@ -1,6 +1,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <sio.h>
+
 void sio_printf(const char *fmt, ...)
 {
     va_list args;

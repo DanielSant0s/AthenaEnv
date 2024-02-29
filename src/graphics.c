@@ -1134,7 +1134,7 @@ void athena_error_screen(const char* errMsg, bool dark_mode) {
 
     if (errMsg != NULL)
     {
-        dbgprintf("AthenaEnv ERROR!\n%s", errMsg);
+        printf("AthenaEnv ERROR!\n%s", errMsg);
 
         if (strstr(errMsg, "EvalError") != NULL) {
             color = GS_SETREG_RGBAQ(0x56,0x71,0x7D,0x80,0x00);
@@ -1148,10 +1148,12 @@ void athena_error_screen(const char* errMsg, bool dark_mode) {
             color = GS_SETREG_RGBAQ(0xD0,0x31,0x3D,0x80,0x00);
         } else if (strstr(errMsg, "InternalError") != NULL) {
             color = GS_SETREG_RGBAQ(0x8A,0x00,0xC2,0x80,0x00);
-        } else if(strstr(errMsg, "URIError") != NULL) {
+        } else if (strstr(errMsg, "URIError") != NULL) {
             color = GS_SETREG_RGBAQ(0xFF,0x78,0x1F,0x80,0x00);
-        } else if(strstr(errMsg, "AggregateError") != NULL) {
+        } else if (strstr(errMsg, "AggregateError") != NULL) {
             color = GS_SETREG_RGBAQ(0xE2,0x61,0x9F,0x80,0x00);
+        } else if (strstr(errMsg, "AthenaError") != NULL) {
+            color = GS_SETREG_RGBAQ(0x70,0x29,0x63,0x80,0x00);
         }
 
         if(dark_mode) {
