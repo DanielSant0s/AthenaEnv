@@ -329,7 +329,7 @@ const char* runScript(const char* script, bool isBuffer)
     if (s < 0) { 
 		if (s == JSFILE_NOTFOUND) {
 			sprintf(error_buf, "AthenaError: Fail when opening %s\n"
-							   "Tip: If you are on PCSX2, check Host filesystem!\n", script);
+							   "\nTip: If you are on PCSX2, check Host filesystem!\n", script);
 		} else {
 			JSValue exception_val = JS_GetException(ctx);
 			const char* exception = JS_ToCString(ctx, exception_val);

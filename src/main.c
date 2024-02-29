@@ -50,7 +50,9 @@ int main(int argc, char **argv) {
 
     char MountPoint[32+6+1]; // max partition name + 'hdd0:/' = '\0' 
     char newCWD[255];
+
     dbginit(); // if we are using serial port. initialize it here before the fun starts
+    
     prepare_IOP();
     init_drivers();
 
@@ -71,7 +73,7 @@ int main(int argc, char **argv) {
 
         }
     }
-    
+
     waitUntilDeviceIsReady(boot_path);
 
     #ifdef ATHENA_GRAPHICS

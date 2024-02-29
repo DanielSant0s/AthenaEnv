@@ -12,6 +12,7 @@
 #include "include/graphics.h"
 #include "include/athena_math.h"
 #include "include/dbgprintf.h"
+#include "include/fntsys.h"
 
 #include "include/pad.h"
 
@@ -1163,11 +1164,13 @@ void athena_error_screen(const char* errMsg, bool dark_mode) {
             color2 = GS_SETREG_RGBAQ(0x80,0x80,0x80,0x80,0x00);
         }
 
+		fntSetCharSize(0, FNTSYS_CHAR_SIZE*64*0.8f, FNTSYS_CHAR_SIZE*64*0.8f);
+
     	while (!isButtonPressed(PAD_START)) {
 			clearScreen(color);
-			printFontMText("AthenaEnv ERROR!", 15.0f, 15.0f, 0.9f, color2);
-			printFontMText(errMsg, 15.0f, 80.0f, 0.6f, color2);
-	   		printFontMText("\nPress [start] to restart\n", 15.0f, 400.0f, 0.6f, color2);
+			fntRenderString(0, 15, 15, 0, 640, 448, "AthenaEnv ERROR!", color2);
+			fntRenderString(0, 15, 80, 0, 640, 448, errMsg, color2);
+			fntRenderString(0, 15, 400, 0, 640, 448, "Press [start] to restart", color2);
 			flipScreen();
 		} 
     }
