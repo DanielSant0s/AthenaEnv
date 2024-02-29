@@ -7,7 +7,6 @@
 #include "fast_obj/fast_obj.h"
 
 #include "include/render.h"
-#include "include/vector.h"
 
 #include "vif.h"
 
@@ -38,6 +37,7 @@ VECTOR camera_yd =       { 0.00f, 1.00f, 0.00f, 0.00f };
 VECTOR camera_zd =       { 0.00f, 0.00f, 1.00f, 0.00f };
 VECTOR camera_up =       { 0.00f, 1.00f, 0.00f, 0.00f };
 VECTOR camera_rotation = { 0.00f, 0.00f, 0.00f, 0.00f };
+VECTOR local_up =        { 0.00f, 1.00f, 0.00f, 1.00f };
 
 eCameraTypes camera_type = CAMERA_DEFAULT;
 
@@ -99,7 +99,7 @@ typedef struct {
     float w, x, y, z;
 } Quat;
 
-Quat Quat_rotation(float rotation, VECTOR axis) {
+static Quat Quat_rotation(float rotation, VECTOR axis) {
     Quat result;
 
 	Normalize(axis, axis);
@@ -115,7 +115,7 @@ Quat Quat_rotation(float rotation, VECTOR axis) {
     return result;
 }
 
-void rotate(VECTOR output, VECTOR input, Quat r) {
+static void rotate(VECTOR output, VECTOR input, Quat r) {
     Quat v = {0.0f, input[0], input[1], input[2]};
 
     Quat conjR = {r.w, -r.x, -r.y, -r.z};
@@ -131,8 +131,6 @@ void rotate(VECTOR output, VECTOR input, Quat r) {
 	output[1] = rotatedV.y;
 	output[2] = rotatedV.z;
 }
-
-VECTOR local_up = {0.0f, 1.0f, 0.0f, 1.0f};
 
 void turnCamera(float yaw, float pitch)
 {
