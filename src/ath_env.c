@@ -313,14 +313,14 @@ const char* runScript(const char* script, bool isBuffer)
 	size_t memoryLimit = (GetMemorySize() - get_used_memory()) >> 1;
 
     dbgprintf("\nStarting AthenaEnv...\n");
-    JSRuntime *rt = JS_NewRuntime(); if (!rt) { return "Runtime creation"; }
+    JSRuntime *rt = JS_NewRuntime(); if (!rt) { return "AthenaError: Runtime creation"; }
     js_std_set_worker_new_context_func(JS_NewCustomContext);
     js_std_init_handlers(rt);
 
 	JS_SetMemoryLimit(rt, memoryLimit);
 	JS_SetGCThreshold(rt, memoryLimit - 4194304);
 
-    JSContext *ctx = JS_NewCustomContext(rt); if (!ctx) { return "Context creation"; }
+    JSContext *ctx = JS_NewCustomContext(rt); if (!ctx) { return "AthenaError: Context creation"; }
 
 	JS_SetModuleLoaderFunc(rt, NULL, js_module_loader, NULL);
 
