@@ -26,7 +26,7 @@ static bool stream_paused = false;
 static int oggThreadID, oggIoThreadID, wavThreadId;
 static int outSema, inSema;
 static unsigned char rdPtr, wrPtr;
-static char oggBuffer[STREAM_RING_BUFFER_COUNT][STREAM_RING_BUFFER_SIZE];
+static char soundBuffer[STREAM_RING_BUFFER_COUNT][STREAM_RING_BUFFER_SIZE];
 static volatile unsigned char oggThreadRunning, oggIoThreadRunning, wav_thread_running;
 
 static Sound *cur_snd;
@@ -38,20 +38,23 @@ static void wavThread(void *arg)
     while (!terminate_flag) {
         //SleepThread();
 
-		ret = fread(oggBuffer[0], 1, sizeof(oggBuffer[0]), cur_snd->fp);
+		ret = fread(soundBuffer[0], 1, sizeof(soundBuffer[0]), cur_snd->fp);
+
 		if (ret > 0)
 		{
 			audsrv_wait_audio(STREAM_RING_BUFFER_SIZE);
-			audsrv_play_audio(oggBuffer[0], ret);
+			audsrv_play_audio(soundBuffer[0], ret);
 		}
 
-        if (ret < sizeof(oggBuffer[0]))
+        if (ret < sizeof(soundBuffer[0]))
 		{
+            fseek(cur_snd->fp, 0x30, SEEK_SET);
+
             if (!stream_repeat) {
 				terminate_flag = 1;
+                sound_pause();
 				break;
 			}
-			fseek(cur_snd->fp, 0x30, SEEK_SET);
 		}
 
 		if(stream_paused) {
@@ -83,7 +86,7 @@ static int init_wav() {
     thread.attr = 0;
     thread.option = 0;
 
-    // ogg thread will start in DORMANT state.
+    // sound thread will start in DORMANT state.
     wavThreadId = CreateThread(&thread);
 
     if (wavThreadId >= 0) {
@@ -295,7 +298,7 @@ static void oggThread(void *arg)
 
         while (PollSema(outSema) == outSema) {
             audsrv_wait_audio(STREAM_RING_BUFFER_SIZE);
-            audsrv_play_audio(oggBuffer[rdPtr], STREAM_RING_BUFFER_SIZE);
+            audsrv_play_audio(soundBuffer[rdPtr], STREAM_RING_BUFFER_SIZE);
             rdPtr = (rdPtr + 1) % STREAM_RING_BUFFER_COUNT;
 
             SignalSema(inSema);
@@ -336,7 +339,7 @@ static void oggIoThread(void *arg)
         	decodeTotal = STREAM_RING_BUFFER_SIZE;
         	int bufferPtr = 0;
         	do {
-        	    int ret = ov_read(cur_snd->fp, oggBuffer[wrPtr] + bufferPtr, decodeTotal, 0, 2, 1, &bitStream);
+        	    int ret = ov_read(cur_snd->fp, soundBuffer[wrPtr] + bufferPtr, decodeTotal, 0, 2, 1, &bitStream);
         	    if (ret > 0) {
         	        bufferPtr += ret;
         	        decodeTotal -= ret;
