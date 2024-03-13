@@ -51,9 +51,7 @@ static void wavThread(void *arg)
             fseek(cur_snd->fp, 0x30, SEEK_SET);
 
             if (!stream_repeat) {
-				terminate_flag = 1;
                 sound_pause();
-				break;
 			}
 		}
 
