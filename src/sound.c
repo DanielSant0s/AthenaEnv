@@ -22,6 +22,7 @@ static bool adpcm_started = false;
 
 static bool stream_repeat = false;
 static bool stream_paused = false;
+static bool stream_restart = false;
 
 static int oggThreadID, oggIoThreadID, wavThreadId;
 static int outSema, inSema;
@@ -30,6 +31,11 @@ static char soundBuffer[STREAM_RING_BUFFER_COUNT][STREAM_RING_BUFFER_SIZE];
 static volatile unsigned char oggThreadRunning, oggIoThreadRunning, wav_thread_running;
 
 static Sound *cur_snd;
+
+static void restartSound(void *arg)
+{
+    stream_restart = true;
+}
 
 static void wavThread(void *arg)
 {
@@ -51,6 +57,7 @@ static void wavThread(void *arg)
             fseek(cur_snd->fp, 0x30, SEEK_SET);
 
             if (!stream_repeat) {
+                audsrv_stop_audio();
                 sound_pause();
 			}
 		}
@@ -63,6 +70,15 @@ static void wavThread(void *arg)
 		} else if (!flag_start) {
 			flag_start = true;
 		}
+
+        if(stream_restart) {
+            audsrv_wait_audio(STREAM_RING_BUFFER_SIZE);
+            audsrv_stop_audio();
+
+            fseek(cur_snd->fp, 0x30, SEEK_SET);
+
+            stream_restart = false;
+        }
     }
 
     audsrv_stop_audio();

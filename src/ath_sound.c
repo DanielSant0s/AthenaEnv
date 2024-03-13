@@ -111,6 +111,11 @@ static JSValue athena_resume(JSContext *ctx, JSValue this_val, int argc, JSValue
 	return JS_UNDEFINED;
 }
 
+static JSValue athena_restart(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	restartSound();
+	return JS_UNDEFINED;
+}
+
 static const JSCFunctionListEntry module_funcs[] = {
 	JS_CFUNC_DEF("setVolume", 2, athena_setvolume),
 	JS_CFUNC_DEF("load", 1, athena_load),
@@ -122,6 +127,7 @@ static const JSCFunctionListEntry module_funcs[] = {
 	JS_CFUNC_DEF("repeat", 1, athena_repeat),
 	JS_CFUNC_DEF("pause", 1, athena_pause),
 	JS_CFUNC_DEF("resume", 1, athena_resume),
+	JS_CFUNC_DEF("restart", 1, athena_restart),
 };
 
 static int module_init(JSContext *ctx, JSModuleDef *m){
