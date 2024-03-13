@@ -45,6 +45,7 @@ void sound_pause(void);
 void sound_resume(Sound* snd);
 void sound_free(Sound* snd);
 void sound_deinit(void);
+void sound_restart(void);
 
 audsrv_adpcm_t* sound_loadadpcm(const char* path);
 void sound_playadpcm(int slot, audsrv_adpcm_t *sample);
