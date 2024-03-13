@@ -32,11 +32,6 @@ static volatile unsigned char oggThreadRunning, oggIoThreadRunning, wav_thread_r
 
 static Sound *cur_snd;
 
-static void restartSound()
-{
-    stream_restart = true;
-}
-
 static void wavThread(void *arg)
 {
     int ret;
@@ -220,6 +215,11 @@ void sound_setadpcmvolume(int slot, int volume) {
     }
 
     audsrv_adpcm_set_volume_and_pan(slot, volume, 0);
+}
+
+void sound_restart()
+{
+    stream_restart = true;
 }
 
 audsrv_adpcm_t* sound_loadadpcm(const char* path){

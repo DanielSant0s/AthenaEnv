@@ -112,7 +112,7 @@ static JSValue athena_resume(JSContext *ctx, JSValue this_val, int argc, JSValue
 }
 
 static JSValue athena_restart(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-	restartSound();
+	sound_restart();
 	return JS_UNDEFINED;
 }
 
