@@ -301,6 +301,64 @@ int sound_get_duration(Sound* snd) {
     return -1;
 }
 
+void sound_set_position(Sound* snd, int ms) {
+    uint32_t f_pos, n_samples;
+
+    if (snd->type == OGG_AUDIO) {
+        if (ms < sound_get_duration(snd)) {
+            if (snd == cur_snd)
+                sound_pause();
+
+            n_samples = ms / 1000 * snd->fmt.freq;
+
+            f_pos = (ms / 1000 * snd->fmt.freq) * (snd->fmt.bits / 16);
+
+            ov_pcm_seek(cur_snd->fp, round(f_pos / STREAM_RING_BUFFER_SIZE) * STREAM_RING_BUFFER_SIZE);
+
+            if (snd == cur_snd)
+                sound_resume(snd);
+        }
+
+    } else if (snd->type == WAV_AUDIO) {
+        if (ms < sound_get_duration(snd)) {
+            if (snd == cur_snd)
+                sound_pause();
+
+            n_samples = ms / 1000 * snd->fmt.freq;
+
+            f_pos = (ms / 1000 * snd->fmt.freq) * (snd->fmt.bits / 4);
+
+            fseek(snd->fp, f_pos, SEEK_SET);
+
+            if (snd == cur_snd)
+                sound_resume(snd);
+        }
+
+    } else if (snd->type == ADPCM_AUDIO) {
+        return -1;
+    }
+}
+
+int sound_get_position(Sound* snd) {
+    uint32_t f_pos, ms;
+
+    if (snd->type == OGG_AUDIO) {
+        f_pos = ov_pcm_tell(snd->fp);
+	    
+        ms = round(f_pos / (snd->fmt.freq / 1000 * (snd->fmt.bits / 16)));
+
+        return ms;
+    } else if (snd->type == WAV_AUDIO) {
+        f_pos = ftell(snd->fp);
+
+        ms = round(f_pos / (snd->fmt.freq / 1000 * (snd->fmt.bits / 4)));
+
+        return ms;
+    } else if (snd->type == ADPCM_AUDIO) {
+        return -1;
+    }
+}
+
 // OGG Support
 
 static void oggThread(void *arg)
