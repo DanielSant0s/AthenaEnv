@@ -32,7 +32,7 @@ static volatile unsigned char oggThreadRunning, oggIoThreadRunning, wav_thread_r
 
 static Sound *cur_snd;
 
-static void restartSound(void *arg)
+static void restartSound()
 {
     stream_restart = true;
 }
