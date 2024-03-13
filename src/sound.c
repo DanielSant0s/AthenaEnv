@@ -325,6 +325,15 @@ static void oggThread(void *arg)
 		} else if (!flag_start) {
 			flag_start = true;
 		}
+
+        if(stream_restart) {
+            audsrv_wait_audio(STREAM_RING_BUFFER_SIZE);
+            audsrv_stop_audio();
+
+            fseek(cur_snd->fp, 0x30, SEEK_SET);
+
+            stream_restart = false;
+        }
     }
 
     audsrv_stop_audio();
@@ -362,11 +371,12 @@ static void oggIoThread(void *arg)
         	        terminate_flag = 1;
         	        break;
         	    } else if (ret == 0) {
+                    ov_pcm_seek(cur_snd->fp, 0);
+
 					if (!stream_repeat) {
-						terminate_flag = 1;
-						break;
+						audsrv_stop_audio();
+                        sound_pause();
 					}
-        	        ov_pcm_seek(cur_snd->fp, 0);
 				}
 
         	} while (decodeTotal > 0);

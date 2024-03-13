@@ -127,7 +127,7 @@ static const JSCFunctionListEntry module_funcs[] = {
 	JS_CFUNC_DEF("repeat", 1, athena_repeat),
 	JS_CFUNC_DEF("pause", 1, athena_pause),
 	JS_CFUNC_DEF("resume", 1, athena_resume),
-	JS_CFUNC_DEF("restart", 1, athena_restart),
+	JS_CFUNC_DEF("restart", 0, athena_restart),
 };
 
 static int module_init(JSContext *ctx, JSModuleDef *m){
