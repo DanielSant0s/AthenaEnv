@@ -82,7 +82,7 @@ while(true){
             Sound.pause(track);
             playing = false;
         } else {
-            Sound.play(track);
+            Sound.resume(track);
             playing = true;
         }
     }
@@ -113,9 +113,9 @@ while(true){
 
     position = Sound.getPosition(track);
 
-    if(pad.justPressed(Pads.RIGHT)) {
+    if(pad.justPressed(Pads.RIGHT) && Sound.isPlaying()) {
         Sound.setPosition(track, Sound.getPosition(track) + 5000);
-    } else if(pad.justPressed(Pads.LEFT)) {
+    } else if(pad.justPressed(Pads.LEFT) && Sound.isPlaying()) {
         Sound.setPosition(track, Sound.getPosition(track) - 5000);
     }
 
