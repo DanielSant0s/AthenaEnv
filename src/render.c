@@ -262,6 +262,12 @@ void SetLightAttribute(int id, float x, float y, float z, int attr){
 			lights.diffuse[id][2] = z;
 			lights.diffuse[id][3] = 1.00f;
 			break;
+		case ATHENA_LIGHT_SPECULAR:
+			lights.specular[id][0] = x;
+			lights.specular[id][1] = y;
+			lights.specular[id][2] = z;
+			lights.specular[id][3] = 1.00f;
+			break;
 	}
 }
 

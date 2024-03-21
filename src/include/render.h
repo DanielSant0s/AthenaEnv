@@ -9,12 +9,14 @@ typedef struct {
 	VECTOR direction[4];
 	VECTOR ambient[4];
 	VECTOR diffuse[4];
+	VECTOR specular[4];
 } LightData;
 
 typedef enum {
 	ATHENA_LIGHT_DIRECTION,
 	ATHENA_LIGHT_AMBIENT,
 	ATHENA_LIGHT_DIFFUSE,
+	ATHENA_LIGHT_SPECULAR,
 } eLightAttributes;
 
 typedef enum {
@@ -38,7 +40,7 @@ typedef struct ath_model {
     VECTOR bounding_box[8];
 
     void (*render)(struct ath_model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z);
-    eLightAttributes pipeline;
+    eRenderPipelines pipeline;
 
     GSTEXTURE** textures;
 	int *tex_ranges;
