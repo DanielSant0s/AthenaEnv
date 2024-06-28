@@ -349,7 +349,26 @@ const char* runScript(const char* script, bool isBuffer)
 
 		return error_buf; 
 	} else {
-		js_std_loop(ctx);
+		s = js_std_loop(ctx);
+
+		if (s < 0) {
+			JSValue exception_val = JS_GetException(ctx);
+			const char* exception = JS_ToCString(ctx, exception_val);
+			JSValue stack_val = JS_GetPropertyStr(ctx, exception_val, "stack");
+			const char* stack = JS_ToCString(ctx, stack_val);
+			JS_FreeValue(ctx, exception_val);
+			JS_FreeValue(ctx, stack_val);
+
+			strcpy(error_buf, exception);
+			strcat(error_buf, "\n");
+			strcat(error_buf, stack);
+
+			js_std_free_handlers(rt);
+			JS_FreeContext(ctx);
+			JS_FreeRuntime(rt);
+
+			return error_buf; 
+		}
 	}
 	
 	js_std_free_handlers(rt);

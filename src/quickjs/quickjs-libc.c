@@ -1883,8 +1883,9 @@ static JSClassDef js_os_timer_class = {
     .gc_mark = js_os_timer_mark,
 }; 
 
-static void call_handler(JSContext *ctx, JSValueConst func)
+static int call_handler(JSContext *ctx, JSValueConst func)
 {
+    int result = 0;
     JSValue ret, func1;
     /* 'func' might be destroyed when calling itself (if it frees the
        handler), so must take extra care */
@@ -1892,8 +1893,11 @@ static void call_handler(JSContext *ctx, JSValueConst func)
     ret = JS_Call(ctx, func1, JS_UNDEFINED, 0, NULL);
     JS_FreeValue(ctx, func1);
     if (JS_IsException(ret))
-        js_std_dump_error(ctx);
+        result = -1;
+        //js_std_dump_error(ctx);
     JS_FreeValue(ctx, ret);
+
+    return result;
 }
 
 #if defined(_WIN32)
@@ -2050,6 +2054,10 @@ static int handle_posted_message(JSRuntime *rt, JSContext *ctx,
 }
 #endif
 
+#define JS_POLL_OK 0
+#define JS_POLL_EMPTY 1
+#define JS_POLL_EXCEPTION -1
+
 static int js_os_poll(JSContext *ctx)
 {
     JSRuntime *rt = JS_GetRuntime(ctx);
@@ -2072,15 +2080,15 @@ static int js_os_poll(JSContext *ctx)
             mask = (uint64_t)1 << sh->sig_num;
             if (os_pending_signals & mask) {
                 os_pending_signals &= ~mask;
-                call_handler(ctx, sh->func);
-                return 0;
+
+                return call_handler(ctx, sh->func);
             }
         }
     }
 
     if (list_empty(&ts->os_rw_handlers) && list_empty(&ts->os_timers) &&
         list_empty(&ts->port_list))
-        return -1; /* no more events */
+        return JS_POLL_EMPTY; /* no more events */
     
     if (!list_empty(&ts->os_timers)) {
         cur_time = get_time_ms();
@@ -2089,21 +2097,22 @@ static int js_os_poll(JSContext *ctx)
             JSOSTimer *th = list_entry(el, JSOSTimer, link);
             delay = th->timeout - cur_time;
             if (delay <= 0) {
+                int call_res = 0;
                 JSValue func;
                 /* the timer expired */
                 func = th->func;
                 if (th->interval != -1) {
                     th->timeout = cur_time + th->interval;
-                    call_handler(ctx, func);
+                    call_res = call_handler(ctx, func);
                 } else {
                     th->func = JS_UNDEFINED;
                     unlink_timer(JS_GetRuntime(ctx), th);
                     if (!th->has_object)
                         free_timer(JS_GetRuntime(ctx), th);
-                    call_handler(ctx, func);
+                    call_res = call_handler(ctx, func);
                     JS_FreeValue(ctx, func);
                 }
-                return 0;
+                return call_res;
             } else if (delay < min_delay) {
                 min_delay = delay;
             }
@@ -3596,10 +3605,12 @@ void js_delete_input_event(int id) {
     totalPadEvents--;
 }
 
-void js_std_loop(JSContext *ctx)
+int js_std_loop(JSContext *ctx)
 {
     JSContext *ctx1;
+    JSValue ret;
     int err;
+    int poll_result;
 
     for(;;) {
         /* execute the pending jobs */
@@ -3615,11 +3626,15 @@ void js_std_loop(JSContext *ctx)
 
         if (render_loop_func != JS_UNDEFINED) {
             clearScreen(clear_color);
-            JS_Call(ctx, render_loop_func, JS_UNDEFINED, 0, NULL);
+            ret = JS_Call(ctx, render_loop_func, JS_UNDEFINED, 0, NULL);
             flipScreen();
+
+            if (JS_IsException(ret)) {
+                err = -1;
+            }
         }
 
-        if (inputEventHandler) {
+        if (inputEventHandler && err != -1) {
             js_pads_update(inputEventHandler);
             if (totalPadEvents) {
                 for (int i = 0; i < 64; i++) {
@@ -3637,16 +3652,42 @@ void js_std_loop(JSContext *ctx)
                                 break;
                         };
 
-                        if (trigger_event)
-                            JS_Call(ctx, padEvents[i].function, JS_UNDEFINED, 0, NULL);
+                        if (trigger_event) {
+                            ret = JS_Call(ctx, padEvents[i].function, JS_UNDEFINED, 0, NULL);            
+
+                            if (JS_IsException(ret)) {
+                                err = -1;
+                            }
+                        }
                     }
                 }
             }
         }
 
-        if ((!os_poll_func || os_poll_func(ctx)) && render_loop_func == JS_UNDEFINED && !totalPadEvents)
+        if ((poll_result = js_os_poll(ctx)) == JS_POLL_EXCEPTION || err == -1) {
+            if (render_loop_func != JS_UNDEFINED)
+                JS_FreeValue(ctx, render_loop_func);
+
+            if (totalPadEvents) {
+                for (int i = 0; i < 64; i++) {
+                    if (padEvents[i].function) {
+                        JS_FreeValue(ctx, padEvents[i].function);
+                    }
+                }
+            }
+            
+            if (poll_result == JS_POLL_EXCEPTION)
+                return poll_result;
+
+            return err;
+        }
+            
+
+        if (poll_result == JS_POLL_EMPTY && render_loop_func == JS_UNDEFINED && !totalPadEvents)
             break;
     }
+
+    return err;
 }
 
 void js_std_eval_binary(JSContext *ctx, const uint8_t *buf, size_t buf_len,
