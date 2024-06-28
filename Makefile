@@ -55,7 +55,7 @@ EE_INCS += -I$(PS2DEV)/gsKit/include -I$(PS2SDK)/ports/include -I$(PS2SDK)/ports
 
 EE_INCS += -Imodules/ds34bt/ee -Imodules/ds34usb/ee
 
-EE_CFLAGS += -Wno-sign-compare -fno-strict-aliasing -fno-exceptions -DCONFIG_VERSION=\"$(shell cat VERSION)\" -D__TM_GMTOFF=tm_gmtoff -DPATH_MAX=256 -DPS2
+EE_CFLAGS += -Wno-sign-compare -fno-strict-aliasing -fno-exceptions -fpermissive -DCONFIG_VERSION=\"$(shell cat VERSION)\" -D__TM_GMTOFF=tm_gmtoff -DPATH_MAX=256 -DPS2
 ifeq ($(RESET_IOP),1)
   EE_CFLAGS += -DRESET_IOP
 endif
@@ -149,11 +149,11 @@ all: $(EXT_LIBS) $(EE_BIN) $(EE_ASM_DIR) $(EE_OBJS_DIR)
 	echo "Building $(EE_BIN)..."
 	$(EE_STRIP) $(EE_BIN)
 
-	echo "Compressing $(EE_BIN_PKD)...\n"
-	ps2-packer $(EE_BIN) $(EE_BIN_PKD) > /dev/null
+# echo "Compressing $(EE_BIN_PKD)...\n"
+# ps2-packer $(EE_BIN) $(EE_BIN_PKD) > /dev/null
 	
 	mv $(EE_BIN) bin/
-	mv $(EE_BIN_PKD) bin/
+#	mv $(EE_BIN_PKD) bin/
 
 #mpgs: src/draw_3D.vsm src/draw_3D_notex.vsm src/draw_3D_colors.vsm src/draw_3D_colors_notex.vsm src/draw_3D_lights.vsm src/draw_3D_lights_notex.vsm
 

@@ -1,20 +1,8 @@
 // {"name": "App store", "author": "Daniel Santos", "version": "04102023", "file": "app_store.js"}
 
-function decodeUTF16LE(binaryStr) {
-    var cp = [];
-    for( var i = 0; i < binaryStr.length; i+=2) {
-        cp.push( 
-             binaryStr.charCodeAt(i) |
-            ( binaryStr.charCodeAt(i+1) << 8 )
-        );
-    }
-
-    return String.fromCharCode.apply( String, cp );
-}
-
 function load_app_db(fname) {
     let list_file = std.open(fname, "r");
-    let app_list = JSON.parse(decodeUTF16LE(list_file.getline()));
+    let app_list = JSON.parse(list_file.getline());
     list_file.close();
     list_file = null;
 
@@ -337,7 +325,7 @@ while(true) {
                         update_state = UPDATING;
                         transfering = true;
                     } else if (update_state == UPDATING) {
-                        if(req.ready(5)) {
+                        if(req.ready(5000)) {
                             transfering = false;
                             update_state = UPDATED;
                         }

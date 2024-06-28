@@ -343,7 +343,7 @@ static JSValue athena_nw_requests_async_get(JSContext *ctx, JSValue this_val, in
     s->chunk.size = 0;    /* no data at this point */
     s->chunk.transferring = false;
 
-    s->tid = create_task("Requests: Get", requestThread, 4096*10, 16);
+    s->tid = create_task("Requests: Get", requestThread, 1638400, 16);
     init_task(s->tid, (void*)s);
 
     return JS_UNDEFINED;
@@ -353,13 +353,16 @@ static JSValue athena_nw_requests_async_get(JSContext *ctx, JSValue this_val, in
 static JSValue athena_nw_requests_ready(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
 {
     JSRequestData* s = JS_GetOpaque2(ctx, this_val, js_request_class_id);
-    int timeout = 999999999, transfer_timeout = 60;
+    int timeout = 999999999, transfer_timeout = 3000;
 
     if (argc > 0) {
         JS_ToInt32(ctx, &timeout, argv[0]);
         if(argc > 1) {
             JS_ToInt32(ctx, &transfer_timeout, argv[1]);
         }
+
+        
+
         if ((clock() - s->chunk.timer) / 1000 > timeout && s->chunk.transferring) {
             s->ready = true;
         } else if ((clock() - s->chunk.timer) / 1000 > transfer_timeout && !s->chunk.transferring && s->chunk.timer > 0) {

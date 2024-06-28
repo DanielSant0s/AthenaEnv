@@ -86,7 +86,7 @@ void requestThread(void* data) {
 
     curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1L);
 
-    curl_easy_setopt(curl, CURLOPT_SSLVERSION, CURL_SSLVERSION_TLSv1_3);
+    curl_easy_setopt(curl, CURLOPT_SSLVERSION, CURL_SSLVERSION_TLSv1_2);
 
     curl_easy_setopt(curl, CURLOPT_USERPWD, s->userpwd);
     curl_easy_setopt(curl, CURLOPT_USERAGENT, s->useragent);
@@ -97,8 +97,11 @@ void requestThread(void* data) {
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
 
+	curl_easy_setopt(curl, CURLOPT_USE_SSL, CURLUSESSL_TRY);
+
     s->chunk.timer = clock();
     res = curl_easy_perform(curl);
+
     if (res != CURLE_OK) {
         s->error = "Error while downloading file\n"; //, curl_easy_strerror(res));
     }

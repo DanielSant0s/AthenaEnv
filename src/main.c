@@ -45,6 +45,33 @@ static void init_drivers() {
 
 }
 
+int mnt(const char* path, int index, int openmod)
+{
+    char PFS[5+1] = "pfs0:";
+    if (index > 0)
+        PFS[3] = '0' + index;
+
+    dbgprintf("Mounting '%s' into pfs%d:\n", path, index);
+    if (fileXioMount(PFS, path, openmod) < 0) // mount
+    {
+        dbgprintf("Mount failed. unmounting & trying again...\n");
+        if (fileXioUmount(PFS) < 0) //try to unmount then mount again in case it got mounted by something else
+        {
+            dbgprintf("Unmount failed!!!\n");
+        }
+        if (fileXioMount(PFS, path, openmod) < 0)
+        {
+            dbgprintf("mount failed again!\n");
+            return -1;
+        } else {
+            dbgprintf("Second mount succeed!\n");
+        }
+    } else {
+        dbgprintf("mount successfull on first attempt\n");
+    }
+    return 0;
+}
+
 int main(int argc, char **argv) {
     init_memory_manager();
 
@@ -105,29 +132,3 @@ int main(int argc, char **argv) {
 }
 
 
-int mnt(const char* path, int index, int openmod)
-{
-    char PFS[5+1] = "pfs0:";
-    if (index > 0)
-        PFS[3] = '0' + index;
-
-    dbgprintf("Mounting '%s' into pfs%d:\n", path, index);
-    if (fileXioMount(PFS, path, openmod) < 0) // mount
-    {
-        dbgprintf("Mount failed. unmounting & trying again...\n");
-        if (fileXioUmount(PFS) < 0) //try to unmount then mount again in case it got mounted by something else
-        {
-            dbgprintf("Unmount failed!!!\n");
-        }
-        if (fileXioMount(PFS, path, openmod) < 0)
-        {
-            dbgprintf("mount failed again!\n");
-            return -1;
-        } else {
-            dbgprintf("Second mount succeed!\n");
-        }
-    } else {
-        dbgprintf("mount successfull on first attempt\n");
-    }
-    return 0;
-}
