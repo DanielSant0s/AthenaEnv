@@ -46,7 +46,7 @@ let app_table = System.listDir().map(file => file.name).filter(str => str.endsWi
 
     let metadata = JSON.parse(metadata_str);
 
-    if (System.doesFileExist(metadata.icon)) {
+    if (std.exists(metadata.icon)) {
         metadata.icon = new Image(metadata.icon);
     } else {
         metadata.icon = no_icon;

@@ -177,6 +177,7 @@ The std module provides wrappers to the libc stdlib.h and stdio.h and a few othe
 * std.evalScript(str, options = undefined) - Evaluate the string str as a script (global eval). options is an optional object containing the following optional properties:
   • std.backtrace_barrier - Boolean (default = false). If true, error backtraces do not list the stack frames below the evalScript.
 * std.loadScript(filename) - Evaluate the file filename as a script (global eval).
+* let hasfile = std.exists(filename) - Returns a bool that determines whether the file exists or not.
 * let fstr = std.loadFile(filename) - Load the file filename and return it as a string assuming UTF-8 encoding. Return null in case of I/O error.
 * let file = std.open(filename, flags, errorObj = undefined) - Open a file (wrapper to the libc fopen()). Return the FILE object or null in case of I/O error. If errorObj is not undefined, set its errno property to the error code or to 0 if no error occured.
 * std.fdopen(fd, flags, errorObj = undefined) - Open a file from a file handle (wrapper to the libc fdopen()). Return the FILE object or null in case of I/O error. If errorObj is not undefined, set its errno property to the error code or to 0 if no error occured.
@@ -547,35 +548,15 @@ Methods:
   
 ### System module
 
-* var fd = System.openFile(path, type)
-* Types list:  
-  • System.FREAD   
-  • System.FWRITE  
-  • System.FCREATE  
-  • System.FRDWR  
-* var buffer = System.readFile(file, size)
-* System.writeFile(fd, data, size)
-* System.closeFile(fd)
-* System.seekFile(fd, pos, type)
-* Types list:  
-  • System.SET  
-  • System.CUR  
-  • System.END  
-* var size = System.sizeFile(fd)
-* System.doesFileExist(path)
-* System.CurrentDirectory(path) *if path given, it sets the current dir, else it gets the current dir
 * var listdir = System.listDir(*path*)
   • listdir[index].name - return file name on indicated index(string)  
   • listdir[index].size - return file size on indicated index(integer)  
   • listdir[index].directory - return if indicated index is a file or a directory(bool)  
-* System.createDirectory(path)
 * System.removeDirectory(path)
-* System.removeFile(path)
 * System.copyFile(source, dest)
 * System.moveFile(source, dest)
 * System.rename(source, dest)
 * System.sleep(sec)
-* var freemem = System.getFreeMemory()
 * System.exitToBrowser()
 * System.setDarkMode(value)
 * var temps = System.getTemperature() // It only works with SCPH-500XX and later models.

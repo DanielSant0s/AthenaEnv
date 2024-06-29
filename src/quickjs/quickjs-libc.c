@@ -780,6 +780,31 @@ static void js_set_error_object(JSContext *ctx, JSValue obj, int err)
     }
 }
 
+static JSValue js_std_exists(JSContext *ctx, JSValueConst this_val,
+                           int argc, JSValueConst *argv)
+{
+    const char *filename;
+    FILE *f;
+    int err;
+    
+    filename = JS_ToCString(ctx, argv[0]);
+    if (!filename)
+        goto fail;
+
+    f = fopen(filename, "r");
+
+    JS_FreeCString(ctx, filename);
+
+    if (!f)
+        return JS_NewBool(ctx, FALSE);
+
+    return JS_NewBool(ctx, TRUE);
+
+ fail:
+    JS_FreeCString(ctx, filename);
+    return JS_EXCEPTION;
+}
+
 static JSValue js_std_open(JSContext *ctx, JSValueConst this_val,
                            int argc, JSValueConst *argv)
 {
@@ -1190,51 +1215,6 @@ static JSValue js_std_file_putByte(JSContext *ctx, JSValueConst this_val,
     return JS_NewInt32(ctx, c);
 }
 
-/* urlGet */
-
-#define URL_GET_PROGRAM "curl -s -i"
-#define URL_GET_BUF_SIZE 4096
-
-static int http_get_header_line(FILE *f, char *buf, size_t buf_size,
-                                DynBuf *dbuf)
-{
-    int c;
-    char *p;
-    
-    p = buf;
-    for(;;) {
-        c = fgetc(f);
-        if (c < 0)
-            return -1;
-        if ((p - buf) < buf_size - 1)
-            *p++ = c;
-        if (dbuf)
-            dbuf_putc(dbuf, c);
-        if (c == '\n')
-            break;
-    }
-    *p = '\0';
-    return 0;
-}
-
-static int http_get_status(const char *buf)
-{
-    const char *p = buf;
-    while (*p != ' ' && *p != '\0')
-        p++;
-    if (*p != ' ')
-        return 0;
-    while (*p == ' ')
-        p++;
-    return atoi(p);
-}
-
-static JSValue js_std_urlGet(JSContext *ctx, JSValueConst this_val,
-                             int argc, JSValueConst *argv)
-{
-    return JS_UNDEFINED;
-}
-
 static JSClassDef js_std_file_class = {
     "FILE",
     .finalizer = js_std_file_finalizer,
@@ -1266,13 +1246,13 @@ static const JSCFunctionListEntry js_std_funcs[] = {
     JS_CFUNC_DEF("setenv", 1, js_std_setenv ),
     JS_CFUNC_DEF("unsetenv", 1, js_std_unsetenv ),
     JS_CFUNC_DEF("getenviron", 1, js_std_getenviron ),
-    JS_CFUNC_DEF("urlGet", 1, js_std_urlGet ),
     JS_CFUNC_DEF("loadFile", 1, js_std_loadFile ),
     JS_CFUNC_DEF("strerror", 1, js_std_strerror ),
     JS_CFUNC_DEF("parseExtJSON", 1, js_std_parseExtJSON ),
     
     /* FILE I/O */
     JS_CFUNC_DEF("open", 2, js_std_open ),
+    JS_CFUNC_DEF("exists", 1, js_std_exists ),
     JS_CFUNC_DEF("popen", 2, js_std_popen ),
     JS_CFUNC_DEF("fdopen", 2, js_std_fdopen ),
     JS_CFUNC_DEF("tmpfile", 0, js_std_tmpfile ),
