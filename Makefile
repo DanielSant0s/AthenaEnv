@@ -35,7 +35,7 @@ EE_BIN_PKD = athena_pkd
 
 EE_SRC_DIR = src/
 EE_OBJS_DIR = obj/
-EE_ASM_DIR = asm/
+EE_ASM_DIR = embed/
 
 RESET_IOP ?= 1
 DEBUG ?= 0
@@ -49,13 +49,13 @@ KEYBOARD ?= 1
 MOUSE ?= 1
 CAMERA ?= 0
 
-EE_LIBS = -L$(PS2SDK)/ports/lib -L$(PS2DEV)/gsKit/lib/ -Lmodules/ds34bt/ee/ -Lmodules/ds34usb/ee/ -lmc -lpad -laudsrv -lpatches -ldebug -lmath3d -ljpeg -lfreetype -lgskit_toolkit -lgskit -ldmakit -lpng -lz -lds34bt -lds34usb -lnetman -lps2ip -lcurl -lwolfssl -lkbd -lmouse -lvorbisfile -lvorbis -logg -llzma -lzip -lfileXio -lelf-loader-nocolour
+EE_LIBS = -L$(PS2SDK)/ports/lib -L$(PS2DEV)/gsKit/lib/ -Lmodules/ds34bt/ee/ -Lmodules/ds34usb/ee/ -lmc -lpad -laudsrv -lpatches -ldebug -lmath3d -ljpeg -lfreetype -lgskit_toolkit -lgskit -ldmakit -lpng -lz -lds34bt -lds34usb -lnetman -lps2ip -lcurl -lwolfssl -lkbd -lmouse -lvorbisfile -lvorbis -logg -llzma -lzip -lfileXio -lelf-loader-nocolour -lerl
 
 EE_INCS += -I$(PS2DEV)/gsKit/include -I$(PS2SDK)/ports/include -I$(PS2SDK)/ports/include/freetype2 -I$(PS2SDK)/ports/include/zlib
 
 EE_INCS += -Imodules/ds34bt/ee -Imodules/ds34usb/ee
 
-EE_CFLAGS += -Wno-sign-compare -fno-strict-aliasing -fno-exceptions -DCONFIG_VERSION=\"$(shell cat VERSION)\" -D__TM_GMTOFF=tm_gmtoff -DPATH_MAX=256 -DPS2
+EE_CFLAGS += -Wno-sign-compare -fno-strict-aliasing -fno-exceptions -fpermissive -DCONFIG_VERSION=\"$(shell cat VERSION)\" -D__TM_GMTOFF=tm_gmtoff -DPATH_MAX=256 -DPS2
 ifeq ($(RESET_IOP),1)
   EE_CFLAGS += -DRESET_IOP
 endif
@@ -64,16 +64,19 @@ ifeq ($(DEBUG),1)
   EE_CFLAGS += -DDEBUG
 endif
 
-BIN2S = $(PS2SDK)/bin/bin2s
+BIN2S = $(PS2SDK)/bin/bin2c
+EE_DVP = dvp-as
+EE_VCL = vcl
+EE_VCLPP = vclpp
 
 EXT_LIBS = modules/ds34usb/ee/libds34usb.a modules/ds34bt/ee/libds34bt.a
 
 JS_CORE = quickjs/cutils.o quickjs/libbf.o quickjs/libregexp.o quickjs/libunicode.o \
 				 quickjs/realpath.o quickjs/quickjs.o quickjs/quickjs-libc.o 
 
-APP_CORE = main.o memory.o ee_tools.o module_system.o taskman.o pad.o system.o strUtils.o 
+APP_CORE = main.o vif.o draw_3D_colors.o draw_3D_colors_notex.o draw_3D.o draw_3D_notex.o draw_3D_lights.o draw_3D_lights_notex.o athena_math.o memory.o ee_tools.o module_system.o taskman.o pad.o system.o strUtils.o 
 
-ATHENA_MODULES = ath_env.o ath_pads.o ath_system.o ath_archive.o ath_timer.o ath_task.o 
+ATHENA_MODULES = ath_env.o ath_physics.o ath_vector.o ath_pads.o ath_system.o ath_archive.o ath_timer.o ath_task.o 
 
 IOP_MODULES = iomanx.o filexio.o sio2man.o mcman.o mcserv.o padman.o  \
 			  usbd.o bdm.o bdmfs_fatfs.o usbmass_bd.o cdfs.o ds34bt.o \
@@ -82,17 +85,9 @@ IOP_MODULES = iomanx.o filexio.o sio2man.o mcman.o mcserv.o padman.o  \
 
 EMBEDDED_ASSETS = quicksand_regular.o
 
-ifeq ($(CLI),1)
-  EE_BIN := $(EE_BIN)_cli
-  EE_BIN_PKD := $(EE_BIN_PKD)_cli
-  EE_CFLAGS += -DATHENA_CLI
-  ATHENA_MODULES += ath_cli.o
-  GRAPHICS = 0
-endif
-
 ifeq ($(GRAPHICS),1)
   EE_CFLAGS += -DATHENA_GRAPHICS
-  APP_CORE += graphics.o atlas.o fntsys.o render.o calc_3d.o 
+  APP_CORE += graphics.o atlas.o fntsys.o render.o calc_3d.o fast_obj/fast_obj.o
   ATHENA_MODULES += ath_color.o ath_font.o ath_render.o ath_screen.o ath_image.o ath_imagelist.o ath_shape.o 
 endif
 
@@ -154,11 +149,13 @@ all: $(EXT_LIBS) $(EE_BIN) $(EE_ASM_DIR) $(EE_OBJS_DIR)
 	echo "Building $(EE_BIN)..."
 	$(EE_STRIP) $(EE_BIN)
 
-	echo "Compressing $(EE_BIN_PKD)...\n"
-	ps2-packer $(EE_BIN) $(EE_BIN_PKD) > /dev/null
+# echo "Compressing $(EE_BIN_PKD)...\n"
+# ps2-packer $(EE_BIN) $(EE_BIN_PKD) > /dev/null
 	
 	mv $(EE_BIN) bin/
-	mv $(EE_BIN_PKD) bin/
+#	mv $(EE_BIN_PKD) bin/
+
+#mpgs: src/draw_3D.vsm src/draw_3D_notex.vsm src/draw_3D_colors.vsm src/draw_3D_colors_notex.vsm src/draw_3D_lights.vsm src/draw_3D_lights_notex.vsm
 
 debug: $(EXT_LIBS) $(EE_BIN)
 	echo "Building $(EE_BIN) with debug symbols..."
@@ -192,7 +189,22 @@ $(EE_OBJS_DIR)%.o: $(EE_SRC_DIR)%.c | $(EE_OBJS_DIR)
 	$(DIR_GUARD)
 	$(EE_CC) $(EE_CFLAGS) $(EE_INCS) -c $< -o $@
 
-$(EE_OBJS_DIR)%.o: $(EE_ASM_DIR)%.s | $(EE_OBJS_DIR)
-	@echo AS - $<
+$(EE_OBJS_DIR)%.o: $(EE_SRC_DIR)%.vsm | $(EE_OBJS_DIR)
+	@echo DVP - $<
 	$(DIR_GUARD)
-	$(EE_AS) $(EE_ASFLAGS) $< -o $@
+	$(EE_DVP) $< -o $@
+
+$(EE_SRC_DIR)%.vcl: $(EE_SRC_DIR)%.vclpp | $(EE_SRC_DIR)
+	@echo VCLPP - $<
+	$(DIR_GUARD)
+	$(EE_VCLPP) $< $@.vcl
+	
+$(EE_SRC_DIR)%.vsm: $(EE_SRC_DIR)%.vcl | $(EE_SRC_DIR)
+	@echo VCL - $<
+	$(DIR_GUARD)
+	$(EE_VCL) -Isrc -g -o$@ $<
+
+$(EE_OBJS_DIR)%.o: $(EE_ASM_DIR)%.c | $(EE_OBJS_DIR)
+	@echo BIN2C - $<
+	$(DIR_GUARD)
+	$(EE_CC) $(EE_CFLAGS) $(EE_INCS) -c $< -o $@

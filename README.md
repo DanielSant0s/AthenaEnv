@@ -47,7 +47,7 @@ AthenaEnv is a project that seeks to facilitate and at the same time brings a co
 * Image: Image drawing.
 * ImageList: Load and manage multiple images while your code is running, multithreaded loading!
 * Draw: Shape drawing, triangles, circles etc.
-* Render: Basic 3D support.
+* Render: Basic 3D support powered by a VU1 renderer.
 * Screen: The entire screen of your project (2D and 3D), being able to change the resolution, enable or disable parameters.
 * Font: Functions that control the texts that appear on the screen, loading texts, drawing and unloading from memory.
 * Pads: Above being able to draw and everything else, A human interface is important. Supports rumble and pressure sensitivity.
@@ -177,6 +177,7 @@ The std module provides wrappers to the libc stdlib.h and stdio.h and a few othe
 * std.evalScript(str, options = undefined) - Evaluate the string str as a script (global eval). options is an optional object containing the following optional properties:
   • std.backtrace_barrier - Boolean (default = false). If true, error backtraces do not list the stack frames below the evalScript.
 * std.loadScript(filename) - Evaluate the file filename as a script (global eval).
+* let hasfile = std.exists(filename) - Returns a bool that determines whether the file exists or not.
 * let fstr = std.loadFile(filename) - Load the file filename and return it as a string assuming UTF-8 encoding. Return null in case of I/O error.
 * let file = std.open(filename, flags, errorObj = undefined) - Open a file (wrapper to the libc fopen()). Return the FILE object or null in case of I/O error. If errorObj is not undefined, set its errno property to the error code or to 0 if no error occured.
 * std.fdopen(fd, flags, errorObj = undefined) - Open a file from a file handle (wrapper to the libc fdopen()). Return the FILE object or null in case of I/O error. If errorObj is not undefined, set its errno property to the error code or to 0 if no error occured.
@@ -330,11 +331,17 @@ Properties:
 * endx, endy - End of the area that will be drawn from the image, the default value is the original image size.
 * angle - Define image rotation angle, default value is 0.0.
 * color - Define image tinting, default value is Color.new(255, 255, 255, 128).
-* filter - Choose between **LINEAR** or **NEAREST**, default value is NEAREST.  
+* filter - Choose between **LINEAR** or **NEAREST**, default value is NEAREST.
+* size - Returns image real size occupied in memory.
+* bpp - Returns image bits per-pixel qantity.
+* delayed - If true, your texture was loaded in RAM, else, VRAM.
+* pixels - The image pixel ArrayBuffer.
+* palette - If is a palette image, it has a palette ArrayBuffer right here.
 
 Methods:
 
 * draw(x, y) - Draw loaded image onscreen(call it every frame). Example: image.draw(15.0, 100.0);
+* optimize() - If your image has 24 bits per-pixel (aka RGB), you can use this to make it 16 bits per-pixel, saving some memory!
 * ready() - Returns true if an asynchronous image was successfully loaded in memory. 
 ```js
 var loaded = image.ready();  
@@ -375,27 +382,63 @@ canvas.psmz = Z16S;
 Screen.setMode(canvas);
 ```
 
-* Render.init(aspect) - Initializes rendering routines. *default aspect is 4/3, widescreen is 16/9
-* var model = Render.loadOBJ(path, *texture*) - Load simple obj 3d data files. MTL not supported yet. Actually it only supports a single texture that you have to load using Image class and pass as a second argument if you want to use it.
-* Render.drawOBJ(model, pos_x, pos_y, pos_z, rot_x, rot_y, rot_z) - Draws the loaded OBJ on the screen.
-* Render.freeOBJ(model)  - Frees the model from memory.
+* Render.setView(aspect, *fov*) - Initializes rendering routines. *default aspect is 4/3, widescreen is 16/9. FOV isn't mandatory, default: 0.2
+* Render.vertex(x, y, z, n1, n2, n3, s, t, r, g, b, a) - Returns a vertex to build a 3D mesh. It should be used to create vertex arrays.  
+  • x, y, z - Vertex position on 3D world.  
+  • n1, n2, n3 - Vertex normal.  
+  • s, t - Vertex texture coordinates.  
+  • r, g, b, a - Vertex color.  
+  
+### RenderObject module
 
+Construction:
+
+```js
+var model = new RenderObject(mesh, *texture*)
+/* Load simple WaveFront OBJ files or vertex arrays.
+MTL is supported on OBJs (including per-vertex colors and multi-texturing).
+If you don't have a MTL file but you want to bind a texture on it,
+just pass the image as a second argument if you want to use it. */
+```
+Methods:  
+
+* draw(pos_x, pos_y, pos_z, rot_x, rot_y, rot_z) - Draws the object on screen.
+* drawBounds(pos_x, pos_y, pos_z, rot_x, rot_y, rot_z) - Draws object bounding box.
+* getTexture(id) - Gets the nth texture object from the model.
+* setTexture(id, texture, *range*) - Changes or sets the nth texture on models.
+* getPipeline() - Returns the current rendering pipeline loaded for the model.
+* setPipeline(pipeline) - Sets the current pipeline for the model. Available pipelines:  
+  • Render.PL_NO_LIGHTS_COLORS  - Colors and lights disabled.  
+  • Render.PL_NO_LIGHTS_COLORS_TEX - Colors, lights and textures disabled.  
+  • Render.PL_NO_LIGHTS - Lights disabled, colors still working.  
+  • Render.PL_NO_LIGHTS_TEX - Textures and lights disabled, colors still working.  
+  • Render.PL_DEFAULT - Default for textured models. Lights and colors enabled.  
+  • Render.PL_DEFAULT_NO_TEX - Default for non-textured models. Lights and colors enabled.  
+  
+Properties:
+
+* vertices - A Render.vertex array that can be modified and read.
+* size - Vertex quantity.
+  
 **Camera**   
 * Camera.position(x, y, z)
 * Camera.rotation(x, y, z)
 
 **Lights**  
-* Lights.create(count)
-* Lights.set(light, dir_x, dir_y, dir_z, r, g, b, type)  
-  • Avaiable light types: AMBIENT, DIRECTIONAL  
+You have 4 lights to use in 3D scenes, use set to configure them.
 
+* Lights.set(id, attribute, x, y, z)  
+  • Avaiable light attributes: Lights.DIRECTION, Lights.AMBIENT, Lights.DIFFUSE    
+  
 ### Screen module
-* Screen.clear(*color*) - Clears screen with the specified color. If you don't specify any argument, it will use black as default.
-* Screen.flip() - Run the render queue and jump to the next frame, i.e.: Updates your screen.
-* var freevram = Screen.getFreeVRAM() - Returns the total of free Video Memory.
-* Screen.setVSync(bool) - Toggles VSync, which makes the framerate stable in 15, 30, 60(depending on the mode) on screen.
-* Screen.setFrameCounter(bool) - Toggles frame counting and FPS collecting.
-* Screen.waitVblankStart() - Waits for a vertical sync.
+* Screen.display(func) - Makes the specified function behave like a main loop, when you don't need to clear or flip the screen because it's done automatically.  
+* Screen.clearColor(*color*) - Sets a constant clear color for Screen.display function.
+* Screen.clear(*color*) - Clears screen with the specified color. If you don't specify any argument, it will use black as default.  
+* Screen.flip() - Run the render queue and jump to the next frame, i.e.: Updates your screen.  
+* var freevram = Screen.getFreeVRAM() - Returns the total of free Video Memory.  
+* Screen.setVSync(bool) - Toggles VSync, which makes the framerate stable in 15, 30, 60(depending on the mode) on screen.  
+* Screen.setFrameCounter(bool) - Toggles frame counting and FPS collecting.  
+* Screen.waitVblankStart() - Waits for a vertical sync.  
 * var fps = Screen.getFPS(frame_interval) - Get Frames per second measure within the specified frame_interval in msec. Dependant on Screen.setFrameCounter(true) to work.
 * const canvas = Screen.getMode() - Get actual video mode parameters. Returns an object.
   • canvas.mode - Available modes: NTSC, DTV_480p, PAL, DTV_576p, DTV_720p, DTV_1080i.  
@@ -427,27 +470,11 @@ Properties:
 * scale - Proportional scale, default: 1.0f
 
 Methods:
-* print(x, y, text) - Draw text on screen(call it every frame). Example: font.print(10.0, 10.0, "Hello world!));
+* print(x, y, text) - Draw text on screen(call it every frame). Example: font.print(10.0, 10.0, "Hello world!);
 * getTextSize(text) - Returns text absolute size in pixels (width, height). Example: const size = font.getTextSize("Hello world!");
 
 ### Pads module
 
-* var pad = Pads.get(*port*) - Returns a pad object containing the following properties:  
-  • pad.btns - Buttons  
-  • pad.lx - Left analog horizontal position (left = -127, default = 0, right = 128)  
-  • pad.ly - Left analog vertical position (up = -127, default = 0, down = 128)  
-  • pad.rx - Right analog horizontal position (left = -127, default = 0, right = 128)  
-  • pad.ry - Right analog vertical position (up = -127, default = 0, down = 128)  
-    
-  ![analog_graph](https://user-images.githubusercontent.com/47725160/154816009-99d7e5da-badf-409b-9a3b-3618fd372f09.png)
-
-* var type = Pads.getType(*port*) - Gets gamepad type in the specified port.
-  • Pads.DIGITAL  
-  • Pads.ANALOG  
-  • Pads.DUALSHOCK  
-* var press = Pads.getPressure(*port*, button) - Get button pressure level.
-* Pads.rumble(port, big, small) - Rumble your gamepad.
-* var ret = Pads.check(pad, button) - Check if the button was pressed on the specified pad.
 * Buttons list:  
   • Pads.SELECT  
   • Pads.START  
@@ -465,6 +492,38 @@ Methods:
   • Pads.R2  
   • Pads.L3  
   • Pads.R3  
+
+* var pad = Pads.get(*port*) - Returns a pad object:  
+Properties:  
+  • pad.btns - Button state on the current check.  
+  • pad.old_btns = Button state on the last check.  
+  • pad.lx - Left analog horizontal position (left = -127, default = 0, right = 128).  
+  • pad.ly - Left analog vertical position (up = -127, default = 0, down = 128).  
+  • pad.rx - Right analog horizontal position (left = -127, default = 0, right = 128).  
+  • pad.ry - Right analog vertical position (up = -127, default = 0, down = 128).  
+    
+  ![analog_graph](https://user-images.githubusercontent.com/47725160/154816009-99d7e5da-badf-409b-9a3b-3618fd372f09.png)  
+  
+Methods:  
+  • update() - Updates all pads pressed and stick positions data.  
+  • pressed(button) - Checks if a button is being pressed (continuously).  
+  • justPressed(button) - Checks if a button was pressed only once.  
+  • setEventHandler() - Sets the pad object to listen events defined by Pads.newEvent, so it doesn't need to be updated.  
+  
+* let event_id = Pads.newEvent(button, kind, function) - Creates an asynchronous pad event, returns the event id. Remember to set the pad object event handler first!
+* Pad event kinds:  
+  • Pads.PRESSED  
+  • Pads.JUST_PRESSED  
+  • Pads.NON_PRESSED  
+* Pads.deleteEvent(event_id) - Deletes the event created by Pads.newEvent.
+* let type = Pads.getType(*port*) - Gets gamepad type in the specified port.
+* Pad Types:  
+  • Pads.DIGITAL  
+  • Pads.ANALOG  
+  • Pads.DUALSHOCK  
+
+* let press = Pads.getPressure(*port*, button) - Get button pressure level.
+* Pads.rumble(port, big, small) - Rumble your gamepad.
   
 ### Keyboard module
 * Keyboard.init() - Initialize keyboard routines.
@@ -489,35 +548,15 @@ Methods:
   
 ### System module
 
-* var fd = System.openFile(path, type)
-* Types list:  
-  • System.FREAD   
-  • System.FWRITE  
-  • System.FCREATE  
-  • System.FRDWR  
-* var buffer = System.readFile(file, size)
-* System.writeFile(fd, data, size)
-* System.closeFile(fd)
-* System.seekFile(fd, pos, type)
-* Types list:  
-  • System.SET  
-  • System.CUR  
-  • System.END  
-* var size = System.sizeFile(fd)
-* System.doesFileExist(path)
-* System.CurrentDirectory(path) *if path given, it sets the current dir, else it gets the current dir
 * var listdir = System.listDir(*path*)
   • listdir[index].name - return file name on indicated index(string)  
   • listdir[index].size - return file size on indicated index(integer)  
   • listdir[index].directory - return if indicated index is a file or a directory(bool)  
-* System.createDirectory(path)
 * System.removeDirectory(path)
-* System.removeFile(path)
 * System.copyFile(source, dest)
 * System.moveFile(source, dest)
 * System.rename(source, dest)
 * System.sleep(sec)
-* var freemem = System.getFreeMemory()
 * System.exitToBrowser()
 * System.setDarkMode(value)
 * var temps = System.getTemperature() // It only works with SCPH-500XX and later models.

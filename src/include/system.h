@@ -14,8 +14,3 @@ typedef struct
 	char name[16];
 	int value;
 } DiscType;
-
-extern char* __ps2_normalize_path(char *path_name);
-extern void load_elf_NoIOPReset(const char *elf_path);
-extern void load_elf(const char *elf_path);
-extern size_t GetFreeSize(void);

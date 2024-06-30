@@ -10,11 +10,11 @@
 #include <png.h>
 
 #include "include/graphics.h"
+#include "include/athena_math.h"
 #include "include/dbgprintf.h"
+#include "include/fntsys.h"
 
 #include "include/pad.h"
-
-#define PI 3.14159265359
 
 static const u64 BLACK_RGBAQ   = GS_SETREG_RGBAQ(0x00,0x00,0x00,0x80,0x00);
 
@@ -91,9 +91,11 @@ int athena_load_png(GSTEXTURE* tex, FILE* File, bool delayed)
 
 	png_get_IHDR(png_ptr, info_ptr, &width, &height, &bit_depth, &color_type,&interlace_type, NULL, NULL);
 
-	if (bit_depth == 16) png_set_strip_16(png_ptr);
-	if (color_type == PNG_COLOR_TYPE_GRAY || bit_depth < 4) png_set_expand(png_ptr);
-	if (png_get_valid(png_ptr, info_ptr, PNG_INFO_tRNS)) png_set_tRNS_to_alpha(png_ptr);
+	if (bit_depth == 16) 
+		png_set_strip_16(png_ptr);
+
+	if (color_type == PNG_COLOR_TYPE_GRAY || color_type == PNG_COLOR_TYPE_GRAY_ALPHA || bit_depth < 4) 
+		png_set_expand(png_ptr);
 
 	png_set_filler(png_ptr, 0xff, PNG_FILLER_AFTER);
 
@@ -105,7 +107,9 @@ int athena_load_png(GSTEXTURE* tex, FILE* File, bool delayed)
     tex->VramClut = 0;
     tex->Clut = NULL;
 
-	if(png_get_color_type(png_ptr, info_ptr) == PNG_COLOR_TYPE_RGB_ALPHA)
+	color_type = png_get_color_type(png_ptr, info_ptr);
+
+	if(color_type == PNG_COLOR_TYPE_RGB_ALPHA)
 	{
 		int row_bytes = png_get_rowbytes(png_ptr, info_ptr);
 		tex->PSM = GS_PSM_CT32;
@@ -131,7 +135,7 @@ int athena_load_png(GSTEXTURE* tex, FILE* File, bool delayed)
 
 		free(row_pointers);
 	}
-	else if(png_get_color_type(png_ptr, info_ptr) == PNG_COLOR_TYPE_RGB)
+	else if(color_type == PNG_COLOR_TYPE_RGB)
 	{
 		int row_bytes = png_get_rowbytes(png_ptr, info_ptr);
 		tex->PSM = GS_PSM_CT24;
@@ -156,7 +160,7 @@ int athena_load_png(GSTEXTURE* tex, FILE* File, bool delayed)
 
 		free(row_pointers);
 	}
-	else if(png_get_color_type(png_ptr, info_ptr) == PNG_COLOR_TYPE_PALETTE){
+	else if(color_type == PNG_COLOR_TYPE_PALETTE){
 
 		struct png_clut { u8 r, g, b, a; };
 
@@ -987,19 +991,18 @@ void drawCircle(float x, float y, float radius, u64 color, u8 filled)
 	int a;
 
 	for (a = 0; a < 36; a++) {
-		v[a*2] = (cosf(a * (PI*2)/36) * radius) + x;
-		v[a*2+1] = (sinf(a * (PI*2)/36) * radius) + y;
+		v[a*2] = (cosf(a * (M_PI*2)/36) * radius) + x;
+		v[a*2+1] = (sinf(a * (M_PI*2)/36) * radius) + y;
 	}
 
-	if (!filled) {
+	if (filled) {
+		gsKit_prim_triangle_fan(gsGlobal, v, 36, 1, color);
+	} else {
 		v[36*2] = radius + x;
 		v[36*2 + 1] = y;
-	}
-	
-	if (filled)
-		gsKit_prim_triangle_fan(gsGlobal, v, 36, 1, color);
-	else
+
 		gsKit_prim_line_strip(gsGlobal, v, 37, 1, color);
+	}
 }
 
 void InvalidateTexture(GSTEXTURE *txt)
@@ -1020,7 +1023,9 @@ int GetInterlacedFrameMode()
 
     return 0;
 }
-GSGLOBAL *getGSGLOBAL(){return gsGlobal;}
+GSGLOBAL *getGSGLOBAL(){ return gsGlobal; }
+
+static void switchFlipScreenFunction();
 
 void setVideoMode(s16 mode, int width, int height, int psm, s16 interlace, s16 field, bool zbuffering, int psmz, bool double_buffering, uint8_t pass_count) {
 	gsGlobal->Mode = mode;
@@ -1130,7 +1135,7 @@ void athena_error_screen(const char* errMsg, bool dark_mode) {
 
     if (errMsg != NULL)
     {
-        dbgprintf("AthenaEnv ERROR!\n%s", errMsg);
+        printf("AthenaEnv ERROR!\n%s", errMsg);
 
         if (strstr(errMsg, "EvalError") != NULL) {
             color = GS_SETREG_RGBAQ(0x56,0x71,0x7D,0x80,0x00);
@@ -1144,10 +1149,12 @@ void athena_error_screen(const char* errMsg, bool dark_mode) {
             color = GS_SETREG_RGBAQ(0xD0,0x31,0x3D,0x80,0x00);
         } else if (strstr(errMsg, "InternalError") != NULL) {
             color = GS_SETREG_RGBAQ(0x8A,0x00,0xC2,0x80,0x00);
-        } else if(strstr(errMsg, "URIError") != NULL) {
+        } else if (strstr(errMsg, "URIError") != NULL) {
             color = GS_SETREG_RGBAQ(0xFF,0x78,0x1F,0x80,0x00);
-        } else if(strstr(errMsg, "AggregateError") != NULL) {
+        } else if (strstr(errMsg, "AggregateError") != NULL) {
             color = GS_SETREG_RGBAQ(0xE2,0x61,0x9F,0x80,0x00);
+        } else if (strstr(errMsg, "AthenaError") != NULL) {
+            color = GS_SETREG_RGBAQ(0x70,0x29,0x63,0x80,0x00);
         }
 
         if(dark_mode) {
@@ -1157,11 +1164,14 @@ void athena_error_screen(const char* errMsg, bool dark_mode) {
             color2 = GS_SETREG_RGBAQ(0x80,0x80,0x80,0x80,0x00);
         }
 
+		fntLoadDefault(NULL);
+		fntSetCharSize(0, FNTSYS_CHAR_SIZE*64*0.8f, FNTSYS_CHAR_SIZE*64*0.8f);
+
     	while (!isButtonPressed(PAD_START)) {
 			clearScreen(color);
-			printFontMText("AthenaEnv ERROR!", 15.0f, 15.0f, 0.9f, color2);
-			printFontMText(errMsg, 15.0f, 80.0f, 0.6f, color2);
-	   		printFontMText("\nPress [start] to restart\n", 15.0f, 400.0f, 0.6f, color2);
+			fntRenderString(0, 15, 15, 0, 640, 448, "AthenaEnv ERROR!", color2);
+			fntRenderString(0, 15, 80, 0, 640, 448, errMsg, color2);
+			fntRenderString(0, 15, 400, 0, 640, 448, "Press [start] to restart", color2);
 			flipScreen();
 		} 
     }
@@ -1180,7 +1190,25 @@ inline void processFrameCounter()
 	frames++;
 }
 
-void flipScreenSingleBuffering()
+void vu1_queue_init(GSGLOBAL *gsGlobal, GSQUEUE *Queue, u8 mode, int size)
+{
+	// Init pool 0
+	Queue->pool[0]		= gsKit_alloc_ucab(size);
+	Queue->pool_max[0]	= (u64 *)((u32)Queue->pool[0] + size);
+
+	Queue->pool[1]		= gsKit_alloc_ucab(size);
+	Queue->pool_max[1]	= (u64 *)((u32)Queue->pool[1] + size);
+
+	Queue->dma_tag		= Queue->pool[0];
+	Queue->pool_cur		= (u64 *)((u32)Queue->pool[0] + 16);
+	Queue->dbuf			= 0;
+	Queue->tag_size		= 0;
+	Queue->last_tag		= Queue->pool_cur;
+	Queue->last_type	= GIF_RESERVED;
+	Queue->mode			= mode;
+}
+
+static void flipScreenSingleBuffering()
 {
 	//gsKit_set_finish(gsGlobal);
 	gsKit_sync(gsGlobal);
@@ -1189,7 +1217,7 @@ void flipScreenSingleBuffering()
 	gsKit_TexManager_nextFrame(gsGlobal);
 }
 
-void flipScreenSingleBufferingPerf()
+static void flipScreenSingleBufferingPerf()
 {
 	//gsKit_set_finish(gsGlobal);
 	gsKit_sync(gsGlobal);
@@ -1200,26 +1228,26 @@ void flipScreenSingleBufferingPerf()
 	processFrameCounter();
 }
 
-void flipScreenDoubleBuffering()
+static void flipScreenDoubleBuffering()
 {	
 	//gsKit_set_finish(gsGlobal);
 
-	gsKit_queue_exec(gsGlobal);
-	gsKit_finish();
 	gsKit_sync(gsGlobal);
 	gsKit_flip(gsGlobal);
+	gsKit_queue_exec(gsGlobal);
+	gsKit_finish();
 	
 	gsKit_TexManager_nextFrame(gsGlobal);
 }
 
-void flipScreenDoubleBufferingPerf()
+static void flipScreenDoubleBufferingPerf()
 {	
 	//gsKit_set_finish(gsGlobal);
 
-	gsKit_queue_exec(gsGlobal);
-	gsKit_finish();
 	gsKit_sync(gsGlobal);
 	gsKit_flip(gsGlobal);
+	gsKit_queue_exec(gsGlobal);
+	gsKit_finish();
 	
 	gsKit_TexManager_nextFrame(gsGlobal);
 
@@ -1228,13 +1256,13 @@ void flipScreenDoubleBufferingPerf()
 
 //////////////////////////////////////////////////////////////////////////////////////////////
 
-void flipScreenSingleBufferingNoVSync()
+static void flipScreenSingleBufferingNoVSync()
 {
 	gsKit_queue_exec(gsGlobal);
 	gsKit_TexManager_nextFrame(gsGlobal);
 }
 
-void flipScreenSingleBufferingPerfNoVSync()
+static void flipScreenSingleBufferingPerfNoVSync()
 {
 
 	gsKit_queue_exec(gsGlobal);
@@ -1243,19 +1271,19 @@ void flipScreenSingleBufferingPerfNoVSync()
 	processFrameCounter();
 }
 
-void flipScreenDoubleBufferingNoVSync()
+static void flipScreenDoubleBufferingNoVSync()
 {	
+	gsKit_flip(gsGlobal);
 	gsKit_queue_exec(gsGlobal);
 	gsKit_finish();
-	gsKit_flip(gsGlobal);
 	gsKit_TexManager_nextFrame(gsGlobal);
 }
 
-void flipScreenDoubleBufferingPerfNoVSync()
+static void flipScreenDoubleBufferingPerfNoVSync()
 {	
+	gsKit_flip(gsGlobal);
 	gsKit_queue_exec(gsGlobal);
 	gsKit_finish();
-	gsKit_flip(gsGlobal);
 	gsKit_TexManager_nextFrame(gsGlobal);
 
 	processFrameCounter();
@@ -1263,7 +1291,7 @@ void flipScreenDoubleBufferingPerfNoVSync()
 
 //////////////////////////////////////////////////////////////////////////////////////////////
 
-void flipScreenHiRes()
+static void flipScreenHiRes()
 {
 	gsKit_hires_sync(gsGlobal);
 	gsKit_hires_flip(gsGlobal);
@@ -1271,7 +1299,7 @@ void flipScreenHiRes()
 
 }
 
-void flipScreenHiResPerf()
+static void flipScreenHiResPerf()
 {
 	gsKit_hires_sync(gsGlobal);
 	gsKit_hires_flip(gsGlobal);
@@ -1280,7 +1308,7 @@ void flipScreenHiResPerf()
 	processFrameCounter();
 }
 
-void switchFlipScreenFunction()
+static void switchFlipScreenFunction()
 {
 	if (hires) {
 		if(perf) {
@@ -1351,6 +1379,10 @@ void init_graphics()
 
 	dmaKit_init(D_CTRL_RELE_OFF, D_CTRL_MFD_OFF, D_CTRL_STS_UNSPEC, D_CTRL_STD_OFF, D_CTRL_RCYC_8, 1 << DMA_CHANNEL_GIF);
 	dmaKit_chan_init(DMA_CHANNEL_GIF);
+	dmaKit_chan_init(DMA_CHANNEL_VIF1);
+	dmaKit_wait(DMA_CHANNEL_GIF, 0);
+	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
+
 
 	flipScreen = flipScreenDoubleBuffering;
 
@@ -1376,6 +1408,7 @@ void init_graphics()
 	gsKit_vsync_wait();
 	flipScreen();
 
+	vu1_set_double_buffer_settings();
 }
 
 void graphicWaitVblankStart(){

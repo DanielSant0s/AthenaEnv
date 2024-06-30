@@ -1,8 +1,7 @@
 
 
 #include "ath_env.h"
-#include <netman.h>
-#include <ps2ip.h>
+#include "include/network.h"
 #include <malloc.h>
 
 typedef struct {
@@ -32,7 +31,7 @@ static JSValue athena_socket_ctor(JSContext *ctx, JSValueConst new_target, int a
     JS_ToInt32(ctx, &s->sin_family, argv[0]);
     JS_ToInt32(ctx, &protocol, argv[1]);
 
-	s->id = lwip_socket(s->sin_family, protocol, 0);
+	s->id = socket(s->sin_family, protocol, 0);
 
     proto = JS_GetPropertyStr(ctx, new_target, "prototype");
     obj = JS_NewObjectProtoClass(ctx, proto, js_socket_class_id);
@@ -57,7 +56,7 @@ static JSValue athena_socket_connect(JSContext *ctx, JSValue this_val, int argc,
     JS_ToInt32(ctx, &sin_port, argv[1]);
     addr.sin_port = PP_HTONS(sin_port);
 
-    int ret = lwip_connect(s->id, (struct sockaddr*)&addr, sizeof(addr));
+    int ret = connect(s->id, (struct sockaddr*)&addr, sizeof(addr));
 
     return JS_NewInt32(ctx, ret);
 }
@@ -77,7 +76,7 @@ static JSValue athena_socket_bind(JSContext *ctx, JSValue this_val, int argc, JS
     JS_ToInt32(ctx, &sin_port, argv[1]);
     addr.sin_port = PP_HTONS(sin_port);
 
-    int ret = lwip_bind(s->id, (struct sockaddr*)&addr, sizeof(addr));
+    int ret = bind(s->id, (struct sockaddr*)&addr, sizeof(addr));
 
     return JS_NewInt32(ctx, ret);
 }
@@ -90,7 +89,7 @@ static JSValue athena_socket_send(JSContext *ctx, JSValue this_val, int argc, JS
     size_t len = 0;
     const char* buf = JS_ToCStringLen(ctx, &len, argv[0]);
 
-    int ret = lwip_send(s->id, buf, len, MSG_DONTWAIT);
+    int ret = send(s->id, buf, len, MSG_DONTWAIT);
 
     return JS_NewInt32(ctx, ret);
 }
@@ -100,7 +99,7 @@ static JSValue athena_socket_listen(JSContext *ctx, JSValue this_val, int argc, 
 
     JSSocketData* s = JS_GetOpaque2(ctx, this_val, js_socket_class_id);
 
-    int ret = lwip_listen(s->id, 0);
+    int ret = listen(s->id, 0);
 
     return JS_NewInt32(ctx, ret);
 }
@@ -115,7 +114,7 @@ static JSValue athena_socket_recv(JSContext *ctx, JSValue this_val, int argc, JS
 
     void* buf = js_mallocz(ctx, len);
 
-    lwip_recv(s->id, buf, len, MSG_PEEK);
+    recv(s->id, buf, len, MSG_PEEK);
     return JS_NewStringLen(ctx, buf, len);
 }
 

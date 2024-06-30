@@ -16,63 +16,6 @@
 
 #define MAX_DIR_FILES 512
 
-static JSValue athena_getCurrentDirectory(JSContext *ctx)
-{
-	char path[256];
-	getcwd(path, 256);
-	return JS_NewString(ctx, path);
-}
-
-static JSValue athena_setCurrentDirectory(JSContext *ctx, JSValueConst *argv)
-{
-        static char temp_path[256];
-	const char *path = JS_ToCString(ctx, argv[0]);
-	if(!path) return JS_ThrowSyntaxError(ctx, "Argument error: System.currentDirectory(file) takes a filename as string as argument.");
-
-	athena_getCurrentDirectory(ctx);
-	
-	// let's do what the ps2sdk should do, 
-	// some normalization... :)
-	// if absolute path (contains [drive]:path/)
-	if (strchr(path, ':'))
-	{
-	      strcpy(temp_path,path);
-	}
-	else // relative path
-	{
-	   // remove last directory ?
-	   if(!strncmp(path, "..", 2))
-	   {
-	        getcwd(temp_path, 256);
-	        if ((temp_path[strlen(temp_path)-1] != ':'))
-	        {
-	           int idx = strlen(temp_path)-1;
-	           do {
-	            	idx--;
-	           } while (temp_path[idx] != '/');
-	           temp_path[idx] = '\0';
-	        }
-	        
-    	} else {
-	      getcwd(temp_path, 256);
-	      strcat(temp_path,"/");
-	      strcat(temp_path,path);
-	   	}
-    }
-        
-        dbgprintf("changing directory to %s\n",__ps2_normalize_path(temp_path));
-        chdir(__ps2_normalize_path(temp_path));
-       
-	return JS_UNDEFINED;
-}
-
-static JSValue athena_curdir(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
-	if(argc == 0) return athena_getCurrentDirectory(ctx);
-	if(argc == 1) return athena_setCurrentDirectory(ctx, argv);
-	return JS_ThrowSyntaxError(ctx, "Argument error: System.currentDirectory([file]) takes zero or one argument.");
-}
-
-
 static JSValue athena_dir(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
 {
 	
@@ -81,7 +24,7 @@ static JSValue athena_dir(JSContext *ctx, JSValue this_val, int argc, JSValueCon
 	JSValue arr = JS_NewArray(ctx);
 
     const char *temp_path = "";
-	char path[255];
+	char path[255], tpath[384];
 	
 	getcwd((char *)path, 256);
 	dbgprintf("current dir %s\n",(char *)path);
@@ -111,14 +54,21 @@ static JSValue athena_dir(JSContext *ctx, JSValue this_val, int argc, JSValueCon
 
 	d = opendir(path);
 
+	struct stat     statbuf;
+
 	if (d) {
 		while ((dir = readdir(d)) != NULL) {
+
+			strcpy(tpath, path);
+			strcat(tpath, "/");
+			strcat(tpath, dir->d_name);
+    		stat(tpath, &statbuf);
 
 			JSValue obj = JS_NewObject(ctx);
 
 			JS_DefinePropertyValueStr(ctx, obj, "name", JS_NewString(ctx, dir->d_name), JS_PROP_C_W_E);
-			JS_DefinePropertyValueStr(ctx, obj, "size", JS_NewUint32(ctx, dir->d_stat.st_size), JS_PROP_C_W_E);
-			JS_DefinePropertyValueStr(ctx, obj, "dir", JS_NewBool(ctx, S_ISDIR(dir->d_stat.st_mode)), JS_PROP_C_W_E);
+			JS_DefinePropertyValueStr(ctx, obj, "size", JS_NewUint32(ctx, statbuf.st_size), JS_PROP_C_W_E);
+			JS_DefinePropertyValueStr(ctx, obj, "dir", JS_NewBool(ctx, (dir->d_type == DT_DIR)), JS_PROP_C_W_E);
 
 			JS_DefinePropertyValueUint32(ctx, arr, i++, obj, JS_PROP_C_W_E);
 	    }
@@ -126,15 +76,6 @@ static JSValue athena_dir(JSContext *ctx, JSValue this_val, int argc, JSValueCon
 	}
 	
 	return arr;
-}
-
-static JSValue athena_createDir(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
-{
-	const char *path = JS_ToCString(ctx, argv[0]);
-	if(!path) return JS_ThrowSyntaxError(ctx, "Argument error: System.createDirectory(directory) takes a directory name as string as argument.");
-	mkdir(path, 0777);
-	
-	return JS_UNDEFINED;
 }
 
 static JSValue athena_removeDir(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
@@ -169,15 +110,6 @@ static JSValue athena_movefile(JSContext *ctx, JSValue this_val, int argc, JSVal
     close(dest);
 
 	remove(oldName);
-
-	return JS_UNDEFINED;
-}
-
-static JSValue athena_removeFile(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
-{
-	const char *path = JS_ToCString(ctx, argv[0]);
-	if(!path) return JS_ThrowSyntaxError(ctx, "Argument error: System.removeFile(filename) takes a filename as string as argument.");
-	remove(path);
 
 	return JS_UNDEFINED;
 }
@@ -252,15 +184,6 @@ static JSValue athena_delay(JSContext *ctx, JSValue this_val, int argc, JSValueC
 	return JS_UNDEFINED;
 }
 
-static JSValue athena_getFreeMemory(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
-{
-	if (argc != 0) return JS_ThrowSyntaxError(ctx, "no arguments expected.");
-	
-	size_t result = GetFreeSize();
-
-	return JS_NewUint32(ctx, (uint32_t)(result));
-}
-
 static JSValue athena_exit(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
 {
 	if (argc != 0) return JS_ThrowSyntaxError(ctx, "System.exitToBrowser");
@@ -302,89 +225,6 @@ static JSValue athena_getmcinfo(JSContext *ctx, JSValue this_val, int argc, JSVa
 
 	return obj;
 }
-
-static JSValue athena_openfile(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-	if (argc != 2) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
-	const char *file_tbo = JS_ToCString(ctx, argv[0]);
-	int type;
-	JS_ToInt32(ctx, &type, argv[1]);
-
-	int fd = open(file_tbo, type, 0777);
-	if (fd < 0) return JS_ThrowSyntaxError(ctx, "cannot open requested file.");
-
-	return JS_NewInt32(ctx, fd);
-}
-
-
-static JSValue athena_readfile(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-	if (argc != 2) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
-	
-	int file;
-	uint32_t size;
-
-	JS_ToInt32(ctx, &file, argv[0]);
-	JS_ToUint32(ctx, &size, argv[1]);
-	uint8_t *buffer = (uint8_t*)malloc(size + 1);
-	int len = read(file,buffer, size);
-	buffer[len] = 0;
-	return JS_NewStringLen(ctx, (const char*)buffer, len);
-}
-
-
-static JSValue athena_writefile(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-	int fd;
-	uint32_t size, len;
-
-	JS_ToInt32(ctx, &fd, argv[0]);
-	unsigned char *data = JS_GetArrayBuffer(ctx, &len, argv[1]);
-	JS_ToUint32(ctx, &size, argv[2]);
-	write(fd, data, size);
-	return JS_UNDEFINED;
-}
-
-static JSValue athena_closefile(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-	if (argc != 1) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
-	int fd;
-	JS_ToInt32(ctx, &fd, argv[0]);
-	close(fd);
-	return JS_UNDEFINED;
-}
-
-static JSValue athena_seekfile(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-	if (argc != 3) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
-	int fd;
-	int pos;
-	uint32_t type;
-
-	JS_ToInt32(ctx, &fd, argv[0]);
-	JS_ToInt32(ctx, &pos, argv[1]);
-	JS_ToUint32(ctx, &type, argv[2]);
-
-	lseek(fd, pos, type);	
-	return JS_UNDEFINED;
-}
-
-
-static JSValue athena_sizefile(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-	if (argc != 1) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
-	int fd;
-	JS_ToInt32(ctx, &fd, argv[0]);
-	uint32_t cur_off = lseek(fd, 0, SEEK_CUR);
-	uint32_t size = lseek(fd, 0, SEEK_END);
-	lseek(fd, cur_off, SEEK_SET);
-	return JS_NewUint32(ctx, size);
-}
-
-
-static JSValue athena_checkexist(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-	if (argc != 1) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
-	const char *file_tbo = JS_ToCString(ctx, argv[0]);
-	int fd = open(file_tbo, O_RDONLY, 0777);
-	if (fd < 0) return JS_NewBool(ctx, false);
-	close(fd);
-	return JS_NewBool(ctx, true);
-}
-
 
 static JSValue athena_loadELF(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
 {
@@ -668,26 +508,15 @@ static JSValue athena_stacktrace(JSContext *ctx, JSValue this_val, int argc, JSV
 }
 
 static const JSCFunctionListEntry system_funcs[] = {
-	JS_CFUNC_DEF( "openFile",           		  2,         athena_openfile),
-	JS_CFUNC_DEF( "readFile",          		  2,         athena_readfile		 ),
-	JS_CFUNC_DEF( "writeFile",          		  3,       	athena_writefile		 ),
-	JS_CFUNC_DEF( "closeFile",          		  1,       	athena_closefile		 ),  
-	JS_CFUNC_DEF( "seekFile",          		  3,         athena_seekfile		 ),  
-	JS_CFUNC_DEF( "sizeFile",          		  1,         athena_sizefile			 ),
-	JS_CFUNC_DEF( "doesFileExist",      		  1,      	athena_checkexist	 ),
-	JS_CFUNC_DEF( "currentDir",   1,        		athena_curdir		 ),
 	JS_CFUNC_DEF( "listDir",  1,         			athena_dir			 		 ),
-	JS_CFUNC_DEF( "createDirectory",    		  1,       	athena_createDir	 ),
 	JS_CFUNC_DEF( "removeDirectory",    		  1,       	athena_removeDir	 ),
 	JS_CFUNC_DEF( "moveFile",	       		  2,        	athena_movefile	 ),
 	JS_CFUNC_DEF( "copyFile",	       		  2,        	athena_copyfile	 ),
 	JS_CFUNC_DEF( "threadCopyFile",	   		  2,       	athena_copyasync	   	 ),
 	JS_CFUNC_DEF( "getFileProgress",	  		  0,  	athena_getfileprogress     ),
-	JS_CFUNC_DEF( "removeFile",         		  2,      	athena_removeFile		 ),
 	JS_CFUNC_DEF( "rename",           		  2,          athena_rename		 ),
 	JS_CFUNC_DEF( "sleep",           		  1,           athena_sleep		 ),
 	JS_CFUNC_DEF( "delay",           		  0,           athena_delay		 ),
-	JS_CFUNC_DEF( "getFreeMemory",      		  0,   		athena_getFreeMemory ),
 	JS_CFUNC_DEF( "exitToBrowser",  		  0,            athena_exit	 ),
 	JS_CFUNC_DEF( "getMCInfo",          2,       	athena_getmcinfo	 		 ),
 	JS_CFUNC_DEF( "loadELF",         3,        	athena_loadELF	 			 ),
@@ -701,13 +530,6 @@ static const JSCFunctionListEntry system_funcs[] = {
 	JS_CFUNC_DEF( "getTemperature",      	  0,   		athena_gettemps	 ),
 	JS_CFUNC_DEF( "getStackTrace",      	  1,   		athena_stacktrace	 ),
 	JS_PROP_STRING_DEF("boot_path", boot_path, JS_PROP_CONFIGURABLE ),
-	JS_PROP_INT32_DEF("FREAD", O_RDONLY, JS_PROP_CONFIGURABLE ),
-	JS_PROP_INT32_DEF("FWRITE", O_WRONLY, JS_PROP_CONFIGURABLE ),
-	JS_PROP_INT32_DEF("FCREATE", O_CREAT | O_WRONLY, JS_PROP_CONFIGURABLE ),
-	JS_PROP_INT32_DEF("FRDWR", O_RDWR, JS_PROP_CONFIGURABLE ),
-	JS_PROP_INT32_DEF("SET", SEEK_SET, JS_PROP_CONFIGURABLE ),
-	JS_PROP_INT32_DEF("END", SEEK_END, JS_PROP_CONFIGURABLE ),
-	JS_PROP_INT32_DEF("CUR", SEEK_CUR, JS_PROP_CONFIGURABLE ),
 	JS_PROP_INT32_DEF("READ_ONLY", 1, JS_PROP_CONFIGURABLE ),
 	JS_PROP_INT32_DEF("SELECT", 2, JS_PROP_CONFIGURABLE ),
 };

@@ -1,20 +1,8 @@
 // {"name": "App store", "author": "Daniel Santos", "version": "04102023", "file": "app_store.js"}
 
-function decodeUTF16LE(binaryStr) {
-    var cp = [];
-    for( var i = 0; i < binaryStr.length; i+=2) {
-        cp.push( 
-             binaryStr.charCodeAt(i) |
-            ( binaryStr.charCodeAt(i+1) << 8 )
-        );
-    }
-
-    return String.fromCharCode.apply( String, cp );
-}
-
 function load_app_db(fname) {
     let list_file = std.open(fname, "r");
-    let app_list = JSON.parse(decodeUTF16LE(list_file.getline()));
+    let app_list = JSON.parse(list_file.getline());
     list_file.close();
     list_file = null;
 
@@ -65,12 +53,7 @@ let app_list = null;
 
 const buttons = [{inc:Pads.DOWN, dec:Pads.UP}, {inc:Pads.RIGHT, dec:Pads.LEFT}, {inc:Pads.R2, dec:Pads.L2}];
 
-function pressed(pad, button) {
-    return (Pads.check(pad[0], button) && !Pads.check(pad[1], button));
-}
-
-
-let pad = [undefined, undefined];
+let pad = Pads.get();
 
 const FADE_IN = 0;
 const FADE_OUT = 1;
@@ -131,10 +114,6 @@ class UI {
         Screen.clear(0x80101010);
     }
 
-    pressed(pad, button) {
-        return (Pads.check(pad[0], button) && !Pads.check(pad[1], button));
-    }
-
 }
 
 let ui = new UI();
@@ -162,11 +141,11 @@ class Menu {
     }
 
     process_input(pad) {
-        if(pressed(pad, buttons[this.pad_mode].dec)) {
+        if(pad.justPressed(buttons[this.pad_mode].dec)) {
             this.num--;
         }
     
-        if(pressed(pad, buttons[this.pad_mode].inc)) {
+        if(pad.justPressed(buttons[this.pad_mode].inc)) {
             this.num++;
         }
 
@@ -318,8 +297,7 @@ const UPDATED = 2;
 let update_state = NOT_UPDATED;
 
 while(true) {
-    pad[1] = pad[0];
-    pad[0] = Pads.get();
+    pad.update();
 
     switch (app_state) {
         case LOADING:
@@ -347,7 +325,7 @@ while(true) {
                         update_state = UPDATING;
                         transfering = true;
                     } else if (update_state == UPDATING) {
-                        if(req.ready(5)) {
+                        if(req.ready(5000)) {
                             transfering = false;
                             update_state = UPDATED;
                         }
@@ -389,11 +367,11 @@ while(true) {
                     break;
             }
 
-            if(pressed(pad, Pads.CROSS)) {
+            if(pad.justPressed(Pads.CROSS)) {
                 app_state = DLING_MENU;
             }
 
-            if(pressed(pad, Pads.TRIANGLE)) {
+            if(pad.justPressed(Pads.TRIANGLE)) {
                 terminate = true;
             }
 
@@ -412,17 +390,17 @@ while(true) {
 
             switch (dl_state) {
                 case DETAILS:
-                    if(pressed(pad, Pads.CROSS)) {
+                    if(pad.justPressed(Pads.CROSS)) {
                         dling_text += "Downloading package...\n";
                         dling_text += "This is an alpha version, it will take a long time\n";
                         dl_state++;
                     }
-                    if(pressed(pad, Pads.TRIANGLE)) {
+                    if(pad.justPressed(Pads.TRIANGLE)) {
                         app_state = MAIN_MENU;
                     }
                     break;
                 case TODOWNLOAD:
-                    req.asyncDownload(app_list[explore_menu.num].link, System.boot_path + app_list[explore_menu.num].fname);
+                    req.asyncDownload(app_list[explore_menu.num].link, System.boot_path + "/" + app_list[explore_menu.num].fname);
                     transfering = true;
                     dl_state++;
                     break;

@@ -8,6 +8,18 @@
 #include "include/fntsys.h"
 #include "ath_env.h"
 
+static JSValue athena_set_clear_color(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	static Color clear_color = GS_SETREG_RGBAQ(0x00, 0x00, 0x00, 0x80, 0x00);
+  	JS_ToInt32(ctx, &clear_color, argv[0]);
+  	js_set_clear_color((uint64_t)clear_color);
+  	return JS_UNDEFINED;
+}
+
+static JSValue athena_displayfunc(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	js_set_render_loop_func(JS_DupValue(ctx, argv[0]));
+	return JS_UNDEFINED;
+}
+
 static JSValue athena_flip(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
   flipScreen();
   return JS_UNDEFINED;
@@ -128,6 +140,7 @@ static JSValue athena_scrlog(JSContext *ctx, JSValue this_val, int argc, JSValue
 		str_buf = malloc(512);
 		buf_len = 512;
 		memset(str_buf, 0, buf_len);
+		fntLoadDefault(NULL);
 	}
 
 	old_len = str_len;
@@ -146,8 +159,10 @@ static JSValue athena_scrlog(JSContext *ctx, JSValue this_val, int argc, JSValue
 
 	clearScreen(GS_SETREG_RGBAQ(0x00, 0x00, 0x00, 0x80, 0x00));
 
+	fntSetCharSize(0, FNTSYS_CHAR_SIZE*64*0.8f, FNTSYS_CHAR_SIZE*64*0.8f);
+
 	if (str_len > 0) {
-		printFontMText(str_buf, 0, 0, 0.5f, 0x80808080);
+		fntRenderString(0, 0, 0, 0, 640, 448, str_buf, 0x80808080);
 	}
 
 	flipScreen();
@@ -164,9 +179,6 @@ static JSValue athena_cls(JSContext *ctx, JSValue this_val, int argc, JSValueCon
 	return JS_UNDEFINED;
 }
 
-
-
-
 static const JSCFunctionListEntry module_funcs[] = {
     JS_CFUNC_DEF("flip", 0, athena_flip),
     JS_CFUNC_DEF("clear", 1, athena_clear),
@@ -179,6 +191,10 @@ static const JSCFunctionListEntry module_funcs[] = {
     JS_CFUNC_DEF("setMode", 1, athena_setvmode),
 	JS_CFUNC_DEF("log", 1, athena_scrlog),
 	JS_CFUNC_DEF("cls", 0, athena_cls),
+
+	JS_CFUNC_DEF("clearColor", 1, athena_set_clear_color),
+	JS_CFUNC_DEF("display", 1, athena_displayfunc),
+
 	JS_PROP_INT32_DEF("NTSC", GS_MODE_NTSC, JS_PROP_CONFIGURABLE),
 	JS_PROP_INT32_DEF("DTV_480p", GS_MODE_DTV_480P, JS_PROP_CONFIGURABLE),
 	JS_PROP_INT32_DEF("PAL", GS_MODE_PAL, JS_PROP_CONFIGURABLE),

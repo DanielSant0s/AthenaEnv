@@ -35,7 +35,7 @@ extern "C" {
 JSModuleDef *js_init_module_std(JSContext *ctx, const char *module_name);
 JSModuleDef *js_init_module_os(JSContext *ctx, const char *module_name);
 void js_std_add_helpers(JSContext *ctx, int argc, char **argv);
-void js_std_loop(JSContext *ctx);
+int js_std_loop(JSContext *ctx);
 void js_std_init_handlers(JSRuntime *rt);
 void js_std_free_handlers(JSRuntime *rt);
 void js_std_dump_error(JSContext *ctx);
@@ -50,7 +50,37 @@ void js_std_promise_rejection_tracker(JSContext *ctx, JSValueConst promise,
                                       JSValueConst reason,
                                       JS_BOOL is_handled, void *opaque);
 void js_std_set_worker_new_context_func(JSContext *(*func)(JSRuntime *rt));
-                                        
+
+void js_set_render_loop_func(JSValue func);
+void js_set_clear_color(uint64_t color);
+
+typedef enum {
+    PRESSED_EVENT,
+    JUSTPRESSED_EVENT,
+    NONPRESSED_EVENT
+} EventFlavours;
+
+typedef struct {
+	char port;
+
+    uint32_t btns;
+    int lx;
+	int ly;
+	int rx;
+	int ry;
+
+    uint32_t old_btns;
+    char old_lx;
+	char old_ly;
+	char old_rx;
+	char old_ry;
+} JSPads;
+
+int js_new_input_event(int buttons, JSValueConst func, EventFlavours flavour);
+void js_delete_input_event(int id);
+void js_set_input_event_handler(JSPads* pad);
+void js_pads_update(JSPads *pad);
+
 #ifdef __cplusplus
 } /* extern "C" { */
 #endif

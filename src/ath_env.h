@@ -1,3 +1,6 @@
+#ifndef ATH_ENV_H
+#define ATH_ENV_H
+
 #include <kernel.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -58,6 +61,9 @@ JSModuleDef *athena_timer_init(JSContext* ctx);
 JSModuleDef *athena_task_init(JSContext* ctx);
 JSModuleDef *athena_pads_init(JSContext* ctx);
 
+JSModuleDef *athena_vector_init(JSContext *ctx);
+JSModuleDef *athena_physics_init(JSContext *ctx);
+
 #ifdef ATHENA_GRAPHICS
 JSModuleDef *athena_render_init(JSContext* ctx);
 JSModuleDef *athena_screen_init(JSContext* ctx);
@@ -66,10 +72,6 @@ JSModuleDef *athena_shape_init(JSContext* ctx);
 JSModuleDef *athena_font_init(JSContext* ctx);
 JSModuleDef *athena_image_init(JSContext* ctx);
 JSModuleDef *athena_imagelist_init(JSContext* ctx);
-#else
-#ifdef ATHENA_CLI
-JSModuleDef *athena_console_init(JSContext* ctx);
-#endif
 #endif
 
 #ifdef ATHENA_NETWORK
@@ -95,3 +97,6 @@ JSModuleDef *athena_sound_init(JSContext* ctx);
 JSModuleDef *athena_camera_init(JSContext* ctx);
 #endif
 
+
+
+#endif

@@ -10,6 +10,16 @@ Keyboard.init();
 
 let bg = new Image("dash/bg.png");
 
+const bg_palette = new Uint8Array(bg.palette);
+
+for (let i = 0; i < bg_palette.length; i += 4) {
+    bg_palette[i+0] = Math.trunc(bg_palette[i+0] * 0.2f);
+    bg_palette[i+1] = Math.trunc(bg_palette[i+1] * 0.0f);
+    bg_palette[i+2] = Math.trunc(bg_palette[i+2] * 1.0f);
+}
+
+console.log("Image size: " + bg.size + " | bits per pixel: " + bg.bpp);
+
 const unsel_color = Color.new(255, 255, 255, 64);
 const sel_color = Color.new(255, 255, 255);
 
@@ -36,7 +46,7 @@ let app_table = System.listDir().map(file => file.name).filter(str => str.endsWi
 
     let metadata = JSON.parse(metadata_str);
 
-    if (System.doesFileExist(metadata.icon)) {
+    if (std.exists(metadata.icon)) {
         metadata.icon = new Image(metadata.icon);
     } else {
         metadata.icon = no_icon;
@@ -47,8 +57,7 @@ let app_table = System.listDir().map(file => file.name).filter(str => str.endsWi
 
 let menu_ptr = 0;
 
-let new_pad = Pads.get();
-let old_pad = new_pad;
+let pad = Pads.get();
 
 let old_kbd_char = 0;
 let kbd_char = 0;
@@ -61,9 +70,10 @@ const VK_RETURN = 10;
 
 var ee_info = System.getCPUInfo();
 
+let mem = undefined;
+
 os.setInterval(() => {
-    old_pad = new_pad;
-    new_pad = Pads.get();
+    pad.update();
 
     old_kbd_char = kbd_char;
     kbd_char = Keyboard.get();
@@ -72,28 +82,28 @@ os.setInterval(() => {
 
     bg.draw(0, 0);
 
-    font_bold.print(15, 5, "Athena dash alpha v0.1");
+    font_bold.print(15, 5, "Athena dash");
 
-    font.print(15, 420, `Temp: ${System.getTemperature() === undefined? "NaN" : System.getTemperature()} C | RAM Usage: ${Math.floor(System.getMemoryStats().used / 1048576)}MB / ${Math.floor(ee_info.RAMSize / 1048576)}MB`);
+    mem = System.getMemoryStats();
 
-    if(Pads.check(new_pad, Pads.UP) && !Pads.check(old_pad, Pads.UP) || old_kbd_char == VK_OLD_UP && kbd_char == VK_NEW_UP) {
+    font.print(15, 420, `Temp: ${System.getTemperature() === undefined? "NaN" : System.getTemperature()} C | RAM Usage: ${Math.floor(mem.used / 1024)}KB / ${Math.floor(ee_info.RAMSize / 1024)}KB`);
+
+    if(pad.justPressed(Pads.UP) || old_kbd_char == VK_OLD_UP && kbd_char == VK_NEW_UP) {
         app_table.unshift(app_table.pop());
 
     }
 
-    if(Pads.check(new_pad, Pads.DOWN) && !Pads.check(old_pad, Pads.DOWN) || old_kbd_char == VK_OLD_DOWN && kbd_char == VK_NEW_DOWN){
+    if(pad.justPressed(Pads.DOWN) || old_kbd_char == VK_OLD_DOWN && kbd_char == VK_NEW_DOWN){
         app_table.push(app_table.shift());
     }
 
-    if(Pads.check(new_pad, Pads.CROSS) && !Pads.check(old_pad, Pads.CROSS) || kbd_char == VK_RETURN){
+    if(pad.justPressed(Pads.CROSS) || kbd_char == VK_RETURN){
         let bin = "athena.elf";
         if ("bin" in app_table[0]) {
             bin = app_table[0].bin;
         }
 
-        
-
-        System.loadELF(System.boot_path + bin, [app_table[0].file, ]); // Doing this to reset all the stuff
+        System.loadELF(System.boot_path + "/" + bin, [app_table[0].file, ]); // Doing this to reset all the stuff
     }
 
     font_medium.print(210, 125, app_table[0].name);
@@ -102,6 +112,6 @@ os.setInterval(() => {
     for(let i = 1; i < (app_table.length < 10? app_table.length : 10); i++) {
         font.print(210, 125+(23*i), app_table[i].name);
     }
-
+    
     Screen.flip();
 }, 0);

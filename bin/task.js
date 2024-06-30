@@ -1,6 +1,6 @@
 // {"name": "BUGGED", "author": "Daniel Santos", "version": "05112023","file": "task.js"}
 
-Tasks.new(function() {
+Tasks.new(() => {
     for(let i = 0; i < 10000; i++) {
         Screen.log("Hello, world!");
     }

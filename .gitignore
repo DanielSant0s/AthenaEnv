@@ -8,4 +8,5 @@ src/main.js.c
 .vscode/settings.json
 
 obj/
-asm/
+embed/
+bin/brew_data.json

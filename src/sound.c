@@ -22,11 +22,12 @@ static bool adpcm_started = false;
 
 static bool stream_repeat = false;
 static bool stream_paused = false;
+static bool stream_restart = false;
 
 static int oggThreadID, oggIoThreadID, wavThreadId;
 static int outSema, inSema;
 static unsigned char rdPtr, wrPtr;
-static char oggBuffer[STREAM_RING_BUFFER_COUNT][STREAM_RING_BUFFER_SIZE];
+static char soundBuffer[STREAM_RING_BUFFER_COUNT][STREAM_RING_BUFFER_SIZE];
 static volatile unsigned char oggThreadRunning, oggIoThreadRunning, wav_thread_running;
 
 static Sound *cur_snd;
@@ -38,20 +39,22 @@ static void wavThread(void *arg)
     while (!terminate_flag) {
         //SleepThread();
 
-		ret = fread(oggBuffer[0], 1, sizeof(oggBuffer[0]), cur_snd->fp);
+		ret = fread(soundBuffer[0], 1, sizeof(soundBuffer[0]), cur_snd->fp);
+
 		if (ret > 0)
 		{
 			audsrv_wait_audio(STREAM_RING_BUFFER_SIZE);
-			audsrv_play_audio(oggBuffer[0], ret);
+			audsrv_play_audio(soundBuffer[0], ret);
 		}
 
-        if (ret < sizeof(oggBuffer[0]))
+        if (ret < sizeof(soundBuffer[0]))
 		{
+            fseek(cur_snd->fp, 0x30, SEEK_SET);
+
             if (!stream_repeat) {
-				terminate_flag = 1;
-				break;
+                audsrv_stop_audio();
+                sound_pause();
 			}
-			fseek(cur_snd->fp, 0x30, SEEK_SET);
 		}
 
 		if(stream_paused) {
@@ -62,6 +65,15 @@ static void wavThread(void *arg)
 		} else if (!flag_start) {
 			flag_start = true;
 		}
+
+        if(stream_restart) {
+            audsrv_wait_audio(STREAM_RING_BUFFER_SIZE);
+            audsrv_stop_audio();
+
+            fseek(cur_snd->fp, 0x30, SEEK_SET);
+
+            stream_restart = false;
+        }
     }
 
     audsrv_stop_audio();
@@ -83,7 +95,7 @@ static int init_wav() {
     thread.attr = 0;
     thread.option = 0;
 
-    // ogg thread will start in DORMANT state.
+    // sound thread will start in DORMANT state.
     wavThreadId = CreateThread(&thread);
 
     if (wavThreadId >= 0) {
@@ -205,6 +217,11 @@ void sound_setadpcmvolume(int slot, int volume) {
     audsrv_adpcm_set_volume_and_pan(slot, volume, 0);
 }
 
+void sound_restart()
+{
+    stream_restart = true;
+}
+
 audsrv_adpcm_t* sound_loadadpcm(const char* path){
     if(!adpcm_started) {
         audsrv_adpcm_init();
@@ -284,6 +301,64 @@ int sound_get_duration(Sound* snd) {
     return -1;
 }
 
+void sound_set_position(Sound* snd, int ms) {
+    uint32_t f_pos, n_samples;
+
+    if (snd->type == OGG_AUDIO) {
+        if (ms < sound_get_duration(snd)) {
+            if (snd == cur_snd)
+                sound_pause();
+
+            n_samples = ms / 1000 * snd->fmt.freq;
+
+            f_pos = (ms / 1000 * snd->fmt.freq) * (snd->fmt.bits / 16);
+
+            ov_pcm_seek(cur_snd->fp, round(f_pos / STREAM_RING_BUFFER_SIZE) * STREAM_RING_BUFFER_SIZE);
+
+            if (snd == cur_snd)
+                sound_resume(snd);
+        }
+
+    } else if (snd->type == WAV_AUDIO) {
+        if (ms < sound_get_duration(snd)) {
+            if (snd == cur_snd)
+                sound_pause();
+
+            n_samples = ms / 1000 * snd->fmt.freq;
+
+            f_pos = (ms / 1000 * snd->fmt.freq) * (snd->fmt.bits / 4);
+
+            fseek(snd->fp, f_pos, SEEK_SET);
+
+            if (snd == cur_snd)
+                sound_resume(snd);
+        }
+
+    } else if (snd->type == ADPCM_AUDIO) {
+        return -1;
+    }
+}
+
+int sound_get_position(Sound* snd) {
+    uint32_t f_pos, ms;
+
+    if (snd->type == OGG_AUDIO) {
+        f_pos = ov_pcm_tell(snd->fp);
+	    
+        ms = round(f_pos / (snd->fmt.freq / 1000 * (snd->fmt.bits / 16)));
+
+        return ms;
+    } else if (snd->type == WAV_AUDIO) {
+        f_pos = ftell(snd->fp);
+
+        ms = round(f_pos / (snd->fmt.freq / 1000 * (snd->fmt.bits / 4)));
+
+        return ms;
+    } else if (snd->type == ADPCM_AUDIO) {
+        return -1;
+    }
+}
+
 // OGG Support
 
 static void oggThread(void *arg)
@@ -295,7 +370,7 @@ static void oggThread(void *arg)
 
         while (PollSema(outSema) == outSema) {
             audsrv_wait_audio(STREAM_RING_BUFFER_SIZE);
-            audsrv_play_audio(oggBuffer[rdPtr], STREAM_RING_BUFFER_SIZE);
+            audsrv_play_audio(soundBuffer[rdPtr], STREAM_RING_BUFFER_SIZE);
             rdPtr = (rdPtr + 1) % STREAM_RING_BUFFER_COUNT;
 
             SignalSema(inSema);
@@ -308,6 +383,15 @@ static void oggThread(void *arg)
 		} else if (!flag_start) {
 			flag_start = true;
 		}
+
+        if(stream_restart) {
+            audsrv_wait_audio(STREAM_RING_BUFFER_SIZE);
+            audsrv_stop_audio();
+
+            fseek(cur_snd->fp, 0x30, SEEK_SET);
+
+            stream_restart = false;
+        }
     }
 
     audsrv_stop_audio();
@@ -336,7 +420,7 @@ static void oggIoThread(void *arg)
         	decodeTotal = STREAM_RING_BUFFER_SIZE;
         	int bufferPtr = 0;
         	do {
-        	    int ret = ov_read(cur_snd->fp, oggBuffer[wrPtr] + bufferPtr, decodeTotal, 0, 2, 1, &bitStream);
+        	    int ret = ov_read(cur_snd->fp, soundBuffer[wrPtr] + bufferPtr, decodeTotal, 0, 2, 1, &bitStream);
         	    if (ret > 0) {
         	        bufferPtr += ret;
         	        decodeTotal -= ret;
@@ -345,11 +429,12 @@ static void oggIoThread(void *arg)
         	        terminate_flag = 1;
         	        break;
         	    } else if (ret == 0) {
+                    ov_pcm_seek(cur_snd->fp, 0);
+
 					if (!stream_repeat) {
-						terminate_flag = 1;
-						break;
+						audsrv_stop_audio();
+                        sound_pause();
 					}
-        	        ov_pcm_seek(cur_snd->fp, 0);
 				}
 
         	} while (decodeTotal > 0);

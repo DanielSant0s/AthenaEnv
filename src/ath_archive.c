@@ -197,6 +197,7 @@ static JSValue athena_archiveopen(JSContext *ctx, JSValue this_val, int argc, JS
 
 	if(magic == 0x04034b50 /* ZIP */) {
         strcpy(path_buf, boot_path);
+		strcat(path_buf, "/");
         strcat(path_buf, path);
 	    if ((za->fp = zip_open(path_buf, 0, &err)) == NULL) {
             zip_error_to_str(buf, sizeof(buf), err, errno);
@@ -295,6 +296,7 @@ static JSValue athena_untar(JSContext *ctx, JSValue this_val, int argc, JSValueC
     }
 
 	getcwd(tar_path, 512);
+	strcat(tar_path, "/");
 	untar(fp, tar_path);
 	fclose(fp);
 
@@ -334,6 +336,7 @@ static JSValue athena_extractall(JSContext *ctx, JSValue this_val, int argc, JSV
             if (zip_stat_index(arc->fp, i, 0, &sb) == 0) {
                 if (sb.name[len - 1] == '/') {
                     strcpy(outbuff, boot_path);
+					strcat(outbuff, "/");
                     strcat(outbuff, sb.name);
                     mkdir(outbuff, 0755);
                 } else {

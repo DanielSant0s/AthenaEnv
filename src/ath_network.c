@@ -62,10 +62,10 @@ static JSValue athena_nw_get_config(JSContext *ctx, JSValue this_val, int argc, 
 	if (ps2ip_getconfig("sm0", &ip_info) >= 0)
 	{
         obj = JS_NewObject(ctx);
-        JS_DefinePropertyValueStr(ctx, obj, "ip", JS_NewString(ctx, inet_ntoa(ip_info.ipaddr)), JS_PROP_C_W_E);
-        JS_DefinePropertyValueStr(ctx, obj, "netmask", JS_NewString(ctx, inet_ntoa(ip_info.netmask)), JS_PROP_C_W_E);
-        JS_DefinePropertyValueStr(ctx, obj, "gateway", JS_NewString(ctx, inet_ntoa(ip_info.gw)), JS_PROP_C_W_E);
-        JS_DefinePropertyValueStr(ctx, obj, "dns", JS_NewString(ctx, inet_ntoa(*dns_getserver(0))), JS_PROP_C_W_E);
+        JS_DefinePropertyValueStr(ctx, obj, "ip", JS_NewString(ctx, ip4addr_ntoa(&ip_info.ipaddr)), JS_PROP_C_W_E);
+        JS_DefinePropertyValueStr(ctx, obj, "netmask", JS_NewString(ctx, ip4addr_ntoa(&ip_info.netmask)), JS_PROP_C_W_E);
+        JS_DefinePropertyValueStr(ctx, obj, "gateway", JS_NewString(ctx, ip4addr_ntoa(&ip_info.gw)), JS_PROP_C_W_E);
+        JS_DefinePropertyValueStr(ctx, obj, "dns", JS_NewString(ctx, ip4addr_ntoa(dns_getserver(0))), JS_PROP_C_W_E);
 	} else {
 		obj = JS_ThrowInternalError(ctx, "Unable to read network info.\n");
 	}
@@ -86,12 +86,12 @@ static JSValue athena_nw_deinit(JSContext *ctx, JSValue this_val, int argc, JSVa
 static JSValue athena_nw_gethostbyname(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
 {
     const char* host = JS_ToCString(ctx, argv[0]);
-    struct hostent *host_address = lwip_gethostbyname(host);
+    struct hostent *host_address = gethostbyname(host);
     
     if (host_address == NULL)
         return JS_ThrowInternalError(ctx, "Unable to resolve address.\n");
 
-    return JS_NewString(ctx, inet_ntoa(*(struct in_addr*)host_address->h_addr));
+    return JS_NewString(ctx, ip4addr_ntoa((struct in_addr*)host_address->h_addr));
 }
 
 static void athena_nw_dtor(JSRuntime *rt, JSValue val)
@@ -343,7 +343,7 @@ static JSValue athena_nw_requests_async_get(JSContext *ctx, JSValue this_val, in
     s->chunk.size = 0;    /* no data at this point */
     s->chunk.transferring = false;
 
-    s->tid = create_task("Requests: Get", requestThread, 4096*10, 16);
+    s->tid = create_task("Requests: Get", requestThread, 1638400, 16);
     init_task(s->tid, (void*)s);
 
     return JS_UNDEFINED;
@@ -353,13 +353,16 @@ static JSValue athena_nw_requests_async_get(JSContext *ctx, JSValue this_val, in
 static JSValue athena_nw_requests_ready(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
 {
     JSRequestData* s = JS_GetOpaque2(ctx, this_val, js_request_class_id);
-    int timeout = 999999999, transfer_timeout = 60;
+    int timeout = 999999999, transfer_timeout = 3000;
 
     if (argc > 0) {
         JS_ToInt32(ctx, &timeout, argv[0]);
         if(argc > 1) {
             JS_ToInt32(ctx, &transfer_timeout, argv[1]);
         }
+
+        
+
         if ((clock() - s->chunk.timer) / 1000 > timeout && s->chunk.transferring) {
             s->ready = true;
         } else if ((clock() - s->chunk.timer) / 1000 > transfer_timeout && !s->chunk.transferring && s->chunk.timer > 0) {

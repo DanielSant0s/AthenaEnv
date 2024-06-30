@@ -99,7 +99,7 @@ void init_taskman()
             tasks_size++;
         }
 
-    } while(info.stack_size != 0) //A way to list already created threads
+    } while(info.stack_size != 0); //A way to list already created threads
     
     dbgprintf("Threads running during boot: %d\n", tasks_size);
 

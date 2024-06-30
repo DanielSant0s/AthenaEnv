@@ -3,7 +3,7 @@
 
 void RedirectFunction(void* old, void* new) {
     u32* function = old;
-    u32 patch = new;
+    u32 patch = (u32)new;
 
     FlushCache(2);
 
@@ -17,7 +17,7 @@ void RedirectFunction(void* old, void* new) {
 
 void RedirectCall(void* old, void* new) {
     u32* function = old;
-    u32 patch = new;
+    u32 patch = (u32)new;
 
     FlushCache(2);
 

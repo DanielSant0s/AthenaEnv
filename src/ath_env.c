@@ -10,6 +10,8 @@
 
 #define TRUE 1
 
+#define JSFILE_NOTFOUND -5656
+
 JSModuleDef *athena_push_module(JSContext* ctx, JSModuleInitFunc *func, const JSCFunctionListEntry *func_list, int len, const char* module_name){
     JSModuleDef *m;
     m = JS_NewCModule(ctx, module_name, func);
@@ -154,6 +156,7 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"import * as Image from 'Image';\n"
 				"import * as ImageList from 'ImageList';\n"
 				"import * as Render from 'Render';\n"
+				"import * as RenderObject from 'RenderObject';\n"
 				"import * as Lights from 'Lights';\n"
 				"import * as Camera from 'Camera';\n"
 				"globalThis.Color = Color;\n"
@@ -187,6 +190,7 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"globalThis.ImageList = ImageList.ImageList;\n"
 
 				"globalThis.Render = Render;\n"
+				"globalThis.RenderObject = RenderObject.RenderObject;\n"
 
 				"globalThis.Lights = Lights;\n"
 				"globalThis.AMBIENT = Lights.AMBIENT;\n"
@@ -194,12 +198,6 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 
 				"globalThis.Camera = Camera;\n"
 
-				#else
-
-				#ifdef ATHENA_CLI
-				"import * as Console from 'Console';\n"
-				"globalThis.Console = Console;\n"
-				#endif
 				#endif
 
 				"import * as std from 'std';\n"
@@ -210,6 +208,9 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"import * as System from 'System';\n"
 				"import * as IOP from 'IOP';\n"
 				"import * as Archive from 'Archive';\n"
+				"import * as Vector2 from 'Vector2';\n"
+				"import * as Vector3 from 'Vector3';\n"
+				"import * as Physics from 'Physics';\n"
 
                 "globalThis.std = std;\n"
                 "globalThis.os = os;\n"
@@ -218,7 +219,11 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"globalThis.Pads = Pads;\n"
 				"globalThis.System = System;\n"
 				"globalThis.Archive = Archive;\n"
-				"globalThis.IOP = IOP;\n";
+				"globalThis.IOP = IOP;\n"
+				"globalThis.Vector2 = Vector2;\n"
+				"globalThis.Vector3 = Vector3;\n"
+				"globalThis.Physics = Physics;\n";
+
 				
             rc = qjs_eval_buf(ctx, str, strlen(str), "<input>", JS_EVAL_TYPE_MODULE);
             if (rc != 0) { return retval; }
@@ -233,17 +238,12 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 static int qjs_handle_file(JSContext *ctx, const char *filename, const char *bytecode_filename) {
 	FILE *f = NULL;
 	int retval;
-	char fnbuf[256];
 
-	snprintf(fnbuf, sizeof(fnbuf), "%s", filename);
-
-	fnbuf[sizeof(fnbuf) - 1] = (char) 0;
-
-	f = fopen(fnbuf, "r");
+	f = fopen(filename, "r");
 	if (!f) {
-		fprintf(stderr, "failed to open source file: %s\n", filename);
-		fflush(stderr);
-		return -1;
+		//fprintf(stderr, "failed to open source file: %s\n", filename);
+		//fflush(stderr);
+		return JSFILE_NOTFOUND;
 	}
 
 	retval = qjs_handle_fh(ctx, f, filename, bytecode_filename);
@@ -267,6 +267,8 @@ static JSContext *JS_NewCustomContext(JSRuntime *rt)
 	athena_timer_init(ctx);
 	athena_task_init(ctx);
 	athena_pads_init(ctx);
+	athena_vector_init(ctx);
+	athena_physics_init(ctx);
 
 	#ifdef ATHENA_AUDIO
 	athena_sound_init(ctx);
@@ -280,10 +282,6 @@ static JSContext *JS_NewCustomContext(JSRuntime *rt)
 	athena_shape_init(ctx);
 	athena_screen_init(ctx);
 	athena_render_init(ctx);
-	#else
-	#ifdef ATHENA_CLI
-	athena_console_init(ctx);
-	#endif
 	#endif
 
 	#ifdef ATHENA_KEYBOARD
@@ -315,39 +313,62 @@ const char* runScript(const char* script, bool isBuffer)
 	size_t memoryLimit = (GetMemorySize() - get_used_memory()) >> 1;
 
     dbgprintf("\nStarting AthenaEnv...\n");
-    JSRuntime *rt = JS_NewRuntime(); if (!rt) { return "Runtime creation"; }
+    JSRuntime *rt = JS_NewRuntime(); if (!rt) { return "AthenaError: Runtime creation"; }
     js_std_set_worker_new_context_func(JS_NewCustomContext);
     js_std_init_handlers(rt);
 
 	JS_SetMemoryLimit(rt, memoryLimit);
-	JS_SetGCThreshold(rt, memoryLimit >> 3);
+	JS_SetGCThreshold(rt, memoryLimit - 4194304);
 
-    JSContext *ctx = JS_NewCustomContext(rt); if (!ctx) { return "Context creation"; }
+    JSContext *ctx = JS_NewCustomContext(rt); if (!ctx) { return "AthenaError: Context creation"; }
 
 	JS_SetModuleLoaderFunc(rt, NULL, js_module_loader, NULL);
 
     int s = qjs_handle_file(ctx, script, NULL);
 
-	js_std_loop(ctx);
-
     if (s < 0) { 
-		JSValue exception_val = JS_GetException(ctx);
-		const char* exception = JS_ToCString(ctx, exception_val);
-		JSValue stack_val = JS_GetPropertyStr(ctx, exception_val, "stack");
-		const char* stack = JS_ToCString(ctx, stack_val);
-		JS_FreeValue(ctx, exception_val);
-		JS_FreeValue(ctx, stack_val);
-		
-		strcpy(error_buf, exception);
-		strcat(error_buf, "\n");
-		strcat(error_buf, stack);
+		if (s == JSFILE_NOTFOUND) {
+			sprintf(error_buf, "AthenaError: Fail when opening %s\n"
+							   "\nTip: If you are on PCSX2, check Host filesystem!\n", script);
+		} else {
+			JSValue exception_val = JS_GetException(ctx);
+			const char* exception = JS_ToCString(ctx, exception_val);
+			JSValue stack_val = JS_GetPropertyStr(ctx, exception_val, "stack");
+			const char* stack = JS_ToCString(ctx, stack_val);
+			JS_FreeValue(ctx, exception_val);
+			JS_FreeValue(ctx, stack_val);
 
+			strcpy(error_buf, exception);
+			strcat(error_buf, "\n");
+			strcat(error_buf, stack);
+		}
+		
 		js_std_free_handlers(rt);
 		JS_FreeContext(ctx);
 		JS_FreeRuntime(rt);
 
-		printf("%s\n", error_buf);
 		return error_buf; 
+	} else {
+		s = js_std_loop(ctx);
+
+		if (s < 0) {
+			JSValue exception_val = JS_GetException(ctx);
+			const char* exception = JS_ToCString(ctx, exception_val);
+			JSValue stack_val = JS_GetPropertyStr(ctx, exception_val, "stack");
+			const char* stack = JS_ToCString(ctx, stack_val);
+			JS_FreeValue(ctx, exception_val);
+			JS_FreeValue(ctx, stack_val);
+
+			strcpy(error_buf, exception);
+			strcat(error_buf, "\n");
+			strcat(error_buf, stack);
+
+			js_std_free_handlers(rt);
+			JS_FreeContext(ctx);
+			JS_FreeRuntime(rt);
+
+			return error_buf; 
+		}
 	}
 	
 	js_std_free_handlers(rt);

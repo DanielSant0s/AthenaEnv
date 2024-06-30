@@ -37,35 +37,13 @@
 #include <limits.h>
 #include <sys/stat.h>
 #include <dirent.h>
-#if defined(_WIN32)
-#include <windows.h>
-#include <conio.h>
-#include <utime.h>
-#else
+
 //#include <dlfcn.h>
 //#include <termios.h>
 #include <sys/ioctl.h>
 #include <sys/wait.h>
 
-#if defined(__APPLE__)
-typedef sig_t sighandler_t;
-#if !defined(environ)
-#include <crt_externs.h>
-#define environ (*_NSGetEnviron())
-#endif
-#endif /* __APPLE__ */
-
-#endif
-
-#if !defined(_WIN32)
-/* enable the os.Worker API. IT relies on POSIX threads */
-#define USE_WORKER
-#endif
-
-#ifdef USE_WORKER
-#include <pthread.h>
-#include <stdatomic.h>
-#endif
+#include "../include/graphics.h"
 
 #include "cutils.h"
 #include "list.h"
@@ -277,23 +255,12 @@ static JSValue js_printf_internal(JSContext *ctx,
                     goto fail;
                 if (mod == 'l') {
                     /* 64 bit number */
-#if defined(_WIN32)
-                    if (q >= fmtbuf + sizeof(fmtbuf) - 3)
-                        goto invalid;
-                    q[2] = q[-1];
-                    q[-1] = 'I';
-                    q[0] = '6';
-                    q[1] = '4';
-                    q[3] = '\0';
-                    dbuf_printf_fun(&dbuf, fmtbuf, (int64_t)int64_arg);
-#else
                     if (q >= fmtbuf + sizeof(fmtbuf) - 2)
                         goto invalid;
                     q[1] = q[-1];
                     q[-1] = q[0] = 'l';
                     q[2] = '\0';
                     dbuf_printf_fun(&dbuf, fmtbuf, (long long)int64_arg);
-#endif
                 } else {
                     dbuf_printf_fun(&dbuf, fmtbuf, (int)int64_arg);
                 }
@@ -453,21 +420,11 @@ static JSValue js_std_loadFile(JSContext *ctx, JSValueConst this_val,
 typedef JSModuleDef *(JSInitModuleFunc)(JSContext *ctx,
                                         const char *module_name);
 
-
-#if defined(_WIN32)
-static JSModuleDef *js_module_loader_so(JSContext *ctx,
-                                        const char *module_name)
-{
-    JS_ThrowReferenceError(ctx, "shared library modules are not supported yet");
-    return NULL;
-}
-#else
 static JSModuleDef *js_module_loader_so(JSContext *ctx,
                                         const char *module_name)
 {
     return NULL;
 }
-#endif /* !_WIN32 */
 
 int js_module_set_import_meta(JSContext *ctx, JSValueConst func_val,
                               JS_BOOL use_realpath, JS_BOOL is_main)
@@ -821,6 +778,31 @@ static void js_set_error_object(JSContext *ctx, JSValue obj, int err)
     if (!JS_IsUndefined(obj)) {
         JS_SetPropertyStr(ctx, obj, "errno", JS_NewInt32(ctx, err));
     }
+}
+
+static JSValue js_std_exists(JSContext *ctx, JSValueConst this_val,
+                           int argc, JSValueConst *argv)
+{
+    const char *filename;
+    FILE *f;
+    int err;
+    
+    filename = JS_ToCString(ctx, argv[0]);
+    if (!filename)
+        goto fail;
+
+    f = fopen(filename, "r");
+
+    JS_FreeCString(ctx, filename);
+
+    if (!f)
+        return JS_NewBool(ctx, FALSE);
+
+    return JS_NewBool(ctx, TRUE);
+
+ fail:
+    JS_FreeCString(ctx, filename);
+    return JS_EXCEPTION;
 }
 
 static JSValue js_std_open(JSContext *ctx, JSValueConst this_val,
@@ -1233,51 +1215,6 @@ static JSValue js_std_file_putByte(JSContext *ctx, JSValueConst this_val,
     return JS_NewInt32(ctx, c);
 }
 
-/* urlGet */
-
-#define URL_GET_PROGRAM "curl -s -i"
-#define URL_GET_BUF_SIZE 4096
-
-static int http_get_header_line(FILE *f, char *buf, size_t buf_size,
-                                DynBuf *dbuf)
-{
-    int c;
-    char *p;
-    
-    p = buf;
-    for(;;) {
-        c = fgetc(f);
-        if (c < 0)
-            return -1;
-        if ((p - buf) < buf_size - 1)
-            *p++ = c;
-        if (dbuf)
-            dbuf_putc(dbuf, c);
-        if (c == '\n')
-            break;
-    }
-    *p = '\0';
-    return 0;
-}
-
-static int http_get_status(const char *buf)
-{
-    const char *p = buf;
-    while (*p != ' ' && *p != '\0')
-        p++;
-    if (*p != ' ')
-        return 0;
-    while (*p == ' ')
-        p++;
-    return atoi(p);
-}
-
-static JSValue js_std_urlGet(JSContext *ctx, JSValueConst this_val,
-                             int argc, JSValueConst *argv)
-{
-    return JS_UNDEFINED;
-}
-
 static JSClassDef js_std_file_class = {
     "FILE",
     .finalizer = js_std_file_finalizer,
@@ -1309,13 +1246,13 @@ static const JSCFunctionListEntry js_std_funcs[] = {
     JS_CFUNC_DEF("setenv", 1, js_std_setenv ),
     JS_CFUNC_DEF("unsetenv", 1, js_std_unsetenv ),
     JS_CFUNC_DEF("getenviron", 1, js_std_getenviron ),
-    JS_CFUNC_DEF("urlGet", 1, js_std_urlGet ),
     JS_CFUNC_DEF("loadFile", 1, js_std_loadFile ),
     JS_CFUNC_DEF("strerror", 1, js_std_strerror ),
     JS_CFUNC_DEF("parseExtJSON", 1, js_std_parseExtJSON ),
     
     /* FILE I/O */
     JS_CFUNC_DEF("open", 2, js_std_open ),
+    JS_CFUNC_DEF("exists", 1, js_std_exists ),
     JS_CFUNC_DEF("popen", 2, js_std_popen ),
     JS_CFUNC_DEF("fdopen", 2, js_std_fdopen ),
     JS_CFUNC_DEF("tmpfile", 0, js_std_tmpfile ),
@@ -1842,7 +1779,7 @@ static void js_os_timer_mark(JSRuntime *rt, JSValueConst val,
     }
 }
 
-static JSValue js_os_create_timer(JSContext *ctx, int64_t interval,
+JSValue js_os_create_timer(JSContext *ctx, int64_t interval,
 int64_t delay, JSValueConst func)
 {
     JSRuntime *rt = JS_GetRuntime(ctx);
@@ -1926,8 +1863,9 @@ static JSClassDef js_os_timer_class = {
     .gc_mark = js_os_timer_mark,
 }; 
 
-static void call_handler(JSContext *ctx, JSValueConst func)
+static int call_handler(JSContext *ctx, JSValueConst func)
 {
+    int result = 0;
     JSValue ret, func1;
     /* 'func' might be destroyed when calling itself (if it frees the
        handler), so must take extra care */
@@ -1935,8 +1873,11 @@ static void call_handler(JSContext *ctx, JSValueConst func)
     ret = JS_Call(ctx, func1, JS_UNDEFINED, 0, NULL);
     JS_FreeValue(ctx, func1);
     if (JS_IsException(ret))
-        js_std_dump_error(ctx);
+        result = -1;
+        //js_std_dump_error(ctx);
     JS_FreeValue(ctx, ret);
+
+    return result;
 }
 
 #if defined(_WIN32)
@@ -2093,6 +2034,10 @@ static int handle_posted_message(JSRuntime *rt, JSContext *ctx,
 }
 #endif
 
+#define JS_POLL_OK 0
+#define JS_POLL_EMPTY 1
+#define JS_POLL_EXCEPTION -1
+
 static int js_os_poll(JSContext *ctx)
 {
     JSRuntime *rt = JS_GetRuntime(ctx);
@@ -2115,15 +2060,15 @@ static int js_os_poll(JSContext *ctx)
             mask = (uint64_t)1 << sh->sig_num;
             if (os_pending_signals & mask) {
                 os_pending_signals &= ~mask;
-                call_handler(ctx, sh->func);
-                return 0;
+
+                return call_handler(ctx, sh->func);
             }
         }
     }
 
     if (list_empty(&ts->os_rw_handlers) && list_empty(&ts->os_timers) &&
         list_empty(&ts->port_list))
-        return -1; /* no more events */
+        return JS_POLL_EMPTY; /* no more events */
     
     if (!list_empty(&ts->os_timers)) {
         cur_time = get_time_ms();
@@ -2132,21 +2077,22 @@ static int js_os_poll(JSContext *ctx)
             JSOSTimer *th = list_entry(el, JSOSTimer, link);
             delay = th->timeout - cur_time;
             if (delay <= 0) {
+                int call_res = 0;
                 JSValue func;
                 /* the timer expired */
                 func = th->func;
                 if (th->interval != -1) {
                     th->timeout = cur_time + th->interval;
-                    call_handler(ctx, func);
+                    call_res = call_handler(ctx, func);
                 } else {
                     th->func = JS_UNDEFINED;
                     unlink_timer(JS_GetRuntime(ctx), th);
                     if (!th->has_object)
                         free_timer(JS_GetRuntime(ctx), th);
-                    call_handler(ctx, func);
+                    call_res = call_handler(ctx, func);
                     JS_FreeValue(ctx, func);
                 }
-                return 0;
+                return call_res;
             } else if (delay < min_delay) {
                 min_delay = delay;
             }
@@ -3592,10 +3538,59 @@ void js_std_promise_rejection_tracker(JSContext *ctx, JSValueConst promise,
 }
 
 /* main loop which calls the user JS callbacks */
-void js_std_loop(JSContext *ctx)
+
+static JSValueConst render_loop_func = JS_UNDEFINED;
+static uint64_t clear_color = GS_SETREG_RGBAQ(0x00, 0x00, 0x00, 0x80, 0x00);
+
+void js_set_render_loop_func(JSValueConst func) {
+    render_loop_func = func;
+}
+
+void js_set_clear_color(uint64_t color) {
+    clear_color = color;
+}
+
+typedef struct {
+    int buttons;
+    JSValueConst function;
+    EventFlavours flavour;
+} InputEvent;
+
+static InputEvent padEvents[64];
+static uint8_t totalPadEvents;
+
+static JSPads* inputEventHandler = NULL;
+
+void js_set_input_event_handler(JSPads* pad) {
+    inputEventHandler = pad;
+}
+
+int js_new_input_event(int buttons, JSValueConst func, EventFlavours flavour) {
+    for (int i = 0; i < 64; i++) {
+        if (!padEvents[i].function) {
+            padEvents[i].buttons = buttons;
+            padEvents[i].function = func;
+            padEvents[i].flavour = flavour;
+            totalPadEvents++;
+            return i;
+        }
+    }
+    return -1;
+}
+
+void js_delete_input_event(int id) {
+    padEvents[id].buttons = 0;
+    padEvents[id].function = NULL;
+    padEvents[id].flavour = PRESSED_EVENT;
+    totalPadEvents--;
+}
+
+int js_std_loop(JSContext *ctx)
 {
     JSContext *ctx1;
+    JSValue ret;
     int err;
+    int poll_result;
 
     for(;;) {
         /* execute the pending jobs */
@@ -3609,9 +3604,70 @@ void js_std_loop(JSContext *ctx)
             }
         }
 
-        if (!os_poll_func || os_poll_func(ctx))
+        if (render_loop_func != JS_UNDEFINED) {
+            clearScreen(clear_color);
+            ret = JS_Call(ctx, render_loop_func, JS_UNDEFINED, 0, NULL);
+            flipScreen();
+
+            if (JS_IsException(ret)) {
+                err = -1;
+            }
+        }
+
+        if (inputEventHandler && err != -1) {
+            js_pads_update(inputEventHandler);
+            if (totalPadEvents) {
+                for (int i = 0; i < 64; i++) {
+                    if (padEvents[i].function) {
+                        bool trigger_event = false;
+                        switch (padEvents[i].flavour) {
+                            case PRESSED_EVENT:
+                                trigger_event = (inputEventHandler->btns & padEvents[i].buttons);
+                                break;
+                            case JUSTPRESSED_EVENT:
+                                trigger_event = ((inputEventHandler->btns & padEvents[i].buttons) && !(inputEventHandler->old_btns & padEvents[i].buttons));
+                                break;
+                            case NONPRESSED_EVENT:
+                                trigger_event = !(inputEventHandler->btns & padEvents[i].buttons);
+                                break;
+                        };
+
+                        if (trigger_event) {
+                            ret = JS_Call(ctx, padEvents[i].function, JS_UNDEFINED, 0, NULL);            
+
+                            if (JS_IsException(ret)) {
+                                err = -1;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if ((poll_result = js_os_poll(ctx)) == JS_POLL_EXCEPTION || err == -1) {
+            if (render_loop_func != JS_UNDEFINED)
+                JS_FreeValue(ctx, render_loop_func);
+
+            if (totalPadEvents) {
+                for (int i = 0; i < 64; i++) {
+                    if (padEvents[i].function) {
+                        JS_FreeValue(ctx, padEvents[i].function);
+                    }
+                }
+            }
+            
+            if (poll_result == JS_POLL_EXCEPTION)
+                return poll_result;
+
+            return err;
+        }
+            
+
+        if (poll_result == JS_POLL_EMPTY && render_loop_func == JS_UNDEFINED && !totalPadEvents)
             break;
     }
+
+    return err;
 }
 
 void js_std_eval_binary(JSContext *ctx, const uint8_t *buf, size_t buf_len,

@@ -83,7 +83,7 @@ static JSValue athena_isplaying(JSContext *ctx, JSValue this_val, int argc, JSVa
 	return JS_NewBool(ctx, is_sound_playing());
 }
 
-static JSValue athena_duration(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+static JSValue athena_get_duration(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	Sound* snd;
 
 	JS_ToUint32(ctx, &snd, argv[0]);
@@ -111,6 +111,26 @@ static JSValue athena_resume(JSContext *ctx, JSValue this_val, int argc, JSValue
 	return JS_UNDEFINED;
 }
 
+static JSValue athena_restart(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	sound_restart();
+	return JS_UNDEFINED;
+}
+
+static JSValue athena_setposition(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+    Sound* snd;
+    uint32_t position;
+    JS_ToUint32(ctx, &snd, argv[0]);
+    JS_ToUint32(ctx, &position, argv[1]);
+    sound_set_position(snd, position);
+    return JS_UNDEFINED;
+}
+
+static JSValue athena_getposition(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+    Sound* snd;
+    JS_ToUint32(ctx, &snd, argv[0]);
+    return JS_NewInt32(ctx, sound_get_position(snd));
+}
+
 static const JSCFunctionListEntry module_funcs[] = {
 	JS_CFUNC_DEF("setVolume", 2, athena_setvolume),
 	JS_CFUNC_DEF("load", 1, athena_load),
@@ -118,10 +138,13 @@ static const JSCFunctionListEntry module_funcs[] = {
 	JS_CFUNC_DEF("free", 1, athena_free),
 	JS_CFUNC_DEF("deinit", 0, athena_deinit),
 	JS_CFUNC_DEF("isPlaying", 0, athena_isplaying),
-	JS_CFUNC_DEF("duration", 1, athena_duration),
+	JS_CFUNC_DEF("getDuration", 1, athena_get_duration),
 	JS_CFUNC_DEF("repeat", 1, athena_repeat),
 	JS_CFUNC_DEF("pause", 1, athena_pause),
 	JS_CFUNC_DEF("resume", 1, athena_resume),
+	JS_CFUNC_DEF("restart", 0, athena_restart),
+	JS_CFUNC_DEF("setPosition", 2, athena_setposition),
+	JS_CFUNC_DEF("getPosition", 1, athena_getposition),
 };
 
 static int module_init(JSContext *ctx, JSModuleDef *m){
