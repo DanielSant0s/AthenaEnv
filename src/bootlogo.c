@@ -23,6 +23,7 @@ bool bootlogo_finished() {
 }
 
 void bootlogoThread(void* data) {
+    GSGLOBAL* gsGlobal = getGSGLOBAL();
     clock_t start_time = 0;
     uint8_t logo_alpha = 0;
     GSTEXTURE bootlogo = { };
@@ -50,11 +51,13 @@ void bootlogoThread(void* data) {
 
         switch (boot_state) {
             case BOOT_FADE_IN:
-                if (logo_alpha < 128)
+                if (logo_alpha < 128) {
                     logo_alpha+=2;
-                else
+                } else {
                     boot_state++;
                     start_time = clock();
+                }
+
                 break;
             case BOOT_WAIT:
                 if (((float)(clock() - start_time) * 1000.0f / CLOCKS_PER_SEC) > 1500.0f) {
@@ -70,8 +73,8 @@ void bootlogoThread(void* data) {
         }
 
         drawImage(&bootlogo, 
-                  320-(bootlogo.Width/2), 
-                  224-(bootlogo.Height/2), 
+                  (gsGlobal->Width/2)-(bootlogo.Width/2), 
+                  (gsGlobal->Height/2)-(bootlogo.Height/2), 
                   bootlogo.Width, 
                   bootlogo.Height, 
                   0.0f, 
@@ -82,6 +85,8 @@ void bootlogoThread(void* data) {
 
         flipScreen();
     }
+
+    gsKit_TexManager_free(gsGlobal, &bootlogo);
 
     exitkill_task();
 }
