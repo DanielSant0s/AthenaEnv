@@ -73,12 +73,19 @@ int mnt(const char* path, int index, int openmod)
 }
 
 int main(int argc, char **argv) {
-    init_memory_manager();
-
     char MountPoint[32+6+1]; // max partition name + 'hdd0:/' = '\0' 
     char newCWD[255];
 
+    init_memory_manager();
+    init_taskman();
+
     dbginit(); // if we are using serial port. initialize it here before the fun starts
+
+    #ifdef ATHENA_GRAPHICS
+	init_graphics();
+    #endif
+
+    init_bootlogo();
 
     prepare_IOP();
     init_drivers();
@@ -104,11 +111,8 @@ int main(int argc, char **argv) {
     waitUntilDeviceIsReady(boot_path);
 
     #ifdef ATHENA_GRAPHICS
-	init_graphics();
     fntInit();
     #endif
-
-    init_taskman();
 
 	const char* errMsg = NULL;
 
