@@ -419,6 +419,7 @@ Properties:
 
 * vertices - A Render.vertex array that can be modified and read.
 * size - Vertex quantity.
+* bounds - Mesh bounding box.
   
 **Camera**   
 * Camera.type(type) - Change camera function types.  
