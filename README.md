@@ -421,8 +421,19 @@ Properties:
 * size - Vertex quantity.
   
 **Camera**   
-* Camera.position(x, y, z)
-* Camera.rotation(x, y, z)
+* Camera.type(type) - Change camera function types
+  • Camera.DEFAULT
+    • Camera.position(x, y, z)
+    • Camera.rotation(x, y, z)
+  • Camera.LOOKAT
+    • Camera.target(x, y, z)
+    • Camera.orbit(yaw, pitch)
+    • Camera.turn(yaw, pitch)
+    • Camera.pan(x, y)
+    • Camera.dolly(distance)
+    • Camera.zoom(distance)
+
+
 
 **Lights**  
 You have 4 lights to use in 3D scenes, use set to configure them.
