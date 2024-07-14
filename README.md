@@ -421,18 +421,20 @@ Properties:
 * size - Vertex quantity.
   
 **Camera**   
-* Camera.type(type) - Change camera function types
-  • Camera.DEFAULT
-    • Camera.position(x, y, z)
-    • Camera.rotation(x, y, z)
-  • Camera.LOOKAT
-    • Camera.target(x, y, z)
-    • Camera.orbit(yaw, pitch)
-    • Camera.turn(yaw, pitch)
-    • Camera.pan(x, y)
-    • Camera.dolly(distance)
-    • Camera.zoom(distance)
-
+* Camera.type(type) - Change camera function types.  
+  • Camera.DEFAULT - Raw camera coordinates  
+    • Camera.position(x, y, z)  
+    • Camera.rotation(x, y, z)  
+  • Camera.LOOKAT - "Look at" style coordinates, most common for games  
+    • Camera.target(x, y, z)  
+    • Camera.orbit(yaw, pitch)  
+    • Camera.turn(yaw, pitch)  
+    • Camera.pan(x, y)  
+    • Camera.dolly(distance)  
+    • Camera.zoom(distance)  
+  
+* Camera.update() - Update camera state (must be called every frame).  
+  
 
 
 **Lights**  
