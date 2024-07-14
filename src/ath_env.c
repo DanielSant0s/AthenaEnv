@@ -324,6 +324,10 @@ const char* runScript(const char* script, bool isBuffer)
 
 	JS_SetModuleLoaderFunc(rt, NULL, js_module_loader, NULL);
 
+	while (!bootlogo_finished()) {
+		usleep(1000);
+	}
+
     int s = qjs_handle_file(ctx, script, NULL);
 
     if (s < 0) { 

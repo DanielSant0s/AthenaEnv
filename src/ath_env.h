@@ -49,6 +49,9 @@ JSClassID get_imglist_class_id();
 
 extern char boot_path[255];
 
+void init_bootlogo();
+bool bootlogo_finished();
+
 void poweroffHandler(void *arg);
 
 const char* runScript(const char* script, bool isBuffer );
