@@ -1,10 +1,3 @@
-import test from "./test.js";
-
-test("module test ok");
-
-let fr_float = Math.fround(15.6787869696);
-console.log(fr_float);
-
 IOP.loadDefaultModule(IOP.keyboard);
 Keyboard.init();
 
@@ -32,8 +25,6 @@ font_medium.scale = 1.0f;
 font.scale = 0.44f;
 
 let no_icon = new Image("no_icon.png");
-
-console.log(JSON.stringify(Tasks.get()));
 
 let app_table = System.listDir().map(file => file.name).filter(str => str.endsWith(".js")).map( app => {
     const app_fd = std.open(app, "r");
@@ -68,7 +59,7 @@ const VK_OLD_DOWN = 27;
 const VK_NEW_DOWN = 43;
 const VK_RETURN = 10;
 
-var ee_info = System.getCPUInfo();
+const ee_info = System.getCPUInfo();
 
 let mem = undefined;
 
