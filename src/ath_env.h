@@ -54,7 +54,7 @@ bool bootlogo_finished();
 
 void poweroffHandler(void *arg);
 
-const char* runScript(const char* script, bool isBuffer );
+const char* run_script(const char* script, bool isBuffer );
 
 JSModuleDef *athena_push_module(JSContext* ctx, JSModuleInitFunc *func, const JSCFunctionListEntry *func_list, int len, const char* module_name);
 

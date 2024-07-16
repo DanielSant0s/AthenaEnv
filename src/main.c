@@ -28,9 +28,6 @@ char boot_path[255];
 bool dark_mode;
 
 static void init_drivers() {
-    SifExecModuleBuffer(&poweroff_irx, size_poweroff_irx, 0, NULL, NULL);
-
-    load_default_module(FILEXIO_MODULE);
     load_default_module(MC_MODULE);
     load_default_module(USB_MASS_MODULE);
     load_default_module(CDFS_MODULE);
@@ -72,12 +69,21 @@ int mnt(const char* path, int index, int openmod)
     return 0;
 }
 
+void init_base_fs_drivers() {
+    SifExecModuleBuffer(&poweroff_irx, size_poweroff_irx, 0, NULL, NULL);
+
+    load_default_module(FILEXIO_MODULE);
+    load_default_module(get_boot_device(boot_path));
+}
+
 int main(int argc, char **argv) {
     char MountPoint[32+6+1]; // max partition name + 'hdd0:/' = '\0' 
     char newCWD[255];
 
     init_memory_manager();
     init_taskman();
+
+    getcwd(boot_path, sizeof(boot_path));
 
     dbginit(); // if we are using serial port. initialize it here before the fun starts
 
@@ -88,9 +94,8 @@ int main(int argc, char **argv) {
     init_bootlogo();
 
     prepare_IOP();
-    init_drivers();
 
-    getcwd(boot_path, sizeof(boot_path));
+    init_base_fs_drivers();
 
     if ((!strncmp(boot_path, "hdd0:", 5)) && (strstr(boot_path, ":pfs:") != NULL) && HDD_USABLE) // we booted from HDD and our modules are loaded and running...
     {
@@ -108,27 +113,29 @@ int main(int argc, char **argv) {
         }
     }
 
-    waitUntilDeviceIsReady(boot_path);
+    wait_device(boot_path);
+
+    init_drivers();
 
     #ifdef ATHENA_GRAPHICS
     fntInit();
     #endif
 
-	const char* errMsg = NULL;
+	const char* err_msg = NULL;
 
     dark_mode = true;
 
     do
     {
         if (argc < 2) {
-            errMsg = runScript("main.js", false);
+            err_msg = run_script("main.js", false);
         } else {
-            errMsg = runScript(argv[1], false);
+            err_msg = run_script(argv[1], false);
         }
 
-        athena_error_screen(errMsg, dark_mode);
+        athena_error_screen(err_msg, dark_mode);
 
-    } while (errMsg != NULL);
+    } while (err_msg != NULL);
 
 	// End program.
 	return 0;

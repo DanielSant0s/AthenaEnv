@@ -308,7 +308,7 @@ static JSContext *JS_NewCustomContext(JSRuntime *rt)
 
 static char error_buf[4096];
 
-const char* runScript(const char* script, bool isBuffer)
+const char* run_script(const char* script, bool isBuffer)
 {
 	size_t memoryLimit = (GetMemorySize() - get_used_memory()) >> 1;
 
