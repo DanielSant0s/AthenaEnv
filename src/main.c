@@ -24,8 +24,10 @@
 #include "include/fntsys.h"
 #endif
 
+#include <readini.h>
+
 char boot_path[255];
-bool dark_mode;
+bool dark_mode, boot_logo;
 
 static void init_drivers() {
     load_default_module(MC_MODULE);
@@ -77,7 +79,7 @@ void init_base_fs_drivers() {
 }
 
 int main(int argc, char **argv) {
-    char MountPoint[32+6+1]; // max partition name + 'hdd0:/' = '\0' 
+    char MountPoint[32+6+1]; // max partition name + 'hdd0:/' + '\0' 
     char newCWD[255];
 
     init_memory_manager();
@@ -90,8 +92,6 @@ int main(int argc, char **argv) {
     #ifdef ATHENA_GRAPHICS
 	init_graphics();
     #endif
-
-    init_bootlogo();
 
     prepare_IOP();
 
@@ -115,6 +115,28 @@ int main(int argc, char **argv) {
 
     wait_device(boot_path);
 
+    IniReader ini;
+    boot_logo = true;
+    dark_mode = true;
+
+    if (readini_open(&ini, "athena.ini")) {
+        while(readini_getline(&ini)) {
+            if (!readini_bool(&ini, "boot_logo", &boot_logo)) {
+                dbgprintf("error reading boot_logo at athena.ini\n");
+
+            } else if (!readini_bool(&ini, "dark_mode", &dark_mode)) {
+                dbgprintf("error reading dark_mode at athena.ini\n");
+
+            } 
+        }
+
+        readini_close(&ini);
+    }
+
+    if (boot_logo) {
+        init_bootlogo();
+    }
+
     init_drivers();
 
     #ifdef ATHENA_GRAPHICS
@@ -122,8 +144,6 @@ int main(int argc, char **argv) {
     #endif
 
 	const char* err_msg = NULL;
-
-    dark_mode = true;
 
     do
     {

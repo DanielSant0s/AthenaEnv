@@ -51,7 +51,7 @@ CAMERA ?= 0
 
 EE_LIBS = -L$(PS2SDK)/ports/lib -L$(PS2DEV)/gsKit/lib/ -Lmodules/ds34bt/ee/ -Lmodules/ds34usb/ee/ -lmc -lpad -laudsrv -lpatches -ldebug -lmath3d -ljpeg -lfreetype -lgskit_toolkit -lgskit -ldmakit -lpng -lz -lds34bt -lds34usb -lnetman -lps2ip -lcurl -lwolfssl -lkbd -lmouse -lvorbisfile -lvorbis -logg -llzma -lzip -lfileXio -lelf-loader-nocolour -lerl
 
-EE_INCS += -I$(PS2DEV)/gsKit/include -I$(PS2SDK)/ports/include -I$(PS2SDK)/ports/include/freetype2 -I$(PS2SDK)/ports/include/zlib
+EE_INCS += -I$(PS2DEV)/gsKit/include -I$(PS2SDK)/ports/include -I$(PS2SDK)/ports/include/freetype2 -I$(PS2SDK)/ports/include/zlib -Isrc/readini/include
 
 EE_INCS += -Imodules/ds34bt/ee -Imodules/ds34usb/ee
 
@@ -75,6 +75,8 @@ JS_CORE = quickjs/cutils.o quickjs/libbf.o quickjs/libregexp.o quickjs/libunicod
 				 quickjs/realpath.o quickjs/quickjs.o quickjs/quickjs-libc.o 
 
 APP_CORE = main.o bootlogo.o vif.o draw_3D_colors.o draw_3D_colors_notex.o draw_3D.o draw_3D_notex.o draw_3D_lights.o draw_3D_lights_notex.o athena_math.o memory.o ee_tools.o module_system.o taskman.o pad.o system.o strUtils.o 
+
+INI_READER = readini/src/readini.o
 
 ATHENA_MODULES = ath_env.o ath_physics.o ath_vector.o ath_pads.o ath_system.o ath_archive.o ath_timer.o ath_task.o 
 
@@ -134,7 +136,7 @@ ifneq ($(EE_SIO), 0)
 endif
 
 
-EE_OBJS = $(APP_CORE) $(JS_CORE) $(ATHENA_MODULES) $(IOP_MODULES) $(EMBEDDED_ASSETS) #group them all
+EE_OBJS = $(APP_CORE) $(INI_READER) $(JS_CORE) $(ATHENA_MODULES) $(IOP_MODULES) $(EMBEDDED_ASSETS) #group them all
 EE_OBJS := $(EE_OBJS:%=$(EE_OBJS_DIR)%) #prepend the object folder
 
 EE_BIN := $(EE_BIN)$(EE_EXT)

@@ -16,7 +16,7 @@
 
 #include "include/dbgprintf.h"
 
-extern bool dark_mode;
+extern bool boot_logo, dark_mode;
 
 #ifdef ATHENA_GRAPHICS
 typedef struct {
