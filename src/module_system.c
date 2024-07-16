@@ -66,7 +66,7 @@ void prepare_IOP() {
 	camera_started = false;
 }
 
-bool waitUntilDeviceIsReady(char *path) {
+bool wait_device(char *path) {
     dbgprintf("waiting for '%s'\n", path);
     struct stat buffer;
     int ret = -1;

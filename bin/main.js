@@ -11,8 +11,6 @@ for (let i = 0; i < bg_palette.length; i += 4) {
     bg_palette[i+2] = Math.trunc(bg_palette[i+2] * 1.0f);
 }
 
-console.log("Image size: " + bg.size + " | bits per pixel: " + bg.bpp);
-
 const unsel_color = Color.new(255, 255, 255, 64);
 const sel_color = Color.new(255, 255, 255);
 
