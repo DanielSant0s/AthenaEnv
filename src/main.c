@@ -118,16 +118,20 @@ int main(int argc, char **argv) {
     IniReader ini;
     boot_logo = true;
     dark_mode = true;
+    char default_script[32] = "main.js";
 
     if (readini_open(&ini, "athena.ini")) {
         while(readini_getline(&ini)) {
-            if (!readini_bool(&ini, "boot_logo", &boot_logo)) {
-                dbgprintf("error reading boot_logo at athena.ini\n");
+            if (readini_bool(&ini, "boot_logo", &boot_logo)) {
+                dbgprintf("reading boot_logo at athena.ini\n");
 
-            } else if (!readini_bool(&ini, "dark_mode", &dark_mode)) {
-                dbgprintf("error reading dark_mode at athena.ini\n");
+            } else if (readini_bool(&ini, "dark_mode", &dark_mode)) {
+                dbgprintf("reading dark_mode at athena.ini\n");
 
-            } 
+            } else if (readini_string(&ini, "default_script", default_script)) {
+                dbgprintf("reading default_script at athena.ini\n");
+
+            }
         }
 
         readini_close(&ini);
@@ -148,7 +152,7 @@ int main(int argc, char **argv) {
     do
     {
         if (argc < 2) {
-            err_msg = run_script("main.js", false);
+            err_msg = run_script(default_script, false);
         } else {
             err_msg = run_script(argv[1], false);
         }

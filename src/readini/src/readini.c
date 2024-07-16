@@ -132,6 +132,7 @@ bool readini_float(IniReader* ini, const char* key, float* value_ptr) {
 
 bool readini_string(IniReader* ini, const char* key, char* value_ptr) {
     int ret = true;
+    char* tmp_value_ptr = value_ptr;
 
     char tmp_str[512];
     char tmp_real_str[512];
@@ -146,8 +147,14 @@ bool readini_string(IniReader* ini, const char* key, char* value_ptr) {
     if ( !ret )
     {
         if(*tmp_real_str == '"' || *tmp_real_str == '\'') {
-            strcpy(value_ptr, tmp_real_str+1);
-            value_ptr[strlen(value_ptr)-1] = '\0';
+            char * totally_real_str = &tmp_real_str[1];
+
+            while (*totally_real_str != '"' && *totally_real_str != '\'') {
+                *tmp_value_ptr++ = *totally_real_str++;
+            }
+
+            *totally_real_str = '\0';
+
         } else {
             strcpy(value_ptr, tmp_real_str);
         }
