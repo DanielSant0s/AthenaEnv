@@ -324,7 +324,7 @@ const char* run_script(const char* script, bool isBuffer)
 
 	JS_SetModuleLoaderFunc(rt, NULL, js_module_loader, NULL);
 
-	while (!bootlogo_finished()) {
+	while (!bootlogo_finished() && boot_logo) {
 		usleep(1000);
 	}
 
