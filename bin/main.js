@@ -61,13 +61,11 @@ const ee_info = System.getCPUInfo();
 
 let mem = undefined;
 
-os.setInterval(() => {
+Screen.display(() => {
     pad.update();
 
     old_kbd_char = kbd_char;
     kbd_char = Keyboard.get();
-
-    Screen.clear();
 
     bg.draw(0, 0);
 
@@ -92,7 +90,9 @@ os.setInterval(() => {
             bin = app_table[0].bin;
         }
 
-        System.loadELF(System.boot_path + "/" + bin, [app_table[0].file, ]); // Doing this to reset all the stuff
+        System.loadELF(System.boot_path + "/" + bin, [`--script=${app_table[0].file}`, 
+                                                      '--nologo',
+                                                      '--ignorecfg']); // Doing this to reload Athena from stratch
     }
 
     font_medium.print(210, 125, app_table[0].name);
@@ -101,6 +101,4 @@ os.setInterval(() => {
     for(let i = 1; i < (app_table.length < 10? app_table.length : 10); i++) {
         font.print(210, 125+(23*i), app_table[i].name);
     }
-    
-    Screen.flip();
-}, 0);
+});

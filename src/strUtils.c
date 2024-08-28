@@ -6,6 +6,13 @@
 #include <assert.h>
 #include <stdarg.h>
 
+char* strpre(const char *pre, const char *str)
+{
+    if (strncmp(pre, str, strlen(pre)) == 0)
+        return (char*)(str + strlen(pre));
+    return NULL;
+}
+
 char* s_sprintf(const char* format, ...)
 {
     va_list args;

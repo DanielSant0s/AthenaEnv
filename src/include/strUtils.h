@@ -19,6 +19,8 @@ int getMountInfo(char *path, char *mountString, char *mountPoint, char *newCWD);
 
 char* s_sprintf(const char* format, ...);
 
+char* strpre(const char *pre, const char *str);
+
 #ifdef __cplusplus
 }
 #endif
