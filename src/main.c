@@ -79,6 +79,14 @@ void init_base_fs_drivers() {
 }
 
 int main(int argc, char **argv) {
+    IniReader ini;
+    boot_logo = true;
+    dark_mode = true;
+    char default_script[128] = "main.js";
+    char default_cfg[128] = "athena.ini";
+    bool ignore_ini = false;
+    bool reset_iop = true;
+
     char MountPoint[32+6+1]; // max partition name + 'hdd0:/' + '\0' 
     char newCWD[255];
 
@@ -89,59 +97,84 @@ int main(int argc, char **argv) {
 
     dbginit(); // if we are using serial port. initialize it here before the fun starts
 
+    if (argc > 1) {
+        char* arg = NULL;
+        char* tmp_arg = NULL;
+        for (int i = 1, arg = argv[1]; i < argc; i++, arg = argv[i]) {
+            if ((tmp_arg = strpre("--script=", arg)) || (tmp_arg = strpre("-s=", arg))) {
+                strcpy(default_script, tmp_arg);
+                default_script[strlen(tmp_arg)] = '\0';
+                tmp_arg = NULL;
+            } else if (!strcmp("--nologo", arg) || !strcmp("-l", arg)) {
+                boot_logo = false;
+            } else if (!strcmp("--ignorecfg", arg) || !strcmp("-i", arg)) {
+                ignore_ini = true;
+            } else if (!strcmp("--lightmode", arg) || !strcmp("-w", arg)) {
+                dark_mode = false;
+            } else if (!strcmp("--noiopreset", arg) || !strcmp("-n", arg)) {
+                reset_iop = false;
+            } else if ((tmp_arg = strpre("--cfg=", arg)) || (tmp_arg = strpre("-c=", arg))) {
+                strcpy(default_cfg, tmp_arg);
+                default_cfg[strlen(tmp_arg)] = '\0';
+                tmp_arg = NULL;
+            }
+        }
+    }
+
     #ifdef ATHENA_GRAPHICS
 	init_graphics();
     #endif
 
-    prepare_IOP();
+    if (reset_iop) {
+        prepare_IOP();
 
-    init_base_fs_drivers();
+        init_base_fs_drivers();
 
-    if ((!strncmp(boot_path, "hdd0:", 5)) && (strstr(boot_path, ":pfs:") != NULL) && HDD_USABLE) // we booted from HDD and our modules are loaded and running...
-    {
-        if (getMountInfo(boot_path, NULL, MountPoint, newCWD)) // ...if we can parse the boot path...
+        if ((!strncmp(boot_path, "hdd0:", 5)) && (strstr(boot_path, ":pfs:") != NULL) && HDD_USABLE) // we booted from HDD and our modules are loaded and running...
         {
-            if (mnt(MountPoint, 0, FIO_MT_RDWR)==0) // ...mount the partition...
+            if (getMountInfo(boot_path, NULL, MountPoint, newCWD)) // ...if we can parse the boot path...
             {
-                strcpy(boot_path, newCWD); // ...replace boot path with mounted pfs path.
-                chdir(newCWD);
-#ifdef RESERVE_PFS0
-                bootpath_is_on_HDD = 1;
-#endif
-            }
+                if (mnt(MountPoint, 0, FIO_MT_RDWR)==0) // ...mount the partition...
+                {
+                    strcpy(boot_path, newCWD); // ...replace boot path with mounted pfs path.
+                    chdir(newCWD);
+    #ifdef RESERVE_PFS0
+                    bootpath_is_on_HDD = 1;
+    #endif
+                }
 
+            }
         }
+
+        wait_device(boot_path);
     }
 
-    wait_device(boot_path);
+    if (!ignore_ini) {
+        if (readini_open(&ini, default_cfg)) {
+            while(readini_getline(&ini)) {
+                if (readini_bool(&ini, "boot_logo", &boot_logo)) {
+                    dbgprintf("reading boot_logo at athena.ini\n");
 
-    IniReader ini;
-    boot_logo = true;
-    dark_mode = true;
-    char default_script[32] = "main.js";
+                } else if (readini_bool(&ini, "dark_mode", &dark_mode)) {
+                    dbgprintf("reading dark_mode at athena.ini\n");
 
-    if (readini_open(&ini, "athena.ini")) {
-        while(readini_getline(&ini)) {
-            if (readini_bool(&ini, "boot_logo", &boot_logo)) {
-                dbgprintf("reading boot_logo at athena.ini\n");
+                } else if (readini_string(&ini, "default_script", default_script)) {
+                    dbgprintf("reading default_script at athena.ini\n");
 
-            } else if (readini_bool(&ini, "dark_mode", &dark_mode)) {
-                dbgprintf("reading dark_mode at athena.ini\n");
-
-            } else if (readini_string(&ini, "default_script", default_script)) {
-                dbgprintf("reading default_script at athena.ini\n");
-
+                }
             }
-        }
 
-        readini_close(&ini);
+            readini_close(&ini);
+        }
     }
 
     if (boot_logo) {
         init_bootlogo();
     }
 
-    init_drivers();
+    if (reset_iop) {
+        init_drivers();
+    }
 
     #ifdef ATHENA_GRAPHICS
     fntInit();
@@ -151,11 +184,7 @@ int main(int argc, char **argv) {
 
     do
     {
-        if (argc < 2) {
-            err_msg = run_script(default_script, false);
-        } else {
-            err_msg = run_script(argv[1], false);
-        }
+        err_msg = run_script(default_script, false);
 
         athena_error_screen(err_msg, dark_mode);
 

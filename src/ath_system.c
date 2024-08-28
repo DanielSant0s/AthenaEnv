@@ -234,7 +234,7 @@ static JSValue athena_loadELF(JSContext *ctx, JSValue this_val, int argc, JSValu
 	char **args = NULL;
 	const char *path = JS_ToCString(ctx, argv[0]);
 
-	if(argc == 2){
+	if(argc > 1) {
 		if (!JS_IsArray(ctx, argv[1])) {
 		    return JS_ThrowSyntaxError(ctx, "Type error, you should use a string array.");
 		}
@@ -251,7 +251,13 @@ static JSValue athena_loadELF(JSContext *ctx, JSValue this_val, int argc, JSValu
 		}
 	}
 
+	if (argc > 2) {
+		if (!JS_ToBool(ctx, argv[2]))
+			LoadExecPS2(path, n, args);
+	}
+	
 	LoadELFFromFile(path, n, args);
+
 	return JS_UNDEFINED;
 }
 

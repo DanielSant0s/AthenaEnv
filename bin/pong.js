@@ -1,8 +1,4 @@
 // {"name": "Pong", "author": "Daniel Santos", "version": "04252023","file": "pong.js"}
-import test from "./test.js";
-
-test("module test ok");
-
 Sound.setVolume(100);
 Sound.setVolume(100, 0);
 
