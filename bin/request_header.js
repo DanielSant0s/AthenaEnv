@@ -24,3 +24,5 @@ Screen.log(req.head("https://raw.githubusercontent.com/DanielSant0s/brewstore-db
 Network.deinit();
 
 System.sleep(300);
+
+std.reload("main.js");

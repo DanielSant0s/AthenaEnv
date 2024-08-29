@@ -468,4 +468,4 @@ while(true) {
 
 Network.deinit();
 
-System.loadELF(System.boot_path + "athena_pkd.elf");
+std.reload("main.js");

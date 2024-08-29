@@ -26,3 +26,8 @@ Pads.newEvent(Pads.LEFT, Pads.JUST_PRESSED, () => {
 Pads.newEvent(Pads.RIGHT, Pads.JUST_PRESSED, () => { 
     console.log(`DPad Right button was just pressed`); 
 });
+
+Pads.newEvent(Pads.START, Pads.JUST_PRESSED, () => { 
+    std.reload("main.js");
+});
+

@@ -140,7 +140,7 @@ while(true){
     }
     
     if(pad.justPressed(Pads.TRIANGLE)) {
-        System.loadELF(System.boot_path + "/athena.elf");
+        std.reload("main.js");
     }
 
     if(pad.justPressed(Pads.SQUARE)) {

@@ -25,3 +25,5 @@ for(var i = 0; i < 1250; i++){
 }
 
 Network.deinit();
+
+std.reload("main.js");

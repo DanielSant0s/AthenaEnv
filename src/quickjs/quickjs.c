@@ -1987,6 +1987,8 @@ void JS_SetRuntimeInfo(JSRuntime *rt, const char *s)
         rt->rt_info = s;
 }
 
+#define DUMP_LEAKS
+
 void JS_FreeRuntime(JSRuntime *rt)
 {
     struct list_head *el, *el1;
@@ -2058,122 +2060,25 @@ void JS_FreeRuntime(JSRuntime *rt)
     bf_context_end(&rt->bf_ctx);
 #endif
 
-#ifdef DUMP_LEAKS
-    /* only the atoms defined in JS_InitAtoms() should be left */
-    {
-        BOOL header_done = FALSE;
-
-        for(i = 0; i < rt->atom_size; i++) {
-            JSAtomStruct *p = rt->atom_array[i];
-            if (!atom_is_free(p) /* && p->str*/) {
-                if (i >= JS_ATOM_END || p->header.ref_count != 1) {
-                    if (!header_done) {
-                        header_done = TRUE;
-                        if (rt->rt_info) {
-                            printf("%s:1: atom leakage:", rt->rt_info);
-                        } else {
-                            printf("Atom leaks:\n"
-                                   "    %6s %6s %s\n",
-                                   "ID", "REFCNT", "NAME");
-                        }
-                    }
-                    if (rt->rt_info) {
-                        printf(" ");
-                    } else {
-                        printf("    %6u %6u ", i, p->header.ref_count);
-                    }
-                    switch (p->atom_type) {
-                    case JS_ATOM_TYPE_STRING:
-                        JS_DumpString(rt, p);
-                        break;
-                    case JS_ATOM_TYPE_GLOBAL_SYMBOL:
-                        printf("Symbol.for(");
-                        JS_DumpString(rt, p);
-                        printf(")");
-                        break;
-                    case JS_ATOM_TYPE_SYMBOL:
-                        if (p->hash == JS_ATOM_HASH_SYMBOL) {
-                            printf("Symbol(");
-                            JS_DumpString(rt, p);
-                            printf(")");
-                        } else {
-                            printf("Private(");
-                            JS_DumpString(rt, p);
-                            printf(")");
-                        }
-                        break;
-                    }
-                    if (rt->rt_info) {
-                        printf(":%u", p->header.ref_count);
-                    } else {
-                        printf("\n");
-                    }
-                }
-            }
-        }
-        if (rt->rt_info && header_done)
-            printf("\n");
-    }
-#endif
-
     /* free the atoms */
     for(i = 0; i < rt->atom_size; i++) {
         JSAtomStruct *p = rt->atom_array[i];
         if (!atom_is_free(p)) {
-#ifdef DUMP_LEAKS
-            list_del(&p->link);
-#endif
             js_free_rt(rt, p);
         }
     }
     js_free_rt(rt, rt->atom_array);
     js_free_rt(rt, rt->atom_hash);
     js_free_rt(rt, rt->shape_hash);
-#ifdef DUMP_LEAKS
-    if (!list_empty(&rt->string_list)) {
-        if (rt->rt_info) {
-            printf("%s:1: string leakage:", rt->rt_info);
-        } else {
-            printf("String leaks:\n"
-                   "    %6s %s\n",
-                   "REFCNT", "VALUE");
-        }
-        list_for_each_safe(el, el1, &rt->string_list) {
-            JSString *str = list_entry(el, JSString, link);
-            if (rt->rt_info) {
-                printf(" ");
-            } else {
-                printf("    %6u ", str->header.ref_count);
-            }
-            JS_DumpString(rt, str);
-            if (rt->rt_info) {
-                printf(":%u", str->header.ref_count);
-            } else {
-                printf("\n");
-            }
-            list_del(&str->link);
-            js_free_rt(rt, str);
-        }
-        if (rt->rt_info)
-            printf("\n");
-    }
-    {
-        JSMallocState *s = &rt->malloc_state;
-        if (s->malloc_count > 1) {
-            if (rt->rt_info)
-                printf("%s:1: ", rt->rt_info);
-            printf("Memory leak: %"PRIu64" bytes lost in %"PRIu64" block%s\n",
-                   (uint64_t)(s->malloc_size - sizeof(JSRuntime)),
-                   (uint64_t)(s->malloc_count - 1), &"s"[s->malloc_count == 2]);
-        }
-    }
-#endif
+
 
     {
         JSMallocState ms = rt->malloc_state;
         rt->mf.js_free(&ms, rt);
     }
 }
+
+#undef DUMP_LEAKS
 
 JSContext *JS_NewContextRaw(JSRuntime *rt)
 {

@@ -68,7 +68,7 @@ while(true){
     savedry = savedry - ry;
     
     if(pad.justPressed(Pads.TRIANGLE)) {
-        System.loadELF(System.boot_path + "/athena.elf");
+        break;
     }
 
     if(pad.justPressed(Pads.SQUARE)) {
@@ -95,3 +95,6 @@ while(true){
 
     Screen.flip();
 }
+
+std.gc();
+std.reload("main.js");

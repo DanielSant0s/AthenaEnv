@@ -27,6 +27,8 @@
 #include <readini.h>
 
 char boot_path[255];
+char default_script[128] = "main.js";
+char default_cfg[128] = "athena.ini";
 bool dark_mode, boot_logo;
 
 static void init_drivers() {
@@ -78,12 +80,16 @@ void init_base_fs_drivers() {
     load_default_module(get_boot_device(boot_path));
 }
 
+void set_default_script(const char* path) {
+    strcpy(default_script, path);
+    default_script[strlen(path)] = '\0';
+}
+
 int main(int argc, char **argv) {
     IniReader ini;
     boot_logo = true;
     dark_mode = true;
-    char default_script[128] = "main.js";
-    char default_cfg[128] = "athena.ini";
+
     bool ignore_ini = false;
     bool reset_iop = true;
 
@@ -102,8 +108,7 @@ int main(int argc, char **argv) {
         char* tmp_arg = NULL;
         for (int i = 1, arg = argv[1]; i < argc; i++, arg = argv[i]) {
             if ((tmp_arg = strpre("--script=", arg)) || (tmp_arg = strpre("-s=", arg))) {
-                strcpy(default_script, tmp_arg);
-                default_script[strlen(tmp_arg)] = '\0';
+                set_default_script(tmp_arg);
                 tmp_arg = NULL;
             } else if (!strcmp("--nologo", arg) || !strcmp("-l", arg)) {
                 boot_logo = false;
@@ -181,6 +186,8 @@ int main(int argc, char **argv) {
     #endif
 
 	const char* err_msg = NULL;
+
+    int jump_ret = setjmp(*get_reset_buf());
 
     do
     {
