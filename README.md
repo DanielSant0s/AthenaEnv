@@ -211,6 +211,7 @@ The std module provides wrappers to the libc stdlib.h and stdio.h and a few othe
   • \f and \v are accepted as space characters  
   • leading plus in numbers  
   • octal (0o prefix) and hexadecimal (0x prefix) numbers  
+* std.reload(str) - Reloads all the Javascript environment (stack, modules etc) with the specified script
   
 **FILE prototype:**
 
