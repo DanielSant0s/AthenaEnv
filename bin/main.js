@@ -1,3 +1,5 @@
+console.log("Starting dashboard...");
+
 IOP.loadDefaultModule(IOP.keyboard);
 Keyboard.init();
 

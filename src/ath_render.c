@@ -251,15 +251,163 @@ static void athena_object_dtor(JSRuntime *rt, JSValue val){
     free(ro->m.normals);
     free(ro->m.texcoords);
 
-	for (int i = 0; i < ro->m.tex_count; i++) {
-		JS_FreeValueRT(rt, ro->textures[i]);
-	}
+	//printf("%d textures\n", ro->m.tex_count);
+
+	//for (int i = 0; i < ro->m.tex_count; i++) {
+	//	if (!((JSImageData*)JS_GetOpaque(ro->textures[i], get_img_class_id()))->path) {
+	//		printf("Freeing %d from mesh\n", i);
+	//		JS_FreeValueRT(rt, ro->textures[i]);
+	//	}
+	//}
 
 	free(ro->m.textures);
 	free(ro->m.tex_ranges);
 	free(ro->textures);
 
 	js_free_rt(rt, ro);
+}
+
+
+static JSValue athena_object_ctor(JSContext *ctx, JSValueConst new_target, int argc, JSValueConst *argv) {
+	JSImageData *image;
+	JSValue obj = JS_UNDEFINED;
+    JSValue proto;
+
+    JSRenderObject* ro = js_mallocz(ctx, sizeof(JSRenderObject));
+	
+    if (!ro)
+        return JS_EXCEPTION;
+
+	if (JS_IsArray(ctx, argv[0])) {
+		memset(ro, 0, sizeof(JSRenderObject));
+
+		int length;
+		JS_ToUint32(ctx, &length, JS_GetPropertyStr(ctx, argv[0], "length"));
+
+		ro->m.indexCount = length;
+		ro->m.positions = malloc(sizeof(VECTOR)*ro->m.indexCount);
+		ro->m.normals = malloc(sizeof(VECTOR)*ro->m.indexCount);
+		ro->m.texcoords = malloc(sizeof(VECTOR)*ro->m.indexCount);
+		ro->m.colours = malloc(sizeof(VECTOR)*ro->m.indexCount);
+
+		for (int i = 0; i < ro->m.indexCount; i++) {
+			JSValue vertex = JS_GetPropertyUint32(ctx, argv[0], i);
+
+			JS_ToFloat32(ctx, &ro->m.positions[i][0], JS_GetPropertyStr(ctx, vertex, "x"));
+			JS_ToFloat32(ctx, &ro->m.positions[i][1], JS_GetPropertyStr(ctx, vertex, "y"));
+			JS_ToFloat32(ctx, &ro->m.positions[i][2], JS_GetPropertyStr(ctx, vertex, "z"));
+			ro->m.positions[i][3] = 1.0f;
+
+			JS_ToFloat32(ctx, &ro->m.normals[i][0], JS_GetPropertyStr(ctx, vertex, "n1"));
+			JS_ToFloat32(ctx, &ro->m.normals[i][1], JS_GetPropertyStr(ctx, vertex, "n2"));
+			JS_ToFloat32(ctx, &ro->m.normals[i][2], JS_GetPropertyStr(ctx, vertex, "n3"));
+			ro->m.normals[i][3] = 1.0f;
+
+			JS_ToFloat32(ctx, &ro->m.texcoords[i][0], JS_GetPropertyStr(ctx, vertex, "s"));
+			JS_ToFloat32(ctx, &ro->m.texcoords[i][1], JS_GetPropertyStr(ctx, vertex, "t"));
+			ro->m.texcoords[i][2] = 1.0f;
+			ro->m.texcoords[i][3] = 1.0f;
+
+			JS_ToFloat32(ctx, &ro->m.colours[i][0], JS_GetPropertyStr(ctx, vertex, "r"));
+			JS_ToFloat32(ctx, &ro->m.colours[i][1], JS_GetPropertyStr(ctx, vertex, "g"));
+			JS_ToFloat32(ctx, &ro->m.colours[i][2], JS_GetPropertyStr(ctx, vertex, "b"));
+			JS_ToFloat32(ctx, &ro->m.colours[i][3], JS_GetPropertyStr(ctx, vertex, "a"));
+
+			JS_FreeValue(ctx, vertex);
+		}
+
+		if(argc > 1) {
+			JS_DupValue(ctx, argv[1]);
+			image = JS_GetOpaque2(ctx, argv[1], get_img_class_id());
+
+			image->tex.Filter = GS_FILTER_LINEAR;
+	
+			ro->m.textures = malloc(sizeof(GSTEXTURE*));
+			ro->m.tex_ranges = malloc(sizeof(int));
+			ro->textures = malloc(sizeof(JSValue));
+
+			ro->m.textures[0] = &(image->tex);
+			ro->m.tex_count = 1;
+			ro->m.tex_ranges[0] = ro->m.indexCount;
+
+			ro->textures[0] = argv[1];
+		}
+
+		ro->m.pipeline = athena_render_set_pipeline(&ro->m, PL_DEFAULT);
+
+		goto register_3d_object;
+	}
+
+	const char *file_tbo = JS_ToCString(ctx, argv[0]); // Model filename
+	
+	// Loading texture
+	if(argc > 1) {
+		image = JS_GetOpaque2(ctx, argv[1], get_img_class_id());
+
+		ro->textures = malloc(sizeof(JSValue));
+
+		ro->textures[0] = argv[1];
+
+		image->tex.Filter = GS_FILTER_LINEAR;
+
+		loadOBJ(&ro->m, file_tbo, &(image->tex));
+
+	} else if (argc > 0) {
+		loadOBJ(&ro->m, file_tbo, NULL);
+
+		ro->textures = malloc(sizeof(JSValue)*ro->m.tex_count);
+
+		for (int i = 0; i < ro->m.tex_count; i++) {
+			JSImageData* image;
+    		JSValue img_obj = JS_UNDEFINED;
+
+			image = js_mallocz(ctx, sizeof(*image));
+    		if (!image)
+    		    return JS_EXCEPTION;
+
+			image->delayed = true;
+			image->tex = *ro->m.textures[i];
+			free(ro->m.textures[i]);
+			ro->m.textures[i] = &(image->tex);
+
+			image->loaded = true;
+			image->width = image->tex.Width;
+			image->height = image->tex.Height;
+			image->endx = image->tex.Width;
+			image->endy = image->tex.Height;
+
+			image->startx = 0.0f;
+			image->starty = 0.0f;
+			image->angle = 0.0f;
+			image->color = 0x80808080;
+
+    		img_obj = JS_NewObjectClass(ctx, get_img_class_id());    
+    		JS_SetOpaque(img_obj, image);
+
+			ro->textures[i] = img_obj;
+
+			//JS_DupValue(ctx, img_obj);
+		}
+	} 
+
+register_3d_object:
+    proto = JS_GetPropertyStr(ctx, new_target, "prototype");
+    obj = JS_NewObjectProtoClass(ctx, proto, js_object_class_id);
+
+	if (ro->m.tex_count > 0) {
+		JSValue tex_arr = JS_NewArray(ctx);
+		for (int i = 0; i < ro->m.tex_count; i++) {
+			if (((JSImageData*)JS_GetOpaque(ro->textures[i], get_img_class_id()))->path)
+				JS_DupValue(ctx, ro->textures[i]);
+			JS_DefinePropertyValueUint32(ctx, tex_arr, i, ro->textures[i], JS_PROP_C_W_E);
+		}
+		JS_DefinePropertyValueStr(ctx, obj, "textures", tex_arr, JS_PROP_C_W_E);
+	}
+
+    JS_FreeValue(ctx, proto);
+    JS_SetOpaque(obj, ro);
+
+    return obj;
 }
 
 static JSClassDef js_object_class = {
@@ -340,6 +488,9 @@ static JSValue athena_settexture(JSContext *ctx, JSValue this_val, int argc, JSV
 	ro->textures[tex_idx] = argv[1];
 	ro->m.textures[tex_idx] = &(image->tex);
 
+	JSValue tex_arr = JS_GetPropertyStr(ctx, this_val, "textures");
+	JS_DefinePropertyValueUint32(ctx, tex_arr, tex_idx, ro->textures[tex_idx], JS_PROP_C_W_E);
+
 	ro->m.tex_count = (ro->m.tex_count < (tex_idx+1)? (tex_idx+1) : ro->m.tex_count);
 
 	if (argc > 2) {
@@ -362,6 +513,7 @@ static JSValue athena_gettexture(JSContext *ctx, JSValue this_val, int argc, JSV
 	JS_ToUint32(ctx, &tex_idx, argv[0]);
 
 	if (ro->m.tex_count > tex_idx) {
+		JS_DupValue(ctx, ro->textures[tex_idx]);
 		return ro->textures[tex_idx];
 	}
 
@@ -463,6 +615,8 @@ static JSValue js_object_set(JSContext *ctx, JSValueConst this_val, JSValue val,
 			JS_ToFloat32(ctx, &ro->m.colours[i][1], JS_GetPropertyStr(ctx, vertex, "g"));
 			JS_ToFloat32(ctx, &ro->m.colours[i][2], JS_GetPropertyStr(ctx, vertex, "b"));
 			JS_ToFloat32(ctx, &ro->m.colours[i][3], JS_GetPropertyStr(ctx, vertex, "a"));
+
+			JS_FreeValue(ctx, vertex);
 		}
 	} else if (magic == 2) {
 
@@ -473,6 +627,8 @@ static JSValue js_object_set(JSContext *ctx, JSValueConst this_val, JSValue val,
 			JS_ToFloat32(ctx, &ro->m.bounding_box[i][1], JS_GetPropertyStr(ctx, vertex, "y"));
 			JS_ToFloat32(ctx, &ro->m.bounding_box[i][2], JS_GetPropertyStr(ctx, vertex, "z"));
 			ro->m.bounding_box[i][3] = 1.0f;
+
+			JS_FreeValue(ctx, vertex);
 		}
 	}	
     return JS_UNDEFINED;
@@ -489,133 +645,6 @@ static const JSCFunctionListEntry js_object_proto_funcs[] = {
 	JS_CGETSET_MAGIC_DEF("size", js_object_get, js_object_set, 1),
 	JS_CGETSET_MAGIC_DEF("bounds", js_object_get, js_object_set, 2),
 };
-
-static JSValue athena_object_ctor(JSContext *ctx, JSValueConst new_target, int argc, JSValueConst *argv) {
-	JSImageData *image;
-	JSValue obj = JS_UNDEFINED;
-    JSValue proto;
-
-    JSRenderObject* ro = js_mallocz(ctx, sizeof(JSRenderObject));
-    if (!ro)
-        return JS_EXCEPTION;
-
-	if (JS_IsArray(ctx, argv[0])) {
-		memset(ro, 0, sizeof(JSRenderObject));
-
-		int length;
-		JS_ToUint32(ctx, &length, JS_GetPropertyStr(ctx, argv[0], "length"));
-
-		ro->m.indexCount = length;
-		ro->m.positions = malloc(sizeof(VECTOR)*ro->m.indexCount);
-		ro->m.normals = malloc(sizeof(VECTOR)*ro->m.indexCount);
-		ro->m.texcoords = malloc(sizeof(VECTOR)*ro->m.indexCount);
-		ro->m.colours = malloc(sizeof(VECTOR)*ro->m.indexCount);
-
-		for (int i = 0; i < ro->m.indexCount; i++) {
-			JSValue vertex = JS_GetPropertyUint32(ctx, argv[0], i);
-
-			JS_ToFloat32(ctx, &ro->m.positions[i][0], JS_GetPropertyStr(ctx, vertex, "x"));
-			JS_ToFloat32(ctx, &ro->m.positions[i][1], JS_GetPropertyStr(ctx, vertex, "y"));
-			JS_ToFloat32(ctx, &ro->m.positions[i][2], JS_GetPropertyStr(ctx, vertex, "z"));
-			ro->m.positions[i][3] = 1.0f;
-
-			JS_ToFloat32(ctx, &ro->m.normals[i][0], JS_GetPropertyStr(ctx, vertex, "n1"));
-			JS_ToFloat32(ctx, &ro->m.normals[i][1], JS_GetPropertyStr(ctx, vertex, "n2"));
-			JS_ToFloat32(ctx, &ro->m.normals[i][2], JS_GetPropertyStr(ctx, vertex, "n3"));
-			ro->m.normals[i][3] = 1.0f;
-
-			JS_ToFloat32(ctx, &ro->m.texcoords[i][0], JS_GetPropertyStr(ctx, vertex, "s"));
-			JS_ToFloat32(ctx, &ro->m.texcoords[i][1], JS_GetPropertyStr(ctx, vertex, "t"));
-			ro->m.texcoords[i][2] = 1.0f;
-			ro->m.texcoords[i][3] = 1.0f;
-
-			JS_ToFloat32(ctx, &ro->m.colours[i][0], JS_GetPropertyStr(ctx, vertex, "r"));
-			JS_ToFloat32(ctx, &ro->m.colours[i][1], JS_GetPropertyStr(ctx, vertex, "g"));
-			JS_ToFloat32(ctx, &ro->m.colours[i][2], JS_GetPropertyStr(ctx, vertex, "b"));
-			JS_ToFloat32(ctx, &ro->m.colours[i][3], JS_GetPropertyStr(ctx, vertex, "a"));
-		}
-
-		if(argc > 1) {
-			JS_DupValue(ctx, argv[1]);
-			image = JS_GetOpaque2(ctx, argv[1], get_img_class_id());
-
-			image->tex.Filter = GS_FILTER_LINEAR;
-	
-			ro->m.textures = malloc(sizeof(GSTEXTURE*));
-			ro->m.tex_ranges = malloc(sizeof(int));
-			ro->textures = malloc(sizeof(JSValue));
-
-			ro->m.textures[0] = &(image->tex);
-			ro->m.tex_count = 1;
-			ro->m.tex_ranges[0] = ro->m.indexCount;
-
-			ro->textures[0] = argv[1];
-		}
-
-		ro->m.pipeline = athena_render_set_pipeline(&ro->m, PL_DEFAULT);
-
-		goto register_3d_object;
-	}
-
-	const char *file_tbo = JS_ToCString(ctx, argv[0]); // Model filename
-	
-	// Loading texture
-	if(argc > 1) {
-		JS_DupValue(ctx, argv[1]);
-		image = JS_GetOpaque2(ctx, argv[1], get_img_class_id());
-
-		ro->textures = malloc(sizeof(JSValue));
-
-		ro->textures[0] = argv[1];
-
-		image->tex.Filter = GS_FILTER_LINEAR;
-
-		loadOBJ(&ro->m, file_tbo, &(image->tex));
-
-	} else if (argc > 0) {
-		loadOBJ(&ro->m, file_tbo, NULL);
-
-		ro->textures = malloc(sizeof(JSValue)*ro->m.tex_count);
-
-		for (int i = 0; i < ro->m.tex_count; i++) {
-			JSImageData* image;
-    		JSValue img_obj = JS_UNDEFINED;
-
-			image = js_mallocz(ctx, sizeof(*image));
-    		if (!image)
-    		    return JS_EXCEPTION;
-
-			image->delayed = true;
-			image->tex = *ro->m.textures[i];
-			free(ro->m.textures[i]);
-			ro->m.textures[i] = &(image->tex);
-
-			image->loaded = true;
-			image->width = image->tex.Width;
-			image->height = image->tex.Height;
-			image->endx = image->tex.Width;
-			image->endy = image->tex.Height;
-
-			image->startx = 0.0f;
-			image->starty = 0.0f;
-			image->angle = 0.0f;
-			image->color = 0x80808080;
-
-    		img_obj = JS_NewObjectClass(ctx, get_img_class_id());    
-    		JS_SetOpaque(img_obj, image);
-
-			ro->textures[i] = img_obj;
-		}
-	} 
-
-register_3d_object:
-    proto = JS_GetPropertyStr(ctx, new_target, "prototype");
-    obj = JS_NewObjectProtoClass(ctx, proto, js_object_class_id);
-    JS_FreeValue(ctx, proto);
-    JS_SetOpaque(obj, ro);
-
-    return obj;
-}
 
 static int js_object_init(JSContext *ctx, JSModuleDef *m)
 {

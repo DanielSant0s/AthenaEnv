@@ -424,6 +424,8 @@ static JSValue js_reload(JSContext *ctx, JSValueConst this_val,
     js_destroy_render_loop(ctx);
     js_destroy_input_events(ctx);
 
+    js_set_clear_color(GS_SETREG_RGBAQ(0x00, 0x00, 0x00, 0x80, 0x00));
+
     destroy_vm(ctx);
 
     longjmp(*get_reset_buf(), 1);
@@ -3590,7 +3592,7 @@ typedef struct {
     EventFlavours flavour;
 } InputEvent;
 
-static InputEvent padEvents[64];
+static InputEvent padEvents[64] = { 0 };
 static uint8_t totalPadEvents = 0;
 
 static JSPads* inputEventHandler = NULL;

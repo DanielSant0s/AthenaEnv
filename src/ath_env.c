@@ -41,12 +41,14 @@ static int qjs_eval_buf(JSContext *ctx, const void *buf, int buf_len,
     } else {
         val = JS_Eval(ctx, buf, buf_len, filename, eval_flags);
     }
+	
     if (JS_IsException(val)) {
         ret = -1;
     } else {
         ret = 0;
     }
-    JS_FreeValue(ctx, val);
+
+	JS_FreeValue(ctx, val);
     return ret;
 }
 

@@ -52,8 +52,9 @@ let bbox = false;
 
 let collision = undefined; 
 
-while(true){
-    Screen.clear(gray);
+Screen.clearColor(gray);
+
+Screen.display(() => {
     Camera.update();
     pad.update();
 
@@ -68,7 +69,8 @@ while(true){
     savedry = savedry - ry;
     
     if(pad.justPressed(Pads.TRIANGLE)) {
-        break;
+        os.chdir("..");
+        std.reload("main.js");
     }
 
     if(pad.justPressed(Pads.SQUARE)) {
@@ -92,9 +94,4 @@ while(true){
 
     fntcpy.print(10, 10, Screen.getFPS(360) + " FPS | " + `RAM: ${Math.floor(System.getMemoryStats().used / 1048576)}MB` + 
      ` | Collision: ${JSON.stringify(collision)}`);
-
-    Screen.flip();
-}
-
-std.gc();
-std.reload("main.js");
+});
