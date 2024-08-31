@@ -30,23 +30,24 @@ static Task tasks[MAX_THREADS];
 static int tasks_size = 0;
 
 bool is_invalid_task(Task* task) {
-    return (task->id == -1 && !task->title && task->id == -1 && task->stack_size == 0);
+    return (task->id == -1 && !task->title && task->id == -1 && task->stack_size == 0 && task->stack == NULL);
 }
 
-void new_task(int id, size_t stack_sz, const char* title){
+void new_task(int id, size_t stack_sz, void* stack, const char* title){
     for(int i = 0; i < MAX_THREADS; i++){
         if (is_invalid_task(&tasks[i])){
             tasks[i].id = id;
             tasks[i].stack_size = stack_sz;
             tasks[i].status = 0;
             tasks[i].title = title;
+            tasks[i].stack = stack;
             break;
         }
     }
 }
 
 s32 AthenaCreateThread(ee_thread_t *thread) {
-    new_task(tasks_size++, thread->stack_size, thread->option == 0? "Unknown" : thread->option);
+    new_task(tasks_size++, thread->stack_size, thread->stack, thread->option == 0? "Unknown" : thread->option);
     return CreateThread(thread);
 }
 
@@ -57,6 +58,8 @@ void del_task(int id){
             tasks[i].stack_size = 0;
             tasks[i].status = -1;
             tasks[i].title = NULL;
+            free(tasks[i].stack);
+            tasks[i].stack = NULL;
             break;
         }
     }
@@ -82,20 +85,21 @@ void init_taskman()
         tasks[i].stack_size = 0;
         tasks[i].status = -1;
         tasks[i].title = NULL;
+        tasks[i].stack = NULL;
     }
 
     ReferThreadStatus(tasks_size, &info);
-    new_task(tasks_size, info.stack_size, "AthenaEnv: JavaScript Runtime");
+    new_task(tasks_size, info.stack_size, info.stack, "AthenaEnv: JavaScript Runtime");
     tasks_size++;
     ReferThreadStatus(tasks_size, &info);
-    new_task(tasks_size, info.stack_size, "Kernel: Thread manager");
+    new_task(tasks_size, info.stack_size, info.stack, "Kernel: Thread manager");
     tasks_size++;
 
     do {
         
         ReferThreadStatus(tasks_size, &info);
         if(info.stack_size != 0) {
-            new_task(tasks_size, info.stack_size, "Unknown");
+            new_task(tasks_size, info.stack_size, info.stack, "Unknown");
             tasks_size++;
         }
 
