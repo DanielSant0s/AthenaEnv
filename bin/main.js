@@ -1,3 +1,5 @@
+console.log("Starting dashboard...");
+
 IOP.loadDefaultModule(IOP.keyboard);
 Keyboard.init();
 
@@ -90,9 +92,10 @@ Screen.display(() => {
             bin = app_table[0].bin;
         }
 
-        System.loadELF(System.boot_path + "/" + bin, [`--script=${app_table[0].file}`, 
-                                                      '--nologo',
-                                                      '--ignorecfg']); // Doing this to reload Athena from stratch
+        //System.loadELF(System.boot_path + "/" + bin, [`--script=${app_table[0].file}`, 
+        //                                              '--nologo',
+        //                                              '--ignorecfg']); // Doing this to reload Athena from stratch
+        std.reload(app_table[0].file);
     }
 
     font_medium.print(210, 125, app_table[0].name);

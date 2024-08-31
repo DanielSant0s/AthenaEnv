@@ -105,7 +105,7 @@ Screen.display(() => {
     }
 
     if((pad.btns & Pads.START) && (pad.btns & Pads.R3) && (pad.btns & Pads.UP)){
-        System.loadELF(System.boot_path + "athena_pkd.elf");
+        std.reload("main.js");
     }
 
     font.print(10, 10, Screen.getFPS(360) + " FPS");

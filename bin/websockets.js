@@ -34,3 +34,5 @@ std.gc();
 Network.deinit();
 
 System.sleep(300);
+
+std.reload("main.js");

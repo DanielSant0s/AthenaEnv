@@ -24,3 +24,5 @@ console.log(result.text);
 Network.deinit();
 
 System.sleep(300);
+
+std.reload("main.js");

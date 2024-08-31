@@ -108,7 +108,7 @@ Screen.display(() => {
 
                     break;
                 case 2:
-                    running = false;
+                    std.reload("main.js");
                     break;
             }
         }

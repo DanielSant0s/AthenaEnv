@@ -44,6 +44,7 @@
 #include <sys/wait.h>
 
 #include "../include/graphics.h"
+#include "../ath_env.h"
 
 #include "cutils.h"
 #include "list.h"
@@ -394,6 +395,40 @@ static JSValue js_loadScript(JSContext *ctx, JSValueConst this_val,
     js_free(ctx, buf);
     JS_FreeCString(ctx, filename);
     return ret;
+}
+
+void js_destroy_render_loop(JSContext *ctx);
+void js_destroy_input_events(JSContext *ctx);
+
+static JSValue js_reload(JSContext *ctx, JSValueConst this_val,
+                             int argc, JSValueConst *argv)
+{
+    uint8_t *buf;
+    const char *filename;
+    JSValue ret;
+    size_t buf_len;
+    
+    filename = JS_ToCString(ctx, argv[0]);
+    if (!filename)
+        return JS_EXCEPTION;
+
+    JSValue val = JS_GetPropertyStr(ctx, this_val, "reload");
+	JS_FreeValue(ctx, val);
+    JS_FreeValue(ctx, val);
+
+    JS_FreeValue(ctx, this_val);
+    
+    set_default_script(filename);
+    JS_FreeCString(ctx, filename);
+
+    js_destroy_render_loop(ctx);
+    js_destroy_input_events(ctx);
+
+    js_set_clear_color(GS_SETREG_RGBAQ(0x00, 0x00, 0x00, 0x80, 0x00));
+
+    destroy_vm(ctx);
+
+    longjmp(*get_reset_buf(), 1);
 }
 
 /* load a file as a UTF-8 encoded string */
@@ -1242,6 +1277,7 @@ static const JSCFunctionListEntry js_std_funcs[] = {
     JS_CFUNC_DEF("gc", 0, js_std_gc ),
     JS_CFUNC_DEF("evalScript", 1, js_evalScript ),
     JS_CFUNC_DEF("loadScript", 1, js_loadScript ),
+    JS_CFUNC_DEF("reload", 1, js_reload ),
     JS_CFUNC_DEF("getenv", 1, js_std_getenv ),
     JS_CFUNC_DEF("setenv", 1, js_std_setenv ),
     JS_CFUNC_DEF("unsetenv", 1, js_std_unsetenv ),
@@ -3556,8 +3592,8 @@ typedef struct {
     EventFlavours flavour;
 } InputEvent;
 
-static InputEvent padEvents[64];
-static uint8_t totalPadEvents;
+static InputEvent padEvents[64] = { 0 };
+static uint8_t totalPadEvents = 0;
 
 static JSPads* inputEventHandler = NULL;
 
@@ -3583,6 +3619,28 @@ void js_delete_input_event(int id) {
     padEvents[id].function = NULL;
     padEvents[id].flavour = PRESSED_EVENT;
     totalPadEvents--;
+}
+
+void js_destroy_render_loop(JSContext *ctx) {
+    if (render_loop_func != JS_UNDEFINED)
+        JS_FreeValue(ctx, render_loop_func);
+
+    render_loop_func = JS_UNDEFINED;
+}
+
+void js_destroy_input_events(JSContext *ctx) {
+    if (totalPadEvents) {
+        for (int i = 0; i < 64; i++) {
+            if (padEvents[i].function) {
+                JS_FreeValue(ctx, padEvents[i].function);
+                padEvents[i].function = NULL;
+                padEvents[i].buttons = 0;
+                padEvents[i].flavour = 0;
+            }
+        }
+    }
+
+    totalPadEvents = 0;
 }
 
 int js_std_loop(JSContext *ctx)

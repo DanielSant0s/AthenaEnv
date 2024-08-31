@@ -143,6 +143,9 @@ static JSValue js_physics_bbox_collide(JSContext *ctx, JSValue this_val, int arg
 		JS_ToFloat32(ctx, &bbox2[i][1], JS_GetPropertyStr(ctx, vertex2, "y"));
 		JS_ToFloat32(ctx, &bbox2[i][2], JS_GetPropertyStr(ctx, vertex2, "z"));
 		bbox2[i][3] = 1.0f;
+
+        JS_FreeValue(ctx, vertex1);
+        JS_FreeValue(ctx, vertex2);
 	}
 
     if (boxBoxCollide(bbox1, bbox2, coords1, coords2, collision)) {

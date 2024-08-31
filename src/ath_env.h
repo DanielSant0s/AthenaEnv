@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <stdbool.h>
+#include <setjmp.h>
 
 #include "quickjs/quickjs-libc.h"
 
@@ -55,6 +56,9 @@ bool bootlogo_finished();
 void poweroffHandler(void *arg);
 
 const char* run_script(const char* script, bool isBuffer );
+void destroy_vm(JSContext* ctx);
+jmp_buf *get_reset_buf();
+void set_default_script(const char* path);
 
 JSModuleDef *athena_push_module(JSContext* ctx, JSModuleInitFunc *func, const JSCFunctionListEntry *func_list, int len, const char* module_name);
 

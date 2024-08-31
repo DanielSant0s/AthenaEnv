@@ -45,16 +45,16 @@ const vertList = [
                   0.0f, 0.0f, 1.0f, 1.0f),
 ];
 
-let listtest = new RenderObject(vertList);
+const listtest = new RenderObject(vertList);
 
 let dragontex = new Image("dragon.png");
-let dragonmesh = new RenderObject("dragon.obj", dragontex);
+const dragonmesh = new RenderObject("dragon.obj", dragontex);
 
 let monkeytex = new Image("monkey.png");
-let monkeymesh = new RenderObject("monkey.obj", monkeytex);
+const monkeymesh = new RenderObject("monkey.obj", monkeytex);
 monkeymesh.setPipeline(Render.PL_NO_LIGHTS_COLORS);
 
-let car = new RenderObject("Car.obj");
+const car = new RenderObject("Car.obj");
 
 let car_vertices = car.vertices;
 
@@ -68,13 +68,13 @@ car_vertices.forEach(vertex => {
 
 car.vertices = car_vertices;
 
-let mill = new RenderObject("cubes.obj");
+const mill = new RenderObject("cubes.obj");
 
-let boombox = new RenderObject("Boombox.obj");
+const boombox = new RenderObject("Boombox.obj");
 let boomboxtex = boombox.getTexture(0);
 boomboxtex.filter = LINEAR;
 
-let model = [dragonmesh, monkeymesh, car, boombox, mill, listtest];
+const model = [dragonmesh, monkeymesh, car, listtest, boombox, mill];
 
 Camera.position(0.0f, 0.0f, 50.0f);
 Camera.rotation(0.0f, 0.0f,  0.0f);
@@ -106,7 +106,7 @@ const gray = Color.new(40, 40, 40, 128);
 
 let bbox = false;
 
-while(true){
+while(true) {
     Screen.clear(gray);
     Camera.update();
     pad.update();
@@ -140,7 +140,8 @@ while(true){
     }
     
     if(pad.justPressed(Pads.TRIANGLE)) {
-        System.loadELF(System.boot_path + "/athena.elf");
+        os.chdir("..");
+        std.reload("main.js");
     }
 
     if(pad.justPressed(Pads.SQUARE)) {

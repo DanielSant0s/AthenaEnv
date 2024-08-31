@@ -41,12 +41,14 @@ static int qjs_eval_buf(JSContext *ctx, const void *buf, int buf_len,
     } else {
         val = JS_Eval(ctx, buf, buf_len, filename, eval_flags);
     }
+	
     if (JS_IsException(val)) {
         ret = -1;
     } else {
         ret = 0;
     }
-    JS_FreeValue(ctx, val);
+
+	JS_FreeValue(ctx, val);
     return ret;
 }
 
@@ -308,6 +310,19 @@ static JSContext *JS_NewCustomContext(JSRuntime *rt)
 
 static char error_buf[4096];
 
+void destroy_vm(JSContext* ctx) {
+	JSRuntime* rt = JS_GetRuntime(ctx);
+	js_std_free_handlers(rt);
+	JS_FreeContext(ctx);
+	JS_FreeRuntime(rt);
+}
+
+static jmp_buf vm_reset_buf;
+
+jmp_buf *get_reset_buf() {
+	return &vm_reset_buf;
+}
+
 const char* run_script(const char* script, bool isBuffer)
 {
 	size_t memoryLimit = (GetMemorySize() - get_used_memory()) >> 1;
@@ -347,9 +362,7 @@ const char* run_script(const char* script, bool isBuffer)
 			strcat(error_buf, stack);
 		}
 		
-		js_std_free_handlers(rt);
-		JS_FreeContext(ctx);
-		JS_FreeRuntime(rt);
+		destroy_vm(ctx);
 
 		return error_buf; 
 	} else {
@@ -367,16 +380,12 @@ const char* run_script(const char* script, bool isBuffer)
 			strcat(error_buf, "\n");
 			strcat(error_buf, stack);
 
-			js_std_free_handlers(rt);
-			JS_FreeContext(ctx);
-			JS_FreeRuntime(rt);
+			destroy_vm(ctx);
 
 			return error_buf; 
 		}
 	}
 	
-	js_std_free_handlers(rt);
-	JS_FreeContext(ctx);
-	JS_FreeRuntime(rt);
+	destroy_vm(ctx);
     return NULL;
 }

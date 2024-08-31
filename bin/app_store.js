@@ -321,7 +321,6 @@ while(true) {
                 case LD_PKGLIST:
                     if (update_state == NOT_UPDATED) {
                         req.asyncDownload("https://raw.githubusercontent.com/DanielSant0s/brewstore-db/main/brew_data.json", "brew_data.json");
-                        console.log(JSON.stringify(Tasks.get()));
                         update_state = UPDATING;
                         transfering = true;
                     } else if (update_state == UPDATING) {
@@ -468,4 +467,4 @@ while(true) {
 
 Network.deinit();
 
-System.loadELF(System.boot_path + "athena_pkd.elf");
+std.reload("main.js");
