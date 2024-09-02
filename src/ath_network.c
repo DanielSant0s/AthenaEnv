@@ -80,7 +80,7 @@ static JSValue athena_nw_deinit(JSContext *ctx, JSValue this_val, int argc, JSVa
 	ps2ipDeinit();
 	NetManDeinit();
 
-    return 0;
+    return JS_UNDEFINED;
 }
 
 static JSValue athena_nw_gethostbyname(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
