@@ -149,14 +149,14 @@ const menus = new MenuList([main_menu, settings_menu],
     }
 );
 
-const components = [background, menus, stats];
-
 const pad = Pads.get();
 
 pad.setEventHandler();
 
+const dashboard = new Interface(pad, [background, menus, stats]);
+
 Screen.display(() => {
-    components.forEach((component) => component.run(pad));
+    dashboard.run();
 
     if (exit_to) {
         std.reload(exit_to); // Always run std.reload on the outer scope, otherwise it can lead to object leaking

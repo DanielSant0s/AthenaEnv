@@ -74,3 +74,17 @@ export class MenuList {
         this.menu_run(pad);
     }
 }
+
+export class Interface {
+    components = [];
+    pad = undefined;
+
+    constructor(pad, components) {
+        this.pad = pad;
+        this.components.push(...components);
+    }
+
+    run() {
+        this.components.forEach((component) => component.run(this.pad));
+    }
+}
