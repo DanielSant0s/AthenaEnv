@@ -1,4 +1,4 @@
-import { Element, Component, Menu, MenuList } from 'UI.js'
+import { Element, Component, Menu, MenuList, Interface } from 'UI.js'
 
 const unsel_color = Color.new(255, 255, 255, 64);
 const sel_color = Color.new(255, 255, 255);
