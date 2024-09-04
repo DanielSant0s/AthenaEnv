@@ -984,6 +984,21 @@
    .endm
 
 ;//--------------------------------------------------------------------
+;// Half Angle - Description here
+;//
+;// Note:
+;//--------------------------------------------------------------------
+
+     .macro         HalfAngle output, vec1, vec2
+     add.xyz        \output, \vec1, \vec2
+     esadd          p, \output
+     mfp.w          \output, p
+     ersqrt         p, \output[w]
+     mfp.w          \output, p
+     mulw.xyz       \output, \output, \output
+     .endm
+     
+;//--------------------------------------------------------------------
 ;// Name Here - Description here
 ;//
 ;// Note:

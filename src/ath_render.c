@@ -75,6 +75,11 @@ static const JSCFunctionListEntry render_funcs[] = {
 	JS_PROP_INT32_DEF("PL_DEFAULT_NO_TEX", PL_DEFAULT_NO_TEX, JS_PROP_CONFIGURABLE ),
 };
 
+static JSValue athena_newlight(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	if (argc != 0) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
+	return JS_NewUint32(ctx, NewLight());
+}
+
 static JSValue athena_setlight(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	if (argc != 5) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
 
@@ -94,6 +99,7 @@ static JSValue athena_setlight(JSContext *ctx, JSValue this_val, int argc, JSVal
 }
 
 static const JSCFunctionListEntry light_funcs[] = {
+  JS_CFUNC_DEF( "new",  	0, athena_newlight),
   JS_CFUNC_DEF( "set",  	5, athena_setlight),
   JS_PROP_INT32_DEF("AMBIENT", ATHENA_LIGHT_AMBIENT, JS_PROP_CONFIGURABLE ),
   JS_PROP_INT32_DEF("DIFFUSE", ATHENA_LIGHT_DIFFUSE, JS_PROP_CONFIGURABLE ),

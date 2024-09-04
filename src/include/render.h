@@ -92,6 +92,7 @@ void dollyCamera(float dist);
 void zoomCamera(float dist);
 void panCamera(float x, float y);
 
+int NewLight();
 void SetLightAttribute(int id, float x, float y, float z, int attr);
 
 void loadOBJ(model* res_m, const char* path, GSTEXTURE* text);

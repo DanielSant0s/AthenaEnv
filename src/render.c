@@ -33,8 +33,6 @@ VECTOR local_up =        { 0.00f, 1.00f, 0.00f, 1.00f };
 
 eCameraTypes camera_type = CAMERA_DEFAULT;
 
-static LightData lights;
-
 void init3D(float aspect, float fov, float near, float far)
 {
 	create_view_screen(view_screen, aspect, -fov, fov, -fov, fov, near, far);
@@ -231,32 +229,47 @@ void panCamera(float x, float y)
 	AddVector(camera_target, camera_target, dir);
 }
 
+static int active_dir_lights = 0;
+static int active_pnt_lights = 0;
+static int active_aaa_lights = 0;
+static int active_bbb_lights = 0;
+static LightData dir_lights;
 
-void SetLightAttribute(int id, float x, float y, float z, int attr){
+int NewLight() {
+	if (active_dir_lights < 4)
+		return active_dir_lights++;
+
+	return -1;
+}
+ 
+void SetLightAttribute(int id, float x, float y, float z, int attr) {
+	if (id < 0)
+		return;
+
 	switch (attr) {
 		case ATHENA_LIGHT_DIRECTION:
-			lights.direction[id][0] = x;
-			lights.direction[id][1] = y;
-			lights.direction[id][2] = z;
-			lights.direction[id][3] = 1.00f;
+			dir_lights.direction[id][0] = x;
+			dir_lights.direction[id][1] = y;
+			dir_lights.direction[id][2] = z;
+			dir_lights.direction[id][3] = 1.00f;
 			break;
 		case ATHENA_LIGHT_AMBIENT:
-			lights.ambient[id][0] = x;
-			lights.ambient[id][1] = y;
-			lights.ambient[id][2] = z;
-			lights.ambient[id][3] = 1.00f;
+			dir_lights.ambient[id][0] = x;
+			dir_lights.ambient[id][1] = y;
+			dir_lights.ambient[id][2] = z;
+			dir_lights.ambient[id][3] = 1.00f;
 			break;
 		case ATHENA_LIGHT_DIFFUSE:
-			lights.diffuse[id][0] = x;
-			lights.diffuse[id][1] = y;
-			lights.diffuse[id][2] = z;
-			lights.diffuse[id][3] = 1.00f;
+			dir_lights.diffuse[id][0] = x;
+			dir_lights.diffuse[id][1] = y;
+			dir_lights.diffuse[id][2] = z;
+			dir_lights.diffuse[id][3] = 1.00f;
 			break;
 		case ATHENA_LIGHT_SPECULAR:
-			lights.specular[id][0] = x;
-			lights.specular[id][1] = y;
-			lights.specular[id][2] = z;
-			lights.specular[id][3] = 1.00f;
+			dir_lights.specular[id][0] = x;
+			dir_lights.specular[id][1] = y;
+			dir_lights.specular[id][2] = z;
+			dir_lights.specular[id][3] = 1.00f;
 			break;
 	}
 }
@@ -498,7 +511,7 @@ u64 vif_packets[2][44] __attribute__((aligned(64)));
 u64* curr_vif_packet;
 
 /** Cube data */
-u64 cube_packet[12] __attribute__((aligned(64)));
+u64 cube_packet[20] __attribute__((aligned(64)));
 
 u8 context = 0;
 
@@ -1090,6 +1103,8 @@ void draw_vu1_with_lights(model* model_test, float pos_x, float pos_y, float pos
 			curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 0, &local_screen, 4, 0);
 			curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 4, &local_light,  4, 0);
 
+			curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 8, &active_dir_lights, 1, 0);
+
 			u32 vif_added_bytes = 0; // zero because now we will use TOP register (double buffer)
 									 // we don't wan't to unpack at 8 + beggining of buffer, but at
 									 // the beggining of the buffer
@@ -1114,7 +1129,7 @@ void draw_vu1_with_lights(model* model_test, float pos_x, float pos_y, float pos
 			curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &normals[idxs_drawn], count, 1);
 			vif_added_bytes += count;
 
-			curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &lights, 12, 1);
+			curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &dir_lights, 12, 1);
 			vif_added_bytes += 12;
 
 			*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
@@ -1208,14 +1223,16 @@ void draw_vu1_with_lights_notex(model* model_test, float pos_x, float pos_y, flo
 		// Add matrix at the beggining of VU mem (skip TOP)
 		curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 0, &local_screen, 4, 0);
 		curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 4, &local_light, 4, 0);
+
+		curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 8, &active_dir_lights, 1, 0);
 	
 		u32 vif_added_bytes = 0; // zero because now we will use TOP register (double buffer)
 								 // we don't wan't to unpack at 8 + beggining of buffer, but at
 								 // the beggining of the buffer
 	
 		// Merge packets
-		curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, cube_packet, 4, 1);
-		vif_added_bytes += 4;
+		curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, cube_packet, 6, 1);
+		vif_added_bytes += 6;
 	
 		// Add vertices
 		curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &model_test->positions[idxs_drawn], count, 1);
@@ -1229,7 +1246,7 @@ void draw_vu1_with_lights_notex(model* model_test, float pos_x, float pos_y, flo
 		curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &model_test->normals[idxs_drawn], count, 1);
 		vif_added_bytes += count;
 
-		curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &lights, 12, 1);
+		curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &dir_lights, 12, 1);
 		vif_added_bytes += 12;
 
 		*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
@@ -1367,6 +1384,8 @@ void draw_vu1_with_spec_lights(model* model_test, float pos_x, float pos_y, floa
 			curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 0, &local_screen, 4, 0);
 			curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 4, &local_light,  4, 0);
 
+			curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 8, &active_dir_lights, 1, 0);
+
 			u32 vif_added_bytes = 0; // zero because now we will use TOP register (double buffer)
 									 // we don't wan't to unpack at 8 + beggining of buffer, but at
 									 // the beggining of the buffer
@@ -1394,7 +1413,7 @@ void draw_vu1_with_spec_lights(model* model_test, float pos_x, float pos_y, floa
 			curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &camera_position, 1, 1);
 			vif_added_bytes += 1;
 
-			curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &lights, 16, 1);
+			curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &dir_lights, 16, 1);
 			vif_added_bytes += 16;
 
 			*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
