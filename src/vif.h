@@ -8,6 +8,10 @@
 #include <stdint.h>
 #include <tamtypes.h>
 
+#define register_vu_program(name)               \
+	extern u32 name##_CodeStart __attribute__((section(".vudata"))); \
+	extern u32 name##_CodeEnd __attribute__((section(".vudata")))
+
 typedef struct {
     uint32_t VPS : 2;   // VIF command status
     uint32_t VEW : 1;   // VU is executing microprogram

@@ -74,7 +74,9 @@ EXT_LIBS = modules/ds34usb/ee/libds34usb.a modules/ds34bt/ee/libds34bt.a
 JS_CORE = quickjs/cutils.o quickjs/libbf.o quickjs/libregexp.o quickjs/libunicode.o \
 				 quickjs/realpath.o quickjs/quickjs.o quickjs/quickjs-libc.o 
 
-APP_CORE = main.o bootlogo.o vif.o draw_3D_colors.o draw_3D_colors_notex.o draw_3D.o draw_3D_notex.o draw_3D_lights.o draw_3D_lights_notex.o athena_math.o memory.o ee_tools.o module_system.o taskman.o pad.o system.o strUtils.o 
+VU1_MICROPROGRAMS = draw_3D_colors.o draw_3D_colors_notex.o draw_3D.o draw_3D_notex.o draw_3D_lights.o draw_3D_lights_notex.o draw_3D_spec.o 
+
+APP_CORE = main.o bootlogo.o vif.o athena_math.o memory.o ee_tools.o module_system.o taskman.o pad.o system.o strUtils.o 
 
 INI_READER = readini/src/readini.o
 
@@ -136,7 +138,7 @@ ifneq ($(EE_SIO), 0)
 endif
 
 
-EE_OBJS = $(APP_CORE) $(INI_READER) $(JS_CORE) $(ATHENA_MODULES) $(IOP_MODULES) $(EMBEDDED_ASSETS) #group them all
+EE_OBJS = $(APP_CORE) $(INI_READER) $(JS_CORE) $(ATHENA_MODULES) $(VU1_MICROPROGRAMS) $(IOP_MODULES) $(EMBEDDED_ASSETS) # group them all
 EE_OBJS := $(EE_OBJS:%=$(EE_OBJS_DIR)%) #prepend the object folder
 
 EE_BIN := $(EE_BIN)$(EE_EXT)
@@ -157,7 +159,7 @@ all: $(EXT_LIBS) $(EE_BIN) $(EE_EMBED_DIR) $(EE_OBJS_DIR)
 	mv $(EE_BIN) bin/
 #	mv $(EE_BIN_PKD) bin/
 
-#mpgs: src/draw_3D.vsm src/draw_3D_notex.vsm src/draw_3D_colors.vsm src/draw_3D_colors_notex.vsm src/draw_3D_lights.vsm src/draw_3D_lights_notex.vsm
+# mpgs: src/draw_3D.vsm src/draw_3D_notex.vsm src/draw_3D_colors.vsm src/draw_3D_colors_notex.vsm src/draw_3D_lights.vsm src/draw_3D_lights_notex.vsm src/draw_3D_spec.vsm
 
 debug: $(EXT_LIBS) $(EE_BIN)
 	echo "Building $(EE_BIN) with debug symbols..."

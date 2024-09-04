@@ -79,11 +79,11 @@ const model = [dragonmesh, monkeymesh, car, listtest, boombox, mill];
 Camera.position(0.0f, 0.0f, 50.0f);
 Camera.rotation(0.0f, 0.0f,  0.0f);
 
-Lights.set(0, Lights.DIRECTION, 0.0,  1.0, -1.0);
-Lights.set(0, Lights.DIFFUSE, 0.8, 0.8, 0.8);
+Lights.set(0, Lights.DIRECTION, 0.0,  0.5, -1.0);
+Lights.set(0, Lights.DIFFUSE, 0.5, 0.5, 0.5);
 
-Lights.set(1, Lights.DIRECTION, 0.0,  1.0, 1.0);
-Lights.set(1, Lights.DIFFUSE, 0.4, 0.0, 0.8);
+//Lights.set(1, Lights.DIRECTION, 0.0,  1.0, 1.0);
+//Lights.set(1, Lights.DIFFUSE, 0.4, 0.0, 0.8);
 
 let pad = Pads.get();
 let modeltodisplay = 0;
@@ -105,6 +105,8 @@ let free_vram = Screen.getFreeVRAM();
 const gray = Color.new(40, 40, 40, 128);
 
 let bbox = false;
+
+let spec = false;
 
 while(true) {
     Screen.clear(gray);
@@ -148,6 +150,16 @@ while(true) {
         bbox ^= 1;
     }
 
+    if(pad.justPressed(Pads.CIRCLE)) {
+        if (spec) {
+            Lights.set(0, Lights.SPECULAR, 0.0, 0.0, 0.0);
+        } else {
+            Lights.set(0, Lights.SPECULAR, 1.0, 1.0, 1.0);
+        }
+
+        spec ^= 1;
+    }
+
     model[modeltodisplay].draw(0.0f, 0.0f, 30.0f, savedly, savedlx, 0.0f);
 
     if(bbox) {
@@ -155,7 +167,7 @@ while(true) {
     }
 
     fntcpy.print(10, 10, Screen.getFPS(360) + " FPS | " + free_mem + " | Free VRAM: " + free_vram + "KB");
-    fntcpy.print(10, 25, model[modeltodisplay].size + " Vertices | " + "Pipeline: " + pipelines[model[modeltodisplay].getPipeline()]);
+    fntcpy.print(10, 25, model[modeltodisplay].size + " Vertices | " + "Pipeline: " + pipelines[model[modeltodisplay].getPipeline()] + " | Specular: " + (spec? "ON" : "OFF"));
 
     Screen.flip();
 }

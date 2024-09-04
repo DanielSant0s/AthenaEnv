@@ -1,12 +1,9 @@
-; _____     ___ ____     ___ ____
-;  ____|   |    ____|   |        | |____|
-; |     ___|   |____ ___|    ____| |    \    PS2DEV Open Source Project.
-;-----------------------------------------------------------------------
-; (c) 2020 h4570 Sandro Sobczyński <sandro.sobczynski@gmail.com>
-; Licenced under Academic Free License version 2.0
-; Review ps2sdk README & LICENSE files for further details.
+; 2024 - Daniel Santos
+; AthenaEnv Renderer
 ;
+; 
 ;
+; 
 ;---------------------------------------------------------------
 ; draw_3D_lights.vcl                                                   |
 ;---------------------------------------------------------------
