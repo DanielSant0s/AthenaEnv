@@ -30,7 +30,8 @@
     ;//////////// --- Load data 1 --- /////////////
     ; Updated once per mesh
     MatrixLoad	ObjectToScreen, 0, vi00 ; load view-projection matrix
-    MatrixLoad	LocalLight,     4, vi00     ; load local light matrix
+    MatrixLoad	LocalLight,     4, vi00 ; load local light matrix
+    ilw.x       dirLightQnt,    8(vi00) ; load active directional lights
     ;/////////////////////////////////////////////
 
 	fcset   0x000000	; VCL won't let us use CLIP without first zeroing
@@ -49,20 +50,23 @@
     lq      primTag,        4(iBase) ; GIF tag - tell GS how many data we will send
     lq      rgba,           5(iBase) ; RGBA
                                      ; u32 : R, G, B, A (0-128)
+
     iaddiu  vertexData,     iBase,      6           ; pointer to vertex data
     ilw.w   vertCount,      0(iBase)                ; load vert count from scale vector
     iadd    stqData,        vertexData, vertCount   ; pointer to stq
     iadd    colorData,      stqData,    vertCount   ; pointer to colors
     iadd    normalData,     colorData,  vertCount   ; pointer to colors
+
     iadd    CamData,        normalData,  vertCount
     lq      CamPos,         0(CamData) ; load program params
-    iaddiu  lightsData,     CamData,      1       
-    MatrixLoad	LightDirection,   0,   lightsData   ; load light directions
-    MatrixLoad	LightAmbient,     4,   lightsData   ; load light ambients
-    MatrixLoad	LightDiffuse,     8,   lightsData   ; load light diffuses
-    MatrixLoad	LightSpecular,    12,  lightsData   ; load light diffuses
-    iaddiu    kickAddress,    lightsData,  16       ; pointer for XGKICK
-    iaddiu    destAddress,    lightsData,  16       ; helper pointer for data inserting
+
+    iaddiu  lightDirs,      CamData,      1       
+    iaddiu  lightAmbs,      lightDirs,    4
+    iaddiu  lightDiffs,     lightAmbs,    4    
+    iaddiu  lightSpecs,     lightDiffs,   4 
+
+    iaddiu    kickAddress,    lightDirs,  16       ; pointer for XGKICK
+    iaddiu    destAddress,    lightDirs,  16       ; helper pointer for data inserting
     ;////////////////////////////////////////////
 
     ;/////////// --- Store tags --- /////////////
@@ -121,68 +125,64 @@
         ;////////////////////////////////////////////
 
         ;//////////////// - NORMALS - /////////////////
-        MatrixMultiplyVertex	normal, LocalLight, inNorm ; transform each normal by the matrix
+        MatrixMultiplyVertex	normal,    LocalLight, inNorm ; transform each normal by the matrix
         MatrixMultiplyVertex	lightvert, LocalLight, inVert ; transform each normal by the matrix
         div         q,      vf00[w],    normal[w]   ; perspective divide (1/vert[w]):
         mul.xyz     normal, normal,     q
         
         add light, vf00, vf00
-        add light, light, LightAmbient[0]
-        add light, light, LightAmbient[1]
-        add light, light, LightAmbient[2]
-        add light, light, LightAmbient[3]
-
         add intensity, vf00, vf00
 
-        VectorDotProduct intensity, normal, LightDirection[0]
+        iadd  currDirLight, vi00, vi00
+        directionaLightsLoop:
+            iadd  currLightPtr, lightAmbs, currDirLight
+            lq LightAmbient, 0(currLightPtr)
 
-        maxx.xyzw  intensity, intensity, vf00
+            ; Ambient lighting
+            add light, light, LightAmbient
 
-        mul diffuse, LightDiffuse[0], intensity[x]
-        add light, light, diffuse
+            iadd  currLightPtr, lightDirs, currDirLight
+            lq LightDirection, 0(currLightPtr)
+            
+            ; Diffuse lighting
+            VectorDotProduct intensity, normal, LightDirection
 
-        ; Blinn-Phong Lighting Calculation
-        ;VectorNormalize CamPos, CamPos
+            maxx.xyzw  intensity, intensity, vf00
 
-        ;sub lightDir, lightvert, CamPos ; Compute light direction vector
-        ;VectorNormalize lightDir, lightDir
+            iadd  currLightPtr, lightDiffs, currDirLight
+            lq LightDiffuse, 0(currLightPtr)
 
-        ; Compute halfway vector
-        add halfDir, LightDirection[0], CamPos
-        VectorNormalize halfDir, halfDir
+            mul diffuse, LightDiffuse, intensity[x]
+            add light, light, diffuse
 
-        add specAngle, vf00, vf00
-        VectorDotProduct specAngle, normal, halfDir
-        maxx		specAngle, specAngle, vf00			; Clamp to > 0
-        mul  		specAngle, specAngle, specAngle	; Square it
-	    mul  		specAngle, specAngle, specAngle	; 4th power
-	    mul  		specAngle, specAngle, specAngle	; 8th power
-	    mul  		specAngle, specAngle, specAngle	; 16th power
-	    ;mul 		specAngle, specAngle, specAngle	; 32nd power
-        ;mul 		specAngle, specAngle, specAngle	; 64nd power
-        mul         specAngle, LightSpecular[0], specAngle[x]
-        add         light, light, specAngle 
+            ; Blinn-Phong Lighting Calculation
+            ;VectorNormalize CamPos, CamPos
 
-        VectorDotProduct intensity, normal, LightDirection[1]
-        
-        maxx.xyzw  intensity, intensity, vf00
+            ;sub lightDir, lightvert, CamPos ; Compute light direction vector
+            ;VectorNormalize lightDir, lightDir
 
-        mul diffuse, LightDiffuse[1], intensity[x]
-        add light, light, diffuse
+            ; Compute halfway vector
+            ;add halfDir, LightDirection, CamPos
+            ;VectorNormalize halfDir, halfDir
+            HalfAngle halfDir, LightDirection, CamPos
 
-        VectorDotProduct intensity, normal, LightDirection[2]
+            iadd  currLightPtr, lightSpecs, currDirLight
+            lq LightSpecular, 0(currLightPtr)
 
-        maxx.xyzw  intensity, intensity, vf00
+            add specAngle, vf00, vf00
+            VectorDotProduct specAngle, normal, halfDir
+            maxx		specAngle, specAngle, vf00			; Clamp to > 0
+            mul  		specAngle, specAngle, specAngle	; Square it
+	        mul  		specAngle, specAngle, specAngle	; 4th power
+	        mul  		specAngle, specAngle, specAngle	; 8th power
+	        mul  		specAngle, specAngle, specAngle	; 16th power
+	        ;mul 		specAngle, specAngle, specAngle	; 32nd power
+            ;mul 		specAngle, specAngle, specAngle	; 64nd power
+            mul         specAngle, LightSpecular, specAngle[x]
+            add         light, light, specAngle 
 
-        mul diffuse, LightDiffuse[2], intensity[x]
-        add light, light, diffuse
-
-        VectorDotProduct intensity, normal, LightDirection[3]
-
-        maxx.xyzw  intensity, intensity, vf00
-
-        mul diffuse, LightDiffuse[3], intensity[x]
-        add light, light, diffuse
+            iaddiu   currDirLight,  currDirLight,  1; increment the loop counter 
+            ibne    dirLightQnt,  currDirLight,  directionaLightsLoop	; and repeat if needed
 
         mul.xyz    color, color,  light            ; color = color * light
         VectorClamp color, color 0.0 1.0
@@ -200,7 +200,7 @@
         iaddiu          vertexData,     vertexData,     1                         
         iaddiu          stqData,        stqData,        1  
         iaddiu          colorData,      colorData,      1  
-        iaddiu          normalData,     normalData,      1
+        iaddiu          normalData,     normalData,     1
         iaddiu          destAddress,    destAddress,    3
 
         iaddi   vertexCounter,  vertexCounter,  -1	; decrement the loop counter 
@@ -214,3 +214,5 @@
 
 --exit
 --endexit
+
+.END ; for gasp

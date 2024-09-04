@@ -65,7 +65,7 @@ void vu1_set_double_buffer_settings()
 	p_data = p_store = vifCreatePacket(2);
 
 	*p_data++ = DMA_TAG(0, 0, DMA_CNT, 0, 0 , 0);
-	*p_data++ = (VIF_CODE(8, 0, VIF_BASE, 0) | (u64)VIF_CODE(496, 0, VIF_OFFSET, 0) << 32);
+	*p_data++ = (VIF_CODE(12, 0, VIF_BASE, 0) | (u64)VIF_CODE(496, 0, VIF_OFFSET, 0) << 32);
 
 	*p_data++ = DMA_TAG(0, 0, DMA_END, 0, 0 , 0);
 	*p_data++ = (VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32);

@@ -31,6 +31,7 @@
     ; Updated once per mesh
     MatrixLoad	ObjectToScreen, 0, vi00 ; load view-projection matrix
     MatrixLoad	LocalLight,     4, vi00     ; load local light matrix
+    ilw.x       dirLightQnt,    8(vi00) ; load active directional lights
     ;/////////////////////////////////////////////
 
 	fcset   0x000000	; VCL won't let us use CLIP without first zeroing
@@ -47,16 +48,18 @@
     lq      primTag,        2(iBase) ; GIF tag - tell GS how many data we will send
     lq      rgba,           3(iBase) ; RGBA
                                      ; u32 : R, G, B, A (0-128)
-    iaddiu  vertexData,     iBase,      4           ; pointer to vertex data
+    iaddiu  vertexData,     iBase,      6           ; pointer to vertex data
     ilw.w   vertCount,      0(iBase)                ; load vert count from scale vector
     iadd    colorData,      vertexData, vertCount   ; pointer to colors
     iadd    normalData,      colorData, vertCount   ; pointer to colors
-    iadd    lightsData,     normalData,  vertCount
-    MatrixLoad	LightDirection,   0,   lightsData   ; load light directions
-    MatrixLoad	LightAmbient,     4,   lightsData   ; load light ambients
-    MatrixLoad	LightDiffuse,     8,   lightsData   ; load light diffuses
-    iaddiu    kickAddress,    lightsData,  12       ; pointer for XGKICK
-    iaddiu    destAddress,    lightsData,  12       ; helper pointer for data inserting
+    iadd    lightData,     normalData,  vertCount
+
+    iaddiu  lightDirs,      lightData,    0      
+    iaddiu  lightAmbs,      lightDirs,    4
+    iaddiu  lightDiffs,     lightAmbs,    4    
+
+    iaddiu    kickAddress,    lightData,  12       ; pointer for XGKICK
+    iaddiu    destAddress,    lightData,  12       ; helper pointer for data inserting
     ;////////////////////////////////////////////
 
     ;/////////// --- Store tags --- /////////////
@@ -68,16 +71,16 @@
     vertexLoop:
 
         ;////////// --- Load loop data --- //////////
-        lq vertex, 0(vertexData)    ; load xyz
+        lq inVert, 0(vertexData)    ; load xyz
                                     ; float : X, Y, Z
                                     ; any32 : _ = 0
         lq.xyzw color,  0(colorData) ; load color
-        lq.xyzw normal,  0(normalData) ; load normal                    
+        lq.xyzw inNorm,  0(normalData) ; load normal                    
         ;////////////////////////////////////////////    
 
 
         ;////////////// --- Vertex --- //////////////
-        MatrixMultiplyVertex	vertex, ObjectToScreen, vertex ; transform each vertex by the matrix
+        MatrixMultiplyVertex	vertex, ObjectToScreen, inVert ; transform each vertex by the matrix
        
         clipw.xyz	vertex, vertex			; Dr. Fortuna: This instruction checks if the vertex is outside
 							; the viewing frustum. If it is, then the appropriate
@@ -101,45 +104,37 @@
         ;////////////////////////////////////////////
 
         ;//////////////// - NORMALS - /////////////////
-        MatrixMultiplyVertex	normal, LocalLight, normal ; transform each normal by the matrix
+        MatrixMultiplyVertex	normal,    LocalLight, inNorm ; transform each normal by the matrix
         div         q,      vf00[w],    normal[w]   ; perspective divide (1/vert[w]):
         mul.xyz     normal, normal,     q
         
         add light, vf00, vf00
-        add light, light, LightAmbient[0]
-        add light, light, LightAmbient[1]
-        add light, light, LightAmbient[2]
-        add light, light, LightAmbient[3]
-
         add intensity, vf00, vf00
 
-        VectorDotProduct intensity, normal, LightDirection[0]
+        iadd  currDirLight, vi00, vi00
+        directionaLightsLoop:
+            iadd  currLightPtr, lightAmbs, currDirLight
+            lq LightAmbient, 0(currLightPtr)
 
-        maxx.xyzw  intensity, intensity, vf00
+            ; Ambient lighting
+            add light, light, LightAmbient
 
-        mul diffuse, LightDiffuse[0], intensity[x]
-        add light, light, diffuse
+            iadd  currLightPtr, lightDirs, currDirLight
+            lq LightDirection, 0(currLightPtr)
+            
+            ; Diffuse lighting
+            VectorDotProduct intensity, normal, LightDirection
 
-        VectorDotProduct intensity, normal, LightDirection[1]
+            maxx.xyzw  intensity, intensity, vf00
 
-        maxx.xyzw  intensity, intensity, vf00
+            iadd  currLightPtr, lightDiffs, currDirLight
+            lq LightDiffuse, 0(currLightPtr)
 
-        mul diffuse, LightDiffuse[1], intensity[x]
-        add light, light, diffuse
+            mul diffuse, LightDiffuse, intensity[x]
+            add light, light, diffuse
 
-        VectorDotProduct intensity, normal, LightDirection[2]
-
-        maxx.xyzw  intensity, intensity, vf00
-
-        mul diffuse, LightDiffuse[2], intensity[x]
-        add light, light, diffuse
-
-        VectorDotProduct intensity, normal, LightDirection[3]
-
-        maxx.xyzw  intensity, intensity, vf00
-
-        mul diffuse, LightDiffuse[3], intensity[x]
-        add light, light, diffuse
+            iaddiu   currDirLight,  currDirLight,  1; increment the loop counter 
+            ibne    dirLightQnt,  currDirLight,  directionaLightsLoop	; and repeat if needed
 
         mul.xyz    color, color,  light            ; color = color * light
         VectorClamp color, color 0.0 1.99
