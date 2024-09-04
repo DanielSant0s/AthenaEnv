@@ -7,7 +7,9 @@ const pipelines = [
     "NO_LIGHTS",
     "NO_LIGHTS_TEX",
     "DEFAULT",
-    "DEFAULT_NO_TEX"
+    "DEFAULT_NO_TEX",
+    "SPECULAR",
+    "SPECULAR_NO_TEX"
 ];
 
 let fntcpy = new Font("default");
@@ -81,7 +83,8 @@ Camera.rotation(0.0f, 0.0f,  0.0f);
 
 const light = Lights.new();
 Lights.set(light, Lights.DIRECTION, 0.0,  0.5, 1.0);
-Lights.set(light, Lights.DIFFUSE, 0.5, 0.5, 0.5);
+Lights.set(light, Lights.DIFFUSE,   0.5, 0.5, 0.5);
+Lights.set(light, Lights.SPECULAR,  1.0, 1.0, 1.0);
 
 //Lights.set(1, Lights.DIRECTION, 0.0,  1.0, 1.0);
 //Lights.set(1, Lights.DIFFUSE, 0.4, 0.0, 0.8);
@@ -138,7 +141,7 @@ while(true) {
         model[modeltodisplay].setPipeline(model[modeltodisplay].getPipeline()-1);
     }
 
-    if(pad.justPressed(Pads.DOWN) && model[modeltodisplay].getPipeline() < 5){
+    if(pad.justPressed(Pads.DOWN) && model[modeltodisplay].getPipeline() < 7){
         model[modeltodisplay].setPipeline(model[modeltodisplay].getPipeline()+1);
     }
     
@@ -151,16 +154,6 @@ while(true) {
         bbox ^= 1;
     }
 
-    if(pad.justPressed(Pads.CIRCLE)) {
-        if (spec) {
-            Lights.set(0, Lights.SPECULAR, 0.0, 0.0, 0.0);
-        } else {
-            Lights.set(0, Lights.SPECULAR, 1.0, 1.0, 1.0);
-        }
-
-        spec ^= 1;
-    }
-
     model[modeltodisplay].draw(0.0f, 0.0f, 30.0f, savedly, savedlx, 0.0f);
 
     if(bbox) {
@@ -168,7 +161,7 @@ while(true) {
     }
 
     fntcpy.print(10, 10, Screen.getFPS(360) + " FPS | " + free_mem + " | Free VRAM: " + free_vram + "KB");
-    fntcpy.print(10, 25, model[modeltodisplay].size + " Vertices | " + "Pipeline: " + pipelines[model[modeltodisplay].getPipeline()] + " | Specular: " + (spec? "ON" : "OFF"));
+    fntcpy.print(10, 25, model[modeltodisplay].size + " Vertices | " + "Pipeline: " + pipelines[model[modeltodisplay].getPipeline()]);
 
     Screen.flip();
 }

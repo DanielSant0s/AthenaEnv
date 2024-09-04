@@ -103,7 +103,7 @@ inline u64* vu_add_unpack_data(u64 *p_data, u32 t_dest_address, void *t_data, u3
 
 void vu1_upload_micro_program(u32* start, u32* end);
 
-void vu1_set_double_buffer_settings();
+void vu1_set_double_buffer_settings(u32 base, u32 offset);
 
 void vifSendPacket(void* packet, u32 vif_channel);
 

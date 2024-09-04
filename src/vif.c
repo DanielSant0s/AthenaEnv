@@ -58,14 +58,14 @@ void vu1_upload_micro_program(u32* start, u32* end)
 	vifDestroyPacket(p_store);
 }
 
-void vu1_set_double_buffer_settings()
+void vu1_set_double_buffer_settings(u32 base, u32 offset)
 {
 	u64* p_data;
 	u64* p_store;
 	p_data = p_store = vifCreatePacket(2);
 
 	*p_data++ = DMA_TAG(0, 0, DMA_CNT, 0, 0 , 0);
-	*p_data++ = (VIF_CODE(12, 0, VIF_BASE, 0) | (u64)VIF_CODE(496, 0, VIF_OFFSET, 0) << 32);
+	*p_data++ = (VIF_CODE(base, 0, VIF_BASE, 0) | (u64)VIF_CODE(offset, 0, VIF_OFFSET, 0) << 32);
 
 	*p_data++ = DMA_TAG(0, 0, DMA_END, 0, 0 , 0);
 	*p_data++ = (VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32);

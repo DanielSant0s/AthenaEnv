@@ -32,6 +32,9 @@
     MatrixLoad	ObjectToScreen, 0, vi00 ; load view-projection matrix
     MatrixLoad	LocalLight,     4, vi00     ; load local light matrix
     ilw.x       dirLightQnt,    8(vi00) ; load active directional lights
+    iaddiu      lightDirs,      vi00,    9       
+    iaddiu      lightAmbs,      vi00,    13
+    iaddiu      lightDiffs,     vi00,    17    
     ;/////////////////////////////////////////////
 
 	fcset   0x000000	; VCL won't let us use CLIP without first zeroing
@@ -39,27 +42,24 @@
 
     ;//////////// --- Load data 2 --- /////////////
     ; Updated dynamically
+
+init:
     xtop    iBase
 
     lq.xyz  scale,          0(iBase) ; load program params
                                      ; float : X, Y, Z - scale vector that we will use to scale the verts after projecting them.
                                      ; float : W - vert count.
-    lq      gifSetTag,      1(iBase) ; GIF tag - set
-    lq      primTag,        2(iBase) ; GIF tag - tell GS how many data we will send
-    lq      rgba,           3(iBase) ; RGBA
+    lq      primTag,        1(iBase) ; GIF tag - tell GS how many data we will send
+    lq      rgba,           2(iBase) ; RGBA
                                      ; u32 : R, G, B, A (0-128)
-    iaddiu  vertexData,     iBase,      6           ; pointer to vertex data
-    ilw.w   vertCount,      0(iBase)                ; load vert count from scale vector
-    iadd    colorData,      vertexData, vertCount   ; pointer to colors
+    iaddiu  vertexData,      iBase,      3           ; pointer to vertex data
+    ilw.w   vertCount,       0(iBase)                ; load vert count from scale vector
+    iadd    colorData,       vertexData, vertCount   ; pointer to colors
     iadd    normalData,      colorData, vertCount   ; pointer to colors
-    iadd    lightData,     normalData,  vertCount
+    iadd    dataPointers,    normalData,  vertCount
 
-    iaddiu  lightDirs,      lightData,    0      
-    iaddiu  lightAmbs,      lightDirs,    4
-    iaddiu  lightDiffs,     lightAmbs,    4    
-
-    iaddiu    kickAddress,    lightData,  12       ; pointer for XGKICK
-    iaddiu    destAddress,    lightData,  12       ; helper pointer for data inserting
+    iaddiu    kickAddress,    dataPointers,  0       ; pointer for XGKICK
+    iaddiu    destAddress,    dataPointers,  0       ; helper pointer for data inserting
     ;////////////////////////////////////////////
 
     ;/////////// --- Store tags --- /////////////
@@ -137,7 +137,7 @@
             ibne    dirLightQnt,  currDirLight,  directionaLightsLoop	; and repeat if needed
 
         mul.xyz    color, color,  light            ; color = color * light
-        VectorClamp color, color 0.0 1.99
+        VectorClamp color, color 0.0 1.0
         mul color, color, rgba                     ; normalize RGBA
         ColorFPtoGsRGBAQ intColor, color           ; convert to int
         ;///////////////////////////////////////////
@@ -158,9 +158,13 @@
 
     ;//////////////////////////////////////////// 
 
-    --barrier
 
     xgkick kickAddress ; dispatch to the GS rasterizer.
+
+--barrier
+--cont
+
+    b init
 
 --exit
 --endexit

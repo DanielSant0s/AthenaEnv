@@ -32,6 +32,9 @@
     MatrixLoad	ObjectToScreen, 0, vi00 ; load view-projection matrix
     MatrixLoad	LocalLight,     4, vi00     ; load local light matrix
     ilw.x       dirLightQnt,    8(vi00) ; load active directional lights
+    iaddiu      lightDirs,      vi00,    9       
+    iaddiu      lightAmbs,      vi00,    13
+    iaddiu      lightDiffs,     vi00,    17    
     ;/////////////////////////////////////////////
 
 	fcset   0x000000	; VCL won't let us use CLIP without first zeroing
@@ -39,6 +42,7 @@
 
     ;//////////// --- Load data 2 --- /////////////
     ; Updated dynamically
+init:
     xtop    iBase
 
     lq.xyz  scale,          0(iBase) ; load program params
@@ -55,14 +59,9 @@
     iadd    stqData,        vertexData, vertCount   ; pointer to stq
     iadd    colorData,      stqData,    vertCount   ; pointer to colors
     iadd    normalData,      colorData,  vertCount   ; pointer to colors
-    iadd    lightData,      normalData,  vertCount
-
-    iaddiu  lightDirs,      lightData,    0      
-    iaddiu  lightAmbs,      lightDirs,    4
-    iaddiu  lightDiffs,     lightAmbs,    4    
-
-    iaddiu    kickAddress,    lightData,  12       ; pointer for XGKICK
-    iaddiu    destAddress,    lightData,  12       ; helper pointer for data inserting
+    iadd     dataPointers,   normalData,  vertCount
+    iaddiu    kickAddress,    dataPointers,  0       ; pointer for XGKICK
+    iaddiu    destAddress,    dataPointers,  0       ; helper pointer for data inserting
     ;////////////////////////////////////////////
 
     ;/////////// --- Store tags --- /////////////
@@ -177,9 +176,12 @@
 
     ;//////////////////////////////////////////// 
 
-    --barrier
-
     xgkick kickAddress ; dispatch to the GS rasterizer.
+
+--barrier
+--cont
+
+    b init
 
 --exit
 --endexit

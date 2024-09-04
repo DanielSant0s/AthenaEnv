@@ -29,9 +29,14 @@
 
     ;//////////// --- Load data 1 --- /////////////
     ; Updated once per mesh
-    MatrixLoad	ObjectToScreen, 0, vi00 ; load view-projection matrix
-    MatrixLoad	LocalLight,     4, vi00 ; load local light matrix
-    ilw.x       dirLightQnt,    8(vi00) ; load active directional lights
+    MatrixLoad	ObjectToScreen, 0,       vi00 ; load view-projection matrix
+    MatrixLoad	LocalLight,     4,       vi00 ; load local light matrix
+    ilw.x       dirLightQnt,    8(vi00)       ; load active directional lights
+    lq          CamPos,         9(vi00)       ; load program params
+    iaddiu      lightDirs,      vi00,    10       
+    iaddiu      lightAmbs,      vi00,    14
+    iaddiu      lightDiffs,     vi00,    18    
+    iaddiu      lightSpecs,     vi00,    22 
     ;/////////////////////////////////////////////
 
 	fcset   0x000000	; VCL won't let us use CLIP without first zeroing
@@ -39,6 +44,7 @@
 
     ;//////////// --- Load data 2 --- /////////////
     ; Updated dynamically
+init:
     xtop    iBase
 
     lq.xyz  scale,          0(iBase) ; load program params
@@ -56,17 +62,10 @@
     iadd    stqData,        vertexData, vertCount   ; pointer to stq
     iadd    colorData,      stqData,    vertCount   ; pointer to colors
     iadd    normalData,     colorData,  vertCount   ; pointer to colors
+    iadd    dataPointers,  normalData,  vertCount
 
-    iadd    CamData,        normalData,  vertCount
-    lq      CamPos,         0(CamData) ; load program params
-
-    iaddiu  lightDirs,      CamData,      1       
-    iaddiu  lightAmbs,      lightDirs,    4
-    iaddiu  lightDiffs,     lightAmbs,    4    
-    iaddiu  lightSpecs,     lightDiffs,   4 
-
-    iaddiu    kickAddress,    lightDirs,  16       ; pointer for XGKICK
-    iaddiu    destAddress,    lightDirs,  16       ; helper pointer for data inserting
+    iaddiu    kickAddress,    dataPointers,  0       ; pointer for XGKICK
+    iaddiu    destAddress,    dataPointers,  0       ; helper pointer for data inserting
     ;////////////////////////////////////////////
 
     ;/////////// --- Store tags --- /////////////
@@ -208,9 +207,12 @@
 
     ;//////////////////////////////////////////// 
 
-    --barrier
-
     xgkick kickAddress ; dispatch to the GS rasterizer.
+
+--barrier
+--cont
+
+    b init
 
 --exit
 --endexit
