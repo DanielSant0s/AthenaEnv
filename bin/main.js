@@ -159,6 +159,8 @@ Screen.display(() => {
     dashboard.run();
 
     if (exit_to) {
+        Screen.clear();
+        Screen.flip();
         std.reload(exit_to); // Always run std.reload on the outer scope, otherwise it can lead to object leaking
     }
 });

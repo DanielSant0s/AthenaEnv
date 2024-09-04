@@ -968,6 +968,22 @@
    .endm
 
 ;//--------------------------------------------------------------------
+;// Reflect - Clamp vector to a range
+;//
+;// Note:
+;//--------------------------------------------------------------------
+
+   .macro Reflect vfReflect,vfN,vfI
+   VectorDotProduct  vfDot,vfN,vfI
+
+   loi  2.0
+   mulax.xyz  acc, vfN, vfDot       ; ACC = N * dot(N, I)
+   mulai.xyz  vfTemp, acc, i        ; vfTemp = 2 * N * dot(N, I)
+
+   sub.xyz  vfReflect, vfI, vfTemp  ; vfReflect = I - 2 * dot(N, I) * N
+   .endm
+
+;//--------------------------------------------------------------------
 ;// Name Here - Description here
 ;//
 ;// Note:
