@@ -79,7 +79,7 @@ const model = [dragonmesh, monkeymesh, car, listtest, boombox, mill];
 Camera.position(0.0f, 0.0f, 50.0f);
 Camera.rotation(0.0f, 0.0f,  0.0f);
 
-Lights.set(0, Lights.DIRECTION, 0.0,  0.5, -1.0);
+Lights.set(0, Lights.DIRECTION, 0.0,  0.5, 1.0);
 Lights.set(0, Lights.DIFFUSE, 0.5, 0.5, 0.5);
 
 //Lights.set(1, Lights.DIRECTION, 0.0,  1.0, 1.0);

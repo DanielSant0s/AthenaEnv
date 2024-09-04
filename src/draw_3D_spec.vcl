@@ -134,12 +134,8 @@
 
         add intensity, vf00, vf00
 
-        loi  -1.0              
-        addi minusOne, vf00, i
-
         VectorDotProduct intensity, normal, LightDirection[0]
-        
-        mul intensity, intensity, minusOne
+
         maxx.xyzw  intensity, intensity, vf00
 
         mul diffuse, LightDiffuse[0], intensity[x]
@@ -169,23 +165,20 @@
 
         VectorDotProduct intensity, normal, LightDirection[1]
         
-        mul intensity, intensity, minusOne
         maxx.xyzw  intensity, intensity, vf00
 
         mul diffuse, LightDiffuse[1], intensity[x]
         add light, light, diffuse
 
         VectorDotProduct intensity, normal, LightDirection[2]
-        
-        mul intensity, intensity, minusOne
+
         maxx.xyzw  intensity, intensity, vf00
 
         mul diffuse, LightDiffuse[2], intensity[x]
         add light, light, diffuse
 
         VectorDotProduct intensity, normal, LightDirection[3]
-        
-        mul intensity, intensity, minusOne
+
         maxx.xyzw  intensity, intensity, vf00
 
         mul diffuse, LightDiffuse[3], intensity[x]
