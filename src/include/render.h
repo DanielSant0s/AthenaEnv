@@ -26,6 +26,8 @@ typedef enum {
 	PL_NO_LIGHTS_TEX,
 	PL_DEFAULT,
 	PL_DEFAULT_NO_TEX,
+	PL_SPECULAR,
+	PL_SPECULAR_NO_TEX
 } eRenderPipelines;
 
 typedef struct ath_model {
