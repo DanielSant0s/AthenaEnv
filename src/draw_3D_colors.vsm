@@ -6,27 +6,29 @@
 		.global	VU1Draw3DColors_CodeEnd
 VU1Draw3DColors_CodeStart:
 __v_src_draw_3D_colors_vcl_4:
-; _LNOPT_w=[ normal2 ] 24 [24 0] 24   [__v_src_draw_3D_colors_vcl_4]
+; _LNOPT_w=[ normal2 ] 5 [5 0] 5   [__v_src_draw_3D_colors_vcl_4]
          NOP                                                        lq            VF01,0(VI00)                        
-         NOP                                                        xtop          VI02                                
          NOP                                                        lq            VF02,1(VI00)                        
-         NOP                                                        lq            VF06,1(VI02)                        
-         NOP                                                        lq            VF09,2(VI02)                        
-         NOP                                                        lq            VF08,3(VI02)                        
-         NOP                                                        lq            VF07,4(VI02)                        
          NOP                                                        lq            VF03,2(VI00)                        
-         NOP                                                        iaddiu        VI03,VI02,0x00000006                
-         NOP                                                        ilw.w         VI08,0(VI02)                        
          NOP                                                        lq            VF04,3(VI00)                        
          NOP                                                        fcset         0                                   
+init:
+; _LNOPT_w=[ normal2 ] 19 [19 0] 19   [init]
+         NOP                                                        xtop          VI02                                
+         NOP                                                        lq            VF06,1(VI02)                        
+         NOP                                                        lq            VF08,2(VI02)                        
+         NOP                                                        iaddiu        VI03,VI02,0x00000006                
+         NOP                                                        ilw.w         VI08,0(VI02)                        
+         NOP                                                        lq            VF09,3(VI02)                        
+         NOP                                                        lq            VF07,4(VI02)                        
          NOP                                                        lq.xyz        VF05,0(VI02)                        
          NOP                                                        iadd          VI04,VI03,VI08                      
          NOP                                                        iadd          VI05,VI04,VI08                      
          NOP                                                        iadd          VI07,VI05,VI08                      
          NOP                                                        sqi           VF06,(VI07++)                       
-         NOP                                                        sqi           VF09,(VI07++)                       
-         NOP                                                        sqi           VF06,(VI07++)                       
          NOP                                                        sqi           VF08,(VI07++)                       
+         NOP                                                        sqi           VF06,(VI07++)                       
+         NOP                                                        sqi           VF09,(VI07++)                       
          NOP                                                        lq            VF06,5(VI02)                        
          NOP                                                        iadd          VI06,VI05,VI08                      
          NOP                                                        sqi           VF07,(VI07++)                       
@@ -51,13 +53,17 @@ vertexLoop:
          NOP                                                        sq            VF07,-3(VI07)                       
          NOP                                                        ibne          VI08,VI02,vertexLoop                
          NOP                                                        sq.xyz        VF08,-1(VI07)                       
-; _LNOPT_w=[ normal2 ] 3 [1 0] 3   [__v_src_draw_3D_colors_vcl_7]
+; _LNOPT_w=[ normal2 ] 1 [1 0] 1   [__v_src_draw_3D_colors_vcl_7]
          NOP                                                        xgkick        VI06                                
+; _LNOPT_w=[ normal2 ] 2 [0 0] 2   [__v_src_draw_3D_colors_vcl_8]
          NOP[E]                                                     NOP                                               
+         NOP                                                        NOP                                               
+; _LNOPT_w=[ normal2 ] 2 [2 0] 2   [__v_src_draw_3D_colors_vcl_9]
+         NOP                                                        b             init                                
          NOP                                                        NOP                                               
 		.align 4
 VU1Draw3DColors_CodeEnd:
-;	iCount=45
+;	iCount=47
 ; register stats:
 ;   9 VU User integer
 ;  10 VU User floating point

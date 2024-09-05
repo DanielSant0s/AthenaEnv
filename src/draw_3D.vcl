@@ -38,6 +38,7 @@
 
     ;//////////// --- Load data 2 --- /////////////
     ; Updated dynamically
+init:
     xtop    iBase
 
     lq.xyz  scale,          0(iBase) ; load program params
@@ -128,9 +129,12 @@
 
     ;//////////////////////////////////////////// 
 
-    --barrier
-
     xgkick kickAddress ; dispatch to the GS rasterizer.
+
+--barrier
+--cont
+
+    b init
 
 --exit
 --endexit
