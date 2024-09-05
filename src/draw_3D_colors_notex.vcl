@@ -37,16 +37,16 @@
 
     ;//////////// --- Load data 2 --- /////////////
     ; Updated dynamically
+init:
     xtop    iBase
 
     lq.xyz  scale,          0(iBase) ; load program params
                                      ; float : X, Y, Z - scale vector that we will use to scale the verts after projecting them.
                                      ; float : W - vert count.
-    lq      gifSetTag,      1(iBase) ; GIF tag - set
-    lq      primTag,        2(iBase) ; GIF tag - tell GS how many data we will send
-    lq      rgba,           3(iBase) ; RGBA
+    lq      primTag,        1(iBase) ; GIF tag - tell GS how many data we will send
+    lq      rgba,           2(iBase) ; RGBA
                                      ; u32 : R, G, B, A (0-128)
-    iaddiu  vertexData,     iBase,      4           ; pointer to vertex data
+    iaddiu  vertexData,     iBase,      3           ; pointer to vertex data
     ilw.w   vertCount,      0(iBase)                ; load vert count from scale vector
     iadd    colorData,      vertexData, vertCount   ; pointer to colors
     iadd    kickAddress,    colorData,  vertCount       ; pointer for XGKICK
@@ -113,9 +113,12 @@
 
     ;//////////////////////////////////////////// 
 
-    --barrier
-
     xgkick kickAddress ; dispatch to the GS rasterizer.
+
+--barrier
+--cont
+
+    b init
 
 --exit
 --endexit

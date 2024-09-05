@@ -6,20 +6,22 @@
 		.global	VU1Draw3DColorsNoTex_CodeEnd
 VU1Draw3DColorsNoTex_CodeStart:
 __v_src_draw_3D_colors_notex_vcl_4:
-; _LNOPT_w=[ normal2 ] 16 [16 0] 16   [__v_src_draw_3D_colors_notex_vcl_4]
+; _LNOPT_w=[ normal2 ] 5 [5 0] 5   [__v_src_draw_3D_colors_notex_vcl_4]
          NOP                                                        lq            VF01,0(VI00)                        
-         NOP                                                        xtop          VI02                                
          NOP                                                        lq            VF02,1(VI00)                        
-         NOP                                                        lq            VF07,2(VI02)                        
          NOP                                                        lq            VF03,2(VI00)                        
-         NOP                                                        iaddiu        VI03,VI02,0x00000004                
-         NOP                                                        ilw.w         VI07,0(VI02)                        
          NOP                                                        lq            VF04,3(VI00)                        
          NOP                                                        fcset         0                                   
+init:
+; _LNOPT_w=[ normal2 ] 11 [11 0] 11   [init]
+         NOP                                                        xtop          VI02                                
+         NOP                                                        ilw.w         VI07,0(VI02)                        
+         NOP                                                        lq            VF07,1(VI02)                        
+         NOP                                                        iaddiu        VI03,VI02,0x00000003                
          NOP                                                        lq.xyz        VF05,0(VI02)                        
          NOP                                                        iadd          VI04,VI03,VI07                      
          NOP                                                        iadd          VI06,VI04,VI07                      
-         NOP                                                        lq            VF06,3(VI02)                        
+         NOP                                                        lq            VF06,2(VI02)                        
          NOP                                                        iadd          VI05,VI04,VI07                      
          NOP                                                        sqi           VF07,(VI06++)                       
          NOP                                                        iadd          VI07,VI02,VI07                      
@@ -47,13 +49,17 @@ vertexLoop:
          NOP                                                        sq            VF08,-2(VI06)                       
          NOP                                                        ibne          VI07,VI02,vertexLoop                
          NOP                                                        sq.xyz        VF07,-1(VI06)                       
-; _LNOPT_w=[ normal2 ] 3 [1 0] 3   [__v_src_draw_3D_colors_notex_vcl_7]
+; _LNOPT_w=[ normal2 ] 1 [1 0] 1   [__v_src_draw_3D_colors_notex_vcl_7]
          NOP                                                        xgkick        VI05                                
+; _LNOPT_w=[ normal2 ] 2 [0 0] 2   [__v_src_draw_3D_colors_notex_vcl_8]
          NOP[E]                                                     NOP                                               
+         NOP                                                        NOP                                               
+; _LNOPT_w=[ normal2 ] 2 [2 0] 2   [__v_src_draw_3D_colors_notex_vcl_9]
+         NOP                                                        b             init                                
          NOP                                                        NOP                                               
 		.align 4
 VU1Draw3DColorsNoTex_CodeEnd:
-;	iCount=41
+;	iCount=43
 ; register stats:
 ;   8 VU User integer
 ;   9 VU User floating point

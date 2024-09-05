@@ -6,19 +6,21 @@
 		.global	VU1Draw3DNoTex_CodeEnd
 VU1Draw3DNoTex_CodeStart:
 __v_src_draw_3D_notex_vcl_4:
-; _LNOPT_w=[ normal2 ] 15 [15 0] 15   [__v_src_draw_3D_notex_vcl_4]
+; _LNOPT_w=[ normal2 ] 5 [5 0] 5   [__v_src_draw_3D_notex_vcl_4]
          NOP                                                        lq            VF01,0(VI00)                        
-         NOP                                                        xtop          VI02                                
          NOP                                                        lq            VF02,1(VI00)                        
-         NOP                                                        lq            VF07,2(VI02)                        
          NOP                                                        lq            VF03,2(VI00)                        
-         NOP                                                        iaddiu        VI03,VI02,0x00000004                
-         NOP                                                        ilw.w         VI06,0(VI02)                        
          NOP                                                        lq            VF04,3(VI00)                        
          NOP                                                        fcset         0                                   
+init:
+; _LNOPT_w=[ normal2 ] 10 [10 0] 10   [init]
+         NOP                                                        xtop          VI02                                
+         NOP                                                        ilw.w         VI06,0(VI02)                        
+         NOP                                                        lq            VF07,1(VI02)                        
+         NOP                                                        iaddiu        VI03,VI02,0x00000003                
          NOP                                                        lq.xyz        VF05,0(VI02)                        
          NOP                                                        iadd          VI05,VI03,VI06                      
-         NOP                                                        lq            VF06,3(VI02)                        
+         NOP                                                        lq            VF06,2(VI02)                        
          NOP                                                        iadd          VI04,VI03,VI06                      
          NOP                                                        sqi           VF07,(VI05++)                       
          NOP                                                        iadd          VI06,VI02,VI06                      
@@ -38,13 +40,17 @@ vertexLoop:
          NOP                                                        isw.w         VI01,0(VI05)                        
          NOP                                                        ibne          VI06,VI02,vertexLoop                
          NOP                                                        sq.xyz        VF07,-1(VI05)                       
-; _LNOPT_w=[ normal2 ] 3 [1 0] 3   [__v_src_draw_3D_notex_vcl_7]
+; _LNOPT_w=[ normal2 ] 1 [1 0] 1   [__v_src_draw_3D_notex_vcl_7]
          NOP                                                        xgkick        VI04                                
+; _LNOPT_w=[ normal2 ] 2 [0 0] 2   [__v_src_draw_3D_notex_vcl_8]
          NOP[E]                                                     NOP                                               
+         NOP                                                        NOP                                               
+; _LNOPT_w=[ normal2 ] 2 [2 0] 2   [__v_src_draw_3D_notex_vcl_9]
+         NOP                                                        b             init                                
          NOP                                                        NOP                                               
 		.align 4
 VU1Draw3DNoTex_CodeEnd:
-;	iCount=32
+;	iCount=34
 ; register stats:
 ;   7 VU User integer
 ;   8 VU User floating point

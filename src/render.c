@@ -552,6 +552,23 @@ void draw_vu1(model* model_test, float pos_x, float pos_y, float pos_z, float ro
 	create_local_world(local_world, object_position, object_rotation);
 	create_local_screen(local_screen, local_world, world_view, view_screen);
 
+	curr_vif_packet = vif_packets[context];
+
+	//memset(curr_vif_packet, 0, 16*22);
+
+	*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
+	*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32));
+
+	// Add matrix at the beggining of VU mem (skip TOP)
+	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 0, &local_screen, 4, 0);
+
+	*curr_vif_packet++ = DMA_TAG(0, 0, DMA_END, 0, 0 , 0);
+	*curr_vif_packet++ = (VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32);
+
+	asm volatile("nop":::"memory");
+
+	vifSendPacket(vif_packets[context], DMA_CHANNEL_VIF1);
+
 	int lastIdx = -1;
 	for(int i = 0; i < model_test->tex_count; i++) {
 		gsKit_TexManager_bind(gsGlobal, model_test->textures[i]);
@@ -622,9 +639,6 @@ void draw_vu1(model* model_test, float pos_x, float pos_y, float pos_z, float ro
 			*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
 			*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32));
 
-			// Add matrix at the beggining of VU mem (skip TOP)
-			curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 0, &local_screen, 4, 0);
-
 			u32 vif_added_bytes = 0; // zero because now we will use TOP register (double buffer)
 									 // we don't wan't to unpack at 8 + beggining of buffer, but at
 									 // the beggining of the buffer
@@ -642,7 +656,7 @@ void draw_vu1(model* model_test, float pos_x, float pos_y, float pos_z, float ro
 			vif_added_bytes += count;
 
 			*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
-			*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, VIF_MSCALF, 0) << 32));
+			*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, (lastIdx == -1? VIF_MSCAL : VIF_MSCNT), 0) << 32));
 
 			*curr_vif_packet++ = DMA_TAG(0, 0, DMA_END, 0, 0 , 0);
 			*curr_vif_packet++ = (VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32);
@@ -688,6 +702,23 @@ void draw_vu1_notex(model* model_test, float pos_x, float pos_y, float pos_z, fl
 	int idxs_to_draw = model_test->indexCount;
 	int idxs_drawn = 0;
 
+	curr_vif_packet = vif_packets[context];
+
+	//memset(curr_vif_packet, 0, 16*22);
+
+	*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
+	*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32));
+
+	// Add matrix at the beggining of VU mem (skip TOP)
+	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 0, &local_screen, 4, 0);
+
+	*curr_vif_packet++ = DMA_TAG(0, 0, DMA_END, 0, 0 , 0);
+	*curr_vif_packet++ = (VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32);
+
+	asm volatile("nop":::"memory");
+
+	vifSendPacket(vif_packets[context], DMA_CHANNEL_VIF1);
+
 	while (idxs_to_draw > 0) {
 		dmaKit_wait(DMA_CHANNEL_VIF1, 0);
 
@@ -708,9 +739,6 @@ void draw_vu1_notex(model* model_test, float pos_x, float pos_y, float pos_z, fl
 		*p_data++ = (*(u32*)(&fX) | (u64)*(u32*)(&fY) << 32);
 		*p_data++ = (*(u32*)(&fZ) | (u64)(count) << 32);
 
-		*p_data++ = GIF_TAG(1, 0, 0, 0, 0, 1);
-		*p_data++ = GIF_AD;
-
 		*p_data++ = VU_GS_GIFTAG(count, 1, 1,
     		VU_GS_PRIM(GS_PRIM_PRIM_TRIANGLE, 1, 0, gsGlobal->PrimFogEnable, 
 			0, gsGlobal->PrimAAEnable, 0, 0, 0),
@@ -727,24 +755,21 @@ void draw_vu1_notex(model* model_test, float pos_x, float pos_y, float pos_z, fl
 
 		*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
 		*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32));
-		
-		// Add matrix at the beggining of VU mem (skip TOP)
-		curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 0, &local_screen, 4, 0);
 	
 		u32 vif_added_bytes = 0; // zero because now we will use TOP register (double buffer)
 								 // we don't wan't to unpack at 8 + beggining of buffer, but at
 								 // the beggining of the buffer
 	
 		// Merge packets
-		curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, cube_packet, 4, 1);
-		vif_added_bytes += 4;
+		curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, cube_packet, 3, 1);
+		vif_added_bytes += 3;
 	
 		// Add vertices
 		curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &model_test->positions[idxs_drawn], count, 1);
 		vif_added_bytes += count; // one VECTOR is size of qword
 
 		*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
-		*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, VIF_MSCAL, 0) << 32));
+		*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, ((!idxs_drawn)? VIF_MSCAL : VIF_MSCNT), 0) << 32));
 	
 		*curr_vif_packet++ = DMA_TAG(0, 0, DMA_END, 0, 0 , 0);
 		*curr_vif_packet++ = (VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32);
@@ -785,6 +810,23 @@ void draw_vu1_with_colors(model* model_test, float pos_x, float pos_y, float pos
 
 	create_local_world(local_world, object_position, object_rotation);
 	create_local_screen(local_screen, local_world, world_view, view_screen);
+
+	curr_vif_packet = vif_packets[context];
+
+	//memset(curr_vif_packet, 0, 16*22);
+
+	*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
+	*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32));
+
+	// Add matrix at the beggining of VU mem (skip TOP)
+	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 0, &local_screen, 4, 0);
+
+	*curr_vif_packet++ = DMA_TAG(0, 0, DMA_END, 0, 0 , 0);
+	*curr_vif_packet++ = (VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32);
+
+	asm volatile("nop":::"memory");
+
+	vifSendPacket(vif_packets[context], DMA_CHANNEL_VIF1);
 
 	int lastIdx = -1;
 	for(int i = 0; i < model_test->tex_count; i++) {
@@ -859,9 +901,6 @@ void draw_vu1_with_colors(model* model_test, float pos_x, float pos_y, float pos
 			*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
 			*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32));
 
-			// Add matrix at the beggining of VU mem (skip TOP)
-			curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 0, &local_screen, 4, 0);
-
 			u32 vif_added_bytes = 0; // zero because now we will use TOP register (double buffer)
 									 // we don't wan't to unpack at 8 + beggining of buffer, but at
 									 // the beggining of the buffer
@@ -883,7 +922,7 @@ void draw_vu1_with_colors(model* model_test, float pos_x, float pos_y, float pos
 			vif_added_bytes += count;
 
 			*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
-			*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, VIF_MSCAL, 0) << 32));
+			*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, (lastIdx == -1? VIF_MSCAL : VIF_MSCNT), 0) << 32));
 
 			*curr_vif_packet++ = DMA_TAG(0, 0, DMA_END, 0, 0 , 0);
 			*curr_vif_packet++ = (VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32);
@@ -930,6 +969,23 @@ void draw_vu1_with_colors_notex(model* model_test, float pos_x, float pos_y, flo
 	int idxs_to_draw = model_test->indexCount;
 	int idxs_drawn = 0;
 
+	curr_vif_packet = vif_packets[context];
+
+	//memset(curr_vif_packet, 0, 16*22);
+
+	*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
+	*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32));
+
+	// Add matrix at the beggining of VU mem (skip TOP)
+	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 0, &local_screen, 4, 0);
+
+	*curr_vif_packet++ = DMA_TAG(0, 0, DMA_END, 0, 0 , 0);
+	*curr_vif_packet++ = (VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32);
+
+	asm volatile("nop":::"memory");
+
+	vifSendPacket(vif_packets[context], DMA_CHANNEL_VIF1);
+
 	while (idxs_to_draw > 0) {
 		dmaKit_wait(DMA_CHANNEL_VIF1, 0);
 
@@ -950,9 +1006,6 @@ void draw_vu1_with_colors_notex(model* model_test, float pos_x, float pos_y, flo
 		*p_data++ = (*(u32*)(&fX) | (u64)*(u32*)(&fY) << 32);
 		*p_data++ = (*(u32*)(&fZ) | (u64)(count) << 32);
 
-		*p_data++ = GIF_TAG(1, 0, 0, 0, 0, 1);
-		*p_data++ = GIF_AD;
-
 		*p_data++ = VU_GS_GIFTAG(count, 1, 1,
     		VU_GS_PRIM(GS_PRIM_PRIM_TRIANGLE, 1, 0, gsGlobal->PrimFogEnable, 
 			0, gsGlobal->PrimAAEnable, 0, 0, 0),
@@ -969,17 +1022,14 @@ void draw_vu1_with_colors_notex(model* model_test, float pos_x, float pos_y, flo
 
 		*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
 		*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32));
-		
-		// Add matrix at the beggining of VU mem (skip TOP)
-		curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 0, &local_screen, 4, 0);
 	
 		u32 vif_added_bytes = 0; // zero because now we will use TOP register (double buffer)
 								 // we don't wan't to unpack at 8 + beggining of buffer, but at
 								 // the beggining of the buffer
 	
 		// Merge packets
-		curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, cube_packet, 4, 1);
-		vif_added_bytes += 4;
+		curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, cube_packet, 3, 1);
+		vif_added_bytes += 3;
 	
 		// Add vertices
 		curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &model_test->positions[idxs_drawn], count, 1);
@@ -990,7 +1040,7 @@ void draw_vu1_with_colors_notex(model* model_test, float pos_x, float pos_y, flo
 		vif_added_bytes += count;
 
 		*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
-		*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, VIF_MSCAL, 0) << 32));
+		*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, ((!idxs_drawn)? VIF_MSCAL : VIF_MSCNT), 0) << 32));
 	
 		*curr_vif_packet++ = DMA_TAG(0, 0, DMA_END, 0, 0 , 0);
 		*curr_vif_packet++ = (VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32);
@@ -1286,7 +1336,7 @@ void draw_vu1_with_lights_notex(model* model_test, float pos_x, float pos_y, flo
 		vif_added_bytes += count;
 
 		*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
-		*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, (idxs_drawn? VIF_MSCAL : VIF_MSCNT), 0) << 32));
+		*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, ((!idxs_drawn)? VIF_MSCAL : VIF_MSCNT), 0) << 32));
 	
 		*curr_vif_packet++ = DMA_TAG(0, 0, DMA_END, 0, 0 , 0);
 		*curr_vif_packet++ = (VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32);
