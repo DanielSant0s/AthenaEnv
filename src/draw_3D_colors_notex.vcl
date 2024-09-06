@@ -84,7 +84,7 @@ init:
 							; bit, which tells the GS not to perform a drawing kick on this
 							; triangle.
 
-        isw.w		iADC,   2(destAddress)
+        isw.w		iADC,   1(destAddress)
         
         div         q,      vf00[w],    vertex[w]   ; perspective divide (1/vert[w]):
         mul.xyz     vertex, vertex,     q

@@ -53,7 +53,7 @@ vertexLoop:
          NOP                                                        NOP                                               
          max.xyz       VF14,VF00,VF00                               fcand         VI01,262143                         
          mulq.xyz      VF13,VF13,Q                                  iaddiu        VI01,VI01,0x00007fff                
-         ftoi4.xyz     VF12,VF12                                    isw.w         VI01,2(VI11)                        
+         ftoi4.xyz     VF12,VF12                                    isw.w         VI01,1(VI11)                        
 directionaLightsLoop:
 ; _LNOPT_w=[ vuta1 ] 12 [26 8] 26   [directionaLightsLoop]
          NOP                                                        iadd          VI01,VI03,VI13                      
