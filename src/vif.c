@@ -1,7 +1,6 @@
 #include "vif.h"
 
 void vifSendPacket(void* packet, u32 vif_channel) {
-    dmaKit_wait(DMA_CHANNEL_GIF, 0);
     dmaKit_wait(vif_channel, 0);
 	FlushCache(0);
 	dmaKit_send_chain(vif_channel, (void *)((u32)packet & 0x0FFFFFFF), 0);

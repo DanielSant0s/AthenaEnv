@@ -37,7 +37,7 @@ vertexLoop:
          madd.xyz      VF07,VF07,VF05                               sq            VF06,-2(VI05)                              ;	STALL_LATENCY ?2
          ftoi4.xyz     VF07,VF07                                    fcand         VI01,262143                                ;	STALL_LATENCY ?3
          NOP                                                        iaddiu        VI01,VI01,0x00007fff                
-         NOP                                                        isw.w         VI01,0(VI05)                        
+         NOP                                                        isw.w         VI01,-1(VI05)                       
          NOP                                                        ibne          VI06,VI02,vertexLoop                
          NOP                                                        sq.xyz        VF07,-1(VI05)                       
 ; _LNOPT_w=[ normal2 ] 1 [1 0] 1   [__v_src_draw_3D_notex_vcl_7]

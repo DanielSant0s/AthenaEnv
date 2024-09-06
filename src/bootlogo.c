@@ -51,7 +51,7 @@ void bootlogoThread(void* data) {
 
         switch (boot_state) {
             case BOOT_FADE_IN:
-                if (logo_alpha < 128) {
+                if (logo_alpha <= 128) {
                     logo_alpha+=2;
                 } else {
                     boot_state++;
@@ -59,17 +59,22 @@ void bootlogoThread(void* data) {
                 }
 
                 break;
+
             case BOOT_WAIT:
                 if (((float)(clock() - start_time) * 1000.0f / CLOCKS_PER_SEC) > 1500.0f) {
                     boot_state++;
                 }
                 break;
+
             case BOOT_FADE_OUT:
-                if (logo_alpha > 0)
+                if (logo_alpha > 0) {
                     logo_alpha-=2;
-                else
+                } else {
                     boot_state++;
+                }
+
                 break;
+
         }
 
         drawImage(&bootlogo, 
