@@ -341,13 +341,21 @@ static JSValue athena_object_ctor(JSContext *ctx, JSValueConst new_target, int a
 			ro->textures[0] = argv[1];
 		}
 
+		ro->m.tristrip = false;
+		if (argc > 2) 
+			ro->m.tristrip = JS_ToBool(ctx, argv[2]);
+	
 		ro->m.pipeline = athena_render_set_pipeline(&ro->m, PL_DEFAULT);
 
 		goto register_3d_object;
 	}
 
 	const char *file_tbo = JS_ToCString(ctx, argv[0]); // Model filename
-	
+
+	ro->m.tristrip = false;
+	if (argc > 2) 
+		ro->m.tristrip = JS_ToBool(ctx, argv[2]);
+
 	// Loading texture
 	if(argc > 1) {
 		image = JS_GetOpaque2(ctx, argv[1], get_img_class_id());

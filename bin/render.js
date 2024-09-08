@@ -75,7 +75,61 @@ const boombox = new RenderObject("Boombox.obj");
 let boomboxtex = boombox.getTexture(0);
 boomboxtex.filter = LINEAR;
 
-const model = [dragonmesh, monkeymesh, car, listtest, boombox, mill];
+function generateSphere(radius, latSegments, longSegments) {
+    const vertList = [];
+
+    function sphericalToCartesian(radius, theta, phi) {
+        const x = radius * Math.sin(theta) * Math.cos(phi);
+        const y = radius * Math.sin(theta) * Math.sin(phi);
+        const z = radius * Math.cos(theta);
+        return { x, y, z };
+    }
+
+    for (let lat = 0; lat <= latSegments; lat++) {
+        const theta = lat * Math.PI / latSegments;
+        for (let lon = 0; lon <= longSegments; lon++) {
+            const phi = lon * 2 * Math.PI / longSegments;
+            const { x, y, z } = sphericalToCartesian(radius, theta, phi);
+            const u = lon / longSegments;
+            const v = lat / latSegments;
+            const color = { r: 1.0, g: 1.0, b: 1.0, a: 1.0 }; // Exemplo de cor
+
+            vertList.push(
+                Render.vertex(x, y, z,     // Posição
+                              x, y, z,     // Normal (exemplo de normal, deve ser vetor unitário)
+                              u, v,        // Coordenadas de textura
+                              color.r, color.g, color.b, color.a) // Cor
+            );
+        }
+    }
+
+    // Gerar triângulos strips
+    const finalVertList = [];
+    for (let lat = 0; lat < latSegments; lat++) {
+        for (let lon = 0; lon <= longSegments; lon++) {
+            const current = lat * (longSegments + 1) + lon;
+            const next = (lat + 1) * (longSegments + 1) + lon;
+
+            finalVertList.push(vertList[current]);
+            finalVertList.push(vertList[next]);
+            finalVertList.push(vertList[next + 1]);
+            finalVertList.push(vertList[current]);
+            finalVertList.push(vertList[next + 1]);
+            finalVertList.push(vertList[current + 1]);
+        }
+    }
+
+    const moontex = new Image("moon.png");
+    const listtest = new RenderObject(finalVertList, moontex, true);
+    return listtest;
+}
+
+const radius = 1.0;
+const latSegments = 160;
+const longSegments = 160;
+const sphere = generateSphere(radius, latSegments, longSegments);
+
+const model = [dragonmesh, monkeymesh, car, listtest, boombox, mill, sphere];
 
 Camera.position(0.0f, 0.0f, 50.0f);
 Camera.rotation(0.0f, 0.0f,  0.0f);
