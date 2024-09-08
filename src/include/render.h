@@ -47,6 +47,8 @@ typedef struct ath_model {
     GSTEXTURE** textures;
 	int *tex_ranges;
 	int tex_count;
+
+	bool tristrip;
 } model;
 
 int athena_render_set_pipeline(model* m, int pl_id);
@@ -60,7 +62,7 @@ void setCameraType(eCameraTypes type);
 
 void cameraUpdate();
 
-#define BATCH_SIZE 48
+#define BATCH_SIZE 69
 
 int clip_bounding_box(MATRIX local_clip, VECTOR *bounding_box);
 void calculate_vertices_clipped(VECTOR *output,  int count, VECTOR *vertices, MATRIX local_screen);

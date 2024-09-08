@@ -394,7 +394,7 @@ void loadOBJ(model* res_m, const char* path, GSTEXTURE* text) {
 	res_m->textures = NULL;
 	res_m->tex_ranges = NULL;
 
-    for (int i = 0, j = 0; i < indexCount; i++, j += 3) {
+	for (int i = 0; i < indexCount; i++) {
         int vertIndex = m->indices[i].p;
         int texcoordIndex = m->indices[i].t;
         int normalIndex = m->indices[i].n;
@@ -420,7 +420,7 @@ void loadOBJ(model* res_m, const char* path, GSTEXTURE* text) {
 
 				res_m->tex_ranges[res_m->tex_count] = i;
 				res_m->tex_count++;
-				
+
 			} else if (m->materials[faceMaterialIndex].map_Kd.name) {
 				res_m->tex_ranges[res_m->tex_count-1] = i;
 			}
@@ -486,7 +486,6 @@ void loadOBJ(model* res_m, const char* path, GSTEXTURE* text) {
 
 	fast_obj_destroy(m);
 }
-
 
 void draw_bbox(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z, Color color)
 {
@@ -628,7 +627,7 @@ void draw_vu1(model* model_test, float pos_x, float pos_y, float pos_z, float ro
 			*p_data++ = GS_TEX0_1;
 		
 			*p_data++ = VU_GS_GIFTAG(count, 1, 1,
-    			VU_GS_PRIM(GS_PRIM_PRIM_TRIANGLE, 1, 1, gsGlobal->PrimFogEnable, 
+    			VU_GS_PRIM(model_test->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE, 1, 1, gsGlobal->PrimFogEnable, 
 				0, gsGlobal->PrimAAEnable, 0, 0, 0),
     		    0, 3);
 		
@@ -747,7 +746,7 @@ void draw_vu1_notex(model* model_test, float pos_x, float pos_y, float pos_z, fl
 		*p_data++ = (*(u32*)(&fZ) | (u64)(count) << 32);
 
 		*p_data++ = VU_GS_GIFTAG(count, 1, 1,
-    		VU_GS_PRIM(GS_PRIM_PRIM_TRIANGLE, 1, 0, gsGlobal->PrimFogEnable, 
+    		VU_GS_PRIM(model_test->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE, 1, 0, gsGlobal->PrimFogEnable, 
 			0, gsGlobal->PrimAAEnable, 0, 0, 0),
     	    0, 2);
 
@@ -894,7 +893,7 @@ void draw_vu1_with_colors(model* model_test, float pos_x, float pos_y, float pos
 			*p_data++ = GS_TEX0_1;
 
 			*p_data++ = VU_GS_GIFTAG(count, 1, 1,
-    			VU_GS_PRIM(GS_PRIM_PRIM_TRIANGLE, 1, 1, gsGlobal->PrimFogEnable, 
+    			VU_GS_PRIM(model_test->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE, 1, 1, gsGlobal->PrimFogEnable, 
 				0, gsGlobal->PrimAAEnable, 0, 0, 0),
     		    0, 3);
 
@@ -1018,7 +1017,7 @@ void draw_vu1_with_colors_notex(model* model_test, float pos_x, float pos_y, flo
 		*p_data++ = (*(u32*)(&fZ) | (u64)(count) << 32);
 
 		*p_data++ = VU_GS_GIFTAG(count, 1, 1,
-    		VU_GS_PRIM(GS_PRIM_PRIM_TRIANGLE, 1, 0, gsGlobal->PrimFogEnable, 
+    		VU_GS_PRIM(model_test->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE, 1, 0, gsGlobal->PrimFogEnable, 
 			0, gsGlobal->PrimAAEnable, 0, 0, 0),
     	    0, 2);
 
@@ -1177,7 +1176,7 @@ void draw_vu1_with_lights(model* model_test, float pos_x, float pos_y, float pos
 			*p_data++ = GS_TEX0_1;
 
 			*p_data++ = VU_GS_GIFTAG(count, 1, 1,
-    			VU_GS_PRIM(GS_PRIM_PRIM_TRIANGLE, 1, 1, gsGlobal->PrimFogEnable, 
+    			VU_GS_PRIM(model_test->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE, 1, 1, gsGlobal->PrimFogEnable, 
 				gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 0, 0, 0),
     		    0, 3);
 
@@ -1304,7 +1303,7 @@ void draw_vu1_with_lights_notex(model* model_test, float pos_x, float pos_y, flo
 		*p_data++ = (*(u32*)(&fZ) | (u64)(count) << 32);
 
 		*p_data++ = VU_GS_GIFTAG(count, 1, 1,
-    		VU_GS_PRIM(GS_PRIM_PRIM_TRIANGLE, 1, 0, gsGlobal->PrimFogEnable, 
+    		VU_GS_PRIM(model_test->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE, 1, 0, gsGlobal->PrimFogEnable, 
 			0, gsGlobal->PrimAAEnable, 0, 0, gsGlobal->PrimAAEnable),
     	    0, 2);
 
@@ -1472,7 +1471,7 @@ void draw_vu1_with_spec_lights(model* model_test, float pos_x, float pos_y, floa
 			*p_data++ = GS_TEX0_1;
 
 			*p_data++ = VU_GS_GIFTAG(count, 1, 1,
-    			VU_GS_PRIM(GS_PRIM_PRIM_TRIANGLE, 1, 1, gsGlobal->PrimFogEnable, 
+    			VU_GS_PRIM(model_test->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE, 1, 1, gsGlobal->PrimFogEnable, 
 				gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 0, 0, 0),
     		    0, 3);
 
@@ -1599,7 +1598,7 @@ void draw_vu1_with_spec_lights_notex(model* model_test, float pos_x, float pos_y
 		*p_data++ = (*(u32*)(&fZ) | (u64)(count) << 32);
 
 		*p_data++ = VU_GS_GIFTAG(count, 1, 1,
-    		VU_GS_PRIM(GS_PRIM_PRIM_TRIANGLE, 1, 0, gsGlobal->PrimFogEnable, 
+    		VU_GS_PRIM(model_test->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE, 1, 0, gsGlobal->PrimFogEnable, 
 			0, gsGlobal->PrimAAEnable, 0, 0, gsGlobal->PrimAAEnable),
     	    0, 2);
 
