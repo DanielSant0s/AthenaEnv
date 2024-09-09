@@ -35,6 +35,7 @@
 #define FAST_OBJ_VERSION        ((FAST_OBJ_VERSION_MAJOR << 8) | FAST_OBJ_VERSION_MINOR)
 
 #include <stdlib.h>
+#include <stdbool.h>
 
 
 typedef struct
@@ -122,6 +123,9 @@ typedef struct
 
     unsigned int                normal_count;
     float*                      normals;
+
+    unsigned int                strip_count;
+    int*                        strips;
 
     /* Face data: one element for each face */
     unsigned int                face_count;
@@ -762,6 +766,76 @@ const char* parse_face(fastObjData* data, const char* ptr)
 
 
 static
+const char* parse_strip(fastObjData* data, const char* ptr, bool strip_start)
+{
+    unsigned int count;
+    fastObjIndex vn;
+    int          v;
+    int          t;
+    int          n;
+
+
+    ptr = skip_whitespace(ptr);
+
+    count = 0;
+    while (!is_newline(*ptr))
+    {
+        v = 0;
+        t = 0;
+        n = 0;
+
+        ptr = parse_int(ptr, &v);
+        if (*ptr == '/')
+        {
+            ptr++;
+            if (*ptr != '/')
+                ptr = parse_int(ptr, &t);
+
+            if (*ptr == '/')
+            {
+                ptr++;
+                ptr = parse_int(ptr, &n);
+            }
+        }
+
+        if (v < 0)
+            vn.p = (array_size(data->mesh->positions) / 3) - (fastObjUInt)(-v);
+        else
+            vn.p = (fastObjUInt)(v);
+
+        if (t < 0)
+            vn.t = (array_size(data->mesh->texcoords) / 2) - (fastObjUInt)(-t);
+        else if (t > 0)
+            vn.t = (fastObjUInt)(t);
+        else
+            vn.t = 0;
+
+        if (n < 0)
+            vn.n = (array_size(data->mesh->normals) / 3) - (fastObjUInt)(-n);
+        else if (n > 0)
+            vn.n = (fastObjUInt)(n);
+        else
+            vn.n = 0;
+
+        array_push(data->mesh->indices, vn);
+        count++;
+
+        ptr = skip_whitespace(ptr);
+    }
+
+    array_push(data->mesh->face_vertices, count);
+    array_push(data->mesh->face_materials, data->material);
+
+    if (strip_start)
+        array_push(data->mesh->strips, (array_size(data->mesh->indices)-1));
+
+    data->group.face_count++;
+    data->object.face_count++;
+
+    return ptr;
+}
+
+static
 const char* parse_object(fastObjData* data, const char* ptr)
 {
     const char* s;
@@ -1266,6 +1340,22 @@ void parse_buffer(fastObjData* data, const char* ptr, const char* end, const fas
             }
             break;
 
+        case 't':
+        case 'q':
+            p++;
+
+            switch (*p++)
+            {
+            case ' ':
+            case '\t':
+                p = parse_strip(data, p, (*(p-2)) == 't');
+                break;
+
+            default:
+                p--; /* roll p++ back in case *p was a newline */
+            }
+            break;
+
         case 'o':
             p++;
 
@@ -1346,6 +1436,7 @@ void fast_obj_destroy(fastObjMesh* m)
     array_clean(m->positions);
     array_clean(m->texcoords);
     array_clean(m->normals);
+    array_clean(m->strips);
     array_clean(m->face_vertices);
     array_clean(m->face_materials);
     array_clean(m->indices);
@@ -1400,6 +1491,7 @@ fastObjMesh* fast_obj_read_with_callbacks(const char* path, const fastObjCallbac
     m->positions      = 0;
     m->texcoords      = 0;
     m->normals        = 0;
+    m->strips         = 0;
     m->face_vertices  = 0;
     m->face_materials = 0;
     m->indices        = 0;
@@ -1507,6 +1599,7 @@ fastObjMesh* fast_obj_read_with_callbacks(const char* path, const fastObjCallbac
     m->position_count = array_size(m->positions) / 3;
     m->texcoord_count = array_size(m->texcoords) / 2;
     m->normal_count   = array_size(m->normals) / 3;
+    m->strip_count    = array_size(m->strips);
     m->face_count     = array_size(m->face_vertices);
     m->index_count    = array_size(m->indices);
     m->material_count = array_size(m->materials);
