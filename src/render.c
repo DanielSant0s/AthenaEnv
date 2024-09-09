@@ -353,6 +353,7 @@ void loadOBJ(model* res_m, const char* path, GSTEXTURE* text) {
     int texcoordCount = m->texcoord_count;
     int normalCount =   m->normal_count;
     int indexCount =    m->index_count;
+	int stripCount =    m->strip_count;
 
     VECTOR* c_verts =     (VECTOR*)malloc(positionCount * sizeof(VECTOR));
     VECTOR* c_texcoords = (VECTOR*)malloc(texcoordCount * sizeof(VECTOR));
@@ -380,11 +381,15 @@ void loadOBJ(model* res_m, const char* path, GSTEXTURE* text) {
 
     res_m->facesCount = m->face_count;
 	res_m->indexCount = m->index_count;
+	res_m->stripCount = m->strip_count;
 
     res_m->positions = (VECTOR*)malloc(indexCount * sizeof(VECTOR));
     res_m->texcoords = (VECTOR*)malloc(indexCount * sizeof(VECTOR));
     res_m->normals =   (VECTOR*)malloc(indexCount * sizeof(VECTOR));
     res_m->colours =   (VECTOR*)malloc(indexCount * sizeof(VECTOR));
+	res_m->strips =    (int*)   malloc(stripCount * sizeof(int));
+
+	memcpy(res_m->strips, m->strips, stripCount * sizeof(int));
 
     int faceMaterialIndex;
 	char* oldTex = NULL;

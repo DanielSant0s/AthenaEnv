@@ -33,11 +33,14 @@ typedef enum {
 typedef struct ath_model {
 	uint32_t facesCount;
     uint32_t indexCount;
+	uint32_t stripCount;
 
     VECTOR* positions;
 	VECTOR* texcoords;
 	VECTOR* normals;
     VECTOR* colours;
+
+	int* strips;
 
     VECTOR bounding_box[8];
 
