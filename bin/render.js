@@ -50,7 +50,7 @@ const vertList = [
 const listtest = new RenderObject(vertList);
 
 let dragontex = new Image("dragon.png");
-const dragonmesh = new RenderObject("dragon.obj", dragontex);
+const dragonmesh = new RenderObject("dragon.objf", dragontex, true);
 
 let monkeytex = new Image("monkey.png");
 const monkeymesh = new RenderObject("monkey.obj", monkeytex);
@@ -79,9 +79,9 @@ function generateSphere(radius, latSegments, longSegments) {
     const vertList = [];
 
     function sphericalToCartesian(radius, theta, phi) {
-        const x = radius * Math.sin(theta) * Math.cos(phi);
-        const y = radius * Math.sin(theta) * Math.sin(phi);
-        const z = radius * Math.cos(theta);
+        const x = radius * Math.sinf(theta) * Math.cosf(phi);
+        const y = radius * Math.sinf(theta) * Math.sinf(phi);
+        const z = radius * Math.cosf(theta);
         return { x, y, z };
     }
 
@@ -90,15 +90,12 @@ function generateSphere(radius, latSegments, longSegments) {
         for (let lon = 0; lon <= longSegments; lon++) {
             const phi = lon * 2 * Math.PI / longSegments;
             const { x, y, z } = sphericalToCartesian(radius, theta, phi);
-            const u = lon / longSegments;
-            const v = lat / latSegments;
-            const color = { r: 1.0, g: 1.0, b: 1.0, a: 1.0 }; // Exemplo de cor
-
+            
             vertList.push(
                 Render.vertex(x, y, z,     // Posição
                               x, y, z,     // Normal (exemplo de normal, deve ser vetor unitário)
-                              u, v,        // Coordenadas de textura
-                              color.r, color.g, color.b, color.a) // Cor
+                              lon / longSegments, lat / latSegments,        // Coordenadas de textura
+                              1.0f,  1.0f,  1.0f,  1.0f) // Cor
             );
         }
     }
@@ -124,9 +121,9 @@ function generateSphere(radius, latSegments, longSegments) {
     return listtest;
 }
 
-const radius = 1.0;
-const latSegments = 160;
-const longSegments = 160;
+const radius = 1.0f;
+const latSegments = 160.0f;
+const longSegments = 160.0f;
 const sphere = generateSphere(radius, latSegments, longSegments);
 
 const model = [dragonmesh, monkeymesh, car, listtest, boombox, mill, sphere];
