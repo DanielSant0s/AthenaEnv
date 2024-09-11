@@ -258,9 +258,7 @@ static void athena_object_dtor(JSRuntime *rt, JSValue val){
     free(ro->m.colours);
     free(ro->m.normals);
     free(ro->m.texcoords);
-
-	free(ro->m.strips);
-
+	
 	//printf("%d textures\n", ro->m.tex_count);
 
 	//for (int i = 0; i < ro->m.tex_count; i++) {
