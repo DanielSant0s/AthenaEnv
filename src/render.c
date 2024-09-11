@@ -346,111 +346,9 @@ int athena_render_set_pipeline(model* m, int pl_id) {
 	return m->pipeline;
 }
 
-void loadOBJ(model* res_m, const char* path, GSTEXTURE* text) {
-    fastObjMesh* m = fast_obj_read(path);
+void calculate_bbox(model* res_m) {
+	float lowX, lowY, lowZ, hiX, hiY, hiZ;
 
-    int positionCount = m->position_count;
-    int texcoordCount = m->texcoord_count;
-    int normalCount =   m->normal_count;
-    int indexCount =    m->index_count;
-	int stripCount =    m->strip_count;
-
-    VECTOR* c_verts =     (VECTOR*)malloc(positionCount * sizeof(VECTOR));
-    VECTOR* c_texcoords = (VECTOR*)malloc(texcoordCount * sizeof(VECTOR));
-    VECTOR* c_normals =   (VECTOR*)malloc(normalCount * sizeof(VECTOR));
-    VECTOR* c_colours =   (VECTOR*)malloc(indexCount * sizeof(VECTOR));
-
-    for (int i = 0; i < positionCount; i++) {
-        memcpy(c_verts[i], m->positions + (3 * i), sizeof(VECTOR));
-        c_verts[i][3] = 1.0f;
-    }
-
-    for (int i = 0; i < normalCount; i++) {
-        memcpy(c_normals[i], m->normals + (3 * i), sizeof(VECTOR));
-        c_normals[i][3] = 1.0f;
-    }
-
-    float oneMinusTexcoord;
-    for (int i = 0; i < texcoordCount; i++) {
-        c_texcoords[i][0] = m->texcoords[(2 * i) + 0];
-        oneMinusTexcoord = 1.0f - m->texcoords[(2 * i) + 1];
-        c_texcoords[i][1] = oneMinusTexcoord;
-        c_texcoords[i][2] = 1.0f;
-        c_texcoords[i][3] = 1.0f;
-    }
-
-    res_m->facesCount = m->face_count;
-	res_m->indexCount = m->index_count;
-	res_m->stripCount = m->strip_count;
-
-    res_m->positions = (VECTOR*)malloc(indexCount * sizeof(VECTOR));
-    res_m->texcoords = (VECTOR*)malloc(indexCount * sizeof(VECTOR));
-    res_m->normals =   (VECTOR*)malloc(indexCount * sizeof(VECTOR));
-    res_m->colours =   (VECTOR*)malloc(indexCount * sizeof(VECTOR));
-	res_m->strips =    (int*)   malloc(stripCount * sizeof(int));
-
-	memcpy(res_m->strips, m->strips, stripCount * sizeof(int));
-
-    int faceMaterialIndex;
-	char* oldTex = NULL;
-	char* curTex = NULL;
-
-	res_m->tex_count = 0;
-	res_m->textures = NULL;
-	res_m->tex_ranges = NULL;
-
-	for (int i = 0; i < indexCount; i++) {
-        int vertIndex = m->indices[i].p;
-        int texcoordIndex = m->indices[i].t;
-        int normalIndex = m->indices[i].n;
-
-        memcpy(&res_m->positions[i], &c_verts[vertIndex], sizeof(VECTOR));
-        memcpy(&res_m->texcoords[i], &c_texcoords[texcoordIndex], sizeof(VECTOR));
-        memcpy(&res_m->normals[i], &c_normals[normalIndex], sizeof(VECTOR));
-
-		if(m->material_count > 0) {
-			faceMaterialIndex = m->face_materials[i / 3];
-
-			if(oldTex != m->materials[faceMaterialIndex].map_Kd.name) {
-
-				curTex = m->materials[faceMaterialIndex].map_Kd.name;
-				oldTex = curTex;
-
-				res_m->textures =   realloc(res_m->textures,   sizeof(GSTEXTURE*)*(res_m->tex_count+1));
-				res_m->tex_ranges = realloc(res_m->tex_ranges, sizeof(int)*(res_m->tex_count+1));
-
-				res_m->textures[res_m->tex_count] = malloc(sizeof(GSTEXTURE));
-
-				load_image(res_m->textures[res_m->tex_count], curTex, true);
-
-				res_m->tex_ranges[res_m->tex_count] = i;
-				res_m->tex_count++;
-
-			} else if (m->materials[faceMaterialIndex].map_Kd.name) {
-				res_m->tex_ranges[res_m->tex_count-1] = i;
-			}
-
-        	c_colours[i][0] = m->materials[faceMaterialIndex].Kd[0];
-        	c_colours[i][1] = m->materials[faceMaterialIndex].Kd[1];
-        	c_colours[i][2] = m->materials[faceMaterialIndex].Kd[2];
-        	c_colours[i][3] = 1.0f;
-		} else {
-			c_colours[i][0] = 1.0f;
-        	c_colours[i][1] = 1.0f;
-        	c_colours[i][2] = 1.0f;
-        	c_colours[i][3] = 1.0f;
-		}
-
-    }
-
-    memcpy(res_m->colours, c_colours, indexCount * sizeof(VECTOR));
-
-    free(c_verts);
-    free(c_colours);
-    free(c_normals);
-    free(c_texcoords);
-
-    float lowX, lowY, lowZ, hiX, hiY, hiZ;
     lowX = hiX = res_m->positions[0][0];
     lowY = hiY = res_m->positions[0][1];
     lowZ = hiZ = res_m->positions[0][2];
@@ -471,23 +369,183 @@ void loadOBJ(model* res_m, const char* path, GSTEXTURE* text) {
     };
 
     memcpy(res_m->bounding_box, bbox, sizeof(bbox));
+}
+
+#define alloc_vectors(cnt) (VECTOR*)malloc(cnt * sizeof(VECTOR))
+#define copy_vectors(dst, src, cnt) memcpy(dst, src, cnt*sizeof(VECTOR))
+#define copy_vector(dst, src) memcpy(dst, src, sizeof(VECTOR))
+#define free_vectors(vec) free(vec)
+
+void loadOBJ(model* res_m, const char* path, GSTEXTURE* text) {
+    fastObjMesh* m = fast_obj_read(path);
+
+    VECTOR* tmp_verts =     alloc_vectors(m->position_count);
+    VECTOR* tmp_texcoords = alloc_vectors(m->texcoord_count);
+    VECTOR* tmp_normals =   alloc_vectors(m->normal_count);
+
+    for (int i = 0; i < m->position_count; i++) {
+		copy_vector(tmp_verts[i], m->positions + (3 * i));
+        tmp_verts[i][3] = 1.0f;
+    }
+
+    for (int i = 0; i < m->normal_count; i++) {
+		copy_vector(tmp_normals[i], m->normals + (3 * i));
+        tmp_normals[i][3] = 1.0f;
+    }
+
+    for (int i = 0; i < m->texcoord_count; i++) {
+        tmp_texcoords[i][0] = m->texcoords[(2 * i) + 0];
+        tmp_texcoords[i][1] = (1.0f - m->texcoords[(2 * i) + 1]);
+        tmp_texcoords[i][2] = 1.0f;
+        tmp_texcoords[i][3] = 1.0f;
+    }
+
+    res_m->facesCount = m->face_count;
+
+    int face_mat_index;
+	char* old_tex = NULL;
+	char* cur_tex = NULL;
+
+	res_m->tex_count = 0;
+	res_m->textures = NULL;
+	res_m->tex_ranges = NULL;
+
+	if (m->strip_count > 0) {
+		res_m->indexCount = m->index_count + (2 * m->strip_count) + (((m->index_count + (2 * m->strip_count)) / (BATCH_SIZE - 2)) * 2) + 1;
+
+		res_m->positions = alloc_vectors(res_m->indexCount);
+    	res_m->texcoords = alloc_vectors(res_m->indexCount);
+    	res_m->normals =   alloc_vectors(res_m->indexCount);
+    	res_m->colours =   alloc_vectors(res_m->indexCount);
+
+    	int batch_index = 0;
+    	int index = 0;
+
+		for (int i = 0; i < m->strip_count; i++) {
+        	int strip_start = m->strips[i];
+        	int strip_end = (i + 1 < m->strip_count) ? m->strips[i + 1] : m->index_count;
+
+        	for (int j = strip_start; j < strip_end; j++) {
+        	    copy_vector(&res_m->positions[index], &tmp_verts[m->indices[j].p]);
+        	    copy_vector(&res_m->texcoords[index], &tmp_texcoords[m->indices[j].t]);
+        	    copy_vector(&res_m->normals[index],   &tmp_normals[m->indices[j].n]);
+
+        	    if (m->material_count > 0) {
+        	        face_mat_index = m->face_materials[j / 3];
+        	        res_m->colours[index][0] = m->materials[face_mat_index].Kd[0];
+        	        res_m->colours[index][1] = m->materials[face_mat_index].Kd[1];
+        	        res_m->colours[index][2] = m->materials[face_mat_index].Kd[2];
+        	        res_m->colours[index][3] = 1.0f;
+        	    } else {
+        	        res_m->colours[index][0] = 1.0f;
+        	        res_m->colours[index][1] = 1.0f;
+        	        res_m->colours[index][2] = 1.0f;
+        	        res_m->colours[index][3] = 1.0f;
+        	    }
+
+        	    index++;
+        	    batch_index++;
+
+				if ((j == strip_end-1) && (m->index_count != strip_end)) {
+					copy_vector(&res_m->positions[index], &res_m->positions[index - 1]);
+					copy_vector(&res_m->texcoords[index], &res_m->texcoords[index - 1]);
+					copy_vector(&res_m->normals[index],   &res_m->normals[index - 1]);
+					copy_vector(&res_m->colours[index],   &res_m->colours[index - 1]);
+					index++;
+					batch_index++;
+
+					copy_vector(&res_m->positions[index], &tmp_verts[m->indices[j+1].p]);
+					copy_vector(&res_m->texcoords[index], &tmp_texcoords[m->indices[j+1].t]);
+					copy_vector(&res_m->normals[index],   &tmp_normals[m->indices[j+1].n]);
+					copy_vector(&res_m->colours[index],   &res_m->colours[index - 1]);
+					index++;
+					batch_index++;
+				}
+
+        	    if (batch_index == BATCH_SIZE) {
+					copy_vector(&res_m->positions[index], &res_m->positions[index - 1]);
+					copy_vector(&res_m->texcoords[index], &res_m->texcoords[index - 1]);
+					copy_vector(&res_m->normals[index],   &res_m->normals[index - 1]);
+					copy_vector(&res_m->colours[index],   &res_m->colours[index - 1]);
+        	        index++;
+
+					copy_vector(&res_m->positions[index], &res_m->positions[index - 1]);
+					copy_vector(&res_m->texcoords[index], &res_m->texcoords[index - 1]);
+					copy_vector(&res_m->normals[index],   &res_m->normals[index - 1]);
+					copy_vector(&res_m->colours[index],   &res_m->colours[index - 1]);
+        	        index++;
+
+        	        batch_index = 0;   
+        	    } 
+        	}
+		}
+
+		res_m->indexCount = index;
+	} else {
+		res_m->indexCount = m->index_count;
+
+    	res_m->positions = alloc_vectors(res_m->indexCount);
+    	res_m->texcoords = alloc_vectors(res_m->indexCount);
+    	res_m->normals =   alloc_vectors(res_m->indexCount);
+    	res_m->colours =   alloc_vectors(res_m->indexCount);
+
+		for (int i = 0; i < res_m->indexCount; i++) {
+			copy_vector(&res_m->positions[i], &tmp_verts[m->indices[i].p]);
+			copy_vector(&res_m->texcoords[i], &tmp_texcoords[m->indices[i].t]);
+			copy_vector(&res_m->normals[i],   &tmp_normals[m->indices[i].n]);
+
+			if(m->material_count > 0) {
+				face_mat_index = m->face_materials[i / 3];
+
+				if(old_tex != m->materials[face_mat_index].map_Kd.name) {
+
+					cur_tex = m->materials[face_mat_index].map_Kd.name;
+					old_tex = cur_tex;
+
+					res_m->textures =   realloc(res_m->textures,   sizeof(GSTEXTURE*)*(res_m->tex_count+1));
+					res_m->tex_ranges = realloc(res_m->tex_ranges, sizeof(int)*(res_m->tex_count+1));
+
+					res_m->textures[res_m->tex_count] = malloc(sizeof(GSTEXTURE));
+
+					load_image(res_m->textures[res_m->tex_count], cur_tex, true);
+
+					res_m->tex_ranges[res_m->tex_count] = i;
+					res_m->tex_count++;
+
+				} else if (m->materials[face_mat_index].map_Kd.name) {
+					res_m->tex_ranges[res_m->tex_count-1] = i;
+				}
+
+    	    	res_m->colours[i][0] = m->materials[face_mat_index].Kd[0];
+    	    	res_m->colours[i][1] = m->materials[face_mat_index].Kd[1];
+    	    	res_m->colours[i][2] = m->materials[face_mat_index].Kd[2];
+    	    	res_m->colours[i][3] = 1.0f;
+			} else {
+				res_m->colours[i][0] = 1.0f;
+    	    	res_m->colours[i][1] = 1.0f;
+    	    	res_m->colours[i][2] = 1.0f;
+    	    	res_m->colours[i][3] = 1.0f;
+			}
+
+    	}
+	}
+
+    free_vectors(tmp_verts);
+    free_vectors(tmp_normals);
+    free_vectors(tmp_texcoords);
+
+    calculate_bbox(res_m);
 
 	if(text) {
 		res_m->textures = malloc(sizeof(GSTEXTURE*));
 		res_m->tex_ranges = malloc(sizeof(int));
+		res_m->tex_count = 1;
 
 		res_m->textures[0] = text;
-		res_m->tex_count = 1;
 		res_m->tex_ranges[0] = res_m->indexCount;
-		res_m->render = draw_vu1_with_lights;
-		res_m->pipeline = PL_DEFAULT;
-	} else if (res_m->tex_count > 0) {
-		res_m->render = draw_vu1_with_lights;
-		res_m->pipeline = PL_DEFAULT;
-	} else {
-		res_m->render = draw_vu1_with_lights_notex;
-		res_m->pipeline = PL_DEFAULT_NO_TEX;
 	}
+
+	athena_render_set_pipeline(res_m, PL_DEFAULT);
 
 	fast_obj_destroy(m);
 }

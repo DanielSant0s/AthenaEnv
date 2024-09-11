@@ -52,7 +52,7 @@ init:
     lq      texGifTag1,     2(iBase) ; GIF tag - texture LOD
     lq      texGifTag2,     3(iBase) ; GIF tag - texture buffer & CLUT
     lq      primTag,        4(iBase) ; GIF tag - tell GS how many data we will send
-    lq      rgba,           5(iBase) ; RGBA
+    lq      rgba,           5(iBase) ; RGBA 
                                      ; u32 : R, G, B, A (0-128)
     iaddiu  vertexData,     iBase,      6           ; pointer to vertex data
     ilw.w   vertCount,      0(iBase)                ; load vert count from scale vector
