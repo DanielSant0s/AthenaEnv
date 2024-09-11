@@ -122,8 +122,8 @@ function generateSphere(radius, latSegments, longSegments) {
 }
 
 const radius = 1.0f;
-const latSegments = 160.0f;
-const longSegments = 160.0f;
+const latSegments = 5.0f;
+const longSegments = 5.0f;
 const sphere = generateSphere(radius, latSegments, longSegments);
 
 const model = [dragonmesh, monkeymesh, car, listtest, boombox, mill, sphere];
