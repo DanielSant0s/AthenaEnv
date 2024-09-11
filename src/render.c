@@ -470,7 +470,7 @@ void loadOBJ(model* res_m, const char* path, GSTEXTURE* text) {
 
 		free(unified_strip_indices);
 
-		res_m->indexCount = index;
+		res_m->indexCount = index-1;
 	} else {
 		res_m->indexCount = m->index_count;
 
