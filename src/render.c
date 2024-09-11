@@ -376,29 +376,21 @@ void calculate_bbox(model* res_m) {
 #define copy_vector(dst, src) memcpy(dst, src, sizeof(VECTOR))
 #define free_vectors(vec) free(vec)
 
+void obj_transfer_vertex(model* m, uint32_t dst_idx, fastObjMesh* obj, uint32_t src_idx) {
+	copy_vector(&m->positions[dst_idx], obj->positions + (3 * obj->indices[src_idx].p));
+	m->positions[dst_idx][3] = 1.0f;
+
+	m->texcoords[dst_idx][0] = obj->texcoords[2 * obj->indices[src_idx].t];
+    m->texcoords[dst_idx][1] = 1.0f - obj->texcoords[2 * obj->indices[src_idx].t + 1];
+    m->texcoords[dst_idx][2] = 1.0f;
+    m->texcoords[dst_idx][3] = 1.0f;
+
+	copy_vector(&m->normals[dst_idx],  obj->normals + (3 * obj->indices[src_idx].n));
+	m->normals[dst_idx][3] = 1.0f;
+}
+
 void loadOBJ(model* res_m, const char* path, GSTEXTURE* text) {
     fastObjMesh* m = fast_obj_read(path);
-
-    VECTOR* tmp_verts =     alloc_vectors(m->position_count);
-    VECTOR* tmp_texcoords = alloc_vectors(m->texcoord_count);
-    VECTOR* tmp_normals =   alloc_vectors(m->normal_count);
-
-    for (int i = 0; i < m->position_count; i++) {
-		copy_vector(tmp_verts[i], m->positions + (3 * i));
-        tmp_verts[i][3] = 1.0f;
-    }
-
-    for (int i = 0; i < m->normal_count; i++) {
-		copy_vector(tmp_normals[i], m->normals + (3 * i));
-        tmp_normals[i][3] = 1.0f;
-    }
-
-    for (int i = 0; i < m->texcoord_count; i++) {
-        tmp_texcoords[i][0] = m->texcoords[(2 * i) + 0];
-        tmp_texcoords[i][1] = (1.0f - m->texcoords[(2 * i) + 1]);
-        tmp_texcoords[i][2] = 1.0f;
-        tmp_texcoords[i][3] = 1.0f;
-    }
 
     res_m->facesCount = m->face_count;
 
@@ -410,6 +402,8 @@ void loadOBJ(model* res_m, const char* path, GSTEXTURE* text) {
 	res_m->textures = NULL;
 	res_m->tex_ranges = NULL;
 
+	res_m->tristrip = m->strip_count > 0;
+
 	if (m->strip_count > 0) {
 		res_m->indexCount = m->index_count + (2 * m->strip_count) + (((m->index_count + (2 * m->strip_count)) / (BATCH_SIZE - 2)) * 2) + 1;
 
@@ -418,67 +412,63 @@ void loadOBJ(model* res_m, const char* path, GSTEXTURE* text) {
     	res_m->normals =   alloc_vectors(res_m->indexCount);
     	res_m->colours =   alloc_vectors(res_m->indexCount);
 
-    	int batch_index = 0;
-    	int index = 0;
+		int unified_strip_count = 0;  
+		int* unified_strip_indices = malloc(sizeof(int) * (m->index_count + 2 * m->strip_count));
 
 		for (int i = 0; i < m->strip_count; i++) {
-        	int strip_start = m->strips[i];
-        	int strip_end = (i + 1 < m->strip_count) ? m->strips[i + 1] : m->index_count;
+		    int strip_start = m->strips[i];
+		    int strip_end = (i + 1 < m->strip_count) ? m->strips[i + 1] : m->index_count;
 
-        	for (int j = strip_start; j < strip_end; j++) {
-        	    copy_vector(&res_m->positions[index], &tmp_verts[m->indices[j].p]);
-        	    copy_vector(&res_m->texcoords[index], &tmp_texcoords[m->indices[j].t]);
-        	    copy_vector(&res_m->normals[index],   &tmp_normals[m->indices[j].n]);
+		    for (int j = strip_start; j < strip_end; j++) {
+		        unified_strip_indices[unified_strip_count++] = j;
 
-        	    if (m->material_count > 0) {
-        	        face_mat_index = m->face_materials[j / 3];
-        	        res_m->colours[index][0] = m->materials[face_mat_index].Kd[0];
-        	        res_m->colours[index][1] = m->materials[face_mat_index].Kd[1];
-        	        res_m->colours[index][2] = m->materials[face_mat_index].Kd[2];
-        	        res_m->colours[index][3] = 1.0f;
-        	    } else {
-        	        res_m->colours[index][0] = 1.0f;
-        	        res_m->colours[index][1] = 1.0f;
-        	        res_m->colours[index][2] = 1.0f;
-        	        res_m->colours[index][3] = 1.0f;
-        	    }
-
-        	    index++;
-        	    batch_index++;
-
-				if ((j == strip_end-1) && (m->index_count != strip_end)) {
-					copy_vector(&res_m->positions[index], &res_m->positions[index - 1]);
-					copy_vector(&res_m->texcoords[index], &res_m->texcoords[index - 1]);
-					copy_vector(&res_m->normals[index],   &res_m->normals[index - 1]);
-					copy_vector(&res_m->colours[index],   &res_m->colours[index - 1]);
-					index++;
-					batch_index++;
-
-					copy_vector(&res_m->positions[index], &tmp_verts[m->indices[j+1].p]);
-					copy_vector(&res_m->texcoords[index], &tmp_texcoords[m->indices[j+1].t]);
-					copy_vector(&res_m->normals[index],   &tmp_normals[m->indices[j+1].n]);
-					copy_vector(&res_m->colours[index],   &res_m->colours[index - 1]);
-					index++;
-					batch_index++;
-				}
-
-        	    if (batch_index == BATCH_SIZE) {
-					copy_vector(&res_m->positions[index], &res_m->positions[index - 1]);
-					copy_vector(&res_m->texcoords[index], &res_m->texcoords[index - 1]);
-					copy_vector(&res_m->normals[index],   &res_m->normals[index - 1]);
-					copy_vector(&res_m->colours[index],   &res_m->colours[index - 1]);
-        	        index++;
-
-					copy_vector(&res_m->positions[index], &res_m->positions[index - 1]);
-					copy_vector(&res_m->texcoords[index], &res_m->texcoords[index - 1]);
-					copy_vector(&res_m->normals[index],   &res_m->normals[index - 1]);
-					copy_vector(&res_m->colours[index],   &res_m->colours[index - 1]);
-        	        index++;
-
-        	        batch_index = 0;   
-        	    } 
-        	}
+		        if (j == strip_end - 1 && i + 1 < m->strip_count) {
+		            unified_strip_indices[unified_strip_count++] = j;
+		            unified_strip_indices[unified_strip_count++] = m->strips[i + 1];
+		        }
+		    }
 		}
+
+		int batch_index = 0;
+		int index = 0;
+
+		for (int i = 0; i < unified_strip_count; i++) {
+		    obj_transfer_vertex(res_m, index, m, unified_strip_indices[i]);
+
+        	if (m->material_count > 0) {
+        	    face_mat_index = m->face_materials[unified_strip_indices[i] / 3];
+        	    res_m->colours[index][0] = m->materials[face_mat_index].Kd[0];
+        	    res_m->colours[index][1] = m->materials[face_mat_index].Kd[1];
+        	    res_m->colours[index][2] = m->materials[face_mat_index].Kd[2];
+        	    res_m->colours[index][3] = 1.0f;
+        	} else {
+        	    res_m->colours[index][0] = 1.0f;
+        	    res_m->colours[index][1] = 1.0f;
+        	    res_m->colours[index][2] = 1.0f;
+        	    res_m->colours[index][3] = 1.0f;
+        	}
+
+		    index++;
+		    batch_index++;
+
+		    if (batch_index == BATCH_SIZE) {
+				copy_vector(&res_m->positions[index], &res_m->positions[index - 2]);
+				copy_vector(&res_m->texcoords[index], &res_m->texcoords[index - 2]);
+				copy_vector(&res_m->normals[index],   &res_m->normals[index - 2]);
+				copy_vector(&res_m->colours[index],   &res_m->colours[index - 2]);
+        	    index++;
+
+				copy_vector(&res_m->positions[index], &res_m->positions[index - 2]);
+				copy_vector(&res_m->texcoords[index], &res_m->texcoords[index - 2]);
+				copy_vector(&res_m->normals[index],   &res_m->normals[index - 2]);
+				copy_vector(&res_m->colours[index],   &res_m->colours[index - 2]);
+        	    index++;
+
+        	    batch_index = 2;
+		    }
+		}
+
+		free(unified_strip_indices);
 
 		res_m->indexCount = index;
 	} else {
@@ -490,9 +480,7 @@ void loadOBJ(model* res_m, const char* path, GSTEXTURE* text) {
     	res_m->colours =   alloc_vectors(res_m->indexCount);
 
 		for (int i = 0; i < res_m->indexCount; i++) {
-			copy_vector(&res_m->positions[i], &tmp_verts[m->indices[i].p]);
-			copy_vector(&res_m->texcoords[i], &tmp_texcoords[m->indices[i].t]);
-			copy_vector(&res_m->normals[i],   &tmp_normals[m->indices[i].n]);
+			obj_transfer_vertex(res_m, i, m, i);
 
 			if(m->material_count > 0) {
 				face_mat_index = m->face_materials[i / 3];
@@ -529,10 +517,6 @@ void loadOBJ(model* res_m, const char* path, GSTEXTURE* text) {
 
     	}
 	}
-
-    free_vectors(tmp_verts);
-    free_vectors(tmp_normals);
-    free_vectors(tmp_texcoords);
 
     calculate_bbox(res_m);
 
