@@ -16,7 +16,7 @@ let fntcpy = new Font("default");
 fntcpy.scale = (0.4f);
 
 Screen.setFrameCounter(true);
-Screen.setVSync(false);
+//Screen.setVSync(false);
 
 const canvas = Screen.getMode();
 
@@ -50,10 +50,10 @@ const vertList = [
 const listtest = new RenderObject(vertList);
 
 let dragontex = new Image("dragon.png");
-const dragonmesh = new RenderObject("dragon.objf", dragontex, true);
+const dragonmesh = new RenderObject("dragon.objf", dragontex);
 
 let monkeytex = new Image("monkey.png");
-const monkeymesh = new RenderObject("monkey.obj", monkeytex);
+const monkeymesh = new RenderObject("monkey.objf", monkeytex);
 
 const car = new RenderObject("Car.obj");
 

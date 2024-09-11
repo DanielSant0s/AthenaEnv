@@ -258,7 +258,7 @@ static void athena_object_dtor(JSRuntime *rt, JSValue val){
     free(ro->m.colours);
     free(ro->m.normals);
     free(ro->m.texcoords);
-	
+
 	//printf("%d textures\n", ro->m.tex_count);
 
 	//for (int i = 0; i < ro->m.tex_count; i++) {
@@ -351,10 +351,6 @@ static JSValue athena_object_ctor(JSContext *ctx, JSValueConst new_target, int a
 	}
 
 	const char *file_tbo = JS_ToCString(ctx, argv[0]); // Model filename
-
-	ro->m.tristrip = false;
-	if (argc > 2) 
-		ro->m.tristrip = JS_ToBool(ctx, argv[2]);
 
 	// Loading texture
 	if(argc > 1) {
