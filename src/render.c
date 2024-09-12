@@ -353,7 +353,7 @@ void calculate_bbox(model* res_m) {
     lowY = hiY = res_m->positions[0][1];
     lowZ = hiZ = res_m->positions[0][2];
 	
-    for (int i = 0; i < res_m->indexCount; i++) {
+    for (int i = 0; i < res_m->index_count; i++) {
         float* pos = res_m->positions[i];
         lowX = fmin(lowX, pos[0]);
         hiX =  fmax(hiX,  pos[0]);
@@ -376,6 +376,11 @@ void calculate_bbox(model* res_m) {
 #define copy_vector(dst, src) memcpy(dst, src, sizeof(VECTOR))
 #define free_vectors(vec) free(vec)
 
+#define copy_init_w_vector(dst, src) do { memcpy(&dst, &src, sizeof(float)*3); dst[3] = 1.0f; } while (0)
+
+#define init_vector(vec) do { vec[0] = 1.0f; vec[1] = 1.0f; vec[2] = 1.0f; vec[3] = 1.0f; } while (0)
+
+
 void obj_transfer_vertex(model* m, uint32_t dst_idx, fastObjMesh* obj, uint32_t src_idx) {
 	copy_vector(&m->positions[dst_idx], obj->positions + (3 * obj->indices[src_idx].p));
 	m->positions[dst_idx][3] = 1.0f;
@@ -392,7 +397,37 @@ void obj_transfer_vertex(model* m, uint32_t dst_idx, fastObjMesh* obj, uint32_t 
 void loadOBJ(model* res_m, const char* path, GSTEXTURE* text) {
     fastObjMesh* m = fast_obj_read(path);
 
-    res_m->facesCount = m->face_count;
+	if (m->material_count) {
+		res_m->materials = (ath_mat *)malloc(m->material_count*sizeof(ath_mat));
+		res_m->material_count = m->material_count;
+
+		for (int i = 0; i < res_m->material_count; i++) {
+			copy_init_w_vector(res_m->materials[i].ambient,             m->materials[i].Ka);
+			copy_init_w_vector(res_m->materials[i].diffuse,             m->materials[i].Kd);
+			copy_init_w_vector(res_m->materials[i].specular,            m->materials[i].Ks);
+			copy_init_w_vector(res_m->materials[i].emission,            m->materials[i].Ke);
+			copy_init_w_vector(res_m->materials[i].transmittance,       m->materials[i].Kt);
+			copy_init_w_vector(res_m->materials[i].transmission_filter, m->materials[i].Tf);
+
+			res_m->materials[i].shininess =  m->materials[i].Ns;
+			res_m->materials[i].refraction =  m->materials[i].Ni;
+			res_m->materials[i].disolve =   m->materials[i].d;
+		}
+	} else {
+		res_m->materials = (ath_mat *)malloc(sizeof(ath_mat));
+		res_m->material_count = 1;
+
+		init_vector(res_m->materials[0].ambient);
+		init_vector(res_m->materials[0].diffuse);
+		init_vector(res_m->materials[0].specular);
+		init_vector(res_m->materials[0].emission);
+		init_vector(res_m->materials[0].transmittance);
+		init_vector(res_m->materials[0].transmission_filter);
+
+		res_m->materials[0].shininess = 1.0f;
+		res_m->materials[0].refraction = 1.0f;
+		res_m->materials[0].disolve = 1.0f;
+	}
 
     int face_mat_index;
 	char* old_tex = NULL;
@@ -404,13 +439,13 @@ void loadOBJ(model* res_m, const char* path, GSTEXTURE* text) {
 
 	res_m->tristrip = m->strip_count > 0;
 
-	if (m->strip_count > 0) {
-		res_m->indexCount = m->index_count + (2 * m->strip_count) + (((m->index_count + (2 * m->strip_count)) / (BATCH_SIZE - 2)) * 2) + 1;
+	if (res_m->tristrip) {
+		res_m->index_count = m->index_count + (2 * m->strip_count) + (((m->index_count + (2 * m->strip_count)) / (BATCH_SIZE - 2)) * 2) + 1;
 
-		res_m->positions = alloc_vectors(res_m->indexCount);
-    	res_m->texcoords = alloc_vectors(res_m->indexCount);
-    	res_m->normals =   alloc_vectors(res_m->indexCount);
-    	res_m->colours =   alloc_vectors(res_m->indexCount);
+		res_m->positions = alloc_vectors(res_m->index_count);
+    	res_m->texcoords = alloc_vectors(res_m->index_count);
+    	res_m->normals =   alloc_vectors(res_m->index_count);
+    	res_m->colours =   alloc_vectors(res_m->index_count);
 
 		int unified_strip_count = 0;  
 		int* unified_strip_indices = malloc(sizeof(int) * (m->index_count + 2 * m->strip_count));
@@ -470,16 +505,16 @@ void loadOBJ(model* res_m, const char* path, GSTEXTURE* text) {
 
 		free(unified_strip_indices);
 
-		res_m->indexCount = index-1;
+		res_m->index_count = index-1;
 	} else {
-		res_m->indexCount = m->index_count;
+		res_m->index_count = m->index_count;
 
-    	res_m->positions = alloc_vectors(res_m->indexCount);
-    	res_m->texcoords = alloc_vectors(res_m->indexCount);
-    	res_m->normals =   alloc_vectors(res_m->indexCount);
-    	res_m->colours =   alloc_vectors(res_m->indexCount);
+    	res_m->positions = alloc_vectors(res_m->index_count);
+    	res_m->texcoords = alloc_vectors(res_m->index_count);
+    	res_m->normals =   alloc_vectors(res_m->index_count);
+    	res_m->colours =   alloc_vectors(res_m->index_count);
 
-		for (int i = 0; i < res_m->indexCount; i++) {
+		for (int i = 0; i < res_m->index_count; i++) {
 			obj_transfer_vertex(res_m, i, m, i);
 
 			if(m->material_count > 0) {
@@ -526,7 +561,7 @@ void loadOBJ(model* res_m, const char* path, GSTEXTURE* text) {
 		res_m->tex_count = 1;
 
 		res_m->textures[0] = text;
-		res_m->tex_ranges[0] = res_m->indexCount;
+		res_m->tex_ranges[0] = res_m->index_count;
 	}
 
 	athena_render_set_pipeline(res_m, PL_DEFAULT);
@@ -750,7 +785,7 @@ void draw_vu1_notex(model* model_test, float pos_x, float pos_y, float pos_z, fl
 	create_local_world(local_world, object_position, object_rotation);
 	create_local_screen(local_screen, local_world, world_view, view_screen);
 
-	int idxs_to_draw = model_test->indexCount;
+	int idxs_to_draw = model_test->index_count;
 	int idxs_drawn = 0;
 
 	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
@@ -1021,7 +1056,7 @@ void draw_vu1_with_colors_notex(model* model_test, float pos_x, float pos_y, flo
 	create_local_world(local_world, object_position, object_rotation);
 	create_local_screen(local_screen, local_world, world_view, view_screen);
 
-	int idxs_to_draw = model_test->indexCount;
+	int idxs_to_draw = model_test->index_count;
 	int idxs_drawn = 0;
 
 	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
@@ -1234,11 +1269,6 @@ void draw_vu1_with_lights(model* model_test, float pos_x, float pos_y, float pos
 
 			curr_vif_packet = vif_packets[context];
 
-			//memset(curr_vif_packet, 0, 16*22);
-
-			//*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
-			//
-
 			u32 vif_added_bytes = 0; // zero because now we will use TOP register (double buffer)
 									 // we don't wan't to unpack at 8 + beggining of buffer, but at
 									 // the beggining of the buffer
@@ -1265,9 +1295,6 @@ void draw_vu1_with_lights(model* model_test, float pos_x, float pos_y, float pos
 
 			*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
 			*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, (lastIdx == -1? VIF_MSCALF : VIF_MSCNT), 0) << 32));
-
-			
-			
 
 			*curr_vif_packet++ = DMA_TAG(0, 0, DMA_END, 0, 0 , 0);
 			*curr_vif_packet++ = (VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32);
@@ -1312,7 +1339,7 @@ void draw_vu1_with_lights_notex(model* model_test, float pos_x, float pos_y, flo
 	create_local_light(local_light, object_rotation);
 	create_local_screen(local_screen, local_world, world_view, view_screen);
 
-	int idxs_to_draw = model_test->indexCount;
+	int idxs_to_draw = model_test->index_count;
 	int idxs_drawn = 0;
 
 	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
@@ -1603,7 +1630,7 @@ void draw_vu1_with_spec_lights_notex(model* model_test, float pos_x, float pos_y
 	create_local_light(local_light, object_rotation);
 	create_local_screen(local_screen, local_world, world_view, view_screen);
 
-	int idxs_to_draw = model_test->indexCount;
+	int idxs_to_draw = model_test->index_count;
 	int idxs_drawn = 0;
 
 	dmaKit_wait(DMA_CHANNEL_VIF1, 0);

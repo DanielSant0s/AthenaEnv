@@ -30,17 +30,30 @@ typedef enum {
 	PL_SPECULAR_NO_TEX
 } eRenderPipelines;
 
+typedef struct
+{
+    VECTOR ambient; 
+    VECTOR diffuse;
+    VECTOR specular;  
+    VECTOR emission;  
+    VECTOR transmittance; 
+    float  shininess;  
+    float  refraction; 
+    VECTOR transmission_filter; 
+    float  disolve;  
+
+	GSTEXTURE* texture;
+
+	uint32_t end_index;
+} ath_mat;
+
 typedef struct ath_model {
-	uint32_t facesCount;
-    uint32_t indexCount;
-	uint32_t stripCount;
+    uint32_t index_count;
 
     VECTOR* positions;
 	VECTOR* texcoords;
 	VECTOR* normals;
     VECTOR* colours;
-
-	int* strips;
 
     VECTOR bounding_box[8];
 
@@ -50,6 +63,9 @@ typedef struct ath_model {
     GSTEXTURE** textures;
 	int *tex_ranges;
 	int tex_count;
+
+	ath_mat *materials;
+	uint32_t material_count;
 
 	bool tristrip;
 } model;
