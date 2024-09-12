@@ -258,6 +258,7 @@ static void athena_object_dtor(JSRuntime *rt, JSValue val){
     free(ro->m.colours);
     free(ro->m.normals);
     free(ro->m.texcoords);
+	free(ro->m.materials);
 
 	//printf("%d textures\n", ro->m.tex_count);
 
@@ -292,13 +293,13 @@ static JSValue athena_object_ctor(JSContext *ctx, JSValueConst new_target, int a
 		int length;
 		JS_ToUint32(ctx, &length, JS_GetPropertyStr(ctx, argv[0], "length"));
 
-		ro->m.indexCount = length;
-		ro->m.positions = malloc(sizeof(VECTOR)*ro->m.indexCount);
-		ro->m.normals = malloc(sizeof(VECTOR)*ro->m.indexCount);
-		ro->m.texcoords = malloc(sizeof(VECTOR)*ro->m.indexCount);
-		ro->m.colours = malloc(sizeof(VECTOR)*ro->m.indexCount);
+		ro->m.index_count = length;
+		ro->m.positions = malloc(sizeof(VECTOR)*ro->m.index_count);
+		ro->m.normals = malloc(sizeof(VECTOR)*ro->m.index_count);
+		ro->m.texcoords = malloc(sizeof(VECTOR)*ro->m.index_count);
+		ro->m.colours = malloc(sizeof(VECTOR)*ro->m.index_count);
 
-		for (int i = 0; i < ro->m.indexCount; i++) {
+		for (int i = 0; i < ro->m.index_count; i++) {
 			JSValue vertex = JS_GetPropertyUint32(ctx, argv[0], i);
 
 			JS_ToFloat32(ctx, &ro->m.positions[i][0], JS_GetPropertyStr(ctx, vertex, "x"));
@@ -336,7 +337,7 @@ static JSValue athena_object_ctor(JSContext *ctx, JSValueConst new_target, int a
 
 			ro->m.textures[0] = &(image->tex);
 			ro->m.tex_count = 1;
-			ro->m.tex_ranges[0] = ro->m.indexCount;
+			ro->m.tex_ranges[0] = ro->m.index_count;
 
 			ro->textures[0] = argv[1];
 		}
@@ -509,7 +510,7 @@ static JSValue athena_settexture(JSContext *ctx, JSValue this_val, int argc, JSV
 		int range;
 		JS_ToUint32(ctx, &range, argv[2]);
 		if (range == -1) {
-			range = ro->m.indexCount;
+			range = ro->m.index_count;
 		}
 
 		ro->m.tex_ranges[tex_idx] = range;
@@ -543,7 +544,7 @@ static JSValue js_object_get(JSContext *ctx, JSValueConst this_val, int magic)
     if (magic == 0) {
 		JSValue array = JS_NewArray(ctx);
 
-		for (int i = 0; i < ro->m.indexCount; i++) {
+		for (int i = 0; i < ro->m.index_count; i++) {
 			JSValue obj = JS_NewObject(ctx);
 		
 			JS_DefinePropertyValueStr(ctx, obj, "x", JS_NewFloat32(ctx, ro->m.positions[i][0]), JS_PROP_C_W_E);
@@ -567,7 +568,7 @@ static JSValue js_object_get(JSContext *ctx, JSValueConst this_val, int magic)
 		
 		return array;
 	} else if (magic == 1) {
-		return JS_NewUint32(ctx, ro->m.indexCount);
+		return JS_NewUint32(ctx, ro->m.index_count);
 	} else if (magic == 2) {
 		JSValue array = JS_NewArray(ctx);
 
@@ -599,11 +600,11 @@ static JSValue js_object_set(JSContext *ctx, JSValueConst this_val, JSValue val,
 		int length;
 		JS_ToUint32(ctx, &length, JS_GetPropertyStr(ctx, val, "length"));
 
-		ro->m.indexCount = length;
-		ro->m.positions = malloc(sizeof(VECTOR)*ro->m.indexCount);
-		ro->m.normals = malloc(sizeof(VECTOR)*ro->m.indexCount);
-		ro->m.texcoords = malloc(sizeof(VECTOR)*ro->m.indexCount);
-		ro->m.colours = malloc(sizeof(VECTOR)*ro->m.indexCount);
+		ro->m.index_count = length;
+		ro->m.positions = malloc(sizeof(VECTOR)*ro->m.index_count);
+		ro->m.normals = malloc(sizeof(VECTOR)*ro->m.index_count);
+		ro->m.texcoords = malloc(sizeof(VECTOR)*ro->m.index_count);
+		ro->m.colours = malloc(sizeof(VECTOR)*ro->m.index_count);
 
 		for (int i = 0; i < length; i++) {
 			JSValue vertex = JS_GetPropertyUint32(ctx, val, i);
