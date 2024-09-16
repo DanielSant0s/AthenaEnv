@@ -440,9 +440,21 @@ static u32* last_mpg = NULL;
 		} \
 	} while (0)
 
+#define dma_add_end_tag(packet) \
+	do { \
+		*packet++ = DMA_TAG(0, 0, DMA_END, 0, 0 , 0); \
+		*packet++ = (VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32); \
+	} while (0)
 
-void draw_vu1(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z)
-{
+#define vu_start_program(packet, init) \
+	do { \
+		*packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0); \
+		*packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, (init? VIF_MSCALF : VIF_MSCNT), 0) << 32)); \
+	} while (0)
+
+void draw_vu1(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z) {
+	unpack_list data;
+
 	VECTOR object_position = { pos_x, pos_y, pos_z, 1.00f };
 	VECTOR object_rotation = { rot_x, rot_y, rot_z, 1.00f };
 
@@ -463,14 +475,10 @@ void draw_vu1(model* m, float pos_x, float pos_y, float pos_z, float rot_x, floa
 
 	curr_vif_packet = vif_packets[context];
 
-	*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
-	*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32));
-
 	// Add matrix at the beggining of VU mem (skip TOP)
 	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 0, &local_screen, 4, 0);
 
-	*curr_vif_packet++ = DMA_TAG(0, 0, DMA_END, 0, 0 , 0);
-	*curr_vif_packet++ = (VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32);
+	dma_add_end_tag(curr_vif_packet);
 
 	vifSendPacket(vif_packets[context], DMA_CHANNEL_VIF1);
 
@@ -540,27 +548,16 @@ void draw_vu1(model* m, float pos_x, float pos_y, float pos_z, float rot_x, floa
 			*p_data++ = (128 | (u64)128 << 32);
 			*p_data++ = (128 | (u64)128 << 32);	
 
-			curr_vif_packet = vif_packets[context];
+			unpack_list_open(&data, vif_packets[context], 0, true);
+			{
+				unpack_list_append(&data, cube_packet, 6);
+				unpack_list_append(&data, &positions[idxs_drawn], count);
+				unpack_list_append(&data, &texcoords[idxs_drawn], count);
+			}
+			curr_vif_packet = unpack_list_close(&data);
 
-			u32 vif_added_bytes = 0; 
-
-			// Merge packets
-			curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, cube_packet, 6, 1);
-			vif_added_bytes += 6;
-
-			curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &positions[idxs_drawn], count, 1);
-			vif_added_bytes += count; // one VECTOR is size of qword
-
-			curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &texcoords[idxs_drawn], count, 1);
-			vif_added_bytes += count;
-
-			*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
-			*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, (last_index == -1? VIF_MSCALF : VIF_MSCNT), 0) << 32));
-
-			*curr_vif_packet++ = DMA_TAG(0, 0, DMA_END, 0, 0 , 0);
-			*curr_vif_packet++ = (VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32);
-
-			asm volatile("nop":::"memory");
+			vu_start_program(curr_vif_packet, last_index == -1);
+			dma_add_end_tag(curr_vif_packet);
 
 			vifSendPacket(vif_packets[context], DMA_CHANNEL_VIF1);
 
@@ -574,8 +571,9 @@ void draw_vu1(model* m, float pos_x, float pos_y, float pos_z, float rot_x, floa
 	context = !context;
 }
 
-void draw_vu1_notex(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z)
-{
+void draw_vu1_notex(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z) {
+	unpack_list data;
+
 	VECTOR object_position = { pos_x, pos_y, pos_z, 1.00f };
 	VECTOR object_rotation = { rot_x, rot_y, rot_z, 1.00f };
 
@@ -596,14 +594,10 @@ void draw_vu1_notex(model* m, float pos_x, float pos_y, float pos_z, float rot_x
 
 	curr_vif_packet = vif_packets[context];
 
-	*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
-	*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32));
-
 	// Add matrix at the beggining of VU mem (skip TOP)
 	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 0, &local_screen, 4, 0);
 
-	*curr_vif_packet++ = DMA_TAG(0, 0, DMA_END, 0, 0 , 0);
-	*curr_vif_packet++ = (VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32);
+	dma_add_end_tag(curr_vif_packet);
 
 	vifSendPacket(vif_packets[context], DMA_CHANNEL_VIF1);
 
@@ -640,24 +634,15 @@ void draw_vu1_notex(model* m, float pos_x, float pos_y, float pos_z, float rot_x
 		*p_data++ = (128 | (u64)128 << 32);
 		*p_data++ = (128 | (u64)128 << 32);	
 
-		curr_vif_packet = vif_packets[context];
-	
-		u32 vif_added_bytes = 0; 
-	
-		// Merge packets
-		curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, cube_packet, 3, 1);
-		vif_added_bytes += 3;
+		unpack_list_open(&data, vif_packets[context], 0, true);
+		{
+			unpack_list_append(&data, cube_packet, 3);
+			unpack_list_append(&data, &m->positions[idxs_drawn], count);
+		}
+		curr_vif_packet = unpack_list_close(&data);
 
-		curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &m->positions[idxs_drawn], count, 1);
-		vif_added_bytes += count; // one VECTOR is size of qword
-
-		*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
-		*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, ((!idxs_drawn)? VIF_MSCALF : VIF_MSCNT), 0) << 32));
-	
-		*curr_vif_packet++ = DMA_TAG(0, 0, DMA_END, 0, 0 , 0);
-		*curr_vif_packet++ = (VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32);
-		
-		asm volatile("nop":::"memory");
+		vu_start_program(curr_vif_packet, (!idxs_drawn));
+		dma_add_end_tag(curr_vif_packet);
 
 		vifSendPacket(vif_packets[context], DMA_CHANNEL_VIF1);
 
@@ -668,8 +653,9 @@ void draw_vu1_notex(model* m, float pos_x, float pos_y, float pos_z, float rot_x
 	context = !context;
 }
 
-void draw_vu1_pvc(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z)
-{
+void draw_vu1_pvc(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z) {
+	unpack_list data;
+
 	VECTOR object_position = { pos_x, pos_y, pos_z, 1.00f };
 	VECTOR object_rotation = { rot_x, rot_y, rot_z, 1.00f };
 
@@ -771,30 +757,17 @@ void draw_vu1_pvc(model* m, float pos_x, float pos_y, float pos_z, float rot_x, 
 			*p_data++ = (*(u32*)(&texCol) | (u64)*(u32*)(&texCol) << 32);
 			*p_data++ = (*(u32*)(&texCol) | (u64)*(u32*)(&texCol) << 32);	
 
-			curr_vif_packet = vif_packets[context];
+			unpack_list_open(&data, vif_packets[context], 0, true);
+			{
+				unpack_list_append(&data, cube_packet, 6);
+				unpack_list_append(&data, &positions[idxs_drawn], count);
+				unpack_list_append(&data, &texcoords[idxs_drawn], count);
+				unpack_list_append(&data,   &colours[idxs_drawn], count);
+			}
+			curr_vif_packet = unpack_list_close(&data);
 
-			u32 vif_added_bytes = 0; 
-
-			// Merge packets
-			curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, cube_packet, 6, 1);
-			vif_added_bytes += 6;
-
-			curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &positions[idxs_drawn], count, 1);
-			vif_added_bytes += count; // one VECTOR is size of qword
-
-			curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &texcoords[idxs_drawn], count, 1);
-			vif_added_bytes += count;
-
-			curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &colours[idxs_drawn], count, 1);
-			vif_added_bytes += count;
-
-			*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
-			*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, (last_index == -1? VIF_MSCALF : VIF_MSCNT), 0) << 32));
-
-			*curr_vif_packet++ = DMA_TAG(0, 0, DMA_END, 0, 0 , 0);
-			*curr_vif_packet++ = (VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32);
-
-			asm volatile("nop":::"memory");
+			vu_start_program(curr_vif_packet, last_index == -1);
+			dma_add_end_tag(curr_vif_packet);
 
 			vifSendPacket(vif_packets[context], DMA_CHANNEL_VIF1);
 
@@ -808,8 +781,9 @@ void draw_vu1_pvc(model* m, float pos_x, float pos_y, float pos_z, float rot_x, 
 	context = !context;
 }
 
-void draw_vu1_pvc_notex(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z)
-{
+void draw_vu1_pvc_notex(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z) {
+	unpack_list data;
+
 	VECTOR object_position = { pos_x, pos_y, pos_z, 1.00f };
 	VECTOR object_rotation = { rot_x, rot_y, rot_z, 1.00f };
 
@@ -834,14 +808,10 @@ void draw_vu1_pvc_notex(model* m, float pos_x, float pos_y, float pos_z, float r
 
 	curr_vif_packet = vif_packets[context];
 
-	*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
-	*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32));
-
 	// Add matrix at the beggining of VU mem (skip TOP)
 	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 0, &local_screen, 4, 0);
 
-	*curr_vif_packet++ = DMA_TAG(0, 0, DMA_END, 0, 0 , 0);
-	*curr_vif_packet++ = (VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32);
+	dma_add_end_tag(curr_vif_packet);
 
 	vifSendPacket(vif_packets[context], DMA_CHANNEL_VIF1);
 
@@ -875,27 +845,16 @@ void draw_vu1_pvc_notex(model* m, float pos_x, float pos_y, float pos_z, float r
 		*p_data++ = (*(u32*)(&texCol) | (u64)*(u32*)(&texCol) << 32);
 		*p_data++ = (*(u32*)(&texCol) | (u64)*(u32*)(&texCol) << 32);	
 
-		curr_vif_packet = vif_packets[context];
-	
-		u32 vif_added_bytes = 0; 
-	
-		// Merge packets
-		curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, cube_packet, 3, 1);
-		vif_added_bytes += 3;
+		unpack_list_open(&data, vif_packets[context], 0, true);
+		{
+			unpack_list_append(&data, cube_packet, 3);
+			unpack_list_append(&data, &m->positions[idxs_drawn], count);
+			unpack_list_append(&data,   &m->colours[idxs_drawn], count);
+		}
+		curr_vif_packet = unpack_list_close(&data);
 
-		curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &m->positions[idxs_drawn], count, 1);
-		vif_added_bytes += count; // one VECTOR is size of qword
-
-		curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &m->colours[idxs_drawn], count, 1);
-		vif_added_bytes += count;
-
-		*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
-		*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, ((!idxs_drawn)? VIF_MSCALF : VIF_MSCNT), 0) << 32));
-	
-		*curr_vif_packet++ = DMA_TAG(0, 0, DMA_END, 0, 0 , 0);
-		*curr_vif_packet++ = (VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32);
-		
-		asm volatile("nop":::"memory");
+		vu_start_program(curr_vif_packet, (!idxs_drawn));
+		dma_add_end_tag(curr_vif_packet);
 
 		vifSendPacket(vif_packets[context], DMA_CHANNEL_VIF1);
 
@@ -906,8 +865,9 @@ void draw_vu1_pvc_notex(model* m, float pos_x, float pos_y, float pos_z, float r
 	context = !context;
 }
 
-void draw_vu1_with_colors(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z)
-{
+void draw_vu1_with_colors(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z) {
+	unpack_list data;
+
 	VECTOR object_position = { pos_x, pos_y, pos_z, 1.00f };
 	VECTOR object_rotation = { rot_x, rot_y, rot_z, 1.00f };
 
@@ -929,14 +889,10 @@ void draw_vu1_with_colors(model* m, float pos_x, float pos_y, float pos_z, float
 
 	curr_vif_packet = vif_packets[context];
 
-	*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
-	*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32));
-
 	// Add matrix at the beggining of VU mem (skip TOP)
 	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 0, &local_screen, 4, 0);
 
-	*curr_vif_packet++ = DMA_TAG(0, 0, DMA_END, 0, 0 , 0);
-	*curr_vif_packet++ = (VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32);
+	dma_add_end_tag(curr_vif_packet);
 
 	vifSendPacket(vif_packets[context], DMA_CHANNEL_VIF1);
 
@@ -1006,27 +962,16 @@ void draw_vu1_with_colors(model* m, float pos_x, float pos_y, float pos_z, float
 			*p_data++ = (*(u32*)(&m->materials[m->material_indices[i].index].diffuse[0]) | (u64)*(u32*)(&m->materials[m->material_indices[i].index].diffuse[1]) << 32);
 			*p_data++ = (*(u32*)(&m->materials[m->material_indices[i].index].diffuse[2]) | (u64)*(u32*)(&m->materials[m->material_indices[i].index].diffuse[3]) << 32);	
 
-			curr_vif_packet = vif_packets[context];
+			unpack_list_open(&data, vif_packets[context], 0, true);
+			{
+				unpack_list_append(&data, cube_packet, 6);
+				unpack_list_append(&data, &positions[idxs_drawn], count);
+				unpack_list_append(&data, &texcoords[idxs_drawn], count);
+			}
+			curr_vif_packet = unpack_list_close(&data);
 
-			u32 vif_added_bytes = 0; 
-
-			// Merge packets
-			curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, cube_packet, 6, 1);
-			vif_added_bytes += 6;
-
-			curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &positions[idxs_drawn], count, 1);
-			vif_added_bytes += count; // one VECTOR is size of qword
-
-			curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &texcoords[idxs_drawn], count, 1);
-			vif_added_bytes += count;
-
-			*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
-			*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, (last_index == -1? VIF_MSCALF : VIF_MSCNT), 0) << 32));
-
-			*curr_vif_packet++ = DMA_TAG(0, 0, DMA_END, 0, 0 , 0);
-			*curr_vif_packet++ = (VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32);
-
-			asm volatile("nop":::"memory");
+			vu_start_program(curr_vif_packet, last_index == -1);
+			dma_add_end_tag(curr_vif_packet);
 
 			vifSendPacket(vif_packets[context], DMA_CHANNEL_VIF1);
 
@@ -1040,8 +985,9 @@ void draw_vu1_with_colors(model* m, float pos_x, float pos_y, float pos_z, float
 	context = !context;
 }
 
-void draw_vu1_with_colors_notex(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z)
-{
+void draw_vu1_with_colors_notex(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z) {
+	unpack_list data;
+
 	VECTOR object_position = { pos_x, pos_y, pos_z, 1.00f };
 	VECTOR object_rotation = { rot_x, rot_y, rot_z, 1.00f };
 
@@ -1063,14 +1009,10 @@ void draw_vu1_with_colors_notex(model* m, float pos_x, float pos_y, float pos_z,
 
 	curr_vif_packet = vif_packets[context];
 
-	*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
-	*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32));
-
 	// Add matrix at the beggining of VU mem (skip TOP)
 	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 0, &local_screen, 4, 0);
 
-	*curr_vif_packet++ = DMA_TAG(0, 0, DMA_END, 0, 0 , 0);
-	*curr_vif_packet++ = (VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32);
+	dma_add_end_tag(curr_vif_packet);
 
 	vifSendPacket(vif_packets[context], DMA_CHANNEL_VIF1);
 
@@ -1109,24 +1051,15 @@ void draw_vu1_with_colors_notex(model* m, float pos_x, float pos_y, float pos_z,
 			*p_data++ = (*(u32*)(&m->materials[m->material_indices[i].index].diffuse[0]) | (u64)*(u32*)(&m->materials[m->material_indices[i].index].diffuse[1]) << 32);
 			*p_data++ = (*(u32*)(&m->materials[m->material_indices[i].index].diffuse[2]) | (u64)*(u32*)(&m->materials[m->material_indices[i].index].diffuse[3]) << 32);	
 
-			curr_vif_packet = vif_packets[context];
+			unpack_list_open(&data, vif_packets[context], 0, true);
+			{
+				unpack_list_append(&data, cube_packet, 3);
+				unpack_list_append(&data, &positions[idxs_drawn], count);
+			}
+			curr_vif_packet = unpack_list_close(&data);
 
-			u32 vif_added_bytes = 0; 
-
-			// Merge packets
-			curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, cube_packet, 3, 1);
-			vif_added_bytes += 3;
-
-			curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &positions[idxs_drawn], count, 1);
-			vif_added_bytes += count; // one VECTOR is size of qword
-
-			*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
-			*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, (last_index == -1? VIF_MSCALF : VIF_MSCNT), 0) << 32));
-
-			*curr_vif_packet++ = DMA_TAG(0, 0, DMA_END, 0, 0 , 0);
-			*curr_vif_packet++ = (VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32);
-
-			asm volatile("nop":::"memory");
+			vu_start_program(curr_vif_packet, last_index == -1);
+			dma_add_end_tag(curr_vif_packet);
 
 			vifSendPacket(vif_packets[context], DMA_CHANNEL_VIF1);
 
@@ -1140,8 +1073,9 @@ void draw_vu1_with_colors_notex(model* m, float pos_x, float pos_y, float pos_z,
 	context = !context;
 }
 
-void draw_vu1_with_lights(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z)
-{
+void draw_vu1_with_lights(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z) {
+	unpack_list data;
+
 	GSGLOBAL *gsGlobal = getGSGLOBAL();
 
 	update_vu_program(VU1Draw3DLightsColors);
@@ -1182,8 +1116,7 @@ void draw_vu1_with_lights(model* m, float pos_x, float pos_y, float pos_z, float
 	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 8, &active_dir_lights, 1, 0);
 	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 9, &dir_lights,       12, 0);
 
-	*curr_vif_packet++ = DMA_TAG(0, 0, DMA_END, 0, 0 , 0);
-	*curr_vif_packet++ = (VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32);
+	dma_add_end_tag(curr_vif_packet);
 
 	vifSendPacket(vif_packets[context], DMA_CHANNEL_VIF1);
 
@@ -1254,30 +1187,17 @@ void draw_vu1_with_lights(model* m, float pos_x, float pos_y, float pos_z, float
 			*p_data++ = (*(u32*)(&m->materials[m->material_indices[i].index].diffuse[0]) | (u64)*(u32*)(&m->materials[m->material_indices[i].index].diffuse[1]) << 32);
 			*p_data++ = (*(u32*)(&m->materials[m->material_indices[i].index].diffuse[2]) | (u64)*(u32*)(&m->materials[m->material_indices[i].index].diffuse[3]) << 32);	
 
-			curr_vif_packet = vif_packets[context];
+			unpack_list_open(&data, vif_packets[context], 0, true);
+			{
+				unpack_list_append(&data, cube_packet, 6);
+				unpack_list_append(&data, &positions[idxs_drawn], count);
+				unpack_list_append(&data, &texcoords[idxs_drawn], count);
+				unpack_list_append(&data, &normals[idxs_drawn], count);
+			}
+			curr_vif_packet = unpack_list_close(&data);
 
-			u32 vif_added_bytes = 0; 
-
-			// Merge packets
-			curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, cube_packet, 6, 1);
-			vif_added_bytes += 6;
-
-			curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &positions[idxs_drawn], count, 1);
-			vif_added_bytes += count; // one VECTOR is size of qword
-
-			curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &texcoords[idxs_drawn], count, 1);
-			vif_added_bytes += count;
-
-			curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &normals[idxs_drawn], count, 1);
-			vif_added_bytes += count;
-
-			*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
-			*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, (last_index == -1? VIF_MSCALF : VIF_MSCNT), 0) << 32));
-
-			*curr_vif_packet++ = DMA_TAG(0, 0, DMA_END, 0, 0 , 0);
-			*curr_vif_packet++ = (VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32);
-
-			asm volatile("nop":::"memory");
+			vu_start_program(curr_vif_packet, last_index == -1);
+			dma_add_end_tag(curr_vif_packet);
 
 			vifSendPacket(vif_packets[context], DMA_CHANNEL_VIF1);
 
@@ -1291,8 +1211,9 @@ void draw_vu1_with_lights(model* m, float pos_x, float pos_y, float pos_z, float
 	context = !context;
 }
 
-void draw_vu1_with_lights_notex(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z)
-{
+void draw_vu1_with_lights_notex(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z) {
+	unpack_list data;
+
 	GSGLOBAL *gsGlobal = getGSGLOBAL();
 
 	update_vu_program(VU1Draw3DLightsColorsNoTex);
@@ -1333,8 +1254,7 @@ void draw_vu1_with_lights_notex(model* m, float pos_x, float pos_y, float pos_z,
 	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 8, &active_dir_lights, 1, 0);
 	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 9, &dir_lights,       12, 0);
 
-	*curr_vif_packet++ = DMA_TAG(0, 0, DMA_END, 0, 0 , 0);
-	*curr_vif_packet++ = (VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32);
+	dma_add_end_tag(curr_vif_packet);
 
 	vifSendPacket(vif_packets[context], DMA_CHANNEL_VIF1);
 
@@ -1374,27 +1294,16 @@ void draw_vu1_with_lights_notex(model* m, float pos_x, float pos_y, float pos_z,
 			*p_data++ = (*(u32*)(&m->materials[m->material_indices[i].index].diffuse[0]) | (u64)*(u32*)(&m->materials[m->material_indices[i].index].diffuse[1]) << 32);
 			*p_data++ = (*(u32*)(&m->materials[m->material_indices[i].index].diffuse[2]) | (u64)*(u32*)(&m->materials[m->material_indices[i].index].diffuse[3]) << 32);	
 
-			curr_vif_packet = vif_packets[context];
+			unpack_list_open(&data, vif_packets[context], 0, true);
+			{
+				unpack_list_append(&data, cube_packet, 3);
+				unpack_list_append(&data, &positions[idxs_drawn], count);
+				unpack_list_append(&data, &normals[idxs_drawn], count);
+			}
+			curr_vif_packet = unpack_list_close(&data);
 
-			u32 vif_added_bytes = 0; 
-
-			// Merge packets
-			curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, cube_packet, 3, 1);
-			vif_added_bytes += 3;
-
-			curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &positions[idxs_drawn], count, 1);
-			vif_added_bytes += count; // one VECTOR is size of qword
-
-			curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &normals[idxs_drawn], count, 1);
-			vif_added_bytes += count;
-
-			*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
-			*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, (last_index == -1? VIF_MSCALF : VIF_MSCNT), 0) << 32));
-
-			*curr_vif_packet++ = DMA_TAG(0, 0, DMA_END, 0, 0 , 0);
-			*curr_vif_packet++ = (VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32);
-
-			asm volatile("nop":::"memory");
+			vu_start_program(curr_vif_packet, last_index == -1);
+			dma_add_end_tag(curr_vif_packet);
 
 			vifSendPacket(vif_packets[context], DMA_CHANNEL_VIF1);
 
@@ -1408,8 +1317,9 @@ void draw_vu1_with_lights_notex(model* m, float pos_x, float pos_y, float pos_z,
 	context = !context;
 }
 
-void draw_vu1_with_spec_lights(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z)
-{
+void draw_vu1_with_spec_lights(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z) {
+	unpack_list data;
+
 	GSGLOBAL *gsGlobal = getGSGLOBAL();
 
 	update_vu_program(VU1Draw3DSpec);
@@ -1451,8 +1361,7 @@ void draw_vu1_with_spec_lights(model* m, float pos_x, float pos_y, float pos_z, 
 	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 9,  getCameraPosition(),   1,  0);
 	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 10, &dir_lights,        16, 0);
 
-	*curr_vif_packet++ = DMA_TAG(0, 0, DMA_END, 0, 0 , 0);
-	*curr_vif_packet++ = (VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32);
+	dma_add_end_tag(curr_vif_packet);
 
 	vifSendPacket(vif_packets[context], DMA_CHANNEL_VIF1);
 
@@ -1523,30 +1432,17 @@ void draw_vu1_with_spec_lights(model* m, float pos_x, float pos_y, float pos_z, 
 			*p_data++ = (*(u32*)(&m->materials[m->material_indices[i].index].diffuse[0]) | (u64)*(u32*)(&m->materials[m->material_indices[i].index].diffuse[1]) << 32);
 			*p_data++ = (*(u32*)(&m->materials[m->material_indices[i].index].diffuse[2]) | (u64)*(u32*)(&m->materials[m->material_indices[i].index].diffuse[3]) << 32);	
 
-			curr_vif_packet = vif_packets[context];
+			unpack_list_open(&data, vif_packets[context], 0, true);
+			{
+				unpack_list_append(&data, cube_packet, 6);
+				unpack_list_append(&data, &positions[idxs_drawn], count);
+				unpack_list_append(&data, &texcoords[idxs_drawn], count);
+				unpack_list_append(&data, &normals[idxs_drawn], count);
+			}
+			curr_vif_packet = unpack_list_close(&data);
 
-			u32 vif_added_bytes = 0; 
-
-			// Merge packets
-			curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, cube_packet, 6, 1);
-			vif_added_bytes += 6;
-
-			curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &positions[idxs_drawn], count, 1);
-			vif_added_bytes += count; // one VECTOR is size of qword
-
-			curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &texcoords[idxs_drawn], count, 1);
-			vif_added_bytes += count;
-
-			curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &normals[idxs_drawn], count, 1);
-			vif_added_bytes += count;
-
-			*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
-			*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, (last_index == -1? VIF_MSCALF : VIF_MSCNT), 0) << 32));
-
-			*curr_vif_packet++ = DMA_TAG(0, 0, DMA_END, 0, 0 , 0);
-			*curr_vif_packet++ = (VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32);
-
-			asm volatile("nop":::"memory");
+			vu_start_program(curr_vif_packet, last_index == -1);
+			dma_add_end_tag(curr_vif_packet);
 
 			vifSendPacket(vif_packets[context], DMA_CHANNEL_VIF1);
 
@@ -1560,8 +1456,9 @@ void draw_vu1_with_spec_lights(model* m, float pos_x, float pos_y, float pos_z, 
 	context = !context;
 }
 
-void draw_vu1_with_spec_lights_notex(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z)
-{
+void draw_vu1_with_spec_lights_notex(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z) {
+	unpack_list data;
+
 	GSGLOBAL *gsGlobal = getGSGLOBAL();
 
 	update_vu_program(VU1Draw3DSpecNoTex);
@@ -1603,8 +1500,7 @@ void draw_vu1_with_spec_lights_notex(model* m, float pos_x, float pos_y, float p
 	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 9,  getCameraPosition(),   1,  0);
 	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 10, &dir_lights,        16, 0);
 
-	*curr_vif_packet++ = DMA_TAG(0, 0, DMA_END, 0, 0 , 0);
-	*curr_vif_packet++ = (VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32);
+	dma_add_end_tag(curr_vif_packet);
 
 	vifSendPacket(vif_packets[context], DMA_CHANNEL_VIF1);
 
@@ -1644,27 +1540,16 @@ void draw_vu1_with_spec_lights_notex(model* m, float pos_x, float pos_y, float p
 			*p_data++ = (*(u32*)(&m->materials[m->material_indices[i].index].diffuse[0]) | (u64)*(u32*)(&m->materials[m->material_indices[i].index].diffuse[1]) << 32);
 			*p_data++ = (*(u32*)(&m->materials[m->material_indices[i].index].diffuse[2]) | (u64)*(u32*)(&m->materials[m->material_indices[i].index].diffuse[3]) << 32);	
 
-			curr_vif_packet = vif_packets[context];
+			unpack_list_open(&data, vif_packets[context], 0, true);
+			{
+				unpack_list_append(&data, cube_packet, 3);
+				unpack_list_append(&data, &positions[idxs_drawn], count);
+				unpack_list_append(&data, &normals[idxs_drawn], count);
+			}
+			curr_vif_packet = unpack_list_close(&data);
 
-			u32 vif_added_bytes = 0; 
-
-			// Merge packets
-			curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, cube_packet, 3, 1);
-			vif_added_bytes += 3;
-
-			curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &positions[idxs_drawn], count, 1);
-			vif_added_bytes += count; // one VECTOR is size of qword
-
-			curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, &normals[idxs_drawn], count, 1);
-			vif_added_bytes += count;
-
-			*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
-			*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, (last_index == -1? VIF_MSCALF : VIF_MSCNT), 0) << 32));
-
-			*curr_vif_packet++ = DMA_TAG(0, 0, DMA_END, 0, 0 , 0);
-			*curr_vif_packet++ = (VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32);
-
-			asm volatile("nop":::"memory");
+			vu_start_program(curr_vif_packet, last_index == -1);
+			dma_add_end_tag(curr_vif_packet);
 
 			vifSendPacket(vif_packets[context], DMA_CHANNEL_VIF1);
 
