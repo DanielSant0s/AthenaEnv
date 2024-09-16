@@ -74,7 +74,11 @@ EXT_LIBS = modules/ds34usb/ee/libds34usb.a modules/ds34bt/ee/libds34bt.a
 JS_CORE = quickjs/cutils.o quickjs/libbf.o quickjs/libregexp.o quickjs/libunicode.o \
 				 quickjs/realpath.o quickjs/quickjs.o quickjs/quickjs-libc.o 
 
-VU1_MPGS = draw_3D_colors.o draw_3D_colors_notex.o draw_3D.o draw_3D_notex.o draw_3D_lights.o draw_3D_lights_notex.o draw_3D_spec.o draw_3D_spec_notex.o
+VU1_MPGS = draw_3D_pvc.o draw_3D_pvc_notex.o \
+           draw_3D_colors.o draw_3D_colors_notex.o \
+           draw_3D.o draw_3D_notex.o \
+           draw_3D_lights.o draw_3D_lights_notex.o \
+           draw_3D_spec.o draw_3D_spec_notex.o
 
 APP_CORE = main.o bootlogo.o vif.o athena_math.o memory.o ee_tools.o module_system.o taskman.o pad.o system.o strUtils.o 
 
@@ -91,7 +95,7 @@ EMBEDDED_ASSETS = quicksand_regular.o owl_indices.o owl_palette.o
 
 ifeq ($(GRAPHICS),1)
   EE_CFLAGS += -DATHENA_GRAPHICS
-  APP_CORE += graphics.o atlas.o fntsys.o render.o calc_3d.o fast_obj/fast_obj.o
+  APP_CORE += graphics.o atlas.o fntsys.o render.o camera.o calc_3d.o fast_obj/fast_obj.o
   ATHENA_MODULES += ath_color.o ath_font.o ath_render.o ath_screen.o ath_image.o ath_imagelist.o ath_shape.o 
 endif
 
@@ -159,7 +163,7 @@ all: $(EXT_LIBS) $(EE_BIN) $(EE_EMBED_DIR) $(EE_OBJS_DIR)
 	mv $(EE_BIN) bin/
 #	mv $(EE_BIN_PKD) bin/
 
-# mpgs: src/draw_3D.vsm src/draw_3D_notex.vsm src/draw_3D_colors.vsm src/draw_3D_colors_notex.vsm src/draw_3D_lights.vsm src/draw_3D_lights_notex.vsm src/draw_3D_spec.vsm src/draw_3D_spec_notex.vsm
+# mpgs: src/draw_3D.vsm src/draw_3D_notex.vsm src/draw_3D_pvc.vsm src/draw_3D_pvc_notex.vsm src/draw_3D_colors.vsm src/draw_3D_colors_notex.vsm src/draw_3D_lights.vsm src/draw_3D_lights_notex.vsm src/draw_3D_spec.vsm src/draw_3D_spec_notex.vsm
 
 debug: $(EXT_LIBS) $(EE_BIN)
 	echo "Building $(EE_BIN) with debug symbols..."

@@ -9,7 +9,9 @@ const pipelines = [
     "DEFAULT",
     "DEFAULT_NO_TEX",
     "SPECULAR",
-    "SPECULAR_NO_TEX"
+    "SPECULAR_NO_TEX",
+    "PVC",
+    "PVC_NO_TEX",
 ];
 
 let fntcpy = new Font("default");
@@ -50,30 +52,30 @@ const vertList = [
 const listtest = new RenderObject(vertList);
 
 let dragontex = new Image("dragon.png");
-const dragonmesh = new RenderObject("dragon.objf", dragontex);
+const dragonmesh = new RenderObject("dragon.obj", dragontex);
 
 let monkeytex = new Image("monkey.png");
-const monkeymesh = new RenderObject("monkey.objf", monkeytex);
+const monkeymesh = new RenderObject("monkey.obj", monkeytex);
 
 const car = new RenderObject("Car.obj");
 
 let car_vertices = car.vertices;
 
-car_vertices.forEach(vertex => {
-    if (vertex.r > 0.45f && vertex.g < 0.2f && vertex.b < 0.2f) {
-        vertex.r = 0.4f;
-        vertex.g = 0.0f;
-        vertex.b = 0.8f;
-    }
-});
-
-car.vertices = car_vertices;
+//car_vertices.forEach(vertex => {
+//    if (vertex.r > 0.45f && vertex.g < 0.2f && vertex.b < 0.2f) {
+//        vertex.r = 0.4f;
+//        vertex.g = 0.0f;
+//        vertex.b = 0.8f;
+//    }
+//});
+//
+//car.vertices = car_vertices;
 
 const mill = new RenderObject("cubes.obj");
 
 const boombox = new RenderObject("Boombox.obj");
-let boomboxtex = boombox.getTexture(0);
-boomboxtex.filter = LINEAR;
+//let boomboxtex = boombox.getTexture(0);
+//boomboxtex.filter = LINEAR;
 
 function generateSphere(radius, latSegments, longSegments) {
     const vertList = [];
@@ -191,7 +193,7 @@ while(true) {
         model[modeltodisplay].setPipeline(model[modeltodisplay].getPipeline()-1);
     }
 
-    if(pad.justPressed(Pads.DOWN) && model[modeltodisplay].getPipeline() < 7){
+    if(pad.justPressed(Pads.DOWN) && model[modeltodisplay].getPipeline() < pipelines.length){
         model[modeltodisplay].setPipeline(model[modeltodisplay].getPipeline()+1);
     }
     

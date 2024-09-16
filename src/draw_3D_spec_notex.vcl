@@ -51,13 +51,12 @@ init:
                                      ; float : X, Y, Z - scale vector that we will use to scale the verts after projecting them.
                                      ; float : W - vert count.
     lq      primTag,        1(iBase) ; GIF tag - tell GS how many data we will send
-    lq      rgba,           2(iBase) ; RGBA
+    lq      matDiffuse,     2(iBase) ; RGBA
                                      ; u32 : R, G, B, A (0-128)
 
     iaddiu  vertexData,     iBase,      3           ; pointer to vertex data
     ilw.w   vertCount,      0(iBase)                ; load vert count from scale vector
-    iadd    colorData,      vertexData, vertCount   ; pointer to colors
-    iadd    normalData,     colorData,  vertCount   ; pointer to normals
+    iadd    normalData,     vertexData,  vertCount   ; pointer to normals
     iadd    dataPointers,  normalData,  vertCount
 
     iaddiu    kickAddress,    dataPointers,  0       ; pointer for XGKICK
@@ -76,8 +75,6 @@ init:
         lq inVert, 0(vertexData)    ; load xyz
                                     ; float : X, Y, Z
                                     ; any32 : _ = 0
-
-        lq.xyzw color,  0(colorData) ; load color
         lq.xyzw inNorm,  0(normalData) ; load normal                    
         ;////////////////////////////////////////////    
 
@@ -166,9 +163,10 @@ init:
             iaddiu   currDirLight,  currDirLight,  1; increment the loop counter 
             ibne    dirLightQnt,  currDirLight,  directionaLightsLoop	; and repeat if needed
 
-        mul.xyz    color, color,  light            ; color = color * light
+        mul.xyzw    color, matDiffuse,  light            ; color = color * light
         VectorClamp color, color 0.0 1.0
-        mul color, color, rgba                     ; normalize RGBA
+        loi 128.0
+        mul color, color, i                     ; normalize RGBA
         ColorFPtoGsRGBAQ intColor, color           ; convert to int
         ;///////////////////////////////////////////
 
@@ -179,7 +177,6 @@ init:
         ;////////////////////////////////////////////
 
         iaddiu          vertexData,     vertexData,     1                         
-        iaddiu          colorData,      colorData,      1  
         iaddiu          normalData,     normalData,     1
         iaddiu          destAddress,    destAddress,    2
 
