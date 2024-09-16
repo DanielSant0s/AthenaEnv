@@ -5,7 +5,7 @@
 ;
 ; 
 ;---------------------------------------------------------------
-; draw_3D_lights.vcl                                                   |
+; draw_3D_lights_notex.vcl                                                   |
 ;---------------------------------------------------------------
 ; A VU1 microprogram to draw 3D object using XYZ2, RGBAQ and ST|
 ; This program uses double buffering (xtop)                    |
@@ -15,9 +15,9 @@
 ; - Jesper Svennevid, Daniel Collin                            |
 ; - Guilherme Lampert                                          |
 ;---------------------------------------------------------------
-
+ 
 .syntax new
-.name VU1Draw3DColors
+.name VU1Draw3DPVCNoTex
 .vu
 .init_vf_all
 .init_vi_all
@@ -43,24 +43,17 @@ init:
     lq.xyz  scale,          0(iBase) ; load program params
                                      ; float : X, Y, Z - scale vector that we will use to scale the verts after projecting them.
                                      ; float : W - vert count.
-    lq      gifSetTag,      1(iBase) ; GIF tag - set
-    lq      texGifTag1,     2(iBase) ; GIF tag - texture LOD
-    lq      texGifTag2,     3(iBase) ; GIF tag - texture buffer & CLUT
-    lq      primTag,        4(iBase) ; GIF tag - tell GS how many data we will send
-    lq      matDiffuse,     5(iBase) ; RGBA
+    lq      primTag,        1(iBase) ; GIF tag - tell GS how many data we will send
+    lq      rgba,           2(iBase) ; RGBA
                                      ; u32 : R, G, B, A (0-128)
-    iaddiu  vertexData,     iBase,      6           ; pointer to vertex data
+    iaddiu  vertexData,     iBase,      3           ; pointer to vertex data
     ilw.w   vertCount,      0(iBase)                ; load vert count from scale vector
-    iadd    stqData,        vertexData, vertCount   ; pointer to stq
-    iadd    kickAddress,    stqData,  vertCount       ; pointer for XGKICK
-    iadd    destAddress,    stqData,  vertCount       ; helper pointer for data inserting
+    iadd    colorData,      vertexData, vertCount   ; pointer to colors
+    iadd    kickAddress,    colorData,  vertCount       ; pointer for XGKICK
+    iadd    destAddress,    colorData,  vertCount       ; helper pointer for data inserting
     ;////////////////////////////////////////////
 
     ;/////////// --- Store tags --- /////////////
-    sqi gifSetTag,  (destAddress++) ;
-    sqi texGifTag1, (destAddress++) ; texture LOD tag
-    sqi gifSetTag,  (destAddress++) ;
-    sqi texGifTag2, (destAddress++) ; texture buffer & CLUT tag
     sqi primTag,    (destAddress++) ; prim + tell gs how many data will be
     ;////////////////////////////////////////////
 
@@ -72,11 +65,7 @@ init:
         lq vertex, 0(vertexData)    ; load xyz
                                     ; float : X, Y, Z
                                     ; any32 : _ = 0
-        lq stq,    0(stqData)       ; load stq
-                                    ; float : S, T
-                                    ; any32 : Q = 1     ; 1, because we will mul this by 1/vert[w] and this
-                                                        ; will be our q for texture perspective correction
-                                    ; any32 : _ = 0         
+        lq.xyzw color,  0(colorData) ; load color                  
         ;////////////////////////////////////////////    
 
 
@@ -95,7 +84,7 @@ init:
 							; bit, which tells the GS not to perform a drawing kick on this
 							; triangle.
 
-        isw.w		iADC,   2(destAddress)
+        isw.w		iADC,   1(destAddress)
         
         div         q,      vf00[w],    vertex[w]   ; perspective divide (1/vert[w]):
         mul.xyz     vertex, vertex,     q
@@ -104,27 +93,20 @@ init:
         ftoi4.xyz   vertex, vertex                  ; convert vertex to 12:4 fixed point format
         ;////////////////////////////////////////////
 
-
-        ;//////////////// --- ST --- ////////////////
-        mulq modStq, stq, q
-        ;////////////////////////////////////////////
-
         ;//////////////// - COLORS - /////////////////
-        loi 128.0 
-        mul color, matDiffuse, i                   ; normalize RGBA
+        mul color, color, rgba                     ; normalize RGBA
         ColorFPtoGsRGBAQ intColor, color           ; convert to int
         ;///////////////////////////////////////////
 
 
         ;//////////// --- Store data --- ////////////
-        sq modStq,      0(destAddress)      ; STQ
-        sq intColor,    1(destAddress)      ; RGBA ; q is grabbed from stq
-        sq.xyz vertex,  2(destAddress)      ; XYZ2
+        sq intColor,    0(destAddress)      ; RGBA ; q is grabbed from stq
+        sq.xyz vertex,  1(destAddress)      ; XYZ2
         ;////////////////////////////////////////////
 
         iaddiu          vertexData,     vertexData,     1                         
-        iaddiu          stqData,        stqData,        1   
-        iaddiu          destAddress,    destAddress,    3
+        iaddiu          colorData,      colorData,      1  
+        iaddiu          destAddress,    destAddress,    2
 
         iaddi   vertexCounter,  vertexCounter,  -1	; decrement the loop counter 
         ibne    vertexCounter,  iBase,   vertexLoop	; and repeat if needed

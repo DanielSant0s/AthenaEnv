@@ -22,7 +22,7 @@ extern bool boot_logo, dark_mode;
 #ifdef ATHENA_GRAPHICS
 typedef struct {
 	const char* path;
-    GSTEXTURE tex;
+    GSTEXTURE *tex;
 	bool delayed;
 	bool loaded;
     Color color;
