@@ -440,18 +440,6 @@ static u32* last_mpg = NULL;
 		} \
 	} while (0)
 
-#define dma_add_end_tag(packet) \
-	do { \
-		*packet++ = DMA_TAG(0, 0, DMA_END, 0, 0 , 0); \
-		*packet++ = (VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32); \
-	} while (0)
-
-#define vu_start_program(packet, init) \
-	do { \
-		*packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0); \
-		*packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, (init? VIF_MSCALF : VIF_MSCNT), 0) << 32)); \
-	} while (0)
-
 void draw_vu1(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z) {
 	unpack_list data;
 
@@ -473,10 +461,7 @@ void draw_vu1(model* m, float pos_x, float pos_y, float pos_z, float rot_x, floa
 
 	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
 
-	curr_vif_packet = vif_packets[context];
-
-	// Add matrix at the beggining of VU mem (skip TOP)
-	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 0, &local_screen, 4, 0);
+	curr_vif_packet = vu_add_unpack_data(vif_packets[context], 0, &local_screen, 4, 0);
 
 	dma_add_end_tag(curr_vif_packet);
 
@@ -592,10 +577,7 @@ void draw_vu1_notex(model* m, float pos_x, float pos_y, float pos_z, float rot_x
 
 	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
 
-	curr_vif_packet = vif_packets[context];
-
-	// Add matrix at the beggining of VU mem (skip TOP)
-	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 0, &local_screen, 4, 0);
+	curr_vif_packet = vu_add_unpack_data(vif_packets[context], 0, &local_screen, 4, 0);
 
 	dma_add_end_tag(curr_vif_packet);
 
@@ -675,16 +657,9 @@ void draw_vu1_pvc(model* m, float pos_x, float pos_y, float pos_z, float rot_x, 
 
 	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
 
-	curr_vif_packet = vif_packets[context];
+	curr_vif_packet = vu_add_unpack_data(vif_packets[context], 0, &local_screen, 4, 0);
 
-	*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
-	*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32));
-
-	// Add matrix at the beggining of VU mem (skip TOP)
-	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 0, &local_screen, 4, 0);
-
-	*curr_vif_packet++ = DMA_TAG(0, 0, DMA_END, 0, 0 , 0);
-	*curr_vif_packet++ = (VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32);
+	dma_add_end_tag(curr_vif_packet);
 
 	vifSendPacket(vif_packets[context], DMA_CHANNEL_VIF1);
 
@@ -806,10 +781,7 @@ void draw_vu1_pvc_notex(model* m, float pos_x, float pos_y, float pos_z, float r
 
 	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
 
-	curr_vif_packet = vif_packets[context];
-
-	// Add matrix at the beggining of VU mem (skip TOP)
-	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 0, &local_screen, 4, 0);
+	curr_vif_packet = vu_add_unpack_data(vif_packets[context], 0, &local_screen, 4, 0);
 
 	dma_add_end_tag(curr_vif_packet);
 
@@ -887,10 +859,7 @@ void draw_vu1_with_colors(model* m, float pos_x, float pos_y, float pos_z, float
 
 	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
 
-	curr_vif_packet = vif_packets[context];
-
-	// Add matrix at the beggining of VU mem (skip TOP)
-	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 0, &local_screen, 4, 0);
+	curr_vif_packet = vu_add_unpack_data(vif_packets[context], 0, &local_screen, 4, 0);
 
 	dma_add_end_tag(curr_vif_packet);
 
@@ -1007,10 +976,7 @@ void draw_vu1_with_colors_notex(model* m, float pos_x, float pos_y, float pos_z,
 
 	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
 
-	curr_vif_packet = vif_packets[context];
-
-	// Add matrix at the beggining of VU mem (skip TOP)
-	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 0, &local_screen, 4, 0);
+	curr_vif_packet = vu_add_unpack_data(vif_packets[context], 0, &local_screen, 4, 0);
 
 	dma_add_end_tag(curr_vif_packet);
 
@@ -1108,13 +1074,14 @@ void draw_vu1_with_lights(model* m, float pos_x, float pos_y, float pos_z, float
 
 	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
 
-	curr_vif_packet = vif_packets[context];
-
-	// Add matrix at the beggining of VU mem (skip TOP)
-	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 0, &local_screen,      4, 0);
-	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 4, &local_light,       4, 0);
-	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 8, &active_dir_lights, 1, 0);
-	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 9, &dir_lights,       12, 0);
+	unpack_list_open(&data, vif_packets[context], 0, false);
+	{
+		unpack_list_append(&data, &local_screen,       4);
+		unpack_list_append(&data, &local_light,        4);
+		unpack_list_append(&data, &active_dir_lights,  1);
+		unpack_list_append(&data, &dir_lights,         12);
+	}
+	curr_vif_packet = unpack_list_close(&data);
 
 	dma_add_end_tag(curr_vif_packet);
 
@@ -1246,13 +1213,14 @@ void draw_vu1_with_lights_notex(model* m, float pos_x, float pos_y, float pos_z,
 
 	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
 
-	curr_vif_packet = vif_packets[context];
-
-	// Add matrix at the beggining of VU mem (skip TOP)
-	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 0, &local_screen,      4, 0);
-	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 4, &local_light,       4, 0);
-	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 8, &active_dir_lights, 1, 0);
-	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 9, &dir_lights,       12, 0);
+	unpack_list_open(&data, vif_packets[context], 0, false);
+	{
+		unpack_list_append(&data, &local_screen,       4);
+		unpack_list_append(&data, &local_light,        4);
+		unpack_list_append(&data, &active_dir_lights,  1);
+		unpack_list_append(&data, &dir_lights,         12);
+	}
+	curr_vif_packet = unpack_list_close(&data);
 
 	dma_add_end_tag(curr_vif_packet);
 
@@ -1350,16 +1318,17 @@ void draw_vu1_with_spec_lights(model* m, float pos_x, float pos_y, float pos_z, 
   	matrix_multiply(local_screen, local_screen, world_view);
   	matrix_multiply(local_screen, local_screen, view_screen);
 
-	curr_vif_packet = vif_packets[context];
-
 	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
 
-	// Add matrix at the beggining of VU mem (skip TOP)
-	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 0,  &local_screen,      4,  0);
-	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 4,  &local_light,       4,  0);
-	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 8,  &active_dir_lights, 1,  0);
-	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 9,  getCameraPosition(),   1,  0);
-	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 10, &dir_lights,        16, 0);
+	unpack_list_open(&data, vif_packets[context], 0, false);
+	{
+		unpack_list_append(&data, &local_screen,       4);
+		unpack_list_append(&data, &local_light,        4);
+		unpack_list_append(&data, &active_dir_lights,  1);
+		unpack_list_append(&data, getCameraPosition(), 1);
+		unpack_list_append(&data, &dir_lights,         16);
+	}
+	curr_vif_packet = unpack_list_close(&data);
 
 	dma_add_end_tag(curr_vif_packet);
 
@@ -1489,16 +1458,17 @@ void draw_vu1_with_spec_lights_notex(model* m, float pos_x, float pos_y, float p
   	matrix_multiply(local_screen, local_screen, world_view);
   	matrix_multiply(local_screen, local_screen, view_screen);
 
-	curr_vif_packet = vif_packets[context];
-
 	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
 
-	// Add matrix at the beggining of VU mem (skip TOP)
-	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 0,  &local_screen,      4,  0);
-	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 4,  &local_light,       4,  0);
-	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 8,  &active_dir_lights, 1,  0);
-	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 9,  getCameraPosition(),   1,  0);
-	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 10, &dir_lights,        16, 0);
+	unpack_list_open(&data, vif_packets[context], 0, false);
+	{
+		unpack_list_append(&data, &local_screen,       4);
+		unpack_list_append(&data, &local_light,        4);
+		unpack_list_append(&data, &active_dir_lights,  1);
+		unpack_list_append(&data, getCameraPosition(), 1);
+		unpack_list_append(&data, &dir_lights,         16);
+	}
+	curr_vif_packet = unpack_list_close(&data);
 
 	dma_add_end_tag(curr_vif_packet);
 
