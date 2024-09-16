@@ -12,6 +12,18 @@
 	extern u32 name##_CodeStart __attribute__((section(".vudata"))); \
 	extern u32 name##_CodeEnd __attribute__((section(".vudata")))
 
+#define dma_add_end_tag(packet) \
+	do { \
+		*packet++ = DMA_TAG(0, 0, DMA_END, 0, 0 , 0); \
+		*packet++ = (VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32); \
+	} while (0)
+
+#define vu_start_program(packet, init) \
+	do { \
+		*packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0); \
+		*packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, (init? VIF_MSCALF : VIF_MSCNT), 0) << 32)); \
+	} while (0)
+
 typedef struct {
     uint32_t VPS : 2;   // VIF command status
     uint32_t VEW : 1;   // VU is executing microprogram
