@@ -255,14 +255,19 @@ static void athena_object_dtor(JSRuntime *rt, JSValue val){
 	JSRenderObject* ro = JS_GetOpaque(val, js_object_class_id);
 
 	free(ro->m.positions);
-    free(ro->m.colours);
+	
+	if (ro->m.colours) {
+		free(ro->m.colours);
+	}
+    	
     free(ro->m.normals);
     free(ro->m.texcoords);
 	free(ro->m.materials);
+	free(ro->m.material_indices);
 
-	//printf("%d textures\n", ro->m.tex_count);
+	//printf("%d textures\n", ro->m.texture_count);
 
-	//for (int i = 0; i < ro->m.tex_count; i++) {
+	//for (int i = 0; i < ro->m.texture_count; i++) {
 	//	if (!((JSImageData*)JS_GetOpaque(ro->textures[i], get_img_class_id()))->path) {
 	//		printf("Freeing %d from mesh\n", i);
 	//		JS_FreeValueRT(rt, ro->textures[i]);
@@ -270,7 +275,7 @@ static void athena_object_dtor(JSRuntime *rt, JSValue val){
 	//}
 
 	free(ro->m.textures);
-	free(ro->m.tex_ranges);
+	free(ro->m.materials);
 	free(ro->textures);
 
 	js_free_rt(rt, ro);
@@ -329,15 +334,34 @@ static JSValue athena_object_ctor(JSContext *ctx, JSValueConst new_target, int a
 			JS_DupValue(ctx, argv[1]);
 			image = JS_GetOpaque2(ctx, argv[1], get_img_class_id());
 
-			image->tex.Filter = GS_FILTER_LINEAR;
+			image->tex->Filter = GS_FILTER_LINEAR;
 	
+			ro->m.materials = (ath_mat *)malloc(sizeof(ath_mat));
+			ro->m.material_count = 1;
+
+			ro->m.material_indices = (material_index *)malloc(sizeof(material_index));
+			ro->m.material_index_count = 1;
+
+			init_vector(ro->m.materials[0].ambient);
+			init_vector(ro->m.materials[0].diffuse);
+			init_vector(ro->m.materials[0].specular);
+			init_vector(ro->m.materials[0].emission);
+			init_vector(ro->m.materials[0].transmittance);
+			init_vector(ro->m.materials[0].transmission_filter);
+
+			ro->m.materials[0].shininess = 1.0f;
+			ro->m.materials[0].refraction = 1.0f;
+			ro->m.materials[0].disolve = 1.0f;
+
+			ro->m.materials[0].texture = image->tex;
+			ro->m.material_indices[0].index = 0;
+			ro->m.material_indices[0].end = ro->m.index_count;
+
 			ro->m.textures = malloc(sizeof(GSTEXTURE*));
-			ro->m.tex_ranges = malloc(sizeof(int));
 			ro->textures = malloc(sizeof(JSValue));
 
-			ro->m.textures[0] = &(image->tex);
-			ro->m.tex_count = 1;
-			ro->m.tex_ranges[0] = ro->m.index_count;
+			ro->m.textures[0] = image->tex;
+			ro->m.texture_count = 1;
 
 			ro->textures[0] = argv[1];
 		}
@@ -346,7 +370,7 @@ static JSValue athena_object_ctor(JSContext *ctx, JSValueConst new_target, int a
 		if (argc > 2) 
 			ro->m.tristrip = JS_ToBool(ctx, argv[2]);
 	
-		ro->m.pipeline = athena_render_set_pipeline(&ro->m, PL_DEFAULT);
+		ro->m.pipeline = athena_render_set_pipeline(&ro->m, PL_PVC);
 
 		goto register_3d_object;
 	}
@@ -361,16 +385,16 @@ static JSValue athena_object_ctor(JSContext *ctx, JSValueConst new_target, int a
 
 		ro->textures[0] = argv[1];
 
-		image->tex.Filter = GS_FILTER_LINEAR;
+		image->tex->Filter = GS_FILTER_LINEAR;
 
-		loadOBJ(&ro->m, file_tbo, &(image->tex));
+		loadOBJ(&ro->m, file_tbo, image->tex);
 
 	} else if (argc > 0) {
 		loadOBJ(&ro->m, file_tbo, NULL);
 
-		ro->textures = malloc(sizeof(JSValue)*ro->m.tex_count);
+		ro->textures = malloc(sizeof(JSValue)*ro->m.texture_count);
 
-		for (int i = 0; i < ro->m.tex_count; i++) {
+		for (int i = 0; i < ro->m.texture_count; i++) {
 			JSImageData* image;
     		JSValue img_obj = JS_UNDEFINED;
 
@@ -379,15 +403,13 @@ static JSValue athena_object_ctor(JSContext *ctx, JSValueConst new_target, int a
     		    return JS_EXCEPTION;
 
 			image->delayed = true;
-			image->tex = *ro->m.textures[i];
-			free(ro->m.textures[i]);
-			ro->m.textures[i] = &(image->tex);
+			image->tex = ro->m.textures[i];
 
 			image->loaded = true;
-			image->width = image->tex.Width;
-			image->height = image->tex.Height;
-			image->endx = image->tex.Width;
-			image->endy = image->tex.Height;
+			image->width = image->tex->Width;
+			image->height = image->tex->Height;
+			image->endx = image->tex->Width;
+			image->endy = image->tex->Height;
 
 			image->startx = 0.0f;
 			image->starty = 0.0f;
@@ -407,9 +429,9 @@ register_3d_object:
     proto = JS_GetPropertyStr(ctx, new_target, "prototype");
     obj = JS_NewObjectProtoClass(ctx, proto, js_object_class_id);
 
-	if (ro->m.tex_count > 0) {
+	if (ro->m.texture_count > 0) {
 		JSValue tex_arr = JS_NewArray(ctx);
-		for (int i = 0; i < ro->m.tex_count; i++) {
+		for (int i = 0; i < ro->m.texture_count; i++) {
 			if (((JSImageData*)JS_GetOpaque(ro->textures[i], get_img_class_id()))->path)
 				JS_DupValue(ctx, ro->textures[i]);
 			JS_DefinePropertyValueUint32(ctx, tex_arr, i, ro->textures[i], JS_PROP_C_W_E);
@@ -493,18 +515,18 @@ static JSValue athena_settexture(JSContext *ctx, JSValue this_val, int argc, JSV
 	JS_DupValue(ctx, argv[1]);
 	JSImageData* image = JS_GetOpaque2(ctx, argv[1], get_img_class_id());
 
-	if (ro->m.tex_count < (tex_idx+1)) {
-		ro->m.textures =   realloc(ro->m.textures,   sizeof(GSTEXTURE*)*(ro->m.tex_count+1));
-		ro->m.tex_ranges = realloc(ro->m.tex_ranges,        sizeof(int)*(ro->m.tex_count+1));
+	/*if (ro->m.texture_count < (tex_idx+1)) {
+		ro->m.textures =   realloc(ro->m.textures,   sizeof(GSTEXTURE*)*(ro->m.texture_count+1));
+		ro->m.tex_ranges = realloc(ro->m.tex_ranges,        sizeof(int)*(ro->m.texture_count+1));
 	}
 
 	ro->textures[tex_idx] = argv[1];
-	ro->m.textures[tex_idx] = &(image->tex);
+	ro->m.textures[tex_idx] = image->tex;
 
 	JSValue tex_arr = JS_GetPropertyStr(ctx, this_val, "textures");
 	JS_DefinePropertyValueUint32(ctx, tex_arr, tex_idx, ro->textures[tex_idx], JS_PROP_C_W_E);
 
-	ro->m.tex_count = (ro->m.tex_count < (tex_idx+1)? (tex_idx+1) : ro->m.tex_count);
+	ro->m.texture_count = (ro->m.texture_count < (tex_idx+1)? (tex_idx+1) : ro->m.texture_count);
 
 	if (argc > 2) {
 		int range;
@@ -514,7 +536,7 @@ static JSValue athena_settexture(JSContext *ctx, JSValue this_val, int argc, JSV
 		}
 
 		ro->m.tex_ranges[tex_idx] = range;
-	}
+	}*/
 
 	return JS_UNDEFINED;
 }
@@ -525,7 +547,7 @@ static JSValue athena_gettexture(JSContext *ctx, JSValue this_val, int argc, JSV
 
 	JS_ToUint32(ctx, &tex_idx, argv[0]);
 
-	if (ro->m.tex_count > tex_idx) {
+	if (ro->m.texture_count > tex_idx) {
 		JS_DupValue(ctx, ro->textures[tex_idx]);
 		return ro->textures[tex_idx];
 	}

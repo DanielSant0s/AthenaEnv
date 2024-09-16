@@ -39,17 +39,18 @@ static JSValue athena_image_isloaded(JSContext *ctx, JSValue this_val, int argc,
 static void athena_image_dtor(JSRuntime *rt, JSValue val){
 		JSImageData *image = JS_GetOpaque(val, js_image_class_id);
 
-		UnloadTexture(&(image->tex));
+		UnloadTexture(image->tex);
 
-		free(image->tex.Mem);
-		image->tex.Mem = NULL;
+		free(image->tex->Mem);
+		image->tex->Mem = NULL;
 
-		if(image->tex.Clut != NULL)
+		if(image->tex->Clut != NULL)
 		{
-			free(image->tex.Clut);
-			image->tex.Clut = NULL;
+			free(image->tex->Clut);
+			image->tex->Clut = NULL;
 		}
 
+		js_free_rt(rt, image->tex);
 		js_free_rt(rt, image);
 	}
 
@@ -64,8 +65,10 @@ static JSValue athena_image_ctor(JSContext *ctx, JSValueConst new_target, int ar
     if (!image)
         return JS_EXCEPTION;
 
-	image->tex.Width = 0;
-	image->tex.Height = 0;
+	image->tex = js_malloc(ctx, sizeof(GSTEXTURE));
+
+	image->tex->Width = 0;
+	image->tex->Height = 0;
 
 	image->path = JS_ToCString(ctx, argv[0]);
 
@@ -77,20 +80,20 @@ static JSValue athena_image_ctor(JSContext *ctx, JSValueConst new_target, int ar
 		goto register_obj;
 	}
 
-	load_image(&(image->tex), image->path, image->delayed);
+	load_image(image->tex, image->path, image->delayed);
 
 	image->loaded = true;
-	image->width = image->tex.Width;
-	image->height = image->tex.Height;
-	image->endx = image->tex.Width;
-	image->endy = image->tex.Height;
+	image->width = image->tex->Width;
+	image->height = image->tex->Height;
+	image->endx = image->tex->Width;
+	image->endy = image->tex->Height;
 
  register_obj:
 	image->startx = 0.0f;
 	image->starty = 0.0f;
 	image->angle = 0.0f;
 	image->color = 0x80808080;
-	image->tex.Filter = GS_FILTER_NEAREST;
+	image->tex->Filter = GS_FILTER_NEAREST;
 
     proto = JS_GetPropertyStr(ctx, new_target, "prototype");
     if (JS_IsException(proto))
@@ -117,9 +120,9 @@ static JSValue athena_image_draw(JSContext *ctx, JSValue this_val, int argc, JSV
 	JS_ToFloat32(ctx, &y, argv[1]);
 
 	if(image->angle != 0.0f){
-		drawImageRotate(&(image->tex), x, y, image->width, image->height, image->startx, image->starty, image->endx, image->endy, image->angle, image->color);
+		drawImageRotate(image->tex, x, y, image->width, image->height, image->startx, image->starty, image->endx, image->endy, image->angle, image->color);
 	} else {
-		drawImage(&(image->tex), x, y, image->width, image->height, image->startx, image->starty, image->endx, image->endy, image->color);
+		drawImage(image->tex, x, y, image->width, image->height, image->startx, image->starty, image->endx, image->endy, image->color);
 	}
 
 	return JS_UNDEFINED;
@@ -128,9 +131,9 @@ static JSValue athena_image_draw(JSContext *ctx, JSValue this_val, int argc, JSV
 static JSValue athena_image_optimize(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	JSImageData *image = JS_GetOpaque2(ctx, this_val, js_image_class_id);
 
-	switch(image->tex.PSM) {
+	switch(image->tex->PSM) {
 		case GS_PSM_CT24:
-			gsKit_texture_to_psm16(&(image->tex));
+			gsKit_texture_to_psm16(image->tex);
 			return JS_NewBool(ctx, true);
 			break;
 		default:
@@ -224,11 +227,11 @@ static JSValue athena_image_get_uint(JSContext *ctx, JSValueConst this_val, int 
 		case 0:
 			return JS_NewUint32(ctx, s->color);
 		case 1:
-			return JS_NewUint32(ctx, s->tex.Filter);
+			return JS_NewUint32(ctx, s->tex->Filter);
 		case 2:
-			return JS_NewUint32(ctx, gsKit_texture_size_ee(s->tex.Width, s->tex.Height, s->tex.PSM));
+			return JS_NewUint32(ctx, gsKit_texture_size_ee(s->tex->Width, s->tex->Height, s->tex->PSM));
 		case 3:
-			switch (s->tex.PSM) {
+			switch (s->tex->PSM) {
 				case GS_PSM_T4:
 					return JS_NewUint32(ctx, 4);
 				case GS_PSM_T8:
@@ -244,12 +247,12 @@ static JSValue athena_image_get_uint(JSContext *ctx, JSValueConst this_val, int 
 		case 4:
 			return JS_NewBool(ctx, s->delayed);
 		case 5:
-			return JS_NewArrayBuffer(ctx, s->tex.Mem, gsKit_texture_size_ee(s->tex.Width, s->tex.Height, s->tex.PSM), NULL, NULL, 1);
+			return JS_NewArrayBuffer(ctx, s->tex->Mem, gsKit_texture_size_ee(s->tex->Width, s->tex->Height, s->tex->PSM), NULL, NULL, 1);
 		case 6:
-			if (s->tex.PSM == GS_PSM_T4) {
-				return JS_NewArrayBuffer(ctx, s->tex.Clut, gsKit_texture_size_ee(8, 2, GS_PSM_CT32), NULL, NULL, 1);
-			} else if (s->tex.PSM == GS_PSM_T8) {
-					return JS_NewArrayBuffer(ctx, s->tex.Clut, gsKit_texture_size_ee(16, 16, GS_PSM_CT32), NULL, NULL, 1);
+			if (s->tex->PSM == GS_PSM_T4) {
+				return JS_NewArrayBuffer(ctx, s->tex->Clut, gsKit_texture_size_ee(8, 2, GS_PSM_CT32), NULL, NULL, 1);
+			} else if (s->tex->PSM == GS_PSM_T8) {
+					return JS_NewArrayBuffer(ctx, s->tex->Clut, gsKit_texture_size_ee(16, 16, GS_PSM_CT32), NULL, NULL, 1);
 			}
 			
 	}
@@ -271,23 +274,23 @@ static JSValue athena_image_set_uint(JSContext *ctx, JSValueConst this_val, JSVa
 			s->color = value;
 			break;
 		case 1:
-			s->tex.Filter = value;
+			s->tex->Filter = value;
 			break;
 		case 5:
-			if (s->tex.Delayed) {
+			if (s->tex->Delayed) {
 				void *pixels = JS_GetArrayBuffer(ctx, &arr_size, val);
-				if (pixels != s->tex.Mem) {
-					free(s->tex.Mem);
-					s->tex.Mem = pixels;
+				if (pixels != s->tex->Mem) {
+					free(s->tex->Mem);
+					s->tex->Mem = pixels;
 				}
 			}
 			break;
 		case 6:
-			if (s->tex.Clut && s->tex.Delayed) {
+			if (s->tex->Clut && s->tex->Delayed) {
 				void *palette = JS_GetArrayBuffer(ctx, &arr_size, val);
-				if (palette != s->tex.Clut) {
-					free(s->tex.Clut);
-					s->tex.Clut = palette;
+				if (palette != s->tex->Clut) {
+					free(s->tex->Clut);
+					s->tex->Clut = palette;
 				}
 			}
 			break;

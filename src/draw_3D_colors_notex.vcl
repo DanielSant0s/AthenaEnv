@@ -44,13 +44,12 @@ init:
                                      ; float : X, Y, Z - scale vector that we will use to scale the verts after projecting them.
                                      ; float : W - vert count.
     lq      primTag,        1(iBase) ; GIF tag - tell GS how many data we will send
-    lq      rgba,           2(iBase) ; RGBA
+    lq      matDiffuse,     2(iBase) ; RGBA
                                      ; u32 : R, G, B, A (0-128)
     iaddiu  vertexData,     iBase,      3           ; pointer to vertex data
     ilw.w   vertCount,      0(iBase)                ; load vert count from scale vector
-    iadd    colorData,      vertexData, vertCount   ; pointer to colors
-    iadd    kickAddress,    colorData,  vertCount       ; pointer for XGKICK
-    iadd    destAddress,    colorData,  vertCount       ; helper pointer for data inserting
+    iadd    kickAddress,    vertexData,  vertCount       ; pointer for XGKICK
+    iadd    destAddress,    vertexData,  vertCount       ; helper pointer for data inserting
     ;////////////////////////////////////////////
 
     ;/////////// --- Store tags --- /////////////
@@ -64,8 +63,7 @@ init:
         ;////////// --- Load loop data --- //////////
         lq vertex, 0(vertexData)    ; load xyz
                                     ; float : X, Y, Z
-                                    ; any32 : _ = 0
-        lq.xyzw color,  0(colorData) ; load color                  
+                                    ; any32 : _ = 0               
         ;////////////////////////////////////////////    
 
 
@@ -94,7 +92,8 @@ init:
         ;////////////////////////////////////////////
 
         ;//////////////// - COLORS - /////////////////
-        mul color, color, rgba                     ; normalize RGBA
+        loi 128.0 
+        mul color, matDiffuse, i                   ; normalize RGBA
         ColorFPtoGsRGBAQ intColor, color           ; convert to int
         ;///////////////////////////////////////////
 
@@ -105,7 +104,6 @@ init:
         ;////////////////////////////////////////////
 
         iaddiu          vertexData,     vertexData,     1                         
-        iaddiu          colorData,      colorData,      1  
         iaddiu          destAddress,    destAddress,    2
 
         iaddi   vertexCounter,  vertexCounter,  -1	; decrement the loop counter 

@@ -52,13 +52,12 @@ init:
     lq      texGifTag1,     2(iBase) ; GIF tag - texture LOD
     lq      texGifTag2,     3(iBase) ; GIF tag - texture buffer & CLUT
     lq      primTag,        4(iBase) ; GIF tag - tell GS how many data we will send
-    lq      rgba,           5(iBase) ; RGBA 
+    lq      matDiffuse,     5(iBase) ; RGBA 
                                      ; u32 : R, G, B, A (0-128)
     iaddiu  vertexData,     iBase,      6           ; pointer to vertex data
     ilw.w   vertCount,      0(iBase)                ; load vert count from scale vector
     iadd    stqData,        vertexData, vertCount   ; pointer to stq
-    iadd    colorData,      stqData,    vertCount   ; pointer to colors
-    iadd    normalData,      colorData,  vertCount   ; pointer to colors
+    iadd    normalData,      stqData,  vertCount   ; pointer to colors
     iadd     dataPointers,   normalData,  vertCount
     iaddiu    kickAddress,    dataPointers,  0       ; pointer for XGKICK
     iaddiu    destAddress,    dataPointers,  0       ; helper pointer for data inserting
@@ -85,7 +84,6 @@ init:
                                     ; any32 : Q = 1     ; 1, because we will mul this by 1/vert[w] and this
                                                         ; will be our q for texture perspective correction
                                     ; any32 : _ = 0 
-        lq.xyzw color,  0(colorData) ; load color
         lq.xyzw inNorm,  0(normalData) ; load normal                    
         ;////////////////////////////////////////////    
 
@@ -152,9 +150,10 @@ init:
             iaddiu   currDirLight,  currDirLight,  1; increment the loop counter 
             ibne    dirLightQnt,  currDirLight,  directionaLightsLoop	; and repeat if needed
 
-        mul.xyz    color, color,  light            ; color = color * light
-        VectorClamp color, color 0.0 1.99
-        mul color, color, rgba                     ; normalize RGBA
+        mul.xyzw    color, matDiffuse, light       ; color = color * light
+        VectorClamp color, color 0.0 1.0
+        loi 128.0
+        mul color, color, i                        ; normalize RGBA
         ColorFPtoGsRGBAQ intColor, color           ; convert to int
         ;///////////////////////////////////////////
 
@@ -166,8 +165,7 @@ init:
         ;////////////////////////////////////////////
 
         iaddiu          vertexData,     vertexData,     1                         
-        iaddiu          stqData,        stqData,        1  
-        iaddiu          colorData,      colorData,      1  
+        iaddiu          stqData,        stqData,        1   
         iaddiu          normalData,     normalData,      1
         iaddiu          destAddress,    destAddress,    3
 

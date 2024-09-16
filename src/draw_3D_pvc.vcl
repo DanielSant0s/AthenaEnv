@@ -17,7 +17,7 @@
 ;---------------------------------------------------------------
 
 .syntax new
-.name VU1Draw3DColors
+.name VU1Draw3DPVC
 .vu
 .init_vf_all
 .init_vi_all
@@ -47,13 +47,14 @@ init:
     lq      texGifTag1,     2(iBase) ; GIF tag - texture LOD
     lq      texGifTag2,     3(iBase) ; GIF tag - texture buffer & CLUT
     lq      primTag,        4(iBase) ; GIF tag - tell GS how many data we will send
-    lq      matDiffuse,     5(iBase) ; RGBA
+    lq      rgba,           5(iBase) ; RGBA
                                      ; u32 : R, G, B, A (0-128)
     iaddiu  vertexData,     iBase,      6           ; pointer to vertex data
     ilw.w   vertCount,      0(iBase)                ; load vert count from scale vector
     iadd    stqData,        vertexData, vertCount   ; pointer to stq
-    iadd    kickAddress,    stqData,  vertCount       ; pointer for XGKICK
-    iadd    destAddress,    stqData,  vertCount       ; helper pointer for data inserting
+    iadd    colorData,      stqData,    vertCount   ; pointer to colors
+    iadd    kickAddress,    colorData,  vertCount       ; pointer for XGKICK
+    iadd    destAddress,    colorData,  vertCount       ; helper pointer for data inserting
     ;////////////////////////////////////////////
 
     ;/////////// --- Store tags --- /////////////
@@ -76,7 +77,8 @@ init:
                                     ; float : S, T
                                     ; any32 : Q = 1     ; 1, because we will mul this by 1/vert[w] and this
                                                         ; will be our q for texture perspective correction
-                                    ; any32 : _ = 0         
+                                    ; any32 : _ = 0 
+        lq.xyzw color,  0(colorData) ; load color                   
         ;////////////////////////////////////////////    
 
 
@@ -110,8 +112,7 @@ init:
         ;////////////////////////////////////////////
 
         ;//////////////// - COLORS - /////////////////
-        loi 128.0 
-        mul color, matDiffuse, i                   ; normalize RGBA
+        mul color, color, rgba                     ; normalize RGBA
         ColorFPtoGsRGBAQ intColor, color           ; convert to int
         ;///////////////////////////////////////////
 
@@ -123,7 +124,8 @@ init:
         ;////////////////////////////////////////////
 
         iaddiu          vertexData,     vertexData,     1                         
-        iaddiu          stqData,        stqData,        1   
+        iaddiu          stqData,        stqData,        1  
+        iaddiu          colorData,      colorData,      1  
         iaddiu          destAddress,    destAddress,    3
 
         iaddi   vertexCounter,  vertexCounter,  -1	; decrement the loop counter 
