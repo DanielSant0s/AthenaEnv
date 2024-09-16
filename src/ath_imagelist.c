@@ -22,10 +22,10 @@ static int imgThread(void* data)
 		WaitSema(list->sema_id);
 		for(int i = 0; i < list->size; i++) {
 			load_image(&(list->list[i]->tex), list->list[i]->path, list->list[i]->delayed);
-			list->list[i]->width = list->list[i]->tex.Width;
-			list->list[i]->height = list->list[i]->tex.Height;
-			list->list[i]->endx = list->list[i]->tex.Width;
-			list->list[i]->endy = list->list[i]->tex.Height;
+			list->list[i]->width = list->list[i]->tex->Width;
+			list->list[i]->height = list->list[i]->tex->Height;
+			list->list[i]->endx = list->list[i]->tex->Width;
+			list->list[i]->endy = list->list[i]->tex->Height;
 			list->list[i]->loaded = true;
 		}
 		free(list->list);
