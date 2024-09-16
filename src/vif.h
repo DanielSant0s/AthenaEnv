@@ -92,8 +92,38 @@ typedef enum {
 #define VU_GS_PRIM(PRIM, IIP, TME, FGE, ABE, AA1, FST, CTXT, FIX) (u128)(((FIX << 10) | (CTXT << 9) | (FST << 8) | (AA1 << 7) | (ABE << 6) | (FGE << 5) | (TME << 4) | (IIP << 3) | (PRIM)))
 #define VU_GS_GIFTAG(NLOOP, EOP, PRE, PRIM, FLG, NREG) (((u64)(NREG) << 60) | ((u64)(FLG) << 58) | ((u64)(PRIM) << 47) | ((u64)(PRE) << 46) | (EOP << 15) | (NLOOP << 0))
 
-inline u64* vu_add_unpack_data(u64 *p_data, u32 t_dest_address, void *t_data, u32 t_size, u8 t_use_top)
-{
+typedef struct {
+    uint64_t *base;
+    uint64_t *ptr;
+    uint32_t vu_addr;
+    bool top;
+} unpack_list;
+
+inline void unpack_list_open(unpack_list *list, uint64_t *base, uint32_t vu_base, bool top) {
+    list->base = base;
+    list->ptr = base;
+    list->vu_addr = vu_base;
+    list->top = top;
+}
+
+inline void *unpack_list_append(unpack_list *list, void *t_data, uint32_t t_size) {
+    *list->ptr++ = DMA_TAG(t_size, 0, DMA_REF, 0, t_data, 0);
+	*list->ptr++ = (VIF_CODE(0x0101 | (0 << 8), 0, VIF_STCYCL, 0) | (u64)
+	VIF_CODE(list->vu_addr | ((u32)1 << 14) | ((u32)list->top << 15), ((t_size == 256) ? 0 : t_size), UNPACK_V4_32 | ((u32)0 << 4) | 0x60, 0) << 32 );
+    list->vu_addr += t_size;
+}
+
+inline uint64_t *unpack_list_close(unpack_list *list) {
+    uint64_t *p_data = list->ptr;
+    list->base = NULL;
+    list->ptr = NULL;
+    list->vu_addr = 0;
+    list->top = false;
+
+    return p_data;
+}
+
+inline uint64_t *vu_add_unpack_data(uint64_t *p_data, u32 t_dest_address, void *t_data, u32 t_size, u8 t_use_top) {
     *p_data++ = DMA_TAG(t_size, 0, DMA_REF, 0, t_data, 0);
 	*p_data++ = (VIF_CODE(0x0101 | (0 << 8), 0, VIF_STCYCL, 0) | (u64)
 	VIF_CODE(t_dest_address | ((u32)1 << 14) | ((u32)t_use_top << 15), ((t_size == 256) ? 0 : t_size), UNPACK_V4_32 | ((u32)0 << 4) | 0x60, 0) << 32 );
