@@ -508,18 +508,9 @@ void draw_vu1(model* m, float pos_x, float pos_y, float pos_z, float rot_x, floa
 			int tw, th;
 			athena_set_tw_th(tex, &tw, &th);
 		
-			if(tex->VramClut == 0)
-			{
-				*p_data++ = GS_SETREG_TEX0(tex->Vram/256, tex->TBW, tex->PSM,
-					tw, th, gsGlobal->PrimAlphaEnable, 0,
-					0, 0, 0, 0, GS_CLUT_STOREMODE_NOLOAD);
-			}
-			else
-			{
-				*p_data++ = GS_SETREG_TEX0(tex->Vram/256, tex->TBW, tex->PSM,
-					tw, th, gsGlobal->PrimAlphaEnable, 0,
-					tex->VramClut/256, tex->ClutPSM, 0, 0, GS_CLUT_STOREMODE_LOAD);
-			}
+			*p_data++ = GS_SETREG_TEX0(tex->Vram/256, tex->TBW, tex->PSM,
+				tw, th, gsGlobal->PrimAlphaEnable, COLOR_MODULATE,
+				tex->VramClut/256, tex->ClutPSM, 0, 0, tex->VramClut? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD);
 			
 			*p_data++ = GS_TEX0_1;
 		
@@ -707,18 +698,9 @@ void draw_vu1_pvc(model* m, float pos_x, float pos_y, float pos_z, float rot_x, 
 			int tw, th;
 			athena_set_tw_th(tex, &tw, &th);
 
-			if(tex->VramClut == 0)
-			{
-				*p_data++ = GS_SETREG_TEX0(tex->Vram/256, tex->TBW, tex->PSM,
-					tw, th, gsGlobal->PrimAlphaEnable, 0,
-					0, 0, 0, 0, GS_CLUT_STOREMODE_NOLOAD);
-			}
-			else
-			{
-				*p_data++ = GS_SETREG_TEX0(tex->Vram/256, tex->TBW, tex->PSM,
-					tw, th, gsGlobal->PrimAlphaEnable, 0,
-					tex->VramClut/256, tex->ClutPSM, 0, 0, GS_CLUT_STOREMODE_LOAD);
-			}
+			*p_data++ = GS_SETREG_TEX0(tex->Vram/256, tex->TBW, tex->PSM,
+				tw, th, gsGlobal->PrimAlphaEnable, COLOR_MODULATE,
+				tex->VramClut/256, tex->ClutPSM, 0, 0, tex->VramClut? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD);
 	
 			*p_data++ = GS_TEX0_1;
 
@@ -906,18 +888,9 @@ void draw_vu1_with_colors(model* m, float pos_x, float pos_y, float pos_z, float
 			int tw, th;
 			athena_set_tw_th(tex, &tw, &th);
 
-			if(tex->VramClut == 0)
-			{
-				*p_data++ = GS_SETREG_TEX0(tex->Vram/256, tex->TBW, tex->PSM,
-					tw, th, gsGlobal->PrimAlphaEnable, 0,
-					0, 0, 0, 0, GS_CLUT_STOREMODE_NOLOAD);
-			}
-			else
-			{
-				*p_data++ = GS_SETREG_TEX0(tex->Vram/256, tex->TBW, tex->PSM,
-					tw, th, gsGlobal->PrimAlphaEnable, 0,
-					tex->VramClut/256, tex->ClutPSM, 0, 0, GS_CLUT_STOREMODE_LOAD);
-			}
+			*p_data++ = GS_SETREG_TEX0(tex->Vram/256, tex->TBW, tex->PSM,
+				tw, th, gsGlobal->PrimAlphaEnable, COLOR_MODULATE,
+				tex->VramClut/256, tex->ClutPSM, 0, 0, tex->VramClut? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD);
 	
 			*p_data++ = GS_TEX0_1;
 
@@ -1129,18 +1102,9 @@ void draw_vu1_with_lights(model* m, float pos_x, float pos_y, float pos_z, float
 			int tw, th;
 			athena_set_tw_th(tex, &tw, &th);
 
-			if(tex->VramClut == 0)
-			{
-				*p_data++ = GS_SETREG_TEX0(tex->Vram/256, tex->TBW, tex->PSM,
-					tw, th, gsGlobal->PrimAlphaEnable, COLOR_MODULATE,
-					0, 0, 0, 0, GS_CLUT_STOREMODE_NOLOAD);
-			}
-			else
-			{
-				*p_data++ = GS_SETREG_TEX0(tex->Vram/256, tex->TBW, tex->PSM,
-					tw, th, gsGlobal->PrimAlphaEnable, 0,
-					tex->VramClut/256, tex->ClutPSM, 0, 0, GS_CLUT_STOREMODE_LOAD);
-			}
+			*p_data++ = GS_SETREG_TEX0(tex->Vram/256, tex->TBW, tex->PSM,
+				tw, th, gsGlobal->PrimAlphaEnable, COLOR_MODULATE,
+				tex->VramClut/256, tex->ClutPSM, 0, 0, tex->VramClut? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD);
 	
 			*p_data++ = GS_TEX0_1;
 
@@ -1376,18 +1340,9 @@ void draw_vu1_with_spec_lights(model* m, float pos_x, float pos_y, float pos_z, 
 			int tw, th;
 			athena_set_tw_th(tex, &tw, &th);
 
-			if(tex->VramClut == 0)
-			{
-				*p_data++ = GS_SETREG_TEX0(tex->Vram/256, tex->TBW, tex->PSM,
-					tw, th, gsGlobal->PrimAlphaEnable, COLOR_MODULATE,
-					0, 0, 0, 0, GS_CLUT_STOREMODE_NOLOAD);
-			}
-			else
-			{
-				*p_data++ = GS_SETREG_TEX0(tex->Vram/256, tex->TBW, tex->PSM,
-					tw, th, gsGlobal->PrimAlphaEnable, 0,
-					tex->VramClut/256, tex->ClutPSM, 0, 0, GS_CLUT_STOREMODE_LOAD);
-			}
+			*p_data++ = GS_SETREG_TEX0(tex->Vram/256, tex->TBW, tex->PSM,
+				tw, th, gsGlobal->PrimAlphaEnable, COLOR_MODULATE,
+				tex->VramClut/256, tex->ClutPSM, 0, 0, tex->VramClut? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD);
 	
 			*p_data++ = GS_TEX0_1;
 
