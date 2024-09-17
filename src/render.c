@@ -1078,12 +1078,12 @@ void draw_vu1_with_colors_notex(model* m, float pos_x, float pos_y, float pos_z,
 			dma_packet_add_float(&attr_packet, fX);
 			dma_packet_add_float(&attr_packet, fY);
 			dma_packet_add_float(&attr_packet, fZ);
-
+ 
 			dma_packet_add_uint(&attr_packet, count);
 
 			dma_packet_add_tag(&attr_packet, 
 			                   DRAW_NOTEX_REGLIST, 
-							   VU_GS_GIFTAG(count, 
+							   VU_GS_GIFTAG(count,  
 							                1, 1, 
 											VU_GS_PRIM(m->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE, 
 													   1, 0, 
@@ -1093,12 +1093,12 @@ void draw_vu1_with_colors_notex(model* m, float pos_x, float pos_y, float pos_z,
 								);
 
 			union {
-				VECTOR v;
+				VECTOR v; 
 				__uint128_t q;
 			} diffuse;
 
 			__asm volatile ( 	
-				"lq    $7,0x0(%1)\n"
+				"lq    $7,0x0(%1)\n" 
 				"sq    $7,0x0(%0)\n"
 				 : : "r" (&diffuse), "r" (m->materials[m->material_indices[i].index].diffuse):"$7","memory");
 
