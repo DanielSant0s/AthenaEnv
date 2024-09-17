@@ -169,8 +169,11 @@ inline void dma_packet_send(dma_packet *packet, uint32_t channel) {
 }
 
 inline void dma_packet_add_tag(dma_packet *packet, uint64_t a1, uint64_t a2) {
-	*packet->ptr++ = a2;
-	*packet->ptr++ = a1;
+	asm volatile ( 	
+		"pcpyld $7, %1, %2 \n"
+		"sq    $7,0x0(%0) \n"
+		 : : "r" (packet->ptr), "r" (a1), "r" (a2):"$7","memory");
+	packet->ptr+=2;
 }
 
 #define dma_packet_add_end_tag(packet) \
@@ -181,9 +184,11 @@ inline void dma_packet_add_tag(dma_packet *packet, uint64_t a1, uint64_t a2) {
 
 
 inline void dma_packet_add_uquad(dma_packet *packet, __uint128_t a1) {
-    __uint128_t* tmp = (__uint128_t*)packet->ptr;
-	*tmp++ = a1;
-    packet->ptr = (uint64_t *)tmp;
+	asm volatile ( 	
+        "lq    $7,0x0(%1)\n" 
+		"sq    $7,0x0(%0) \n"
+		 : : "r" (packet->ptr), "r" (&a1):"$7","memory");
+	packet->ptr+=2;
 }
 
 inline void dma_packet_add_uint(dma_packet *packet, uint32_t a1) {
