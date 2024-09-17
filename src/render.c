@@ -427,6 +427,9 @@ u64* curr_vif_packet;
 /** Cube data */
 u64 cube_packet[20] __attribute__((aligned(64)));
 
+dma_packet draw_packet;
+dma_packet attr_packet;
+
 u8 context = 0;
 
 static u32* last_mpg = NULL;
@@ -441,8 +444,6 @@ static u32* last_mpg = NULL;
 	} while (0)
 
 void draw_vu1(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z) {
-	unpack_list data;
-
 	VECTOR object_position = { pos_x, pos_y, pos_z, 1.00f };
 	VECTOR object_rotation = { rot_x, rot_y, rot_z, 1.00f };
 
@@ -466,6 +467,8 @@ void draw_vu1(model* m, float pos_x, float pos_y, float pos_z, float rot_x, floa
 	dma_add_end_tag(curr_vif_packet);
 
 	vifSendPacket(vif_packets[context], DMA_CHANNEL_VIF1);
+
+	dma_packet_create(&attr_packet, cube_packet, 0);
 
 	int last_index = -1;
 	GSTEXTURE* tex = NULL;
@@ -493,49 +496,68 @@ void draw_vu1(model* m, float pos_x, float pos_y, float pos_z, float rot_x, floa
 			float fX = 2048.0f+gsGlobal->Width/2;
 			float fY = 2048.0f+gsGlobal->Height/2;
 			float fZ = ((float)get_max_z(gsGlobal));
+
+			dma_packet_reset(&attr_packet);
+
+			dma_packet_add_float(&attr_packet, fX);
+			dma_packet_add_float(&attr_packet, fY);
+			dma_packet_add_float(&attr_packet, fZ);
+
+			dma_packet_add_uint(&attr_packet, count);
 		
-			u64* p_data = cube_packet;
+			dma_packet_add_tag(&attr_packet, GIF_AD, GIFTAG(1, 0, 0, 0, 0, 1));
 		
-			*p_data++ = (*(u32*)(&fX) | (u64)*(u32*)(&fY) << 32);
-			*p_data++ = (*(u32*)(&fZ) | (u64)count << 32);
-		
-			*p_data++ = GIF_TAG(1, 0, 0, 0, 0, 1);
-			*p_data++ = GIF_AD;
-		
-			*p_data++ = GS_SETREG_TEX1(1, 0, tex->Filter, tex->Filter, 0, 0, 0);
-			*p_data++ = GS_TEX1_1;
+			dma_packet_add_tag(&attr_packet, GS_TEX1_1, GS_SETREG_TEX1(1, 0, tex->Filter, tex->Filter, 0, 0, 0));
 		
 			int tw, th;
 			athena_set_tw_th(tex, &tw, &th);
-		
-			*p_data++ = GS_SETREG_TEX0(tex->Vram/256, tex->TBW, tex->PSM,
-				tw, th, gsGlobal->PrimAlphaEnable, COLOR_MODULATE,
-				tex->VramClut/256, tex->ClutPSM, 0, 0, tex->VramClut? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD);
-			
-			*p_data++ = GS_TEX0_1;
-		
-			*p_data++ = VU_GS_GIFTAG(count, 1, 1,
-    			VU_GS_PRIM(m->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE, 1, 1, gsGlobal->PrimFogEnable, 
-				0, gsGlobal->PrimAAEnable, 0, 0, 0),
-    		    0, 3);
-		
-			*p_data++ = DRAW_STQ2_REGLIST;
-		
-			*p_data++ = (128 | (u64)128 << 32);
-			*p_data++ = (128 | (u64)128 << 32);	
 
-			unpack_list_open(&data, vif_packets[context], 0, true);
+			dma_packet_add_tag(&attr_packet, 
+							   GS_TEX0_1, 
+							   GS_SETREG_TEX0(tex->Vram/256, 
+											  tex->TBW, 
+											  tex->PSM,
+											  tw, th, 
+											  gsGlobal->PrimAlphaEnable, 
+											  COLOR_MODULATE,
+											  tex->VramClut/256, 
+											  tex->ClutPSM, 
+											  0, 0, 
+											  tex->VramClut? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD)
+								);
+
+			dma_packet_add_tag(&attr_packet, 
+			                   DRAW_STQ2_REGLIST, 
+							   VU_GS_GIFTAG(count, 
+							                1, 1, 
+											VU_GS_PRIM(m->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE, 
+													   1, 1, 
+													   gsGlobal->PrimFogEnable, 
+													   gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 0, 0, 0),
+    		    							0, 3)
+								);
+
+			dma_packet_add_uint(&attr_packet, 128);
+			dma_packet_add_uint(&attr_packet, 128);
+			dma_packet_add_uint(&attr_packet, 128);
+			dma_packet_add_uint(&attr_packet, 128);
+
+			dma_packet_create(&draw_packet, vif_packets[context], 0);
+
+			unpack_list_open(&draw_packet, 0, true);
 			{
-				unpack_list_append(&data, cube_packet, 6);
-				unpack_list_append(&data, &positions[idxs_drawn], count);
-				unpack_list_append(&data, &texcoords[idxs_drawn], count);
+				unpack_list_append(&draw_packet, attr_packet.base, 6);
+				unpack_list_append(&draw_packet, &positions[idxs_drawn], count);
+				unpack_list_append(&draw_packet, &texcoords[idxs_drawn], count);
 			}
-			curr_vif_packet = unpack_list_close(&data);
+			unpack_list_close(&draw_packet);
 
-			vu_start_program(curr_vif_packet, last_index == -1);
-			dma_add_end_tag(curr_vif_packet);
+			dma_packet_start_program(&draw_packet, last_index == -1);
+			dma_packet_add_end_tag(&draw_packet);
 
-			vifSendPacket(vif_packets[context], DMA_CHANNEL_VIF1);
+			dma_packet_send(&draw_packet, DMA_CHANNEL_VIF1);
+
+			dma_packet_destroy(&draw_packet);
 
 			idxs_to_draw -= count;
 			idxs_drawn += count;
@@ -548,7 +570,7 @@ void draw_vu1(model* m, float pos_x, float pos_y, float pos_z, float rot_x, floa
 }
 
 void draw_vu1_notex(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z) {
-	unpack_list data;
+	
 
 	VECTOR object_position = { pos_x, pos_y, pos_z, 1.00f };
 	VECTOR object_rotation = { rot_x, rot_y, rot_z, 1.00f };
@@ -577,6 +599,8 @@ void draw_vu1_notex(model* m, float pos_x, float pos_y, float pos_z, float rot_x
 	int idxs_to_draw = m->index_count;
 	int idxs_drawn = 0;
 
+	dma_packet_create(&attr_packet, cube_packet, 0);
+
 	while (idxs_to_draw > 0) {
 		dmaKit_wait(DMA_CHANNEL_VIF1, 0);
 
@@ -592,32 +616,44 @@ void draw_vu1_notex(model* m, float pos_x, float pos_y, float pos_z, float rot_x
 
 		float texCol = 128.0f;
 
-		u64* p_data = cube_packet;
+		dma_packet_reset(&attr_packet);
 
-		*p_data++ = (*(u32*)(&fX) | (u64)*(u32*)(&fY) << 32);
-		*p_data++ = (*(u32*)(&fZ) | (u64)(count) << 32);
+		dma_packet_add_float(&attr_packet, fX);
+		dma_packet_add_float(&attr_packet, fY);
+		dma_packet_add_float(&attr_packet, fZ);
 
-		*p_data++ = VU_GS_GIFTAG(count, 1, 1,
-    		VU_GS_PRIM(m->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE, 1, 0, gsGlobal->PrimFogEnable, 
-			0, gsGlobal->PrimAAEnable, 0, 0, 0),
-    	    0, 2);
+		dma_packet_add_uint(&attr_packet, count);
 
-		*p_data++ = DRAW_NOTEX_REGLIST;
+		dma_packet_add_tag(&attr_packet, 
+		                   DRAW_NOTEX_REGLIST, 
+						   VU_GS_GIFTAG(count, 
+						                1, 1, 
+										VU_GS_PRIM(m->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE, 
+												   1, 0, 
+												   gsGlobal->PrimFogEnable, 
+												   gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 0, 0, 0),
+    	    							0, 2)
+							);
 
-		*p_data++ = (128 | (u64)128 << 32);
-		*p_data++ = (128 | (u64)128 << 32);	
+		dma_packet_add_uint(&attr_packet, 128);
+		dma_packet_add_uint(&attr_packet, 128);
+		dma_packet_add_uint(&attr_packet, 128);
+		dma_packet_add_uint(&attr_packet, 128);
 
-		unpack_list_open(&data, vif_packets[context], 0, true);
+		dma_packet_create(&draw_packet, vif_packets[context], 0);
+
+		unpack_list_open(&draw_packet, 0, true);
 		{
-			unpack_list_append(&data, cube_packet, 3);
-			unpack_list_append(&data, &m->positions[idxs_drawn], count);
+			unpack_list_append(&draw_packet, attr_packet.base, 3);
+			unpack_list_append(&draw_packet, &m->positions[idxs_drawn], count);
 		}
-		curr_vif_packet = unpack_list_close(&data);
+		unpack_list_close(&draw_packet);
 
-		vu_start_program(curr_vif_packet, (!idxs_drawn));
-		dma_add_end_tag(curr_vif_packet);
+		dma_packet_start_program(&draw_packet, (!idxs_drawn));
+		dma_packet_add_end_tag(&draw_packet);
 
-		vifSendPacket(vif_packets[context], DMA_CHANNEL_VIF1);
+		dma_packet_send(&draw_packet, DMA_CHANNEL_VIF1);
+		dma_packet_destroy(&draw_packet);
 
 		idxs_to_draw -= count;
 		idxs_drawn += count;
@@ -627,7 +663,7 @@ void draw_vu1_notex(model* m, float pos_x, float pos_y, float pos_z, float rot_x
 }
 
 void draw_vu1_pvc(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z) {
-	unpack_list data;
+	
 
 	VECTOR object_position = { pos_x, pos_y, pos_z, 1.00f };
 	VECTOR object_rotation = { rot_x, rot_y, rot_z, 1.00f };
@@ -653,6 +689,8 @@ void draw_vu1_pvc(model* m, float pos_x, float pos_y, float pos_z, float rot_x, 
 	dma_add_end_tag(curr_vif_packet);
 
 	vifSendPacket(vif_packets[context], DMA_CHANNEL_VIF1);
+
+	dma_packet_create(&attr_packet, cube_packet, 0);
 
 	int last_index = -1;
 	GSTEXTURE* tex = NULL;
@@ -682,51 +720,68 @@ void draw_vu1_pvc(model* m, float pos_x, float pos_y, float pos_z, float rot_x, 
 			float fY = 2048.0f+gsGlobal->Height/2;
 			float fZ = ((float)get_max_z(gsGlobal));
 
-			float texCol = 128.0f;
+			dma_packet_reset(&attr_packet);
 
-			u64* p_data = cube_packet;
+			dma_packet_add_float(&attr_packet, fX);
+			dma_packet_add_float(&attr_packet, fY);
+			dma_packet_add_float(&attr_packet, fZ);
 
-			*p_data++ = (*(u32*)(&fX) | (u64)*(u32*)(&fY) << 32);
-			*p_data++ = (*(u32*)(&fZ) | (u64)(count) << 32);
-
-			*p_data++ = GIF_TAG(1, 0, 0, 0, 0, 1);
-			*p_data++ = GIF_AD;
-
-			*p_data++ = GS_SETREG_TEX1(1, 0, tex->Filter, tex->Filter, 0, 0, 0);
-			*p_data++ = GS_TEX1_1;
-
+			dma_packet_add_uint(&attr_packet, count);
+		
+			dma_packet_add_tag(&attr_packet, GIF_AD, GIFTAG(1, 0, 0, 0, 0, 1));
+		
+			dma_packet_add_tag(&attr_packet, GS_TEX1_1, GS_SETREG_TEX1(1, 0, tex->Filter, tex->Filter, 0, 0, 0));
+		
 			int tw, th;
 			athena_set_tw_th(tex, &tw, &th);
 
-			*p_data++ = GS_SETREG_TEX0(tex->Vram/256, tex->TBW, tex->PSM,
-				tw, th, gsGlobal->PrimAlphaEnable, COLOR_MODULATE,
-				tex->VramClut/256, tex->ClutPSM, 0, 0, tex->VramClut? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD);
-	
-			*p_data++ = GS_TEX0_1;
+			dma_packet_add_tag(&attr_packet, 
+							   GS_TEX0_1, 
+							   GS_SETREG_TEX0(tex->Vram/256, 
+											  tex->TBW, 
+											  tex->PSM,
+											  tw, th, 
+											  gsGlobal->PrimAlphaEnable, 
+											  COLOR_MODULATE,
+											  tex->VramClut/256, 
+											  tex->ClutPSM, 
+											  0, 0, 
+											  tex->VramClut? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD)
+								);
 
-			*p_data++ = VU_GS_GIFTAG(count, 1, 1,
-    			VU_GS_PRIM(m->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE, 1, 1, gsGlobal->PrimFogEnable, 
-				0, gsGlobal->PrimAAEnable, 0, 0, 0),
-    		    0, 3);
+			dma_packet_add_tag(&attr_packet, 
+			                   DRAW_STQ2_REGLIST, 
+							   VU_GS_GIFTAG(count, 
+							                1, 1, 
+											VU_GS_PRIM(m->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE, 
+													   1, 1, 
+													   gsGlobal->PrimFogEnable, 
+													   gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 0, 0, 0),
+    		    							0, 3)
+								);
 
-			*p_data++ = DRAW_STQ2_REGLIST;
+			dma_packet_add_float(&attr_packet, 128.0f);
+			dma_packet_add_float(&attr_packet, 128.0f);
+			dma_packet_add_float(&attr_packet, 128.0f);
+			dma_packet_add_float(&attr_packet, 128.0f);
 
-			*p_data++ = (*(u32*)(&texCol) | (u64)*(u32*)(&texCol) << 32);
-			*p_data++ = (*(u32*)(&texCol) | (u64)*(u32*)(&texCol) << 32);	
+			dma_packet_create(&draw_packet, vif_packets[context], 0);
 
-			unpack_list_open(&data, vif_packets[context], 0, true);
+			unpack_list_open(&draw_packet, 0, true);
 			{
-				unpack_list_append(&data, cube_packet, 6);
-				unpack_list_append(&data, &positions[idxs_drawn], count);
-				unpack_list_append(&data, &texcoords[idxs_drawn], count);
-				unpack_list_append(&data,   &colours[idxs_drawn], count);
+				unpack_list_append(&draw_packet, attr_packet.base, 6);
+				unpack_list_append(&draw_packet, &positions[idxs_drawn], count);
+				unpack_list_append(&draw_packet, &texcoords[idxs_drawn], count);
+				unpack_list_append(&draw_packet,   &colours[idxs_drawn], count);
 			}
-			curr_vif_packet = unpack_list_close(&data);
+			unpack_list_close(&draw_packet);
 
-			vu_start_program(curr_vif_packet, last_index == -1);
-			dma_add_end_tag(curr_vif_packet);
+			dma_packet_start_program(&draw_packet, last_index == -1);
+			dma_packet_add_end_tag(&draw_packet);
 
-			vifSendPacket(vif_packets[context], DMA_CHANNEL_VIF1);
+			dma_packet_send(&draw_packet, DMA_CHANNEL_VIF1);
+
+			dma_packet_destroy(&draw_packet);
 
 			idxs_to_draw -= count;
 			idxs_drawn += count;
@@ -739,7 +794,7 @@ void draw_vu1_pvc(model* m, float pos_x, float pos_y, float pos_z, float rot_x, 
 }
 
 void draw_vu1_pvc_notex(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z) {
-	unpack_list data;
+	
 
 	VECTOR object_position = { pos_x, pos_y, pos_z, 1.00f };
 	VECTOR object_rotation = { rot_x, rot_y, rot_z, 1.00f };
@@ -769,6 +824,8 @@ void draw_vu1_pvc_notex(model* m, float pos_x, float pos_y, float pos_z, float r
 
 	vifSendPacket(vif_packets[context], DMA_CHANNEL_VIF1);
 
+	dma_packet_create(&attr_packet, cube_packet, 0);
+
 	while (idxs_to_draw > 0) {
 		dmaKit_wait(DMA_CHANNEL_VIF1, 0);
 
@@ -782,35 +839,46 @@ void draw_vu1_pvc_notex(model* m, float pos_x, float pos_y, float pos_z, float r
 		float fY = 2048.0f+gsGlobal->Height/2;
 		float fZ = ((float)get_max_z(gsGlobal));
 
-		float texCol = 128.0f;
+		dma_packet_reset(&attr_packet);
 
-		u64* p_data = cube_packet;
+		dma_packet_add_float(&attr_packet, fX);
+		dma_packet_add_float(&attr_packet, fY);
+		dma_packet_add_float(&attr_packet, fZ);
 
-		*p_data++ = (*(u32*)(&fX) | (u64)*(u32*)(&fY) << 32);
-		*p_data++ = (*(u32*)(&fZ) | (u64)(count) << 32);
+		dma_packet_add_uint(&attr_packet, count);
 
-		*p_data++ = VU_GS_GIFTAG(count, 1, 1,
-    		VU_GS_PRIM(m->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE, 1, 0, gsGlobal->PrimFogEnable, 
-			0, gsGlobal->PrimAAEnable, 0, 0, 0),
-    	    0, 2);
+		dma_packet_add_tag(&attr_packet, 
+		                   DRAW_NOTEX_REGLIST, 
+						   VU_GS_GIFTAG(count, 
+						                1, 1, 
+										VU_GS_PRIM(m->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE, 
+												   1, 0, 
+												   gsGlobal->PrimFogEnable, 
+												   gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 0, 0, 0),
+    	    							0, 2)
+							);
 
-		*p_data++ = DRAW_NOTEX_REGLIST;
+		dma_packet_add_float(&attr_packet, 128.0f);
+		dma_packet_add_float(&attr_packet, 128.0f);
+		dma_packet_add_float(&attr_packet, 128.0f);
+		dma_packet_add_float(&attr_packet, 128.0f);
 
-		*p_data++ = (*(u32*)(&texCol) | (u64)*(u32*)(&texCol) << 32);
-		*p_data++ = (*(u32*)(&texCol) | (u64)*(u32*)(&texCol) << 32);	
+		dma_packet_create(&draw_packet, vif_packets[context], 0);
 
-		unpack_list_open(&data, vif_packets[context], 0, true);
+		unpack_list_open(&draw_packet, 0, true);
 		{
-			unpack_list_append(&data, cube_packet, 3);
-			unpack_list_append(&data, &m->positions[idxs_drawn], count);
-			unpack_list_append(&data,   &m->colours[idxs_drawn], count);
+			unpack_list_append(&draw_packet, attr_packet.base, 3);
+			unpack_list_append(&draw_packet, &m->positions[idxs_drawn], count);
+			unpack_list_append(&draw_packet,   &m->colours[idxs_drawn], count);
 		}
-		curr_vif_packet = unpack_list_close(&data);
+		unpack_list_close(&draw_packet);
 
-		vu_start_program(curr_vif_packet, (!idxs_drawn));
-		dma_add_end_tag(curr_vif_packet);
+		dma_packet_start_program(&draw_packet, (!idxs_drawn));
+		dma_packet_add_end_tag(&draw_packet);
 
-		vifSendPacket(vif_packets[context], DMA_CHANNEL_VIF1);
+		dma_packet_send(&draw_packet, DMA_CHANNEL_VIF1);
+
+		dma_packet_destroy(&draw_packet);
 
 		idxs_to_draw -= count;
 		idxs_drawn += count;
@@ -820,7 +888,7 @@ void draw_vu1_pvc_notex(model* m, float pos_x, float pos_y, float pos_z, float r
 }
 
 void draw_vu1_with_colors(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z) {
-	unpack_list data;
+	
 
 	VECTOR object_position = { pos_x, pos_y, pos_z, 1.00f };
 	VECTOR object_rotation = { rot_x, rot_y, rot_z, 1.00f };
@@ -846,6 +914,8 @@ void draw_vu1_with_colors(model* m, float pos_x, float pos_y, float pos_z, float
 	dma_add_end_tag(curr_vif_packet);
 
 	vifSendPacket(vif_packets[context], DMA_CHANNEL_VIF1);
+
+	dma_packet_create(&attr_packet, cube_packet, 0);
 
 	int last_index = -1;
 	GSTEXTURE* tex = NULL;
@@ -874,48 +944,74 @@ void draw_vu1_with_colors(model* m, float pos_x, float pos_y, float pos_z, float
 			float fY = 2048.0f+gsGlobal->Height/2;
 			float fZ = ((float)get_max_z(gsGlobal));
 
-			u64* p_data = cube_packet;
+			dma_packet_reset(&attr_packet);
 
-			*p_data++ = (*(u32*)(&fX) | (u64)*(u32*)(&fY) << 32);
-			*p_data++ = (*(u32*)(&fZ) | (u64)(count) << 32);
+			dma_packet_add_float(&attr_packet, fX);
+			dma_packet_add_float(&attr_packet, fY);
+			dma_packet_add_float(&attr_packet, fZ);
 
-			*p_data++ = GIF_TAG(1, 0, 0, 0, 0, 1);
-			*p_data++ = GIF_AD;
-
-			*p_data++ = GS_SETREG_TEX1(1, 0, tex->Filter, tex->Filter, 0, 0, 0);
-			*p_data++ = GS_TEX1_1;
-
+			dma_packet_add_uint(&attr_packet, count);
+		
+			dma_packet_add_tag(&attr_packet, GIF_AD, GIFTAG(1, 0, 0, 0, 0, 1));
+		
+			dma_packet_add_tag(&attr_packet, GS_TEX1_1, GS_SETREG_TEX1(1, 0, tex->Filter, tex->Filter, 0, 0, 0));
+		
 			int tw, th;
 			athena_set_tw_th(tex, &tw, &th);
 
-			*p_data++ = GS_SETREG_TEX0(tex->Vram/256, tex->TBW, tex->PSM,
-				tw, th, gsGlobal->PrimAlphaEnable, COLOR_MODULATE,
-				tex->VramClut/256, tex->ClutPSM, 0, 0, tex->VramClut? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD);
-	
-			*p_data++ = GS_TEX0_1;
+			dma_packet_add_tag(&attr_packet, 
+							   GS_TEX0_1, 
+							   GS_SETREG_TEX0(tex->Vram/256, 
+											  tex->TBW, 
+											  tex->PSM,
+											  tw, th, 
+											  gsGlobal->PrimAlphaEnable, 
+											  COLOR_MODULATE,
+											  tex->VramClut/256, 
+											  tex->ClutPSM, 
+											  0, 0, 
+											  tex->VramClut? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD)
+								);
 
-			*p_data++ = VU_GS_GIFTAG(count, 1, 1,
-    			VU_GS_PRIM(m->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE, 1, 1, gsGlobal->PrimFogEnable, 
-				0, gsGlobal->PrimAAEnable, 0, 0, 0),
-    		    0, 3);
+			dma_packet_add_tag(&attr_packet, 
+			                   DRAW_STQ2_REGLIST, 
+							   VU_GS_GIFTAG(count, 
+							                1, 1, 
+											VU_GS_PRIM(m->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE, 
+													   1, 1, 
+													   gsGlobal->PrimFogEnable, 
+													   gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 0, 0, 0),
+    		    							0, 3)
+								);
 
-			*p_data++ = DRAW_STQ2_REGLIST;
+			union {
+				VECTOR v;
+				__uint128_t q;
+			} diffuse;
 
-			*p_data++ = (*(u32*)(&m->materials[m->material_indices[i].index].diffuse[0]) | (u64)*(u32*)(&m->materials[m->material_indices[i].index].diffuse[1]) << 32);
-			*p_data++ = (*(u32*)(&m->materials[m->material_indices[i].index].diffuse[2]) | (u64)*(u32*)(&m->materials[m->material_indices[i].index].diffuse[3]) << 32);	
+			__asm volatile ( 	
+				"lq    $7,0x0(%1)\n"
+				"sq    $7,0x0(%0)\n"
+				 : : "r" (&diffuse), "r" (m->materials[m->material_indices[i].index].diffuse):"$7","memory");
 
-			unpack_list_open(&data, vif_packets[context], 0, true);
+			dma_packet_add_uquad(&attr_packet, diffuse.q);
+
+			dma_packet_create(&draw_packet, vif_packets[context], 0);
+
+			unpack_list_open(&draw_packet, 0, true);
 			{
-				unpack_list_append(&data, cube_packet, 6);
-				unpack_list_append(&data, &positions[idxs_drawn], count);
-				unpack_list_append(&data, &texcoords[idxs_drawn], count);
+				unpack_list_append(&draw_packet, attr_packet.base, 6);
+				unpack_list_append(&draw_packet, &positions[idxs_drawn], count);
+				unpack_list_append(&draw_packet, &texcoords[idxs_drawn], count);
 			}
-			curr_vif_packet = unpack_list_close(&data);
+			unpack_list_close(&draw_packet);
 
-			vu_start_program(curr_vif_packet, last_index == -1);
-			dma_add_end_tag(curr_vif_packet);
+			dma_packet_start_program(&draw_packet, last_index == -1);
+			dma_packet_add_end_tag(&draw_packet);
 
-			vifSendPacket(vif_packets[context], DMA_CHANNEL_VIF1);
+			dma_packet_send(&draw_packet, DMA_CHANNEL_VIF1);
+
+			dma_packet_destroy(&draw_packet);
 
 			idxs_to_draw -= count;
 			idxs_drawn += count;
@@ -928,7 +1024,7 @@ void draw_vu1_with_colors(model* m, float pos_x, float pos_y, float pos_z, float
 }
 
 void draw_vu1_with_colors_notex(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z) {
-	unpack_list data;
+	
 
 	VECTOR object_position = { pos_x, pos_y, pos_z, 1.00f };
 	VECTOR object_rotation = { rot_x, rot_y, rot_z, 1.00f };
@@ -955,6 +1051,8 @@ void draw_vu1_with_colors_notex(model* m, float pos_x, float pos_y, float pos_z,
 
 	vifSendPacket(vif_packets[context], DMA_CHANNEL_VIF1);
 
+	dma_packet_create(&attr_packet, cube_packet, 0);
+
 	int last_index = -1;
 	for(int i = 0; i < m->material_index_count; i++) {
 		VECTOR* positions = &m->positions[last_index+1];
@@ -975,32 +1073,52 @@ void draw_vu1_with_colors_notex(model* m, float pos_x, float pos_y, float pos_z,
 			float fY = 2048.0f+gsGlobal->Height/2;
 			float fZ = ((float)get_max_z(gsGlobal));
 
-			u64* p_data = cube_packet;
+			dma_packet_reset(&attr_packet);
 
-			*p_data++ = (*(u32*)(&fX) | (u64)*(u32*)(&fY) << 32);
-			*p_data++ = (*(u32*)(&fZ) | (u64)(count) << 32);
+			dma_packet_add_float(&attr_packet, fX);
+			dma_packet_add_float(&attr_packet, fY);
+			dma_packet_add_float(&attr_packet, fZ);
 
-			*p_data++ = VU_GS_GIFTAG(count, 1, 1,
-    			VU_GS_PRIM(m->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE, 1, 0, gsGlobal->PrimFogEnable, 
-				0, gsGlobal->PrimAAEnable, 0, 0, 0),
-    		    0, 2);
+			dma_packet_add_uint(&attr_packet, count);
 
-			*p_data++ = DRAW_NOTEX_REGLIST;
+			dma_packet_add_tag(&attr_packet, 
+			                   DRAW_NOTEX_REGLIST, 
+							   VU_GS_GIFTAG(count, 
+							                1, 1, 
+											VU_GS_PRIM(m->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE, 
+													   1, 0, 
+													   gsGlobal->PrimFogEnable, 
+													   gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 0, 0, 0),
+    		    							0, 2)
+								);
 
-			*p_data++ = (*(u32*)(&m->materials[m->material_indices[i].index].diffuse[0]) | (u64)*(u32*)(&m->materials[m->material_indices[i].index].diffuse[1]) << 32);
-			*p_data++ = (*(u32*)(&m->materials[m->material_indices[i].index].diffuse[2]) | (u64)*(u32*)(&m->materials[m->material_indices[i].index].diffuse[3]) << 32);	
+			union {
+				VECTOR v;
+				__uint128_t q;
+			} diffuse;
 
-			unpack_list_open(&data, vif_packets[context], 0, true);
+			__asm volatile ( 	
+				"lq    $7,0x0(%1)\n"
+				"sq    $7,0x0(%0)\n"
+				 : : "r" (&diffuse), "r" (m->materials[m->material_indices[i].index].diffuse):"$7","memory");
+
+			dma_packet_add_uquad(&attr_packet, diffuse.q);
+
+			dma_packet_create(&draw_packet, vif_packets[context], 0);
+
+			unpack_list_open(&draw_packet, 0, true);
 			{
-				unpack_list_append(&data, cube_packet, 3);
-				unpack_list_append(&data, &positions[idxs_drawn], count);
+				unpack_list_append(&draw_packet, attr_packet.base, 3);
+				unpack_list_append(&draw_packet, &positions[idxs_drawn], count);
 			}
-			curr_vif_packet = unpack_list_close(&data);
+			unpack_list_close(&draw_packet);
 
-			vu_start_program(curr_vif_packet, last_index == -1);
-			dma_add_end_tag(curr_vif_packet);
+			dma_packet_start_program(&draw_packet, last_index == -1);
+			dma_packet_add_end_tag(&draw_packet);
 
-			vifSendPacket(vif_packets[context], DMA_CHANNEL_VIF1);
+			dma_packet_send(&draw_packet, DMA_CHANNEL_VIF1);
+
+			dma_packet_destroy(&draw_packet);
 
 			idxs_to_draw -= count;
 			idxs_drawn += count;
@@ -1013,7 +1131,7 @@ void draw_vu1_with_colors_notex(model* m, float pos_x, float pos_y, float pos_z,
 }
 
 void draw_vu1_with_lights(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z) {
-	unpack_list data;
+	
 
 	GSGLOBAL *gsGlobal = getGSGLOBAL();
 
@@ -1047,18 +1165,24 @@ void draw_vu1_with_lights(model* m, float pos_x, float pos_y, float pos_z, float
 
 	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
 
-	unpack_list_open(&data, vif_packets[context], 0, false);
+	dma_packet_create(&draw_packet, vif_packets[context], 0);
+
+	unpack_list_open(&draw_packet, 0, false);
 	{
-		unpack_list_append(&data, &local_screen,       4);
-		unpack_list_append(&data, &local_light,        4);
-		unpack_list_append(&data, &active_dir_lights,  1);
-		unpack_list_append(&data, &dir_lights,         12);
+		unpack_list_append(&draw_packet, &local_screen,       4);
+		unpack_list_append(&draw_packet, &local_light,        4);
+		unpack_list_append(&draw_packet, &active_dir_lights,  1);
+		unpack_list_append(&draw_packet, &dir_lights,         12);
 	}
-	curr_vif_packet = unpack_list_close(&data);
+	unpack_list_close(&draw_packet);
 
-	dma_add_end_tag(curr_vif_packet);
+	dma_packet_add_end_tag(&draw_packet);
 
-	vifSendPacket(vif_packets[context], DMA_CHANNEL_VIF1);
+	dma_packet_send(&draw_packet, DMA_CHANNEL_VIF1);
+
+	dma_packet_destroy(&draw_packet);
+
+	dma_packet_create(&attr_packet, cube_packet, 0);
 
 	int last_index = -1;
 	GSTEXTURE* tex = NULL;
@@ -1087,50 +1211,75 @@ void draw_vu1_with_lights(model* m, float pos_x, float pos_y, float pos_z, float
 			float fX = 2048.0f+gsGlobal->Width/2;
 			float fY = 2048.0f+gsGlobal->Height/2;
 			float fZ = ((float)get_max_z(gsGlobal));
+			dma_packet_reset(&attr_packet);
 
-			u64* p_data = cube_packet;
+			dma_packet_add_float(&attr_packet, fX);
+			dma_packet_add_float(&attr_packet, fY);
+			dma_packet_add_float(&attr_packet, fZ);
 
-			*p_data++ = (*(u32*)(&fX) | (u64)*(u32*)(&fY) << 32);
-			*p_data++ = (*(u32*)(&fZ) | (u64)(count) << 32);
-
-			*p_data++ = GIF_TAG(1, 0, 0, 0, 0, 1);
-			*p_data++ = GIF_AD;
-
-			*p_data++ = GS_SETREG_TEX1(1, 0, tex->Filter, tex->Filter, 0, 0, 0);
-			*p_data++ = GS_TEX1_1;
-
+			dma_packet_add_uint(&attr_packet, count);
+		
+			dma_packet_add_tag(&attr_packet, GIF_AD, GIFTAG(1, 0, 0, 0, 0, 1));
+		
+			dma_packet_add_tag(&attr_packet, GS_TEX1_1, GS_SETREG_TEX1(1, 0, tex->Filter, tex->Filter, 0, 0, 0));
+		
 			int tw, th;
 			athena_set_tw_th(tex, &tw, &th);
 
-			*p_data++ = GS_SETREG_TEX0(tex->Vram/256, tex->TBW, tex->PSM,
-				tw, th, gsGlobal->PrimAlphaEnable, COLOR_MODULATE,
-				tex->VramClut/256, tex->ClutPSM, 0, 0, tex->VramClut? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD);
-	
-			*p_data++ = GS_TEX0_1;
+			dma_packet_add_tag(&attr_packet, 
+							   GS_TEX0_1, 
+							   GS_SETREG_TEX0(tex->Vram/256, 
+											  tex->TBW, 
+											  tex->PSM,
+											  tw, th, 
+											  gsGlobal->PrimAlphaEnable, 
+											  COLOR_MODULATE,
+											  tex->VramClut/256, 
+											  tex->ClutPSM, 
+											  0, 0, 
+											  tex->VramClut? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD)
+								);
 
-			*p_data++ = VU_GS_GIFTAG(count, 1, 1,
-    			VU_GS_PRIM(m->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE, 1, 1, gsGlobal->PrimFogEnable, 
-				gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 0, 0, 0),
-    		    0, 3);
+			dma_packet_add_tag(&attr_packet, 
+			                   DRAW_STQ2_REGLIST, 
+							   VU_GS_GIFTAG(count, 
+							                1, 1, 
+											VU_GS_PRIM(m->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE, 
+													   1, 1, 
+													   gsGlobal->PrimFogEnable, 
+													   gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 0, 0, 0),
+    		    							0, 3)
+								);
 
-			*p_data++ = DRAW_STQ2_REGLIST;
+			union {
+				VECTOR v;
+				__uint128_t q;
+			} diffuse;
 
-			*p_data++ = (*(u32*)(&m->materials[m->material_indices[i].index].diffuse[0]) | (u64)*(u32*)(&m->materials[m->material_indices[i].index].diffuse[1]) << 32);
-			*p_data++ = (*(u32*)(&m->materials[m->material_indices[i].index].diffuse[2]) | (u64)*(u32*)(&m->materials[m->material_indices[i].index].diffuse[3]) << 32);	
+			__asm volatile ( 	
+				"lq    $7,0x0(%1)\n"
+				"sq    $7,0x0(%0)\n"
+				 : : "r" (&diffuse), "r" (m->materials[m->material_indices[i].index].diffuse):"$7","memory");
 
-			unpack_list_open(&data, vif_packets[context], 0, true);
+			dma_packet_add_uquad(&attr_packet, diffuse.q);
+
+			dma_packet_create(&draw_packet, vif_packets[context], 0);
+
+			unpack_list_open(&draw_packet, 0, true);
 			{
-				unpack_list_append(&data, cube_packet, 6);
-				unpack_list_append(&data, &positions[idxs_drawn], count);
-				unpack_list_append(&data, &texcoords[idxs_drawn], count);
-				unpack_list_append(&data, &normals[idxs_drawn], count);
+				unpack_list_append(&draw_packet, attr_packet.base, 6);
+				unpack_list_append(&draw_packet, &positions[idxs_drawn], count);
+				unpack_list_append(&draw_packet, &texcoords[idxs_drawn], count);
+				unpack_list_append(&draw_packet, &normals[idxs_drawn], count);
 			}
-			curr_vif_packet = unpack_list_close(&data);
+			unpack_list_close(&draw_packet);
 
-			vu_start_program(curr_vif_packet, last_index == -1);
-			dma_add_end_tag(curr_vif_packet);
+			dma_packet_start_program(&draw_packet, last_index == -1);
+			dma_packet_add_end_tag(&draw_packet);
 
-			vifSendPacket(vif_packets[context], DMA_CHANNEL_VIF1);
+			dma_packet_send(&draw_packet, DMA_CHANNEL_VIF1);
+
+			dma_packet_destroy(&draw_packet);
 
 			idxs_to_draw -= count;
 			idxs_drawn += count;
@@ -1143,7 +1292,7 @@ void draw_vu1_with_lights(model* m, float pos_x, float pos_y, float pos_z, float
 }
 
 void draw_vu1_with_lights_notex(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z) {
-	unpack_list data;
+	
 
 	GSGLOBAL *gsGlobal = getGSGLOBAL();
 
@@ -1177,18 +1326,24 @@ void draw_vu1_with_lights_notex(model* m, float pos_x, float pos_y, float pos_z,
 
 	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
 
-	unpack_list_open(&data, vif_packets[context], 0, false);
+	dma_packet_create(&draw_packet, vif_packets[context], 0);
+
+	unpack_list_open(&draw_packet, 0, false);
 	{
-		unpack_list_append(&data, &local_screen,       4);
-		unpack_list_append(&data, &local_light,        4);
-		unpack_list_append(&data, &active_dir_lights,  1);
-		unpack_list_append(&data, &dir_lights,         12);
+		unpack_list_append(&draw_packet, &local_screen,       4);
+		unpack_list_append(&draw_packet, &local_light,        4);
+		unpack_list_append(&draw_packet, &active_dir_lights,  1);
+		unpack_list_append(&draw_packet, &dir_lights,         12);
 	}
-	curr_vif_packet = unpack_list_close(&data);
+	unpack_list_close(&draw_packet);
 
-	dma_add_end_tag(curr_vif_packet);
+	dma_packet_add_end_tag(&draw_packet);
 
-	vifSendPacket(vif_packets[context], DMA_CHANNEL_VIF1);
+	dma_packet_send(&draw_packet, DMA_CHANNEL_VIF1);
+
+	dma_packet_destroy(&draw_packet);
+
+	dma_packet_create(&attr_packet, cube_packet, 0);
 
 	int last_index = -1;
 	for(int i = 0; i < m->material_index_count; i++) {
@@ -1211,33 +1366,53 @@ void draw_vu1_with_lights_notex(model* m, float pos_x, float pos_y, float pos_z,
 			float fY = 2048.0f+gsGlobal->Height/2;
 			float fZ = ((float)get_max_z(gsGlobal));
 
-			u64* p_data = cube_packet;
+			dma_packet_reset(&attr_packet);
 
-			*p_data++ = (*(u32*)(&fX) | (u64)*(u32*)(&fY) << 32);
-			*p_data++ = (*(u32*)(&fZ) | (u64)(count) << 32);
+			dma_packet_add_float(&attr_packet, fX);
+			dma_packet_add_float(&attr_packet, fY);
+			dma_packet_add_float(&attr_packet, fZ);
 
-			*p_data++ = VU_GS_GIFTAG(count, 1, 1,
-    			VU_GS_PRIM(m->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE, 1, 0, gsGlobal->PrimFogEnable, 
-				0, gsGlobal->PrimAAEnable, 0, 0, gsGlobal->PrimAAEnable),
-    		    0, 2);
+			dma_packet_add_uint(&attr_packet, count);
 
-			*p_data++ = DRAW_NOTEX_REGLIST;
+			dma_packet_add_tag(&attr_packet, 
+			                   DRAW_NOTEX_REGLIST, 
+							   VU_GS_GIFTAG(count, 
+							                1, 1, 
+											VU_GS_PRIM(m->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE, 
+													   1, 0, 
+													   gsGlobal->PrimFogEnable, 
+													   gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 0, 0, 0),
+    		    							0, 2)
+								);
 
-			*p_data++ = (*(u32*)(&m->materials[m->material_indices[i].index].diffuse[0]) | (u64)*(u32*)(&m->materials[m->material_indices[i].index].diffuse[1]) << 32);
-			*p_data++ = (*(u32*)(&m->materials[m->material_indices[i].index].diffuse[2]) | (u64)*(u32*)(&m->materials[m->material_indices[i].index].diffuse[3]) << 32);	
+			union {
+				VECTOR v;
+				__uint128_t q;
+			} diffuse;
 
-			unpack_list_open(&data, vif_packets[context], 0, true);
+			__asm volatile ( 	
+				"lq    $7,0x0(%1)\n"
+				"sq    $7,0x0(%0)\n"
+				 : : "r" (&diffuse), "r" (m->materials[m->material_indices[i].index].diffuse):"$7","memory");
+
+			dma_packet_add_uquad(&attr_packet, diffuse.q);
+
+			dma_packet_create(&draw_packet, vif_packets[context], 0);
+
+			unpack_list_open(&draw_packet, 0, true);
 			{
-				unpack_list_append(&data, cube_packet, 3);
-				unpack_list_append(&data, &positions[idxs_drawn], count);
-				unpack_list_append(&data, &normals[idxs_drawn], count);
+				unpack_list_append(&draw_packet, attr_packet.base, 3);
+				unpack_list_append(&draw_packet, &positions[idxs_drawn], count);
+				unpack_list_append(&draw_packet, &normals[idxs_drawn], count);
 			}
-			curr_vif_packet = unpack_list_close(&data);
+			unpack_list_close(&draw_packet);
 
-			vu_start_program(curr_vif_packet, last_index == -1);
-			dma_add_end_tag(curr_vif_packet);
+			dma_packet_start_program(&draw_packet, last_index == -1);
+			dma_packet_add_end_tag(&draw_packet);
 
-			vifSendPacket(vif_packets[context], DMA_CHANNEL_VIF1);
+			dma_packet_send(&draw_packet, DMA_CHANNEL_VIF1);
+
+			dma_packet_destroy(&draw_packet);
 
 			idxs_to_draw -= count;
 			idxs_drawn += count;
@@ -1250,7 +1425,7 @@ void draw_vu1_with_lights_notex(model* m, float pos_x, float pos_y, float pos_z,
 }
 
 void draw_vu1_with_spec_lights(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z) {
-	unpack_list data;
+	
 
 	GSGLOBAL *gsGlobal = getGSGLOBAL();
 
@@ -1284,19 +1459,25 @@ void draw_vu1_with_spec_lights(model* m, float pos_x, float pos_y, float pos_z, 
 
 	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
 
-	unpack_list_open(&data, vif_packets[context], 0, false);
+	dma_packet_create(&draw_packet, vif_packets[context], 0);
+
+	unpack_list_open(&draw_packet, 0, false);
 	{
-		unpack_list_append(&data, &local_screen,       4);
-		unpack_list_append(&data, &local_light,        4);
-		unpack_list_append(&data, &active_dir_lights,  1);
-		unpack_list_append(&data, getCameraPosition(), 1);
-		unpack_list_append(&data, &dir_lights,         16);
+		unpack_list_append(&draw_packet, &local_screen,       4);
+		unpack_list_append(&draw_packet, &local_light,        4);
+		unpack_list_append(&draw_packet, &active_dir_lights,  1);
+		unpack_list_append(&draw_packet, getCameraPosition(), 1);
+		unpack_list_append(&draw_packet, &dir_lights,         16);
 	}
-	curr_vif_packet = unpack_list_close(&data);
+	unpack_list_close(&draw_packet);
 
-	dma_add_end_tag(curr_vif_packet);
+	dma_packet_add_end_tag(&draw_packet);
 
-	vifSendPacket(vif_packets[context], DMA_CHANNEL_VIF1);
+	dma_packet_send(&draw_packet, DMA_CHANNEL_VIF1);
+
+	dma_packet_destroy(&draw_packet);
+
+	dma_packet_create(&attr_packet, cube_packet, 0);
 
 	int last_index = -1;
 	GSTEXTURE* tex = NULL;
@@ -1326,49 +1507,74 @@ void draw_vu1_with_spec_lights(model* m, float pos_x, float pos_y, float pos_z, 
 			float fY = 2048.0f+gsGlobal->Height/2;
 			float fZ = ((float)get_max_z(gsGlobal));
 
-			u64* p_data = cube_packet;
+			dma_packet_reset(&attr_packet);
 
-			*p_data++ = (*(u32*)(&fX) | (u64)*(u32*)(&fY) << 32);
-			*p_data++ = (*(u32*)(&fZ) | (u64)(count) << 32);
+			dma_packet_add_float(&attr_packet, fX);
+			dma_packet_add_float(&attr_packet, fY);
+			dma_packet_add_float(&attr_packet, fZ);
 
-			*p_data++ = GIF_TAG(1, 0, 0, 0, 0, 1);
-			*p_data++ = GIF_AD;
-
-			*p_data++ = GS_SETREG_TEX1(1, 0, tex->Filter, tex->Filter, 0, 0, 0);
-			*p_data++ = GS_TEX1_1;
-
+			dma_packet_add_uint(&attr_packet, count);
+		
+			dma_packet_add_tag(&attr_packet, GIF_AD, GIFTAG(1, 0, 0, 0, 0, 1));
+		
+			dma_packet_add_tag(&attr_packet, GS_TEX1_1, GS_SETREG_TEX1(1, 0, tex->Filter, tex->Filter, 0, 0, 0));
+		
 			int tw, th;
 			athena_set_tw_th(tex, &tw, &th);
 
-			*p_data++ = GS_SETREG_TEX0(tex->Vram/256, tex->TBW, tex->PSM,
-				tw, th, gsGlobal->PrimAlphaEnable, COLOR_MODULATE,
-				tex->VramClut/256, tex->ClutPSM, 0, 0, tex->VramClut? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD);
-	
-			*p_data++ = GS_TEX0_1;
+			dma_packet_add_tag(&attr_packet, 
+							   GS_TEX0_1, 
+							   GS_SETREG_TEX0(tex->Vram/256, 
+											  tex->TBW, 
+											  tex->PSM,
+											  tw, th, 
+											  gsGlobal->PrimAlphaEnable, 
+											  COLOR_MODULATE,
+											  tex->VramClut/256, 
+											  tex->ClutPSM, 
+											  0, 0, 
+											  tex->VramClut? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD)
+								);
 
-			*p_data++ = VU_GS_GIFTAG(count, 1, 1,
-    			VU_GS_PRIM(m->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE, 1, 1, gsGlobal->PrimFogEnable, 
-				gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 0, 0, 0),
-    		    0, 3);
+			dma_packet_add_tag(&attr_packet, 
+			                   DRAW_STQ2_REGLIST, 
+							   VU_GS_GIFTAG(count, 
+							                1, 1, 
+											VU_GS_PRIM(m->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE, 
+													   1, 1, 
+													   gsGlobal->PrimFogEnable, 
+													   gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 0, 0, 0),
+    		    							0, 3)
+								);
 
-			*p_data++ = DRAW_STQ2_REGLIST;
+			union {
+				VECTOR v;
+				__uint128_t q;
+			} diffuse;
 
-			*p_data++ = (*(u32*)(&m->materials[m->material_indices[i].index].diffuse[0]) | (u64)*(u32*)(&m->materials[m->material_indices[i].index].diffuse[1]) << 32);
-			*p_data++ = (*(u32*)(&m->materials[m->material_indices[i].index].diffuse[2]) | (u64)*(u32*)(&m->materials[m->material_indices[i].index].diffuse[3]) << 32);	
+			__asm volatile ( 	
+				"lq    $7,0x0(%1)\n"
+				"sq    $7,0x0(%0)\n"
+				 : : "r" (&diffuse), "r" (m->materials[m->material_indices[i].index].diffuse):"$7","memory");
 
-			unpack_list_open(&data, vif_packets[context], 0, true);
+			dma_packet_add_uquad(&attr_packet, diffuse.q);
+			dma_packet_create(&draw_packet, vif_packets[context], 0);
+
+			unpack_list_open(&draw_packet, 0, true);
 			{
-				unpack_list_append(&data, cube_packet, 6);
-				unpack_list_append(&data, &positions[idxs_drawn], count);
-				unpack_list_append(&data, &texcoords[idxs_drawn], count);
-				unpack_list_append(&data, &normals[idxs_drawn], count);
+				unpack_list_append(&draw_packet, attr_packet.base, 6);
+				unpack_list_append(&draw_packet, &positions[idxs_drawn], count);
+				unpack_list_append(&draw_packet, &texcoords[idxs_drawn], count);
+				unpack_list_append(&draw_packet, &normals[idxs_drawn], count);
 			}
-			curr_vif_packet = unpack_list_close(&data);
+			unpack_list_close(&draw_packet);
 
-			vu_start_program(curr_vif_packet, last_index == -1);
-			dma_add_end_tag(curr_vif_packet);
+			dma_packet_start_program(&draw_packet, last_index == -1);
+			dma_packet_add_end_tag(&draw_packet);
 
-			vifSendPacket(vif_packets[context], DMA_CHANNEL_VIF1);
+			dma_packet_send(&draw_packet, DMA_CHANNEL_VIF1);
+
+			dma_packet_destroy(&draw_packet);
 
 			idxs_to_draw -= count;
 			idxs_drawn += count;
@@ -1381,7 +1587,7 @@ void draw_vu1_with_spec_lights(model* m, float pos_x, float pos_y, float pos_z, 
 }
 
 void draw_vu1_with_spec_lights_notex(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z) {
-	unpack_list data;
+	
 
 	GSGLOBAL *gsGlobal = getGSGLOBAL();
 
@@ -1415,19 +1621,25 @@ void draw_vu1_with_spec_lights_notex(model* m, float pos_x, float pos_y, float p
 
 	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
 
-	unpack_list_open(&data, vif_packets[context], 0, false);
+	dma_packet_create(&draw_packet, vif_packets[context], 0);
+
+	unpack_list_open(&draw_packet, 0, false);
 	{
-		unpack_list_append(&data, &local_screen,       4);
-		unpack_list_append(&data, &local_light,        4);
-		unpack_list_append(&data, &active_dir_lights,  1);
-		unpack_list_append(&data, getCameraPosition(), 1);
-		unpack_list_append(&data, &dir_lights,         16);
+		unpack_list_append(&draw_packet, &local_screen,       4);
+		unpack_list_append(&draw_packet, &local_light,        4);
+		unpack_list_append(&draw_packet, &active_dir_lights,  1);
+		unpack_list_append(&draw_packet, getCameraPosition(), 1);
+		unpack_list_append(&draw_packet, &dir_lights,         16);
 	}
-	curr_vif_packet = unpack_list_close(&data);
+	unpack_list_close(&draw_packet);
 
-	dma_add_end_tag(curr_vif_packet);
+	dma_packet_add_end_tag(&draw_packet);
 
-	vifSendPacket(vif_packets[context], DMA_CHANNEL_VIF1);
+	dma_packet_send(&draw_packet, DMA_CHANNEL_VIF1);
+
+	dma_packet_destroy(&draw_packet);
+
+	dma_packet_create(&attr_packet, cube_packet, 0);
 
 	int last_index = -1;
 	for(int i = 0; i < m->material_index_count; i++) {
@@ -1450,33 +1662,53 @@ void draw_vu1_with_spec_lights_notex(model* m, float pos_x, float pos_y, float p
 			float fY = 2048.0f+gsGlobal->Height/2;
 			float fZ = ((float)get_max_z(gsGlobal));
 
-			u64* p_data = cube_packet;
+			dma_packet_reset(&attr_packet);
 
-			*p_data++ = (*(u32*)(&fX) | (u64)*(u32*)(&fY) << 32);
-			*p_data++ = (*(u32*)(&fZ) | (u64)(count) << 32);
+			dma_packet_add_float(&attr_packet, fX);
+			dma_packet_add_float(&attr_packet, fY);
+			dma_packet_add_float(&attr_packet, fZ);
 
-			*p_data++ = VU_GS_GIFTAG(count, 1, 1,
-    			VU_GS_PRIM(m->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE, 1, 0, gsGlobal->PrimFogEnable, 
-				gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 0, 0, 0),
-    		    0, 2);
+			dma_packet_add_uint(&attr_packet, count);
 
-			*p_data++ = DRAW_NOTEX_REGLIST;
+			dma_packet_add_tag(&attr_packet, 
+			                   DRAW_NOTEX_REGLIST, 
+							   VU_GS_GIFTAG(count, 
+							                1, 1, 
+											VU_GS_PRIM(m->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE, 
+													   1, 0, 
+													   gsGlobal->PrimFogEnable, 
+													   gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 0, 0, 0),
+    		    							0, 2)
+								);
 
-			*p_data++ = (*(u32*)(&m->materials[m->material_indices[i].index].diffuse[0]) | (u64)*(u32*)(&m->materials[m->material_indices[i].index].diffuse[1]) << 32);
-			*p_data++ = (*(u32*)(&m->materials[m->material_indices[i].index].diffuse[2]) | (u64)*(u32*)(&m->materials[m->material_indices[i].index].diffuse[3]) << 32);	
+			union {
+				VECTOR v;
+				__uint128_t q;
+			} diffuse;
 
-			unpack_list_open(&data, vif_packets[context], 0, true);
+			__asm volatile ( 	
+				"lq    $7,0x0(%1)\n"
+				"sq    $7,0x0(%0)\n"
+				 : : "r" (&diffuse), "r" (m->materials[m->material_indices[i].index].diffuse):"$7","memory");
+
+			dma_packet_add_uquad(&attr_packet, diffuse.q);
+
+			dma_packet_create(&draw_packet, vif_packets[context], 0);
+
+			unpack_list_open(&draw_packet, 0, true);
 			{
-				unpack_list_append(&data, cube_packet, 3);
-				unpack_list_append(&data, &positions[idxs_drawn], count);
-				unpack_list_append(&data, &normals[idxs_drawn], count);
+				unpack_list_append(&draw_packet, attr_packet.base, 3);
+				unpack_list_append(&draw_packet, &positions[idxs_drawn], count);
+				unpack_list_append(&draw_packet, &normals[idxs_drawn], count);
 			}
-			curr_vif_packet = unpack_list_close(&data);
+			unpack_list_close(&draw_packet);
 
-			vu_start_program(curr_vif_packet, last_index == -1);
-			dma_add_end_tag(curr_vif_packet);
+			dma_packet_start_program(&draw_packet, last_index == -1);
+			dma_packet_add_end_tag(&draw_packet);
 
-			vifSendPacket(vif_packets[context], DMA_CHANNEL_VIF1);
+			dma_packet_send(&draw_packet, DMA_CHANNEL_VIF1);
+
+			dma_packet_destroy(&draw_packet);
 
 			idxs_to_draw -= count;
 			idxs_drawn += count;
