@@ -6,7 +6,7 @@ void vifSendPacket(void* packet, u32 vif_channel) {
 	dmaKit_send_chain(vif_channel, (void *)((u32)packet & 0x0FFFFFFF), 0);
 }
 
-void *vifCreatePacket(u32 size) {
+void *vifCreatePacket(uint32_t size) {
     return memalign(128, size*16);
 }
 
