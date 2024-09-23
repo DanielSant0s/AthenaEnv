@@ -32,22 +32,35 @@ Render.setView(4/3);
 // Change your root folder to "render" so we can work with file path magic :p
 os.chdir("render");
 
-const vertList = [
-    Render.vertex(0.5f, 0.5f, 0.5f,         // Position - X Y Z
-                  1.0f, 1.0f, 1.0f,         // Normal - N1 N2 N3
-                  0.0f, 0.0f,               // Texture coordinate - S T
-                  1.0f, 0.0f, 0.0f, 1.0f),  // Color - R G B A
+// x, y, z, adc=1.0f
+const triPositions = new Float32Array([
+    0.5f, 0.5f, 0.5f, 1.0f, 
+    0.5f, 0.8f, 0.5f, 1.0f, 
+    0.8f, 0.8f, 0.5f, 1.0f, 
+]);
 
-    Render.vertex(0.5f, 0.8f, 0.5f, 
-                  1.0f, 1.0f, 1.0f, 
-                  1.0f, 0.0f, 
-                  0.0f, 1.0f, 0.0f, 1.0f),
+// n1, n2, n3, adc=1.0f
+const triNormals = new Float32Array([
+    1.0f, 1.0f, 1.0f, 1.0f, 
+    1.0f, 1.0f, 1.0f, 1.0f, 
+    1.0f, 1.0f, 1.0f, 1.0f, 
+]);
 
-    Render.vertex(0.8f, 0.8f, 0.5f, 
-                  1.0f, 1.0f, 1.0f, 
-                  1.0f, 1.0f, 
-                  0.0f, 0.0f, 1.0f, 1.0f),
-];
+// s, t, q, adc=1.0f
+const triTexCoords = new Float32Array([
+    0.0f, 0.0f, 1.0f, 1.0f, 
+    1.0f, 0.0f, 1.0f, 1.0f, 
+    1.0f, 1.0f, 1.0f, 1.0f, 
+]);
+
+// r, g, b, a
+const triColors = new Float32Array([
+    1.0f, 0.0f, 0.0f, 1.0f, 
+    0.0f, 1.0f, 0.0f, 1.0f, 
+    0.0f, 0.0f, 1.0f, 1.0f, 
+]);
+
+const vertList = Render.vertexList(triPositions, triNormals, triTexCoords, triColors);
 
 const listtest = new RenderObject(vertList);
 
@@ -77,58 +90,7 @@ const boombox = new RenderObject("Boombox.obj");
 //let boomboxtex = boombox.getTexture(0);
 //boomboxtex.filter = LINEAR;
 
-function generateSphere(radius, latSegments, longSegments) {
-    const vertList = [];
-
-    function sphericalToCartesian(radius, theta, phi) {
-        const x = radius * Math.sinf(theta) * Math.cosf(phi);
-        const y = radius * Math.sinf(theta) * Math.sinf(phi);
-        const z = radius * Math.cosf(theta);
-        return { x, y, z };
-    }
-
-    for (let lat = 0; lat <= latSegments; lat++) {
-        const theta = lat * Math.PI / latSegments;
-        for (let lon = 0; lon <= longSegments; lon++) {
-            const phi = lon * 2 * Math.PI / longSegments;
-            const { x, y, z } = sphericalToCartesian(radius, theta, phi);
-            
-            vertList.push(
-                Render.vertex(x, y, z,     // Posição
-                              x, y, z,     // Normal (exemplo de normal, deve ser vetor unitário)
-                              lon / longSegments, lat / latSegments,        // Coordenadas de textura
-                              1.0f,  1.0f,  1.0f,  1.0f) // Cor
-            );
-        }
-    }
-
-    // Gerar triângulos strips
-    const finalVertList = [];
-    for (let lat = 0; lat < latSegments; lat++) {
-        for (let lon = 0; lon <= longSegments; lon++) {
-            const current = lat * (longSegments + 1) + lon;
-            const next = (lat + 1) * (longSegments + 1) + lon;
-
-            finalVertList.push(vertList[current]);
-            finalVertList.push(vertList[next]);
-            finalVertList.push(vertList[next + 1]);
-            finalVertList.push(vertList[current]);
-            finalVertList.push(vertList[next + 1]);
-            finalVertList.push(vertList[current + 1]);
-        }
-    }
-
-    const moontex = new Image("moon.png");
-    const listtest = new RenderObject(finalVertList, moontex, true);
-    return listtest;
-}
-
-const radius = 1.0f;
-const latSegments = 5.0f;
-const longSegments = 5.0f;
-const sphere = generateSphere(radius, latSegments, longSegments);
-
-const model = [dragonmesh, monkeymesh, car, listtest, boombox, mill, sphere];
+const model = [dragonmesh, monkeymesh, car, listtest, boombox, mill];
 
 Camera.position(0.0f, 0.0f, 50.0f);
 Camera.rotation(0.0f, 0.0f,  0.0f);

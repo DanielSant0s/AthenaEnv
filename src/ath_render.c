@@ -7,76 +7,6 @@
 #include "include/render.h"
 #include "ath_env.h"
 
-static JSValue athena_initrender(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
-	float aspect, fov = 0.2f, near = 0.1f, far = 2000.0f;
-	JS_ToFloat32(ctx, &aspect, argv[0]);
-	if (argc > 1) {
-		JS_ToFloat32(ctx, &fov, argv[1]);
-
-		if (argc > 2) {
-			JS_ToFloat32(ctx, &near, argv[2]);
-			JS_ToFloat32(ctx, &far, argv[3]);
-		}
-	}
-  	init3D(aspect, fov, near, far);
-	return JS_UNDEFINED;
-}
-
-static JSValue athena_newvertex(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
-	float x, y, z, s, t, n1, n2, n3, r, g, b, a;
-
-	JS_ToFloat32(ctx, &x, argv[0]);
-	JS_ToFloat32(ctx, &y, argv[1]);
-	JS_ToFloat32(ctx, &z, argv[2]);
-
-	JS_ToFloat32(ctx, &n1, argv[3]);
-	JS_ToFloat32(ctx, &n2, argv[4]);
-	JS_ToFloat32(ctx, &n3, argv[5]);
-
-	JS_ToFloat32(ctx, &s, argv[6]);
-	JS_ToFloat32(ctx, &t, argv[7]);
-
-	JS_ToFloat32(ctx, &r, argv[8]);
-	JS_ToFloat32(ctx, &g, argv[9]);
-	JS_ToFloat32(ctx, &b, argv[10]);
-	JS_ToFloat32(ctx, &a, argv[11]);
-
-
-	JSValue obj = JS_NewObject(ctx);
-
-	JS_DefinePropertyValueStr(ctx, obj, "x", JS_NewFloat32(ctx, x), JS_PROP_C_W_E);
-	JS_DefinePropertyValueStr(ctx, obj, "y", JS_NewFloat32(ctx, y), JS_PROP_C_W_E);
-	JS_DefinePropertyValueStr(ctx, obj, "z", JS_NewFloat32(ctx, z), JS_PROP_C_W_E);
-
-	JS_DefinePropertyValueStr(ctx, obj, "n1", JS_NewFloat32(ctx, n1), JS_PROP_C_W_E);
-	JS_DefinePropertyValueStr(ctx, obj, "n2", JS_NewFloat32(ctx, n2), JS_PROP_C_W_E);
-	JS_DefinePropertyValueStr(ctx, obj, "n3", JS_NewFloat32(ctx, n3), JS_PROP_C_W_E);
-
-	JS_DefinePropertyValueStr(ctx, obj, "s", JS_NewFloat32(ctx, s), JS_PROP_C_W_E);
-	JS_DefinePropertyValueStr(ctx, obj, "t", JS_NewFloat32(ctx, t), JS_PROP_C_W_E);
-
-	JS_DefinePropertyValueStr(ctx, obj, "r", JS_NewFloat32(ctx, r), JS_PROP_C_W_E);
-	JS_DefinePropertyValueStr(ctx, obj, "g", JS_NewFloat32(ctx, g), JS_PROP_C_W_E);
-	JS_DefinePropertyValueStr(ctx, obj, "b", JS_NewFloat32(ctx, b), JS_PROP_C_W_E);
-	JS_DefinePropertyValueStr(ctx, obj, "a", JS_NewFloat32(ctx, a), JS_PROP_C_W_E);
-
-	return obj;
-}
-
-static const JSCFunctionListEntry render_funcs[] = {
-    JS_CFUNC_DEF( "setView",     2,           athena_initrender),
-	JS_CFUNC_DEF( "vertex",      12,           athena_newvertex),
-
-	JS_PROP_INT32_DEF("PL_NO_LIGHTS_COLORS", PL_NO_LIGHTS_COLORS, JS_PROP_CONFIGURABLE ),
-	JS_PROP_INT32_DEF("PL_NO_LIGHTS_COLORS_TEX", PL_NO_LIGHTS_COLORS_TEX, JS_PROP_CONFIGURABLE ),
-	JS_PROP_INT32_DEF("PL_NO_LIGHTS", PL_NO_LIGHTS, JS_PROP_CONFIGURABLE ),
-	JS_PROP_INT32_DEF("PL_NO_LIGHTS_TEX", PL_NO_LIGHTS_TEX, JS_PROP_CONFIGURABLE ),
-	JS_PROP_INT32_DEF("PL_DEFAULT", PL_DEFAULT, JS_PROP_CONFIGURABLE ),
-	JS_PROP_INT32_DEF("PL_DEFAULT_NO_TEX", PL_DEFAULT_NO_TEX, JS_PROP_CONFIGURABLE ),
-	JS_PROP_INT32_DEF("PL_SPECULAR", PL_SPECULAR, JS_PROP_CONFIGURABLE ),
-	JS_PROP_INT32_DEF("PL_SPECULAR_NO_TEX", PL_SPECULAR_NO_TEX, JS_PROP_CONFIGURABLE ),
-};
-
 static JSValue athena_newlight(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	if (argc != 0) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
 	return JS_NewUint32(ctx, NewLight());
@@ -229,11 +159,6 @@ static const JSCFunctionListEntry camera_funcs[] = {
   JS_PROP_INT32_DEF("LOOKAT", CAMERA_LOOKAT, JS_PROP_CONFIGURABLE ),
 };
 
-static int render_init(JSContext *ctx, JSModuleDef *m)
-{
-    return JS_SetModuleExportList(ctx, m, render_funcs, countof(render_funcs));
-}
-
 static int light_init(JSContext *ctx, JSModuleDef *m)
 {
     return JS_SetModuleExportList(ctx, m, light_funcs, countof(light_funcs));
@@ -292,42 +217,49 @@ static JSValue athena_object_ctor(JSContext *ctx, JSValueConst new_target, int a
     if (!ro)
         return JS_EXCEPTION;
 
-	if (JS_IsArray(ctx, argv[0])) {
+	if (JS_IsObject(argv[0])) {
 		memset(ro, 0, sizeof(JSRenderObject));
 
-		int length;
-		JS_ToUint32(ctx, &length, JS_GetPropertyStr(ctx, argv[0], "length"));
+		uint32_t size = 0;
+		JSValue vert_arr;
+		void *tmp_vert_ptr = NULL;
 
-		ro->m.index_count = length;
-		ro->m.positions = malloc(sizeof(VECTOR)*ro->m.index_count);
-		ro->m.normals = malloc(sizeof(VECTOR)*ro->m.index_count);
-		ro->m.texcoords = malloc(sizeof(VECTOR)*ro->m.index_count);
-		ro->m.colours = malloc(sizeof(VECTOR)*ro->m.index_count);
+		vert_arr = JS_GetPropertyStr(ctx, argv[0], "positions");
 
-		for (int i = 0; i < ro->m.index_count; i++) {
-			JSValue vertex = JS_GetPropertyUint32(ctx, argv[0], i);
+		tmp_vert_ptr = JS_GetArrayBuffer(ctx, &size, JS_GetTypedArrayBuffer(ctx, vert_arr, NULL, NULL, NULL));
 
-			JS_ToFloat32(ctx, &ro->m.positions[i][0], JS_GetPropertyStr(ctx, vertex, "x"));
-			JS_ToFloat32(ctx, &ro->m.positions[i][1], JS_GetPropertyStr(ctx, vertex, "y"));
-			JS_ToFloat32(ctx, &ro->m.positions[i][2], JS_GetPropertyStr(ctx, vertex, "z"));
-			ro->m.positions[i][3] = 1.0f;
+		ro->m.index_count = (size/sizeof(float))/4;
 
-			JS_ToFloat32(ctx, &ro->m.normals[i][0], JS_GetPropertyStr(ctx, vertex, "n1"));
-			JS_ToFloat32(ctx, &ro->m.normals[i][1], JS_GetPropertyStr(ctx, vertex, "n2"));
-			JS_ToFloat32(ctx, &ro->m.normals[i][2], JS_GetPropertyStr(ctx, vertex, "n3"));
-			ro->m.normals[i][3] = 1.0f;
+		if (tmp_vert_ptr) {
+			ro->m.positions = malloc(size);
+			memcpy(ro->m.positions, tmp_vert_ptr, size);
+		}
 
-			JS_ToFloat32(ctx, &ro->m.texcoords[i][0], JS_GetPropertyStr(ctx, vertex, "s"));
-			JS_ToFloat32(ctx, &ro->m.texcoords[i][1], JS_GetPropertyStr(ctx, vertex, "t"));
-			ro->m.texcoords[i][2] = 1.0f;
-			ro->m.texcoords[i][3] = 1.0f;
+		vert_arr = JS_GetPropertyStr(ctx, argv[0], "normals");
 
-			JS_ToFloat32(ctx, &ro->m.colours[i][0], JS_GetPropertyStr(ctx, vertex, "r"));
-			JS_ToFloat32(ctx, &ro->m.colours[i][1], JS_GetPropertyStr(ctx, vertex, "g"));
-			JS_ToFloat32(ctx, &ro->m.colours[i][2], JS_GetPropertyStr(ctx, vertex, "b"));
-			JS_ToFloat32(ctx, &ro->m.colours[i][3], JS_GetPropertyStr(ctx, vertex, "a"));
+		tmp_vert_ptr = JS_GetArrayBuffer(ctx, &size, JS_GetTypedArrayBuffer(ctx, vert_arr, NULL, NULL, NULL));
 
-			JS_FreeValue(ctx, vertex);
+		if (tmp_vert_ptr) {
+			ro->m.normals = malloc(size);
+			memcpy(ro->m.normals, tmp_vert_ptr, size);
+		}
+
+		vert_arr = JS_GetPropertyStr(ctx, argv[0], "texcoords");
+
+		tmp_vert_ptr = JS_GetArrayBuffer(ctx, &size, JS_GetTypedArrayBuffer(ctx, vert_arr, NULL, NULL, NULL));
+
+		if (tmp_vert_ptr) {
+			ro->m.texcoords = malloc(size);
+			memcpy(ro->m.texcoords, tmp_vert_ptr, size);
+		}
+
+		vert_arr = JS_GetPropertyStr(ctx, argv[0], "colors");
+
+		tmp_vert_ptr = JS_GetArrayBuffer(ctx, &size, JS_GetTypedArrayBuffer(ctx, vert_arr, NULL, NULL, NULL));
+
+		if (tmp_vert_ptr) {
+			ro->m.colours = malloc(size);
+			memcpy(ro->m.colours, tmp_vert_ptr, size);
 		}
 
 		if(argc > 1) {
@@ -680,6 +612,118 @@ static const JSCFunctionListEntry js_object_proto_funcs[] = {
 	JS_CGETSET_MAGIC_DEF("size", js_object_get, js_object_set, 1),
 	JS_CGETSET_MAGIC_DEF("bounds", js_object_get, js_object_set, 2),
 };
+
+static JSValue athena_initrender(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
+	float aspect, fov = 0.2f, near = 0.1f, far = 2000.0f;
+	JS_ToFloat32(ctx, &aspect, argv[0]);
+	if (argc > 1) {
+		JS_ToFloat32(ctx, &fov, argv[1]);
+
+		if (argc > 2) {
+			JS_ToFloat32(ctx, &near, argv[2]);
+			JS_ToFloat32(ctx, &far, argv[3]);
+		}
+	}
+  	init3D(aspect, fov, near, far);
+	return JS_UNDEFINED;
+}
+
+static JSValue athena_newmaterial(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
+	JSValue obj = JS_NewObject(ctx);
+
+	JSValue arr = JS_NewArray(ctx);
+	JS_DefinePropertyValueUint32(ctx, arr, 0, JS_NewFloat32(ctx, 1.0f), JS_PROP_C_W_E);
+	JS_DefinePropertyValueUint32(ctx, arr, 1, JS_NewFloat32(ctx, 1.0f), JS_PROP_C_W_E);
+	JS_DefinePropertyValueUint32(ctx, arr, 2, JS_NewFloat32(ctx, 1.0f), JS_PROP_C_W_E);
+
+	JS_DefinePropertyValueStr(ctx, obj, "ambient", arr, JS_PROP_C_W_E);
+
+	arr = JS_NewArray(ctx);
+	JS_DefinePropertyValueUint32(ctx, arr, 0, JS_NewFloat32(ctx, 1.0f), JS_PROP_C_W_E);
+	JS_DefinePropertyValueUint32(ctx, arr, 1, JS_NewFloat32(ctx, 1.0f), JS_PROP_C_W_E);
+	JS_DefinePropertyValueUint32(ctx, arr, 2, JS_NewFloat32(ctx, 1.0f), JS_PROP_C_W_E);
+
+	JS_DefinePropertyValueStr(ctx, obj, "diffuse", arr, JS_PROP_C_W_E);
+
+	arr = JS_NewArray(ctx);
+	JS_DefinePropertyValueUint32(ctx, arr, 0, JS_NewFloat32(ctx, 1.0f), JS_PROP_C_W_E);
+	JS_DefinePropertyValueUint32(ctx, arr, 1, JS_NewFloat32(ctx, 1.0f), JS_PROP_C_W_E);
+	JS_DefinePropertyValueUint32(ctx, arr, 2, JS_NewFloat32(ctx, 1.0f), JS_PROP_C_W_E);
+
+	JS_DefinePropertyValueStr(ctx, obj, "specular", arr, JS_PROP_C_W_E);
+
+	arr = JS_NewArray(ctx);
+	JS_DefinePropertyValueUint32(ctx, arr, 0, JS_NewFloat32(ctx, 1.0f), JS_PROP_C_W_E);
+	JS_DefinePropertyValueUint32(ctx, arr, 1, JS_NewFloat32(ctx, 1.0f), JS_PROP_C_W_E);
+	JS_DefinePropertyValueUint32(ctx, arr, 2, JS_NewFloat32(ctx, 1.0f), JS_PROP_C_W_E);
+
+	JS_DefinePropertyValueStr(ctx, obj, "emission", arr, JS_PROP_C_W_E);
+
+	arr = JS_NewArray(ctx);
+	JS_DefinePropertyValueUint32(ctx, arr, 0, JS_NewFloat32(ctx, 1.0f), JS_PROP_C_W_E);
+	JS_DefinePropertyValueUint32(ctx, arr, 1, JS_NewFloat32(ctx, 1.0f), JS_PROP_C_W_E);
+	JS_DefinePropertyValueUint32(ctx, arr, 2, JS_NewFloat32(ctx, 1.0f), JS_PROP_C_W_E);
+
+	JS_DefinePropertyValueStr(ctx, obj, "transmittance", arr, JS_PROP_C_W_E);
+
+	JS_DefinePropertyValueStr(ctx, obj, "shininess", JS_NewFloat32(ctx, 1.0f), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "refraction", JS_NewFloat32(ctx, 1.0f), JS_PROP_C_W_E);
+
+	arr = JS_NewArray(ctx);
+	JS_DefinePropertyValueUint32(ctx, arr, 0, JS_NewFloat32(ctx, 1.0f), JS_PROP_C_W_E);
+	JS_DefinePropertyValueUint32(ctx, arr, 1, JS_NewFloat32(ctx, 1.0f), JS_PROP_C_W_E);
+	JS_DefinePropertyValueUint32(ctx, arr, 2, JS_NewFloat32(ctx, 1.0f), JS_PROP_C_W_E);
+
+	JS_DefinePropertyValueStr(ctx, obj, "transmission_filter", arr, JS_PROP_C_W_E);
+
+	JS_DefinePropertyValueStr(ctx, obj, "disolve", JS_NewFloat32(ctx, 1.0f), JS_PROP_C_W_E);
+
+	JS_DefinePropertyValueStr(ctx, obj, "texture", JS_UNDEFINED, JS_PROP_C_W_E);
+
+	return obj;
+}
+
+static JSValue athena_newmaterialindex(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
+	JSValue obj = JS_NewObject(ctx);
+	JS_DefinePropertyValueStr(ctx, obj, "index", argv[0], JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "end",   argv[1], JS_PROP_C_W_E);
+
+	return obj;
+}
+
+static JSValue athena_newvertex(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
+	JSValue obj = JS_NewObject(ctx);
+
+	JS_DefinePropertyValueStr(ctx, obj, "positions",        argv[0], JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "normals",          argv[1], JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "texcoords",        argv[2], JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "colors",           argv[3], JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "materials",        argv[4], JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "material_indices", argv[5], JS_PROP_C_W_E);
+
+	return obj;
+}
+
+static const JSCFunctionListEntry render_funcs[] = {
+    JS_CFUNC_DEF( "setView",         4,                athena_initrender),
+	JS_CFUNC_DEF( "vertexList",      6,                 athena_newvertex),
+	JS_CFUNC_DEF( "material",        0,               athena_newmaterial),
+	JS_CFUNC_DEF( "materialIndex",   2,          athena_newmaterialindex),
+
+	JS_PROP_INT32_DEF("PL_NO_LIGHTS_COLORS", PL_NO_LIGHTS_COLORS, JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("PL_NO_LIGHTS_COLORS_TEX", PL_NO_LIGHTS_COLORS_TEX, JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("PL_NO_LIGHTS", PL_NO_LIGHTS, JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("PL_NO_LIGHTS_TEX", PL_NO_LIGHTS_TEX, JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("PL_DEFAULT", PL_DEFAULT, JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("PL_DEFAULT_NO_TEX", PL_DEFAULT_NO_TEX, JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("PL_SPECULAR", PL_SPECULAR, JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("PL_SPECULAR_NO_TEX", PL_SPECULAR_NO_TEX, JS_PROP_CONFIGURABLE ),
+};
+
+static int render_init(JSContext *ctx, JSModuleDef *m)
+{
+    return JS_SetModuleExportList(ctx, m, render_funcs, countof(render_funcs));
+}
 
 static int js_object_init(JSContext *ctx, JSModuleDef *m)
 {
