@@ -959,7 +959,7 @@ struct JSObject {
                 uint32_t *uint32_ptr;   /* JS_CLASS_UINT32_ARRAY */
                 int64_t *int64_ptr;     /* JS_CLASS_INT64_ARRAY */
                 uint64_t *uint64_ptr;   /* JS_CLASS_UINT64_ARRAY */
-                double *float_ptr;       /* JS_CLASS_FLOAT32_ARRAY */
+                float *float_ptr;       /* JS_CLASS_FLOAT32_ARRAY */
                 double *double_ptr;     /* JS_CLASS_FLOAT64_ARRAY */
             } u;
             uint32_t count; /* <= 2^31-1. 0 for a detached typed array */
@@ -1112,6 +1112,7 @@ static void js_operator_set_mark(JSRuntime *rt, JSValueConst val,
 static JSValue JS_ToStringFree(JSContext *ctx, JSValue val);
 static int JS_ToBoolFree(JSContext *ctx, JSValue val);
 static int JS_ToInt32Free(JSContext *ctx, int32_t *pres, JSValue val);
+static int JS_ToFloat32Free(JSContext *ctx, float *pres, JSValue val);
 static int JS_ToFloat64Free(JSContext *ctx, double *pres, JSValue val);
 static int JS_ToUint8ClampFree(JSContext *ctx, int32_t *pres, JSValue val);
 static JSValue js_compile_regexp(JSContext *ctx, JSValueConst pattern,
@@ -7851,7 +7852,7 @@ static JSValue JS_GetPropertyValue(JSContext *ctx, JSValueConst this_obj,
             return JS_NewBigUint64(ctx, p->u.array.u.uint64_ptr[idx]);
 #endif
         case JS_CLASS_FLOAT32_ARRAY:
-            return __JS_NewFloat64(ctx, p->u.array.u.float_ptr[idx]);
+            return custom_JS_NewFloat32(ctx, p->u.array.u.float_ptr[idx]);
         case JS_CLASS_FLOAT64_ARRAY:
             return __JS_NewFloat64(ctx, p->u.array.u.double_ptr[idx]);
         default:
@@ -8617,6 +8618,7 @@ static int JS_SetPropertyValue(JSContext *ctx, JSValueConst this_obj,
                JS_VALUE_GET_TAG(prop) == JS_TAG_INT)) {
         JSObject *p;
         uint32_t idx;
+        float f;
         double d;
         int32_t v;
 
@@ -8706,11 +8708,11 @@ static int JS_SetPropertyValue(JSContext *ctx, JSValueConst this_obj,
             break;
 #endif
         case JS_CLASS_FLOAT32_ARRAY:
-            if (JS_ToFloat64Free(ctx, &d, val))
+            if (JS_ToFloat32Free(ctx, &f, val))
                 return -1;
             if (unlikely(idx >= (uint32_t)p->u.array.count))
                 goto ta_out_of_bound;
-            p->u.array.u.float_ptr[idx] = d;
+            p->u.array.u.float_ptr[idx] = f;
             break;
         case JS_CLASS_FLOAT64_ARRAY:
             if (JS_ToFloat64Free(ctx, &d, val))
@@ -10501,7 +10503,7 @@ static __exception int __JS_ToFloat64Free(JSContext *ctx, double *pres,
         d = JS_VALUE_GET_INT(val);
         break;
     case JS_CUSTOM_TAG_FLOAT32:
-        d = JS_VALUE_GET_FLOAT32(val);
+        d = (double)JS_VALUE_GET_FLOAT32(val);
         break;
     case JS_TAG_FLOAT64:
         d = JS_VALUE_GET_FLOAT64(val);
@@ -10535,7 +10537,7 @@ static inline int JS_ToFloat64Free(JSContext *ctx, double *pres, JSValue val)
         *pres = JS_VALUE_GET_INT(val);
         return 0;
     } else if (JS_TAG_IS_FLOAT32(tag)) {
-        *pres = JS_VALUE_GET_FLOAT32(val);
+        *pres = (double)JS_VALUE_GET_FLOAT32(val);
         return 0;
     } else if (JS_TAG_IS_FLOAT64(tag)) {
         *pres = JS_VALUE_GET_FLOAT64(val);
@@ -52465,7 +52467,7 @@ static JSValue js_typed_array_indexOf(JSContext *ctx, JSValueConst this_val,
     int len, tag, is_int, is_bigint, k, stop, inc, res = -1;
     int64_t v64;
     double d;
-    double f;
+    float f;
     
     len = js_typed_array_get_length_internal(ctx, this_val);
     if (len < 0)
@@ -52619,18 +52621,18 @@ static JSValue js_typed_array_indexOf(JSContext *ctx, JSValueConst this_val,
         if (is_bigint)
             break;
         if (isnan(d)) {
-            const double *pv = p->u.array.u.float_ptr;
+            const float *pv = p->u.array.u.float_ptr;
             /* special case: indexOf returns -1, includes finds NaN */
             if (special != special_includes)
                 goto done;
             for (; k != stop; k += inc) {
-                if (isnan(pv[k])) {
+                if (isnanf(pv[k])) {
                     res = k;
                     break;
                 }
             }
-        } else if ((f = (double)d) == d) {
-            const double *pv = p->u.array.u.float_ptr;
+        } else if ((f = (float)d) == ((float)d)) {
+            const float *pv = p->u.array.u.float_ptr;
             for (; k != stop; k += inc) {
                 if (pv[k] == f) {
                     res = k;
@@ -52929,6 +52931,17 @@ static JSValue js_typed_array_subarray(JSContext *ctx, JSValueConst this_val,
 
 /* TypedArray.prototype.sort */
 
+static int js_cmp_floats(float x, float y)
+{
+    if (isnanf(x))    return isnanf(y) ? 0 : +1;
+    if (isnanf(y))    return -1;
+    if (x < y)       return -1;
+    if (x > y)       return 1;
+    if (x != 0)      return 0;
+    if (signbit(x))  return signbit(y) ? 0 : -1;
+    else             return signbit(y) ? 1 : 0;
+}
+
 static int js_cmp_doubles(double x, double y)
 {
     if (isnan(x))    return isnan(y) ? 0 : +1;
@@ -52983,7 +52996,7 @@ static int js_TA_cmp_uint64(const void *a, const void *b, void *opaque) {
 #endif
 
 static int js_TA_cmp_float32(const void *a, const void *b, void *opaque) {
-    return js_cmp_doubles(*(const double *)a, *(const double *)b);
+    return js_cmp_floats(*(const float *)a, *(const float *)b);
 }
 
 static int js_TA_cmp_float64(const void *a, const void *b, void *opaque) {
@@ -53025,7 +53038,7 @@ static JSValue js_TA_get_uint64(JSContext *ctx, const void *a) {
 #endif
 
 static JSValue js_TA_get_float32(JSContext *ctx, const void *a) {
-    return __JS_NewFloat64(ctx, *(const double *)a);
+    return custom_JS_NewFloat32(ctx, *(const float *)a);
 }
 
 static JSValue js_TA_get_float64(JSContext *ctx, const void *a) {
@@ -53695,14 +53708,14 @@ static JSValue js_dataview_getValue(JSContext *ctx,
     case JS_CLASS_FLOAT32_ARRAY:
         {
             union {
-                double f;
+                float f;
                 uint32_t i;
             } u;
             v = get_u32(ptr);
             if (is_swap)
                 v = bswap32(v);
             u.i = v;
-            return __JS_NewFloat64(ctx, u.f);
+            return custom_JS_NewFloat32(ctx, u.f);
         }
     case JS_CLASS_FLOAT64_ARRAY:
         {
