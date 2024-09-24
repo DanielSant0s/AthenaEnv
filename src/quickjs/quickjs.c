@@ -51875,6 +51875,7 @@ static JSValue js_typed_array_get_length(JSContext *ctx,
     p = get_typed_array(ctx, this_val, 0);
     if (!p)
         return JS_EXCEPTION;
+    
     return JS_NewInt32(ctx, p->u.array.count);
 }
 

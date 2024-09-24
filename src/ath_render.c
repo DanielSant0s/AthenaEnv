@@ -228,7 +228,7 @@ static JSValue athena_object_ctor(JSContext *ctx, JSValueConst new_target, int a
 
 		tmp_vert_ptr = JS_GetArrayBuffer(ctx, &size, JS_GetTypedArrayBuffer(ctx, vert_arr, NULL, NULL, NULL));
 
-		ro->m.index_count = (size/sizeof(float))/4;
+		ro->m.index_count = size/sizeof(VECTOR);
 
 		if (tmp_vert_ptr) {
 			ro->m.positions = malloc(size);
@@ -496,31 +496,25 @@ static JSValue js_object_get(JSContext *ctx, JSValueConst this_val, int magic)
         return JS_EXCEPTION;
 		
     if (magic == 0) {
-		JSValue array = JS_NewArray(ctx);
+		JSValue obj = JS_NewObject(ctx);
 
-		for (int i = 0; i < ro->m.index_count; i++) {
-			JSValue obj = JS_NewObject(ctx);
-		
-			JS_DefinePropertyValueStr(ctx, obj, "x", JS_NewFloat32(ctx, ro->m.positions[i][0]), JS_PROP_C_W_E);
-			JS_DefinePropertyValueStr(ctx, obj, "y", JS_NewFloat32(ctx, ro->m.positions[i][1]), JS_PROP_C_W_E);
-			JS_DefinePropertyValueStr(ctx, obj, "z", JS_NewFloat32(ctx, ro->m.positions[i][2]), JS_PROP_C_W_E);
-		
-			JS_DefinePropertyValueStr(ctx, obj, "n1", JS_NewFloat32(ctx, ro->m.normals[i][0]), JS_PROP_C_W_E);
-			JS_DefinePropertyValueStr(ctx, obj, "n2", JS_NewFloat32(ctx, ro->m.normals[i][1]), JS_PROP_C_W_E);
-			JS_DefinePropertyValueStr(ctx, obj, "n3", JS_NewFloat32(ctx, ro->m.normals[i][2]), JS_PROP_C_W_E);
-		
-			JS_DefinePropertyValueStr(ctx, obj, "s", JS_NewFloat32(ctx, ro->m.texcoords[i][0]), JS_PROP_C_W_E);
-			JS_DefinePropertyValueStr(ctx, obj, "t", JS_NewFloat32(ctx, ro->m.texcoords[i][1]), JS_PROP_C_W_E);
-		
-			JS_DefinePropertyValueStr(ctx, obj, "r", JS_NewFloat32(ctx, ro->m.colours[i][0]), JS_PROP_C_W_E);
-			JS_DefinePropertyValueStr(ctx, obj, "g", JS_NewFloat32(ctx, ro->m.colours[i][1]), JS_PROP_C_W_E);
-			JS_DefinePropertyValueStr(ctx, obj, "b", JS_NewFloat32(ctx, ro->m.colours[i][2]), JS_PROP_C_W_E);
-			JS_DefinePropertyValueStr(ctx, obj, "a", JS_NewFloat32(ctx, ro->m.colours[i][3]), JS_PROP_C_W_E);
+		if (ro->m.positions)
+			JS_DefinePropertyValueStr(ctx, obj, "positions", JS_NewArrayBufferCopy(ctx, ro->m.positions, ro->m.index_count*sizeof(VECTOR)), JS_PROP_C_W_E);
 
-			JS_DefinePropertyValueUint32(ctx, array, i, obj, JS_PROP_C_W_E);
-		}
-		
-		return array;
+		if (ro->m.normals)
+			JS_DefinePropertyValueStr(ctx, obj, "normals",   JS_NewArrayBufferCopy(ctx, ro->m.normals, ro->m.index_count*sizeof(VECTOR)), JS_PROP_C_W_E);
+
+		if (ro->m.texcoords)
+			JS_DefinePropertyValueStr(ctx, obj, "texcoords", JS_NewArrayBufferCopy(ctx, ro->m.texcoords, ro->m.index_count*sizeof(VECTOR)), JS_PROP_C_W_E);
+
+		if (ro->m.colours)
+			JS_DefinePropertyValueStr(ctx, obj, "colors",    JS_NewArrayBufferCopy(ctx, ro->m.colours, ro->m.index_count*sizeof(VECTOR)), JS_PROP_C_W_E);
+
+
+		//JS_DefinePropertyValueStr(ctx, obj, "materials",        argv[4], JS_PROP_C_W_E);
+		//JS_DefinePropertyValueStr(ctx, obj, "material_indices", argv[5], JS_PROP_C_W_E);
+
+		return obj;
 	} else if (magic == 1) {
 		return JS_NewUint32(ctx, ro->m.index_count);
 	} else if (magic == 2) {
@@ -546,44 +540,66 @@ static JSValue js_object_set(JSContext *ctx, JSValueConst this_val, JSValue val,
         return JS_EXCEPTION;
 
     if (magic == 0) {
-		free(ro->m.positions);
-    	free(ro->m.colours);
-    	free(ro->m.normals);
-    	free(ro->m.texcoords);
+		if (ro->m.positions)
+			free(ro->m.positions);
+		
+		if (ro->m.colours)
+    		free(ro->m.colours);
+		
+		if (ro->m.normals)
+    		free(ro->m.normals);
+		
+		if (ro->m.texcoords)
+    		free(ro->m.texcoords);
 
-		int length;
-		JS_ToUint32(ctx, &length, JS_GetPropertyStr(ctx, val, "length"));
+		uint32_t size = 0;
+		JSValue vert_arr, ta_buf;
+		void *tmp_vert_ptr = NULL;
 
-		ro->m.index_count = length;
-		ro->m.positions = malloc(sizeof(VECTOR)*ro->m.index_count);
-		ro->m.normals = malloc(sizeof(VECTOR)*ro->m.index_count);
-		ro->m.texcoords = malloc(sizeof(VECTOR)*ro->m.index_count);
-		ro->m.colours = malloc(sizeof(VECTOR)*ro->m.index_count);
+		vert_arr = JS_GetPropertyStr(ctx, val, "positions");
 
-		for (int i = 0; i < length; i++) {
-			JSValue vertex = JS_GetPropertyUint32(ctx, val, i);
+		ta_buf = JS_GetTypedArrayBuffer(ctx, vert_arr, NULL, NULL, NULL);
 
-			JS_ToFloat32(ctx, &ro->m.positions[i][0], JS_GetPropertyStr(ctx, vertex, "x"));
-			JS_ToFloat32(ctx, &ro->m.positions[i][1], JS_GetPropertyStr(ctx, vertex, "y"));
-			JS_ToFloat32(ctx, &ro->m.positions[i][2], JS_GetPropertyStr(ctx, vertex, "z"));
-			ro->m.positions[i][3] = 1.0f;
+		tmp_vert_ptr = JS_GetArrayBuffer(ctx, &size, ((ta_buf != JS_EXCEPTION)? ta_buf : vert_arr));
 
-			JS_ToFloat32(ctx, &ro->m.normals[i][0], JS_GetPropertyStr(ctx, vertex, "n1"));
-			JS_ToFloat32(ctx, &ro->m.normals[i][1], JS_GetPropertyStr(ctx, vertex, "n2"));
-			JS_ToFloat32(ctx, &ro->m.normals[i][2], JS_GetPropertyStr(ctx, vertex, "n3"));
-			ro->m.normals[i][3] = 1.0f;
+		ro->m.index_count = size/sizeof(VECTOR);
 
-			JS_ToFloat32(ctx, &ro->m.texcoords[i][0], JS_GetPropertyStr(ctx, vertex, "s"));
-			JS_ToFloat32(ctx, &ro->m.texcoords[i][1], JS_GetPropertyStr(ctx, vertex, "t"));
-			ro->m.texcoords[i][2] = 1.0f;
-			ro->m.texcoords[i][3] = 1.0f;
+		if (tmp_vert_ptr) {
+			ro->m.positions = malloc(size);
+			memcpy(ro->m.positions, tmp_vert_ptr, size);
+		}
 
-			JS_ToFloat32(ctx, &ro->m.colours[i][0], JS_GetPropertyStr(ctx, vertex, "r"));
-			JS_ToFloat32(ctx, &ro->m.colours[i][1], JS_GetPropertyStr(ctx, vertex, "g"));
-			JS_ToFloat32(ctx, &ro->m.colours[i][2], JS_GetPropertyStr(ctx, vertex, "b"));
-			JS_ToFloat32(ctx, &ro->m.colours[i][3], JS_GetPropertyStr(ctx, vertex, "a"));
+		vert_arr = JS_GetPropertyStr(ctx, val, "normals");
 
-			JS_FreeValue(ctx, vertex);
+		ta_buf = JS_GetTypedArrayBuffer(ctx, vert_arr, NULL, NULL, NULL);
+
+		tmp_vert_ptr = JS_GetArrayBuffer(ctx, &size, ((ta_buf != JS_EXCEPTION)? ta_buf : vert_arr));
+
+		if (tmp_vert_ptr) {
+			ro->m.normals = malloc(size);
+			memcpy(ro->m.normals, tmp_vert_ptr, size);
+		}
+
+		vert_arr = JS_GetPropertyStr(ctx, val, "texcoords");
+
+		ta_buf = JS_GetTypedArrayBuffer(ctx, vert_arr, NULL, NULL, NULL);
+
+		tmp_vert_ptr = JS_GetArrayBuffer(ctx, &size, ((ta_buf != JS_EXCEPTION)? ta_buf : vert_arr));
+
+		if (tmp_vert_ptr) {
+			ro->m.texcoords = malloc(size);
+			memcpy(ro->m.texcoords, tmp_vert_ptr, size);
+		}
+
+		vert_arr = JS_GetPropertyStr(ctx, val, "colors");
+
+		ta_buf = JS_GetTypedArrayBuffer(ctx, vert_arr, NULL, NULL, NULL);
+
+		tmp_vert_ptr = JS_GetArrayBuffer(ctx, &size, ((ta_buf != JS_EXCEPTION)? ta_buf : vert_arr));
+
+		if (tmp_vert_ptr) {
+			ro->m.colours = malloc(size);
+			memcpy(ro->m.colours, tmp_vert_ptr, size);
 		}
 	} else if (magic == 2) {
 

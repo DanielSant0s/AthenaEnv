@@ -72,17 +72,18 @@ const monkeymesh = new RenderObject("monkey.obj", monkeytex);
 
 const car = new RenderObject("Car.obj");
 
-let car_vertices = car.vertices;
+const old_verts = car.vertices;
 
-//car_vertices.forEach(vertex => {
-//    if (vertex.r > 0.45f && vertex.g < 0.2f && vertex.b < 0.2f) {
-//        vertex.r = 0.4f;
-//        vertex.g = 0.0f;
-//        vertex.b = 0.8f;
-//    }
-//});
-//
-//car.vertices = car_vertices;
+const car_vertices = new Float32Array(old_verts.positions);
+
+const new_positions = car_vertices.map((item) => {
+    return item + (Math.random() * 0.1f);
+
+});
+
+old_verts.positions = new_positions;
+
+car.vertices = old_verts;
 
 const mill = new RenderObject("cubes.obj");
 
