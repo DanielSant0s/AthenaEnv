@@ -179,16 +179,23 @@ typedef struct {
 static void athena_object_dtor(JSRuntime *rt, JSValue val){
 	JSRenderObject* ro = JS_GetOpaque(val, js_object_class_id);
 
-	free(ro->m.positions);
+	if (ro->m.colours)
+		free(ro->m.positions);
 	
-	if (ro->m.colours) {
+	if (ro->m.colours)
 		free(ro->m.colours);
-	}
-    	
-    free(ro->m.normals);
-    free(ro->m.texcoords);
-	free(ro->m.materials);
-	free(ro->m.material_indices);
+
+	if (ro->m.normals)	
+    	free(ro->m.normals);
+
+	if (ro->m.texcoords)
+    	free(ro->m.texcoords);
+	
+	if (ro->m.materials)
+		free(ro->m.materials);
+	
+	if (ro->m.material_indices)
+		free(ro->m.material_indices);
 
 	//printf("%d textures\n", ro->m.texture_count);
 
@@ -199,13 +206,21 @@ static void athena_object_dtor(JSRuntime *rt, JSValue val){
 	//	}
 	//}
 
-	free(ro->m.textures);
-	free(ro->m.materials);
-	free(ro->textures);
+	if (ro->m.textures)
+		free(ro->m.textures);
+
+	if (ro->textures)
+		free(ro->textures);
 
 	js_free_rt(rt, ro);
 }
 
+static const char* vert_attributes[] = {
+	"positions",
+	"normals",
+	"texcoords",
+	"colors"
+};
 
 static JSValue athena_object_ctor(JSContext *ctx, JSValueConst new_target, int argc, JSValueConst *argv) {
 	JSImageData *image;
@@ -221,45 +236,30 @@ static JSValue athena_object_ctor(JSContext *ctx, JSValueConst new_target, int a
 		memset(ro, 0, sizeof(JSRenderObject));
 
 		uint32_t size = 0;
-		JSValue vert_arr;
+		JSValue vert_arr, ta_buf;
 		void *tmp_vert_ptr = NULL;
+		
+		VECTOR** attributes_ptr[] = {
+			&ro->m.positions,
+			&ro->m.normals,
+			&ro->m.texcoords,
+			&ro->m.colours
+		};
 
-		vert_arr = JS_GetPropertyStr(ctx, argv[0], "positions");
+		for (int i = 0; i < 4; i++) {
+			vert_arr = JS_GetPropertyStr(ctx, argv[0], vert_attributes[i]);
 
-		tmp_vert_ptr = JS_GetArrayBuffer(ctx, &size, JS_GetTypedArrayBuffer(ctx, vert_arr, NULL, NULL, NULL));
+			ta_buf = JS_GetTypedArrayBuffer(ctx, vert_arr, NULL, NULL, NULL);
 
-		ro->m.index_count = size/sizeof(VECTOR);
+			tmp_vert_ptr = JS_GetArrayBuffer(ctx, &size, ((ta_buf != JS_EXCEPTION)? ta_buf : vert_arr));
 
-		if (tmp_vert_ptr) {
-			ro->m.positions = malloc(size);
-			memcpy(ro->m.positions, tmp_vert_ptr, size);
-		}
+			if (!i)
+				ro->m.index_count = size/sizeof(VECTOR);
 
-		vert_arr = JS_GetPropertyStr(ctx, argv[0], "normals");
-
-		tmp_vert_ptr = JS_GetArrayBuffer(ctx, &size, JS_GetTypedArrayBuffer(ctx, vert_arr, NULL, NULL, NULL));
-
-		if (tmp_vert_ptr) {
-			ro->m.normals = malloc(size);
-			memcpy(ro->m.normals, tmp_vert_ptr, size);
-		}
-
-		vert_arr = JS_GetPropertyStr(ctx, argv[0], "texcoords");
-
-		tmp_vert_ptr = JS_GetArrayBuffer(ctx, &size, JS_GetTypedArrayBuffer(ctx, vert_arr, NULL, NULL, NULL));
-
-		if (tmp_vert_ptr) {
-			ro->m.texcoords = malloc(size);
-			memcpy(ro->m.texcoords, tmp_vert_ptr, size);
-		}
-
-		vert_arr = JS_GetPropertyStr(ctx, argv[0], "colors");
-
-		tmp_vert_ptr = JS_GetArrayBuffer(ctx, &size, JS_GetTypedArrayBuffer(ctx, vert_arr, NULL, NULL, NULL));
-
-		if (tmp_vert_ptr) {
-			ro->m.colours = malloc(size);
-			memcpy(ro->m.colours, tmp_vert_ptr, size);
+			if (tmp_vert_ptr) {
+				*attributes_ptr[i] = malloc(size);
+				memcpy(*attributes_ptr[i], tmp_vert_ptr, size);
+			}			
 		}
 
 		if(argc > 1) {
@@ -540,67 +540,36 @@ static JSValue js_object_set(JSContext *ctx, JSValueConst this_val, JSValue val,
         return JS_EXCEPTION;
 
     if (magic == 0) {
-		if (ro->m.positions)
-			free(ro->m.positions);
-		
-		if (ro->m.colours)
-    		free(ro->m.colours);
-		
-		if (ro->m.normals)
-    		free(ro->m.normals);
-		
-		if (ro->m.texcoords)
-    		free(ro->m.texcoords);
-
 		uint32_t size = 0;
 		JSValue vert_arr, ta_buf;
 		void *tmp_vert_ptr = NULL;
 
-		vert_arr = JS_GetPropertyStr(ctx, val, "positions");
+		VECTOR** attributes_ptr[] = {
+			&ro->m.positions,
+			&ro->m.normals,
+			&ro->m.texcoords,
+			&ro->m.colours
+		};
 
-		ta_buf = JS_GetTypedArrayBuffer(ctx, vert_arr, NULL, NULL, NULL);
+		for (int i = 0; i < 4; i++) {
+			if (*attributes_ptr[i])
+				free(*attributes_ptr[i]);
 
-		tmp_vert_ptr = JS_GetArrayBuffer(ctx, &size, ((ta_buf != JS_EXCEPTION)? ta_buf : vert_arr));
+			vert_arr = JS_GetPropertyStr(ctx, val, vert_attributes[i]);
 
-		ro->m.index_count = size/sizeof(VECTOR);
+			ta_buf = JS_GetTypedArrayBuffer(ctx, vert_arr, NULL, NULL, NULL);
 
-		if (tmp_vert_ptr) {
-			ro->m.positions = malloc(size);
-			memcpy(ro->m.positions, tmp_vert_ptr, size);
+			tmp_vert_ptr = JS_GetArrayBuffer(ctx, &size, ((ta_buf != JS_EXCEPTION)? ta_buf : vert_arr));
+
+			if (!i)
+				ro->m.index_count = size/sizeof(VECTOR);
+
+			if (tmp_vert_ptr) {
+				*attributes_ptr[i] = malloc(size);
+				memcpy(*attributes_ptr[i], tmp_vert_ptr, size);
+			}			
 		}
 
-		vert_arr = JS_GetPropertyStr(ctx, val, "normals");
-
-		ta_buf = JS_GetTypedArrayBuffer(ctx, vert_arr, NULL, NULL, NULL);
-
-		tmp_vert_ptr = JS_GetArrayBuffer(ctx, &size, ((ta_buf != JS_EXCEPTION)? ta_buf : vert_arr));
-
-		if (tmp_vert_ptr) {
-			ro->m.normals = malloc(size);
-			memcpy(ro->m.normals, tmp_vert_ptr, size);
-		}
-
-		vert_arr = JS_GetPropertyStr(ctx, val, "texcoords");
-
-		ta_buf = JS_GetTypedArrayBuffer(ctx, vert_arr, NULL, NULL, NULL);
-
-		tmp_vert_ptr = JS_GetArrayBuffer(ctx, &size, ((ta_buf != JS_EXCEPTION)? ta_buf : vert_arr));
-
-		if (tmp_vert_ptr) {
-			ro->m.texcoords = malloc(size);
-			memcpy(ro->m.texcoords, tmp_vert_ptr, size);
-		}
-
-		vert_arr = JS_GetPropertyStr(ctx, val, "colors");
-
-		ta_buf = JS_GetTypedArrayBuffer(ctx, vert_arr, NULL, NULL, NULL);
-
-		tmp_vert_ptr = JS_GetArrayBuffer(ctx, &size, ((ta_buf != JS_EXCEPTION)? ta_buf : vert_arr));
-
-		if (tmp_vert_ptr) {
-			ro->m.colours = malloc(size);
-			memcpy(ro->m.colours, tmp_vert_ptr, size);
-		}
 	} else if (magic == 2) {
 
 		for (int i = 0; i < 8; i++) {
@@ -726,14 +695,14 @@ static const JSCFunctionListEntry render_funcs[] = {
 	JS_CFUNC_DEF( "material",        0,               athena_newmaterial),
 	JS_CFUNC_DEF( "materialIndex",   2,          athena_newmaterialindex),
 
-	JS_PROP_INT32_DEF("PL_NO_LIGHTS_COLORS", PL_NO_LIGHTS_COLORS, JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("PL_NO_LIGHTS_COLORS",         PL_NO_LIGHTS_COLORS, JS_PROP_CONFIGURABLE ),
 	JS_PROP_INT32_DEF("PL_NO_LIGHTS_COLORS_TEX", PL_NO_LIGHTS_COLORS_TEX, JS_PROP_CONFIGURABLE ),
-	JS_PROP_INT32_DEF("PL_NO_LIGHTS", PL_NO_LIGHTS, JS_PROP_CONFIGURABLE ),
-	JS_PROP_INT32_DEF("PL_NO_LIGHTS_TEX", PL_NO_LIGHTS_TEX, JS_PROP_CONFIGURABLE ),
-	JS_PROP_INT32_DEF("PL_DEFAULT", PL_DEFAULT, JS_PROP_CONFIGURABLE ),
-	JS_PROP_INT32_DEF("PL_DEFAULT_NO_TEX", PL_DEFAULT_NO_TEX, JS_PROP_CONFIGURABLE ),
-	JS_PROP_INT32_DEF("PL_SPECULAR", PL_SPECULAR, JS_PROP_CONFIGURABLE ),
-	JS_PROP_INT32_DEF("PL_SPECULAR_NO_TEX", PL_SPECULAR_NO_TEX, JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("PL_NO_LIGHTS",                       PL_NO_LIGHTS, JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("PL_NO_LIGHTS_TEX",               PL_NO_LIGHTS_TEX, JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("PL_DEFAULT",                           PL_DEFAULT, JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("PL_DEFAULT_NO_TEX",             PL_DEFAULT_NO_TEX, JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("PL_SPECULAR",                         PL_SPECULAR, JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("PL_SPECULAR_NO_TEX",           PL_SPECULAR_NO_TEX, JS_PROP_CONFIGURABLE ),
 };
 
 static int render_init(JSContext *ctx, JSModuleDef *m)
