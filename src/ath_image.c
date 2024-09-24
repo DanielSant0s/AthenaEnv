@@ -252,7 +252,7 @@ static JSValue athena_image_get_uint(JSContext *ctx, JSValueConst this_val, int 
 			if (s->tex->PSM == GS_PSM_T4) {
 				return JS_NewArrayBuffer(ctx, s->tex->Clut, gsKit_texture_size_ee(8, 2, GS_PSM_CT32), NULL, NULL, 1);
 			} else if (s->tex->PSM == GS_PSM_T8) {
-					return JS_NewArrayBuffer(ctx, s->tex->Clut, gsKit_texture_size_ee(16, 16, GS_PSM_CT32), NULL, NULL, 1);
+				return JS_NewArrayBuffer(ctx, s->tex->Clut, gsKit_texture_size_ee(16, 16, GS_PSM_CT32), NULL, NULL, 1);
 			}
 			
 	}
