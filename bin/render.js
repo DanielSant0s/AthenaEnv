@@ -10,12 +10,13 @@ const pipelines = [
     "DEFAULT_NO_TEX",
     "SPECULAR",
     "SPECULAR_NO_TEX",
+
     "PVC",
     "PVC_NO_TEX",
 ];
 
-let fntcpy = new Font("default");
-fntcpy.scale = 0.4f;
+const font = new Font("default");
+font.scale = 0.4f;
 
 Screen.setFrameCounter(true);
 Screen.setVSync(false);
@@ -81,7 +82,6 @@ const car_vertices = new Float32Array(old_verts.positions);
 
 const new_positions = car_vertices.map((item) => {
     return item + (Math.random() * 0.1f);
-
 });
 
 old_verts.positions = new_positions;
@@ -178,8 +178,8 @@ while(true) {
         model[modeltodisplay].drawBounds(0.0f, 0.0f, 30.0f, savedly, savedlx, 0.0f, Color.new(128, 0, 255));
     }
 
-    fntcpy.print(10, 10, Screen.getFPS(360) + " FPS | " + free_mem + " | Free VRAM: " + free_vram + "KB");
-    fntcpy.print(10, 25, model[modeltodisplay].size + " Vertices | " + "Pipeline: " + pipelines[model[modeltodisplay].getPipeline()]);
+    font.print(10, 10, Screen.getFPS(360) + " FPS | " + free_mem + " | Free VRAM: " + free_vram + "KB");
+    font.print(10, 25, model[modeltodisplay].size + " Vertices | " + "Pipeline: " + pipelines[model[modeltodisplay].getPipeline()]);
 
     Screen.flip();
 }
