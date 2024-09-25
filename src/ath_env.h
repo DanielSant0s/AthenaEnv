@@ -73,6 +73,8 @@ JSModuleDef *athena_physics_init(JSContext *ctx);
 
 #ifdef ATHENA_GRAPHICS
 JSModuleDef *athena_render_init(JSContext* ctx);
+JSModuleDef *athena_lights_init(JSContext* ctx);
+JSModuleDef *athena_3dcamera_init(JSContext* ctx);
 JSModuleDef *athena_screen_init(JSContext* ctx);
 JSModuleDef *athena_color_init(JSContext* ctx);
 JSModuleDef *athena_shape_init(JSContext* ctx);

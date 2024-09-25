@@ -195,8 +195,6 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"globalThis.RenderObject = RenderObject.RenderObject;\n"
 
 				"globalThis.Lights = Lights;\n"
-				"globalThis.AMBIENT = Lights.AMBIENT;\n"
-				"globalThis.DIRECTIONAL = Lights.DIRECTIONAL;\n"
 
 				"globalThis.Camera = Camera;\n"
 
@@ -284,6 +282,8 @@ static JSContext *JS_NewCustomContext(JSRuntime *rt)
 	athena_shape_init(ctx);
 	athena_screen_init(ctx);
 	athena_render_init(ctx);
+	athena_lights_init(ctx);
+	athena_3dcamera_init(ctx);
 	#endif
 
 	#ifdef ATHENA_KEYBOARD
