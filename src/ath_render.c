@@ -423,12 +423,12 @@ static JSValue js_object_set(JSContext *ctx, JSValueConst this_val, JSValue val,
 }
 
 static const JSCFunctionListEntry js_object_proto_funcs[] = {
-    JS_CFUNC_DEF("draw",        6,   athena_drawobject),
-	JS_CFUNC_DEF("drawBounds",  7,     athena_drawbbox),
-	JS_CFUNC_DEF("setPipeline", 1, athena_setpipeline ),
-	JS_CFUNC_DEF("getPipeline", 0, athena_getpipeline ),
-	JS_CFUNC_DEF("setTexture",  3,  athena_settexture ),
-	JS_CFUNC_DEF("getTexture",  1,  athena_gettexture ),
+    JS_CFUNC_DEF("draw",        6,  athena_drawobject),
+	JS_CFUNC_DEF("drawBounds",  7,    athena_drawbbox),
+	JS_CFUNC_DEF("setPipeline", 1, athena_setpipeline),
+	JS_CFUNC_DEF("getPipeline", 0, athena_getpipeline),
+	JS_CFUNC_DEF("setTexture",  3,  athena_settexture),
+	JS_CFUNC_DEF("getTexture",  1,  athena_gettexture),
 
 	JS_CGETSET_MAGIC_DEF("vertices", js_object_get, js_object_set, 0),
 	JS_CGETSET_MAGIC_DEF("size",     js_object_get, js_object_set, 1),
@@ -515,7 +515,6 @@ static JSValue athena_newmaterialindex(JSContext *ctx, JSValue this_val, int arg
 
 static JSValue athena_newvertex(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
 	JSValue obj = JS_NewObject(ctx);
-
 	JS_DefinePropertyValueStr(ctx, obj, "positions",        argv[0], JS_PROP_C_W_E);
 	JS_DefinePropertyValueStr(ctx, obj, "normals",          argv[1], JS_PROP_C_W_E);
 	JS_DefinePropertyValueStr(ctx, obj, "texcoords",        argv[2], JS_PROP_C_W_E);
@@ -532,14 +531,14 @@ static const JSCFunctionListEntry render_funcs[] = {
 	JS_CFUNC_DEF( "material",        0,               athena_newmaterial),
 	JS_CFUNC_DEF( "materialIndex",   2,          athena_newmaterialindex),
 
-	JS_PROP_INT32_DEF("PL_NO_LIGHTS_COLORS",         PL_NO_LIGHTS_COLORS, JS_PROP_CONFIGURABLE ),
-	JS_PROP_INT32_DEF("PL_NO_LIGHTS_COLORS_TEX", PL_NO_LIGHTS_COLORS_TEX, JS_PROP_CONFIGURABLE ),
-	JS_PROP_INT32_DEF("PL_NO_LIGHTS",                       PL_NO_LIGHTS, JS_PROP_CONFIGURABLE ),
-	JS_PROP_INT32_DEF("PL_NO_LIGHTS_TEX",               PL_NO_LIGHTS_TEX, JS_PROP_CONFIGURABLE ),
-	JS_PROP_INT32_DEF("PL_DEFAULT",                           PL_DEFAULT, JS_PROP_CONFIGURABLE ),
-	JS_PROP_INT32_DEF("PL_DEFAULT_NO_TEX",             PL_DEFAULT_NO_TEX, JS_PROP_CONFIGURABLE ),
-	JS_PROP_INT32_DEF("PL_SPECULAR",                         PL_SPECULAR, JS_PROP_CONFIGURABLE ),
-	JS_PROP_INT32_DEF("PL_SPECULAR_NO_TEX",           PL_SPECULAR_NO_TEX, JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("PL_NO_LIGHTS_COLORS",         PL_NO_LIGHTS_COLORS, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("PL_NO_LIGHTS_COLORS_TEX", PL_NO_LIGHTS_COLORS_TEX, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("PL_NO_LIGHTS",                       PL_NO_LIGHTS, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("PL_NO_LIGHTS_TEX",               PL_NO_LIGHTS_TEX, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("PL_DEFAULT",                           PL_DEFAULT, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("PL_DEFAULT_NO_TEX",             PL_DEFAULT_NO_TEX, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("PL_SPECULAR",                         PL_SPECULAR, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("PL_SPECULAR_NO_TEX",           PL_SPECULAR_NO_TEX, JS_PROP_CONFIGURABLE),
 };
 
 static int render_init(JSContext *ctx, JSModuleDef *m)

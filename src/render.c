@@ -386,12 +386,11 @@ void loadOBJ(model* res_m, const char* path, GSTEXTURE* text) {
 	fast_obj_destroy(m);
 }
 
-void draw_bbox(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z, Color color)
-{
+void draw_bbox(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z, Color color) {
+	GSGLOBAL *gsGlobal = getGSGLOBAL();
+
 	VECTOR object_position = { pos_x, pos_y, pos_z, 1.00f };
 	VECTOR object_rotation = { rot_x, rot_y, rot_z, 1.00f };
-
-    GSGLOBAL *gsGlobal = getGSGLOBAL();
 
 	// Matrices to setup the 3D environment and camera
 	MATRIX local_world;
@@ -444,13 +443,13 @@ static u32* last_mpg = NULL;
 	} while (0)
 
 void draw_vu1(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z) {
+	GSGLOBAL *gsGlobal = getGSGLOBAL();
+
 	VECTOR object_position = { pos_x, pos_y, pos_z, 1.00f };
 	VECTOR object_rotation = { rot_x, rot_y, rot_z, 1.00f };
 
 	MATRIX local_world;
 	MATRIX local_screen;
-
-	GSGLOBAL *gsGlobal = getGSGLOBAL();
 
 	update_vu_program(VU1Draw3D);
 
@@ -570,15 +569,13 @@ void draw_vu1(model* m, float pos_x, float pos_y, float pos_z, float rot_x, floa
 }
 
 void draw_vu1_notex(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z) {
-	
+	GSGLOBAL *gsGlobal = getGSGLOBAL();
 
 	VECTOR object_position = { pos_x, pos_y, pos_z, 1.00f };
 	VECTOR object_rotation = { rot_x, rot_y, rot_z, 1.00f };
 
 	MATRIX local_world;
 	MATRIX local_screen;
-
-	GSGLOBAL *gsGlobal = getGSGLOBAL();
 
 	update_vu_program(VU1Draw3DNoTex);
 
@@ -663,7 +660,7 @@ void draw_vu1_notex(model* m, float pos_x, float pos_y, float pos_z, float rot_x
 }
 
 void draw_vu1_pvc(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z) {
-	
+	GSGLOBAL *gsGlobal = getGSGLOBAL();
 
 	VECTOR object_position = { pos_x, pos_y, pos_z, 1.00f };
 	VECTOR object_rotation = { rot_x, rot_y, rot_z, 1.00f };
@@ -671,8 +668,6 @@ void draw_vu1_pvc(model* m, float pos_x, float pos_y, float pos_z, float rot_x, 
 	MATRIX local_world;
 	MATRIX local_light;
 	MATRIX local_screen;
-
-	GSGLOBAL *gsGlobal = getGSGLOBAL();
 
 	update_vu_program(VU1Draw3DPVC);
 
@@ -794,7 +789,7 @@ void draw_vu1_pvc(model* m, float pos_x, float pos_y, float pos_z, float rot_x, 
 }
 
 void draw_vu1_pvc_notex(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z) {
-	
+	GSGLOBAL *gsGlobal = getGSGLOBAL();
 
 	VECTOR object_position = { pos_x, pos_y, pos_z, 1.00f };
 	VECTOR object_rotation = { rot_x, rot_y, rot_z, 1.00f };
@@ -802,8 +797,6 @@ void draw_vu1_pvc_notex(model* m, float pos_x, float pos_y, float pos_z, float r
 	MATRIX local_world;
 	MATRIX local_light;
 	MATRIX local_screen;
-
-	GSGLOBAL *gsGlobal = getGSGLOBAL();
 
 	update_vu_program(VU1Draw3DPVCNoTex);
 
@@ -888,16 +881,14 @@ void draw_vu1_pvc_notex(model* m, float pos_x, float pos_y, float pos_z, float r
 }
 
 void draw_vu1_with_colors(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z) {
+	GSGLOBAL *gsGlobal = getGSGLOBAL();
 	
-
 	VECTOR object_position = { pos_x, pos_y, pos_z, 1.00f };
 	VECTOR object_rotation = { rot_x, rot_y, rot_z, 1.00f };
 
 	MATRIX local_world;
 	MATRIX local_light;
 	MATRIX local_screen;
-
-	GSGLOBAL *gsGlobal = getGSGLOBAL();
 
 	update_vu_program(VU1Draw3DColors);
 
@@ -1024,8 +1015,6 @@ void draw_vu1_with_colors(model* m, float pos_x, float pos_y, float pos_z, float
 }
 
 void draw_vu1_with_colors_notex(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z) {
-	
-
 	VECTOR object_position = { pos_x, pos_y, pos_z, 1.00f };
 	VECTOR object_rotation = { rot_x, rot_y, rot_z, 1.00f };
 
@@ -1131,8 +1120,6 @@ void draw_vu1_with_colors_notex(model* m, float pos_x, float pos_y, float pos_z,
 }
 
 void draw_vu1_with_lights(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z) {
-	
-
 	GSGLOBAL *gsGlobal = getGSGLOBAL();
 
 	update_vu_program(VU1Draw3DLightsColors);
@@ -1292,8 +1279,6 @@ void draw_vu1_with_lights(model* m, float pos_x, float pos_y, float pos_z, float
 }
 
 void draw_vu1_with_lights_notex(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z) {
-	
-
 	GSGLOBAL *gsGlobal = getGSGLOBAL();
 
 	update_vu_program(VU1Draw3DLightsColorsNoTex);
@@ -1425,8 +1410,6 @@ void draw_vu1_with_lights_notex(model* m, float pos_x, float pos_y, float pos_z,
 }
 
 void draw_vu1_with_spec_lights(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z) {
-	
-
 	GSGLOBAL *gsGlobal = getGSGLOBAL();
 
 	update_vu_program(VU1Draw3DSpec);
@@ -1587,8 +1570,6 @@ void draw_vu1_with_spec_lights(model* m, float pos_x, float pos_y, float pos_z, 
 }
 
 void draw_vu1_with_spec_lights_notex(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z) {
-	
-
 	GSGLOBAL *gsGlobal = getGSGLOBAL();
 
 	update_vu_program(VU1Draw3DSpecNoTex);
