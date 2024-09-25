@@ -15,7 +15,7 @@ const pipelines = [
 ];
 
 let fntcpy = new Font("default");
-fntcpy.scale = (0.4f);
+fntcpy.scale = 0.4f;
 
 Screen.setFrameCounter(true);
 Screen.setVSync(false);
@@ -60,7 +60,10 @@ const triColors = new Float32Array([
     0.0f, 0.0f, 1.0f, 1.0f, 
 ]);
 
-const vertList = Render.vertexList(triPositions, triNormals, triTexCoords, triColors);
+const vertList = Render.vertexList(triPositions, 
+                                   triNormals, 
+                                   triTexCoords, 
+                                   triColors);
 
 const listtest = new RenderObject(vertList);
 

@@ -7,168 +7,6 @@
 #include "include/render.h"
 #include "ath_env.h"
 
-static JSValue athena_newlight(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-	if (argc != 0) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
-	return JS_NewUint32(ctx, NewLight());
-}
-
-static JSValue athena_setlight(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-	if (argc != 5) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
-
-	float x, y, z;
-	int id, attr;
-
-	JS_ToInt32(ctx, &id, argv[0]);
-	JS_ToInt32(ctx, &attr, argv[1]);
-	JS_ToFloat32(ctx, &x, argv[2]);
-	JS_ToFloat32(ctx, &y, argv[3]);
-	JS_ToFloat32(ctx, &z, argv[4]);
-	
-
-	SetLightAttribute(id, x, y, z, attr);
-
-	return JS_UNDEFINED;
-}
-
-static const JSCFunctionListEntry light_funcs[] = {
-  JS_CFUNC_DEF( "new",  	0, athena_newlight),
-  JS_CFUNC_DEF( "set",  	5, athena_setlight),
-  JS_PROP_INT32_DEF("AMBIENT", ATHENA_LIGHT_AMBIENT, JS_PROP_CONFIGURABLE ),
-  JS_PROP_INT32_DEF("DIFFUSE", ATHENA_LIGHT_DIFFUSE, JS_PROP_CONFIGURABLE ),
-  JS_PROP_INT32_DEF("SPECULAR", ATHENA_LIGHT_SPECULAR, JS_PROP_CONFIGURABLE ),
-  JS_PROP_INT32_DEF("DIRECTION", ATHENA_LIGHT_DIRECTION, JS_PROP_CONFIGURABLE ),
-};
-
-
-static JSValue athena_camposition(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-	if (argc != 3) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
-	float x, y, z;
-	JS_ToFloat32(ctx, &x, argv[0]);
-	JS_ToFloat32(ctx, &y, argv[1]);
-	JS_ToFloat32(ctx, &z, argv[2]);
-	
-	setCameraPosition(x, y, z);
-
-	return JS_UNDEFINED;
-}
-
-
-static JSValue athena_camrotation(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-	if (argc != 3) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
-	float x, y, z;
-	JS_ToFloat32(ctx, &x, argv[0]);
-	JS_ToFloat32(ctx, &y, argv[1]);
-	JS_ToFloat32(ctx, &z, argv[2]);
-	
-	setCameraRotation(x, y, z);
-
-	return JS_UNDEFINED;
-}
-
-static JSValue athena_camtarget(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-	if (argc != 3) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
-	float x, y, z;
-	JS_ToFloat32(ctx, &x, argv[0]);
-	JS_ToFloat32(ctx, &y, argv[1]);
-	JS_ToFloat32(ctx, &z, argv[2]);
-	
-	setCameraTarget(x, y, z);
-
-	return JS_UNDEFINED;
-}
-
-static JSValue athena_camorbit(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-	float yaw, pitch;
-	JS_ToFloat32(ctx, &yaw, argv[0]);
-	JS_ToFloat32(ctx, &pitch, argv[1]);
-	
-	orbitCamera(yaw, pitch);
-
-	return JS_UNDEFINED;
-}
-
-static JSValue athena_camturn(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-	float yaw, pitch;
-	JS_ToFloat32(ctx, &yaw, argv[0]);
-	JS_ToFloat32(ctx, &pitch, argv[1]);
-	
-	turnCamera(yaw, pitch);
-
-	return JS_UNDEFINED;
-}
-
-static JSValue athena_campan(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-	float x, y;
-	JS_ToFloat32(ctx, &x, argv[0]);
-	JS_ToFloat32(ctx, &y, argv[1]);
-	
-	panCamera(x, y);
-
-	return JS_UNDEFINED;
-}
-
-static JSValue athena_camdolly(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-	float dist;
-	JS_ToFloat32(ctx, &dist, argv[0]);
-	
-	dollyCamera(dist);
-
-	return JS_UNDEFINED;
-}
-
-static JSValue athena_camzoom(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-	float dist;
-	JS_ToFloat32(ctx, &dist, argv[0]);
-	
-	zoomCamera(dist);
-
-	return JS_UNDEFINED;
-}
-
-static JSValue athena_camupdate(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-	cameraUpdate();
-
-	return JS_UNDEFINED;
-}
-
-static JSValue athena_camtype(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-	eCameraTypes type;
-
-	JS_ToUint32(ctx, &type, argv[0]);
-
-	setCameraType(type);
-
-	return JS_UNDEFINED;
-}
-
-static const JSCFunctionListEntry camera_funcs[] = {
-  JS_CFUNC_DEF("position", 3, athena_camposition),
-  JS_CFUNC_DEF("rotation", 3, athena_camrotation),
-
-  JS_CFUNC_DEF("target", 3, athena_camtarget),
-  JS_CFUNC_DEF("orbit", 2, athena_camorbit),
-  JS_CFUNC_DEF("turn", 2, athena_camturn),
-  JS_CFUNC_DEF("dolly", 1, athena_camdolly),
-  JS_CFUNC_DEF("zoom", 1, athena_camzoom),
-  JS_CFUNC_DEF("pan", 2, athena_campan),
-
-  JS_CFUNC_DEF("update", 0, athena_camupdate),
-  JS_CFUNC_DEF("type", 1, athena_camtype),
-
-  JS_PROP_INT32_DEF("DEFAULT", CAMERA_DEFAULT, JS_PROP_CONFIGURABLE ),
-  JS_PROP_INT32_DEF("LOOKAT", CAMERA_LOOKAT, JS_PROP_CONFIGURABLE ),
-};
-
-static int light_init(JSContext *ctx, JSModuleDef *m)
-{
-    return JS_SetModuleExportList(ctx, m, light_funcs, countof(light_funcs));
-}
-
-static int camera_init(JSContext *ctx, JSModuleDef *m)
-{
-    return JS_SetModuleExportList(ctx, m, camera_funcs, countof(camera_funcs));
-}
-
 static JSClassID js_object_class_id;
 
 typedef struct {
@@ -487,8 +325,6 @@ static JSValue athena_gettexture(JSContext *ctx, JSValue this_val, int argc, JSV
 	return JS_UNDEFINED;
 }
 
-
-
 static JSValue js_object_get(JSContext *ctx, JSValueConst this_val, int magic)
 {
     JSRenderObject* ro = JS_GetOpaque2(ctx, this_val, js_object_class_id);
@@ -587,15 +423,16 @@ static JSValue js_object_set(JSContext *ctx, JSValueConst this_val, JSValue val,
 }
 
 static const JSCFunctionListEntry js_object_proto_funcs[] = {
-    JS_CFUNC_DEF("draw", 6, athena_drawobject),
-	JS_CFUNC_DEF("drawBounds", 7, athena_drawbbox),
+    JS_CFUNC_DEF("draw",        6,   athena_drawobject),
+	JS_CFUNC_DEF("drawBounds",  7,     athena_drawbbox),
 	JS_CFUNC_DEF("setPipeline", 1, athena_setpipeline ),
 	JS_CFUNC_DEF("getPipeline", 0, athena_getpipeline ),
-	JS_CFUNC_DEF("setTexture", 3, athena_settexture ),
-	JS_CFUNC_DEF("getTexture", 1, athena_gettexture ),
+	JS_CFUNC_DEF("setTexture",  3,  athena_settexture ),
+	JS_CFUNC_DEF("getTexture",  1,  athena_gettexture ),
+
 	JS_CGETSET_MAGIC_DEF("vertices", js_object_get, js_object_set, 0),
-	JS_CGETSET_MAGIC_DEF("size", js_object_get, js_object_set, 1),
-	JS_CGETSET_MAGIC_DEF("bounds", js_object_get, js_object_set, 2),
+	JS_CGETSET_MAGIC_DEF("size",     js_object_get, js_object_set, 1),
+	JS_CGETSET_MAGIC_DEF("bounds",   js_object_get, js_object_set, 2),
 };
 
 static JSValue athena_initrender(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
@@ -663,7 +500,7 @@ static JSValue athena_newmaterial(JSContext *ctx, JSValue this_val, int argc, JS
 
 	JS_DefinePropertyValueStr(ctx, obj, "disolve", JS_NewFloat32(ctx, 1.0f), JS_PROP_C_W_E);
 
-	JS_DefinePropertyValueStr(ctx, obj, "texture", JS_UNDEFINED, JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "texture", JS_NULL, JS_PROP_C_W_E);
 
 	return obj;
 }
@@ -737,7 +574,5 @@ JSModuleDef *athena_render_init(JSContext* ctx){
         return NULL;
     JS_AddModuleExport(ctx, m, "RenderObject");
 
-	athena_push_module(ctx, render_init, render_funcs, countof(render_funcs), "Render");
-	athena_push_module(ctx, light_init, light_funcs, countof(light_funcs), "Lights");
-    return athena_push_module(ctx, camera_init, camera_funcs, countof(camera_funcs), "Camera");
+	return athena_push_module(ctx, render_init, render_funcs, countof(render_funcs), "Render");
 }
