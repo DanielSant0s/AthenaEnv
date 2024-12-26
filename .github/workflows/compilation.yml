@@ -24,7 +24,7 @@ jobs:
       run: |
         git config --global --add safe.directory /__w/AthenaEnv/AthenaEnv
 
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
     - run: |
         git fetch --prune --unshallow
 
@@ -34,25 +34,23 @@ jobs:
         make
 
     - name: Get short SHA
-      id: slug
-      run: echo "::set-output name=sha8::$(echo ${GITHUB_SHA} | cut -c1-8)"
+      run: echo "SHA8=$(echo ${GITHUB_SHA} | cut -c1-8)" >> $GITHUB_ENV
 
     - name: Upload artifacts
       if: ${{ success() }}
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
-        name: AthenaEnv-${{ steps.slug.outputs.sha8 }}
+        name: AthenaEnv-${{ env.SHA8 }}
         path: bin
 
     - name: Compress & Rename bin folder
       run: |
         mv bin/ AthenaEnv/
         tar -zcvf AthenaEnv.tar.gz AthenaEnv
- 
-
+        
     - name: Create Pre-release
       if: github.ref == 'refs/heads/main'
-      uses: marvinpinto/action-automatic-releases@latest
+      uses: mathieucarbou/marvinpinto-action-automatic-releases@latest
       with:
         repo_token: "${{ secrets.GITHUB_TOKEN }}"
         automatic_release_tag: "latest"
