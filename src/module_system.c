@@ -212,6 +212,7 @@ int load_default_module(int id) {
     			ID = SifExecModuleBuffer(&mcserv_irx, size_mcserv_irx, 0, NULL, &ret);
 				REPORT("MCSERV");
 				mc_started = LOAD_SUCCESS();
+				if (mc_started) mcInit(MC_TYPE_XMC); //to avoid hang on RPC for a module that did not remain resident
 			}
 			break;
 
