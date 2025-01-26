@@ -14,32 +14,27 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: ps2dev/ps2dev:latest
+    container: ghcr.io/ps2homebrew/ps2homebrew:main
     steps:
-    - name: Install dependencies
-      run: |
-        apk add build-base git bash
-        
+    - name: git checkout
+      uses: actions/checkout@v4
+
     - name: Workaround permission issue
       run: |
         git config --global --add safe.directory /__w/AthenaEnv/AthenaEnv
-
-    - uses: actions/checkout@v2
-    - run: |
         git fetch --prune --unshallow
 
     - name: Compile project
       run: |
-        make clean 
-        make
+        make clean all
 
     - name: Get short SHA
       id: slug
-      run: echo "::set-output name=sha8::$(echo ${GITHUB_SHA} | cut -c1-8)"
+      run: echo "sha8=$(echo ${GITHUB_SHA} | cut -c1-8)" >> $GITHUB_ENV
 
     - name: Upload artifacts
       if: ${{ success() }}
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
         name: AthenaEnv-${{ steps.slug.outputs.sha8 }}
         path: bin
@@ -48,11 +43,11 @@ jobs:
       run: |
         mv bin/ AthenaEnv/
         tar -zcvf AthenaEnv.tar.gz AthenaEnv
- 
+
 
     - name: Create Pre-release
       if: github.ref == 'refs/heads/main'
-      uses: marvinpinto/action-automatic-releases@latest
+      uses: mathieucarbou/marvinpinto-action-automatic-releases@latest
       with:
         repo_token: "${{ secrets.GITHUB_TOKEN }}"
         automatic_release_tag: "latest"
@@ -62,7 +57,7 @@ jobs:
 
     - name: Release
       if: startsWith(github.ref, 'refs/tags/')
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       with:
         files: AthenaEnv.tar.gz
         tag_name: ${{ steps.tag.outputs.VERSION }}
