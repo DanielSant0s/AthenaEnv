@@ -106,6 +106,7 @@ int athena_load_png(GSTEXTURE* tex, FILE* File, bool delayed)
 
     tex->VramClut = 0;
     tex->Clut = NULL;
+	tex->ClutStorageMode = GS_CLUT_STORAGE_CSM1;
 
 	color_type = png_get_color_type(png_ptr, info_ptr);
 
@@ -362,7 +363,11 @@ int athena_load_bmp(GSTEXTURE* tex, FILE* File, bool delayed)
 
 	tex->Width = Bitmap.InfoHeader.Width;
 	tex->Height = Bitmap.InfoHeader.Height;
-	tex->Filter = GS_FILTER_NEAREST;
+	tex->Filter = GS_FILTER_NEAREST; 
+
+    tex->VramClut = 0;
+    tex->Clut = NULL;
+	tex->ClutStorageMode = GS_CLUT_STORAGE_CSM1;
 
 	if(Bitmap.InfoHeader.BitCount == 4)
 	{
@@ -678,6 +683,7 @@ static void  _ps2_load_JPEG_generic(GSTEXTURE *Texture, struct jpeg_decompress_s
 	Texture->Filter = GS_FILTER_NEAREST;
 	Texture->VramClut = 0;
 	Texture->Clut = NULL;
+	Texture->ClutStorageMode = GS_CLUT_STORAGE_CSM1;
 
 	textureSize = cinfo->output_width*cinfo->output_height*cinfo->out_color_components;
 	#ifdef DEBUG
