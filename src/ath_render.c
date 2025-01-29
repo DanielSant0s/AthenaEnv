@@ -325,6 +325,38 @@ static JSValue athena_gettexture(JSContext *ctx, JSValue this_val, int argc, JSV
 	return JS_UNDEFINED;
 }
 
+inline JSValue JS_NewVector(JSContext *ctx, VECTOR v) {
+	JSValue vec = JS_NewObject(ctx);
+	JS_DefinePropertyValueStr(ctx, vec, "x", JS_NewFloat32(ctx, v[0]), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, vec, "y", JS_NewFloat32(ctx, v[1]), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, vec, "z", JS_NewFloat32(ctx, v[2]), JS_PROP_C_W_E);
+
+	return vec;
+}
+
+inline void JS_ToVector(JSContext *ctx, VECTOR v, JSValue vec) {
+	JS_ToFloat32(ctx, &v[0], JS_GetPropertyStr(ctx, vec, "x"));
+	JS_ToFloat32(ctx, &v[1], JS_GetPropertyStr(ctx, vec, "y"));
+	JS_ToFloat32(ctx, &v[2], JS_GetPropertyStr(ctx, vec, "z"));
+	v[3] = 1.0f;
+}
+
+inline JSValue JS_NewMaterial(JSContext *ctx, VECTOR v) {
+	JSValue vec = JS_NewObject(ctx);
+	JS_DefinePropertyValueStr(ctx, vec, "r", JS_NewFloat32(ctx, v[0]), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, vec, "g", JS_NewFloat32(ctx, v[1]), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, vec, "b", JS_NewFloat32(ctx, v[2]), JS_PROP_C_W_E);
+
+	return vec;
+}
+
+inline void JS_ToMaterial(JSContext *ctx, VECTOR v, JSValue vec) {
+	JS_ToFloat32(ctx, &v[0], JS_GetPropertyStr(ctx, vec, "r"));
+	JS_ToFloat32(ctx, &v[1], JS_GetPropertyStr(ctx, vec, "g"));
+	JS_ToFloat32(ctx, &v[2], JS_GetPropertyStr(ctx, vec, "b"));
+	v[3] = 1.0f;
+}
+
 static JSValue js_object_get(JSContext *ctx, JSValueConst this_val, int magic)
 {
     JSRenderObject* ro = JS_GetOpaque2(ctx, this_val, js_object_class_id);
@@ -335,16 +367,16 @@ static JSValue js_object_get(JSContext *ctx, JSValueConst this_val, int magic)
 		JSValue obj = JS_NewObject(ctx);
 
 		if (ro->m.positions)
-			JS_DefinePropertyValueStr(ctx, obj, "positions", JS_NewArrayBufferCopy(ctx, ro->m.positions, ro->m.index_count*sizeof(VECTOR)), JS_PROP_C_W_E);
+			JS_DefinePropertyValueStr(ctx, obj, "positions", JS_NewArrayBuffer(ctx, ro->m.positions, ro->m.index_count*sizeof(VECTOR), NULL, NULL, false), JS_PROP_C_W_E);
 
 		if (ro->m.normals)
-			JS_DefinePropertyValueStr(ctx, obj, "normals",   JS_NewArrayBufferCopy(ctx, ro->m.normals, ro->m.index_count*sizeof(VECTOR)), JS_PROP_C_W_E);
+			JS_DefinePropertyValueStr(ctx, obj, "normals",   JS_NewArrayBuffer(ctx, ro->m.normals, ro->m.index_count*sizeof(VECTOR), NULL, NULL, false), JS_PROP_C_W_E);
 
 		if (ro->m.texcoords)
-			JS_DefinePropertyValueStr(ctx, obj, "texcoords", JS_NewArrayBufferCopy(ctx, ro->m.texcoords, ro->m.index_count*sizeof(VECTOR)), JS_PROP_C_W_E);
+			JS_DefinePropertyValueStr(ctx, obj, "texcoords", JS_NewArrayBuffer(ctx, ro->m.texcoords, ro->m.index_count*sizeof(VECTOR), NULL, NULL, false), JS_PROP_C_W_E);
 
 		if (ro->m.colours)
-			JS_DefinePropertyValueStr(ctx, obj, "colors",    JS_NewArrayBufferCopy(ctx, ro->m.colours, ro->m.index_count*sizeof(VECTOR)), JS_PROP_C_W_E);
+			JS_DefinePropertyValueStr(ctx, obj, "colors",    JS_NewArrayBuffer(ctx, ro->m.colours, ro->m.index_count*sizeof(VECTOR), NULL, NULL, false), JS_PROP_C_W_E);
 
 
 		//JS_DefinePropertyValueStr(ctx, obj, "materials",        argv[4], JS_PROP_C_W_E);
@@ -352,8 +384,28 @@ static JSValue js_object_get(JSContext *ctx, JSValueConst this_val, int magic)
 
 		return obj;
 	} else if (magic == 1) {
+		JSValue arr = JS_NewArray(ctx);
+
+		for (int i = 0; i < ro->m.material_count; i++) {
+			JSValue obj = JS_NewObject(ctx);
+
+			JS_DefinePropertyValueStr(ctx, obj, "ambient", JS_NewMaterial(ctx, &ro->m.materials[i].ambient), JS_PROP_C_W_E);
+			JS_DefinePropertyValueStr(ctx, obj, "diffuse", JS_NewMaterial(ctx, &ro->m.materials[i].diffuse), JS_PROP_C_W_E);
+			JS_DefinePropertyValueStr(ctx, obj, "specular", JS_NewMaterial(ctx, &ro->m.materials[i].specular), JS_PROP_C_W_E);
+			JS_DefinePropertyValueStr(ctx, obj, "emission", JS_NewMaterial(ctx, &ro->m.materials[i].emission), JS_PROP_C_W_E);
+			JS_DefinePropertyValueStr(ctx, obj, "transmittance", JS_NewMaterial(ctx, &ro->m.materials[i].transmittance), JS_PROP_C_W_E);
+			JS_DefinePropertyValueStr(ctx, obj, "shininess", JS_NewFloat32(ctx, ro->m.materials[i].shininess), JS_PROP_C_W_E);
+			JS_DefinePropertyValueStr(ctx, obj, "refraction", JS_NewFloat32(ctx, ro->m.materials[i].refraction), JS_PROP_C_W_E);
+			JS_DefinePropertyValueStr(ctx, obj, "transmission_filter", JS_NewMaterial(ctx, &ro->m.materials[i].transmission_filter), JS_PROP_C_W_E);
+			JS_DefinePropertyValueStr(ctx, obj, "disolve", JS_NewFloat32(ctx, ro->m.materials[i].disolve), JS_PROP_C_W_E);
+
+			JS_DefinePropertyValueUint32(ctx, arr, i, obj, JS_PROP_C_W_E);
+		}
+
+		return arr;
+	} else if (magic == 7) {
 		return JS_NewUint32(ctx, ro->m.index_count);
-	} else if (magic == 2) {
+	} else if (magic == 8) {
 		JSValue array = JS_NewArray(ctx);
 
 		for (int i = 0; i < 8; i++) {
@@ -406,7 +458,34 @@ static JSValue js_object_set(JSContext *ctx, JSValueConst this_val, JSValue val,
 			}			
 		}
 
-	} else if (magic == 2) {
+	} else if (magic == 1) {
+		uint32_t material_count = 0;
+
+		JS_ToUint32(ctx, &material_count, JS_GetPropertyStr(ctx, val, "length"));
+
+		if (material_count > ro->m.material_count) {
+			ro->m.materials = realloc(ro->m.materials, material_count);
+		}
+
+		for (int i = 0; i < material_count; i++) {
+			JSValue obj = JS_GetPropertyUint32(ctx, val, i);
+
+			JS_ToMaterial(ctx, &ro->m.materials[i].ambient, JS_GetPropertyStr(ctx, obj, "ambient"));
+			JS_ToMaterial(ctx, &ro->m.materials[i].diffuse, JS_GetPropertyStr(ctx, obj, "diffuse"));
+			JS_ToMaterial(ctx, &ro->m.materials[i].specular, JS_GetPropertyStr(ctx, obj, "specular"));
+			JS_ToMaterial(ctx, &ro->m.materials[i].emission, JS_GetPropertyStr(ctx, obj, "emission"));
+			JS_ToMaterial(ctx, &ro->m.materials[i].transmittance, JS_GetPropertyStr(ctx, obj, "transmittance"));
+			JS_ToFloat32(ctx, &ro->m.materials[i].shininess, JS_GetPropertyStr(ctx, obj, "shininess"));
+			JS_ToFloat32(ctx, &ro->m.materials[i].refraction, JS_GetPropertyStr(ctx, obj, "refraction"));
+			JS_ToMaterial(ctx, &ro->m.materials[i].transmission_filter, JS_GetPropertyStr(ctx, obj, "transmission_filter"));
+			JS_ToFloat32(ctx, &ro->m.materials[i].disolve, JS_GetPropertyStr(ctx, obj, "disolve"));
+
+			JS_FreeValue(ctx, obj);
+		}
+
+		ro->m.material_count = material_count;
+
+	} else if (magic == 8) {
 
 		for (int i = 0; i < 8; i++) {
 			JSValue vertex = JS_GetPropertyUint32(ctx, val, i);
@@ -430,9 +509,10 @@ static const JSCFunctionListEntry js_object_proto_funcs[] = {
 	JS_CFUNC_DEF("setTexture",  3,  athena_settexture),
 	JS_CFUNC_DEF("getTexture",  1,  athena_gettexture),
 
-	JS_CGETSET_MAGIC_DEF("vertices", js_object_get, js_object_set, 0),
-	JS_CGETSET_MAGIC_DEF("size",     js_object_get, js_object_set, 1),
-	JS_CGETSET_MAGIC_DEF("bounds",   js_object_get, js_object_set, 2),
+	JS_CGETSET_MAGIC_DEF("vertices",  js_object_get, js_object_set, 0),
+	JS_CGETSET_MAGIC_DEF("materials", js_object_get, js_object_set, 1),
+	JS_CGETSET_MAGIC_DEF("size",      js_object_get, js_object_set, 7),
+	JS_CGETSET_MAGIC_DEF("bounds",    js_object_get, js_object_set, 8),
 };
 
 static JSValue athena_initrender(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
