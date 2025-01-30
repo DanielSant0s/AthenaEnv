@@ -74,9 +74,13 @@ const dragonmesh = new RenderObject("dragon.obj", dragontex);
 let monkeytex = new Image("monkey.png");
 const monkeymesh = new RenderObject("monkey.obj", monkeytex);
 
+let moontex = new Image("moon.png");
+
 const car = new RenderObject("Car.obj");
 
-car.materials = car.materials.map((mat) => {
+const car_materials = car.materials;
+
+const new_materials = car_materials.map((mat) => {
     if (mat.diffuse.r > 0.4 && mat.diffuse.g == 0.0 && mat.diffuse.b == 0.0) {
         mat.diffuse.r = 0.25;
         mat.diffuse.b = 0.5;
@@ -85,15 +89,17 @@ car.materials = car.materials.map((mat) => {
     return mat;
 });
 
+car.materials = new_materials;
+
 //const car_vertices = new Float32Array(car.vertices.positions); // Pointer to a float array
 
 //car_vertices.forEach((item, i, positions) => positions[i] = item + (Math.random() * 0.1f));
 
 const mill = new RenderObject("cubes.obj");
+mill.setTexture(1, moontex);
 
 const boombox = new RenderObject("Boombox.obj");
-//let boomboxtex = boombox.getTexture(0);
-//boomboxtex.filter = LINEAR;
+boombox.getTexture(0).filter = LINEAR;
 
 const model = [dragonmesh, monkeymesh, car, listtest, boombox, mill];
 
