@@ -123,7 +123,7 @@ static JSValue athena_object_ctor(JSContext *ctx, JSValueConst new_target, int a
 			ro->m.materials[0].refraction = 1.0f;
 			ro->m.materials[0].disolve = 1.0f;
 
-			ro->m.materials[0].texture = image->tex;
+			ro->m.materials[0].texture_id = -1;
 			ro->m.material_indices[0].index = 0;
 			ro->m.material_indices[0].end = ro->m.index_count;
 
@@ -399,6 +399,8 @@ static JSValue js_object_get(JSContext *ctx, JSValueConst this_val, int magic)
 			JS_DefinePropertyValueStr(ctx, obj, "transmission_filter", JS_NewMaterial(ctx, &ro->m.materials[i].transmission_filter), JS_PROP_C_W_E);
 			JS_DefinePropertyValueStr(ctx, obj, "disolve", JS_NewFloat32(ctx, ro->m.materials[i].disolve), JS_PROP_C_W_E);
 
+			JS_DefinePropertyValueStr(ctx, obj, "texture_id", JS_NewInt32(ctx, ro->m.materials[i].texture_id), JS_PROP_C_W_E);
+
 			JS_DefinePropertyValueUint32(ctx, arr, i, obj, JS_PROP_C_W_E);
 		}
 
@@ -470,15 +472,17 @@ static JSValue js_object_set(JSContext *ctx, JSValueConst this_val, JSValue val,
 		for (int i = 0; i < material_count; i++) {
 			JSValue obj = JS_GetPropertyUint32(ctx, val, i);
 
-			JS_ToMaterial(ctx, &ro->m.materials[i].ambient, JS_GetPropertyStr(ctx, obj, "ambient"));
-			JS_ToMaterial(ctx, &ro->m.materials[i].diffuse, JS_GetPropertyStr(ctx, obj, "diffuse"));
-			JS_ToMaterial(ctx, &ro->m.materials[i].specular, JS_GetPropertyStr(ctx, obj, "specular"));
-			JS_ToMaterial(ctx, &ro->m.materials[i].emission, JS_GetPropertyStr(ctx, obj, "emission"));
-			JS_ToMaterial(ctx, &ro->m.materials[i].transmittance, JS_GetPropertyStr(ctx, obj, "transmittance"));
-			JS_ToFloat32(ctx, &ro->m.materials[i].shininess, JS_GetPropertyStr(ctx, obj, "shininess"));
-			JS_ToFloat32(ctx, &ro->m.materials[i].refraction, JS_GetPropertyStr(ctx, obj, "refraction"));
+			JS_ToMaterial(ctx, &ro->m.materials[i].ambient,             JS_GetPropertyStr(ctx, obj, "ambient"));
+			JS_ToMaterial(ctx, &ro->m.materials[i].diffuse,             JS_GetPropertyStr(ctx, obj, "diffuse"));
+			JS_ToMaterial(ctx, &ro->m.materials[i].specular,            JS_GetPropertyStr(ctx, obj, "specular"));
+			JS_ToMaterial(ctx, &ro->m.materials[i].emission,            JS_GetPropertyStr(ctx, obj, "emission"));
+			JS_ToMaterial(ctx, &ro->m.materials[i].transmittance,       JS_GetPropertyStr(ctx, obj, "transmittance"));
+			JS_ToFloat32(ctx,  &ro->m.materials[i].shininess,           JS_GetPropertyStr(ctx, obj, "shininess"));
+			JS_ToFloat32(ctx,  &ro->m.materials[i].refraction,          JS_GetPropertyStr(ctx, obj, "refraction"));
 			JS_ToMaterial(ctx, &ro->m.materials[i].transmission_filter, JS_GetPropertyStr(ctx, obj, "transmission_filter"));
-			JS_ToFloat32(ctx, &ro->m.materials[i].disolve, JS_GetPropertyStr(ctx, obj, "disolve"));
+			JS_ToFloat32(ctx,  &ro->m.materials[i].disolve,             JS_GetPropertyStr(ctx, obj, "disolve"));
+
+			JS_ToInt32(ctx,    &ro->m.materials[i].texture_id,          JS_GetPropertyStr(ctx, obj, "texture_id"));
 
 			JS_FreeValue(ctx, obj);
 		}
