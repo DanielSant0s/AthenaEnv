@@ -45,7 +45,7 @@ typedef struct
     VECTOR transmission_filter; 
     float  disolve;  
 
-	GSTEXTURE* texture;
+	int texture_id;
 } ath_mat;
 
 typedef struct {
