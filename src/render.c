@@ -233,16 +233,17 @@ void loadOBJ(model* res_m, const char* path, GSTEXTURE* text) {
 			res_m->materials[i].refraction =  m->materials[i].Ni;
 			res_m->materials[i].disolve =   m->materials[i].d;
 
-			res_m->materials[i].texture = NULL;
+			res_m->materials[i].texture_id = -1;
 
 			if (m->materials[i].map_Kd.name) {
 				bool prev_loaded = false;
 
 				if (!prev_loaded) {
-					res_m->materials[i].texture = malloc(sizeof(GSTEXTURE));
-					load_image(res_m->materials[i].texture, m->materials[i].map_Kd.name, true);
+					res_m->materials[i].texture_id = res_m->texture_count;
+					GSTEXTURE* tex = malloc(sizeof(GSTEXTURE));
+					load_image(tex, m->materials[i].map_Kd.name, true);
 
-					append_texture(res_m, res_m->materials[i].texture);
+					append_texture(res_m, tex);
 				}
 			}
 
@@ -266,10 +267,10 @@ void loadOBJ(model* res_m, const char* path, GSTEXTURE* text) {
 		res_m->materials[0].refraction = 1.0f;
 		res_m->materials[0].disolve = 1.0f;
 
-		res_m->materials[0].texture = NULL;
+		res_m->materials[0].texture_id = -1;
 
 		if((text)) {
-			res_m->materials[0].texture = text;
+			res_m->materials[0].texture_id = 0;
 			append_texture(res_m, text);
 		}
 	}
@@ -472,9 +473,10 @@ void draw_vu1(model* m, float pos_x, float pos_y, float pos_z, float rot_x, floa
 	int last_index = -1;
 	GSTEXTURE* tex = NULL;
 	for(int i = 0; i < m->material_index_count; i++) {
-		if (m->materials[m->material_indices[i].index].texture != tex) {
-			gsKit_TexManager_bind(gsGlobal, m->materials[m->material_indices[i].index].texture);
-			tex = m->materials[m->material_indices[i].index].texture;
+		GSTEXTURE *cur_tex = m->textures[m->materials[m->material_indices[i].index].texture_id];
+		if (cur_tex != tex) {
+			gsKit_TexManager_bind(gsGlobal, cur_tex);
+			tex = cur_tex;
 		}
 	
 		VECTOR* positions = &m->positions[last_index+1];
@@ -690,9 +692,10 @@ void draw_vu1_pvc(model* m, float pos_x, float pos_y, float pos_z, float rot_x, 
 	int last_index = -1;
 	GSTEXTURE* tex = NULL;
 	for(int i = 0; i < m->material_index_count; i++) {
-		if (m->materials[m->material_indices[i].index].texture != tex) {
-			gsKit_TexManager_bind(gsGlobal, m->materials[m->material_indices[i].index].texture);
-			tex = m->materials[m->material_indices[i].index].texture;
+		GSTEXTURE *cur_tex = m->textures[m->materials[m->material_indices[i].index].texture_id];
+		if (cur_tex != tex) {
+			gsKit_TexManager_bind(gsGlobal, cur_tex);
+			tex = cur_tex;
 		}
 
 		VECTOR* positions = &m->positions[last_index+1];
@@ -911,9 +914,10 @@ void draw_vu1_with_colors(model* m, float pos_x, float pos_y, float pos_z, float
 	int last_index = -1;
 	GSTEXTURE* tex = NULL;
 	for(int i = 0; i < m->material_index_count; i++) {
-		if (m->materials[m->material_indices[i].index].texture != tex) {
-			gsKit_TexManager_bind(gsGlobal, m->materials[m->material_indices[i].index].texture);
-			tex = m->materials[m->material_indices[i].index].texture;
+		GSTEXTURE *cur_tex = m->textures[m->materials[m->material_indices[i].index].texture_id];
+		if (cur_tex != tex) {
+			gsKit_TexManager_bind(gsGlobal, cur_tex);
+			tex = cur_tex;
 		}
 
 		VECTOR* positions = &m->positions[last_index+1];
@@ -1174,9 +1178,10 @@ void draw_vu1_with_lights(model* m, float pos_x, float pos_y, float pos_z, float
 	int last_index = -1;
 	GSTEXTURE* tex = NULL;
 	for(int i = 0; i < m->material_index_count; i++) {
-		if (m->materials[m->material_indices[i].index].texture != tex) {
-			gsKit_TexManager_bind(gsGlobal, m->materials[m->material_indices[i].index].texture);
-			tex = m->materials[m->material_indices[i].index].texture;
+		GSTEXTURE *cur_tex = m->textures[m->materials[m->material_indices[i].index].texture_id];
+		if (cur_tex != tex) {
+			gsKit_TexManager_bind(gsGlobal, cur_tex);
+			tex = cur_tex;
 		}
 
 		VECTOR* positions = &m->positions[last_index+1];
@@ -1465,9 +1470,10 @@ void draw_vu1_with_spec_lights(model* m, float pos_x, float pos_y, float pos_z, 
 	int last_index = -1;
 	GSTEXTURE* tex = NULL;
 	for(int i = 0; i < m->material_index_count; i++) {
-		if (m->materials[m->material_indices[i].index].texture != tex) {
-			gsKit_TexManager_bind(gsGlobal, m->materials[m->material_indices[i].index].texture);
-			tex = m->materials[m->material_indices[i].index].texture;
+		GSTEXTURE *cur_tex = m->textures[m->materials[m->material_indices[i].index].texture_id];
+		if (cur_tex != tex) {
+			gsKit_TexManager_bind(gsGlobal, cur_tex);
+			tex = cur_tex;
 		}
 
 		VECTOR* positions = &m->positions[last_index+1];
