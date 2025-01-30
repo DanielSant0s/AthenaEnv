@@ -37,12 +37,12 @@ static void athena_object_dtor(JSRuntime *rt, JSValue val){
 
 	//printf("%d textures\n", ro->m.texture_count);
 
-	//for (int i = 0; i < ro->m.texture_count; i++) {
-	//	if (!((JSImageData*)JS_GetOpaque(ro->textures[i], get_img_class_id()))->path) {
-	//		printf("Freeing %d from mesh\n", i);
-	//		JS_FreeValueRT(rt, ro->textures[i]);
-	//	}
-	//}
+	for (int i = 0; i < ro->m.texture_count; i++) {
+		if (!((JSImageData*)JS_GetOpaque(ro->textures[i], get_img_class_id()))->path) {
+			printf("Freeing %d from mesh\n", i);
+			JS_FreeValueRT(rt, ro->textures[i]);
+		}
+	}
 
 	if (ro->m.textures)
 		free(ro->m.textures);
@@ -98,6 +98,8 @@ static JSValue athena_object_ctor(JSContext *ctx, JSValueConst new_target, int a
 				*attributes_ptr[i] = malloc(size);
 				memcpy(*attributes_ptr[i], tmp_vert_ptr, size);
 			}			
+
+			JS_FreeValue(ctx, ((ta_buf != JS_EXCEPTION)? ta_buf : vert_arr));
 		}
 
 		if(argc > 1) {
@@ -273,40 +275,32 @@ static JSValue athena_getpipeline(JSContext *ctx, JSValue this_val, int argc, JS
 }
 
 static JSValue athena_settexture(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-	int tex_idx;
+	uint32_t tex_idx;
 	JSRenderObject* ro = JS_GetOpaque2(ctx, this_val, js_object_class_id);
 
 	JS_ToUint32(ctx, &tex_idx, argv[0]);
 
+	if (ro->m.texture_count < (tex_idx+1)) {
+		ro->m.textures = realloc(ro->m.textures, sizeof(GSTEXTURE*)*(ro->m.texture_count+1));
+		ro->textures =   realloc(ro->textures,   sizeof(JSValue)*(ro->m.texture_count+1));
+		ro->m.textures[tex_idx] = NULL;
+	}
+
 	if (ro->m.textures[tex_idx]) {
-		JS_FreeValue(ctx, ro->textures[tex_idx]);
+		//JS_FreeValue(ctx, ro->textures[tex_idx]);
 	}
 
 	JS_DupValue(ctx, argv[1]);
 	JSImageData* image = JS_GetOpaque2(ctx, argv[1], get_img_class_id());
-
-	/*if (ro->m.texture_count < (tex_idx+1)) {
-		ro->m.textures =   realloc(ro->m.textures,   sizeof(GSTEXTURE*)*(ro->m.texture_count+1));
-		ro->m.tex_ranges = realloc(ro->m.tex_ranges,        sizeof(int)*(ro->m.texture_count+1));
-	}
 
 	ro->textures[tex_idx] = argv[1];
 	ro->m.textures[tex_idx] = image->tex;
 
 	JSValue tex_arr = JS_GetPropertyStr(ctx, this_val, "textures");
 	JS_DefinePropertyValueUint32(ctx, tex_arr, tex_idx, ro->textures[tex_idx], JS_PROP_C_W_E);
+	JS_FreeValue(ctx, tex_arr);
 
 	ro->m.texture_count = (ro->m.texture_count < (tex_idx+1)? (tex_idx+1) : ro->m.texture_count);
-
-	if (argc > 2) {
-		int range;
-		JS_ToUint32(ctx, &range, argv[2]);
-		if (range == -1) {
-			range = ro->m.index_count;
-		}
-
-		ro->m.tex_ranges[tex_idx] = range;
-	}*/
 
 	return JS_UNDEFINED;
 }
@@ -339,6 +333,8 @@ inline void JS_ToVector(JSContext *ctx, VECTOR v, JSValue vec) {
 	JS_ToFloat32(ctx, &v[1], JS_GetPropertyStr(ctx, vec, "y"));
 	JS_ToFloat32(ctx, &v[2], JS_GetPropertyStr(ctx, vec, "z"));
 	v[3] = 1.0f;
+
+	JS_FreeValue(ctx, vec);
 }
 
 inline JSValue JS_NewMaterial(JSContext *ctx, VECTOR v) {
@@ -355,6 +351,8 @@ inline void JS_ToMaterial(JSContext *ctx, VECTOR v, JSValue vec) {
 	JS_ToFloat32(ctx, &v[1], JS_GetPropertyStr(ctx, vec, "g"));
 	JS_ToFloat32(ctx, &v[2], JS_GetPropertyStr(ctx, vec, "b"));
 	v[3] = 1.0f;
+
+	JS_FreeValue(ctx, vec);
 }
 
 static JSValue js_object_get(JSContext *ctx, JSValueConst this_val, int magic)
@@ -378,10 +376,6 @@ static JSValue js_object_get(JSContext *ctx, JSValueConst this_val, int magic)
 		if (ro->m.colours)
 			JS_DefinePropertyValueStr(ctx, obj, "colors",    JS_NewArrayBuffer(ctx, ro->m.colours, ro->m.index_count*sizeof(VECTOR), NULL, NULL, false), JS_PROP_C_W_E);
 
-
-		//JS_DefinePropertyValueStr(ctx, obj, "materials",        argv[4], JS_PROP_C_W_E);
-		//JS_DefinePropertyValueStr(ctx, obj, "material_indices", argv[5], JS_PROP_C_W_E);
-
 		return obj;
 	} else if (magic == 1) {
 		JSValue arr = JS_NewArray(ctx);
@@ -400,6 +394,19 @@ static JSValue js_object_get(JSContext *ctx, JSValueConst this_val, int magic)
 			JS_DefinePropertyValueStr(ctx, obj, "disolve", JS_NewFloat32(ctx, ro->m.materials[i].disolve), JS_PROP_C_W_E);
 
 			JS_DefinePropertyValueStr(ctx, obj, "texture_id", JS_NewInt32(ctx, ro->m.materials[i].texture_id), JS_PROP_C_W_E);
+
+			JS_DefinePropertyValueUint32(ctx, arr, i, obj, JS_PROP_C_W_E);
+		}
+
+		return arr;
+	} else if (magic == 2) {
+		JSValue arr = JS_NewArray(ctx);
+
+		for (int i = 0; i < ro->m.material_index_count; i++) {
+			JSValue obj = JS_NewObject(ctx);
+
+			JS_DefinePropertyValueStr(ctx, obj, "index", JS_NewUint32(ctx, ro->m.material_indices[i].index), JS_PROP_C_W_E);
+			JS_DefinePropertyValueStr(ctx, obj, "end",   JS_NewUint32(ctx, ro->m.material_indices[i].end),   JS_PROP_C_W_E);
 
 			JS_DefinePropertyValueUint32(ctx, arr, i, obj, JS_PROP_C_W_E);
 		}
@@ -489,6 +496,26 @@ static JSValue js_object_set(JSContext *ctx, JSValueConst this_val, JSValue val,
 
 		ro->m.material_count = material_count;
 
+	} else if (magic == 2) {
+		uint32_t material_index_count = 0;
+
+		JS_ToUint32(ctx, &material_index_count, JS_GetPropertyStr(ctx, val, "length"));
+
+		if (material_index_count > ro->m.material_index_count) {
+			ro->m.material_indices = realloc(ro->m.material_indices, material_index_count);
+		}
+
+		for (int i = 0; i < material_index_count; i++) {
+			JSValue obj = JS_GetPropertyUint32(ctx, val, i);
+
+			JS_ToUint32(ctx, &ro->m.material_indices[i].index, JS_GetPropertyStr(ctx, obj, "index"));
+			JS_ToUint32(ctx, &ro->m.material_indices[i].end,   JS_GetPropertyStr(ctx, obj, "end"));
+
+			JS_FreeValue(ctx, obj);
+		}
+
+		ro->m.material_index_count = material_index_count;
+
 	} else if (magic == 8) {
 
 		for (int i = 0; i < 8; i++) {
@@ -513,10 +540,11 @@ static const JSCFunctionListEntry js_object_proto_funcs[] = {
 	JS_CFUNC_DEF("setTexture",  3,  athena_settexture),
 	JS_CFUNC_DEF("getTexture",  1,  athena_gettexture),
 
-	JS_CGETSET_MAGIC_DEF("vertices",  js_object_get, js_object_set, 0),
-	JS_CGETSET_MAGIC_DEF("materials", js_object_get, js_object_set, 1),
-	JS_CGETSET_MAGIC_DEF("size",      js_object_get, js_object_set, 7),
-	JS_CGETSET_MAGIC_DEF("bounds",    js_object_get, js_object_set, 8),
+	JS_CGETSET_MAGIC_DEF("vertices",         js_object_get, js_object_set, 0),
+	JS_CGETSET_MAGIC_DEF("materials",        js_object_get, js_object_set, 1),
+	JS_CGETSET_MAGIC_DEF("material_indices", js_object_get, js_object_set, 2),
+	JS_CGETSET_MAGIC_DEF("size",             js_object_get, js_object_set, 7),
+	JS_CGETSET_MAGIC_DEF("bounds",           js_object_get, js_object_set, 8),
 };
 
 static JSValue athena_initrender(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
@@ -584,7 +612,7 @@ static JSValue athena_newmaterial(JSContext *ctx, JSValue this_val, int argc, JS
 
 	JS_DefinePropertyValueStr(ctx, obj, "disolve", JS_NewFloat32(ctx, 1.0f), JS_PROP_C_W_E);
 
-	JS_DefinePropertyValueStr(ctx, obj, "texture", JS_NULL, JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "texture_id", JS_NewInt32(ctx, -1), JS_PROP_C_W_E);
 
 	return obj;
 }
