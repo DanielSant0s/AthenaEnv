@@ -1,7 +1,10 @@
 // {"name": "3D collision", "author": "Daniel Santos", "version": "04072023", "icon": "render_icon.png", "file": "3dcollision.js"}
 
 let fntcpy = new Font("default");
-fntcpy.scale = (0.4f);
+fntcpy.scale = 0.4f;
+
+Screen.setFrameCounter(true);
+Screen.setVSync(false);
 
 const canvas = Screen.getMode();
 
@@ -11,9 +14,6 @@ canvas.psmz = Z16S;
 Screen.setMode(canvas);
 
 Render.setView(4/3);
-
-Screen.setFrameCounter(true);
-Screen.setVSync(false);
 
 // Change your root folder to "render" so we can work with file path magic :p
 os.chdir("render");
@@ -28,11 +28,9 @@ let carbounds = Physics.createBox(2, 2, 2);
 Camera.position(0.0f, 0.0f, 40.0f);
 Camera.type(Camera.LOOKAT);
 
-Lights.set(0, Lights.DIRECTION, 0.0,  1.0, -1.0);
-Lights.set(0, Lights.DIFFUSE, 0.8, 0.8, 0.8);
-
-Lights.set(1, Lights.DIRECTION, 0.0,  1.0, 1.0);
-Lights.set(1, Lights.DIFFUSE, 0.4, 0.0, 0.8);
+const light0 = Lights.new();
+Lights.set(light0, Lights.DIRECTION, 0.0,  1.0, 1.0);
+Lights.set(light0, Lights.DIFFUSE, 0.8, 0.8, 0.8);
 
 let pad = Pads.get();
 

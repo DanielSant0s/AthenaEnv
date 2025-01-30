@@ -17,8 +17,10 @@ typedef struct {
 static void athena_object_dtor(JSRuntime *rt, JSValue val){
 	JSRenderObject* ro = JS_GetOpaque(val, js_object_class_id);
 
-	if (ro->m.colours)
-		free(ro->m.positions);
+	dbgprintf("Freeing RenderObject\n");
+
+	if (ro->m.positions)
+		free(ro->m.positions); 
 	
 	if (ro->m.colours)
 		free(ro->m.colours);
@@ -37,12 +39,12 @@ static void athena_object_dtor(JSRuntime *rt, JSValue val){
 
 	//printf("%d textures\n", ro->m.texture_count);
 
-	for (int i = 0; i < ro->m.texture_count; i++) {
-		if (!((JSImageData*)JS_GetOpaque(ro->textures[i], get_img_class_id()))->path) {
-			printf("Freeing %d from mesh\n", i);
-			JS_FreeValueRT(rt, ro->textures[i]);
-		}
-	}
+	//for (int i = 0; i < ro->m.texture_count; i++) {
+	//	if (!((JSImageData*)JS_GetOpaque(ro->textures[i], get_img_class_id()))->path) {
+	//		printf("Freeing %d from mesh\n", i);
+	//		JS_FreeValueRT(rt, ro->textures[i]);
+	//	}
+	//}
 
 	if (ro->m.textures)
 		free(ro->m.textures);
