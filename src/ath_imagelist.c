@@ -15,13 +15,13 @@ JSClassID get_imglist_class_id(){
 }
 
 static int imgThread(void* data)
-{
+{ 
 	JSImgList* list = data;
 
 	while(true){
 		WaitSema(list->sema_id);
 		for(int i = 0; i < list->size; i++) {
-			load_image(&(list->list[i]->tex), list->list[i]->path, list->list[i]->delayed);
+			load_image(list->list[i]->tex, list->list[i]->path, list->list[i]->delayed);
 			list->list[i]->width = list->list[i]->tex->Width;
 			list->list[i]->height = list->list[i]->tex->Height;
 			list->list[i]->endx = list->list[i]->tex->Width;
