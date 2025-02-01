@@ -433,6 +433,8 @@ Methods:
   • Render.PL_NO_LIGHTS_COLORS_TEX - Colors, lights and textures disabled.  
   • Render.PL_NO_LIGHTS - Lights disabled, colors still working.  
   • Render.PL_NO_LIGHTS_TEX - Textures and lights disabled, colors still working.  
+  • Render.PL_SPECULAR - Diffuse and specular lights and colors enabled.  
+  • Render.PL_SPECULAR_NO_TEX - Diffuse and specular lights and colors enabled, textures disabled.  
   • Render.PL_DEFAULT - Default for textured models. Lights and colors enabled.  
   • Render.PL_DEFAULT_NO_TEX - Default for non-textured models. Lights and colors enabled.  
   
