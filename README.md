@@ -303,11 +303,11 @@ Constants to interpret the mode property returned by stat(). They have the same 
 * os.platform - Return a string representing the platform: "linux", "darwin", "win32", "ps2" or "js".
     
 ### Color module
-* var col = Color.new(r, g, b, *a*) - Returns a color object from the specified RGB(A) parameters.
-* var r = Color.getR(col) - Get red intensity of the color.
-* var g = Color.getG(col) - Get green intensity of the color.
-* var b = Color.getB(col) - Get blue intensity of the color.
-* var a = Color.getA(col) - Get alpha intensity of the color.
+* let col = Color.new(r, g, b, *a*) - Returns a color object from the specified RGB(A) parameters.
+* let r = Color.getR(col) - Get red intensity of the color.
+* let g = Color.getG(col) - Get green intensity of the color.
+* let b = Color.getB(col) - Get blue intensity of the color.
+* let a = Color.getA(col) - Get alpha intensity of the color.
 * Color.setR(col, r) - Set red intensity of the color.
 * Color.setG(col, g) - Set green intensity of the color.
 * Color.setB(col, g) - Set blue intensity of the color.
@@ -317,12 +317,12 @@ Constants to interpret the mode property returned by stat(). They have the same 
 
 Construction:  
 
-* var image = new Image(path, *mode*, *async_list*);  
+* let image = new Image(path, *mode*, *async_list*);  
   path - Path to the file, E.g.: "images/test.png".  
   *mode* - Choose between storing the image between **RAM** or **VRAM**, default value is RAM.  
   *async_list* - Gets a ImageList object, which is a asynchronous image loading list, if you want to load images in the background.  
 ```js
-var test = new Image("owl.png", VRAM); 
+let test = new Image("owl.png", VRAM); 
 ``` 
 
 Properties:
@@ -345,7 +345,7 @@ Methods:
 * optimize() - If your image has 24 bits per-pixel (aka RGB), you can use this to make it 16 bits per-pixel, saving some memory!
 * ready() - Returns true if an asynchronous image was successfully loaded in memory. 
 ```js
-var loaded = image.ready();  
+let loaded = image.ready();  
 ```
 
 **ImageList**
@@ -353,7 +353,7 @@ var loaded = image.ready();
 Construction:
 
 ```js
-var async_list = new ImageList(); // This constructor creates a new thread and a queue to load images in background, avoid building multiple ImageList objects.
+let async_list = new ImageList(); // This constructor creates a new thread and a queue to load images in background, avoid building multiple ImageList objects.
 ```
 Methods:
 
@@ -383,19 +383,39 @@ canvas.psmz = Z16S;
 Screen.setMode(canvas);
 ```
 
-* Render.setView(aspect, *fov*) - Initializes rendering routines. *default aspect is 4/3, widescreen is 16/9. FOV isn't mandatory, default: 0.2
-* Render.vertex(x, y, z, n1, n2, n3, s, t, r, g, b, a) - Returns a vertex to build a 3D mesh. It should be used to create vertex arrays.  
-  • x, y, z - Vertex position on 3D world.  
-  • n1, n2, n3 - Vertex normal.  
-  • s, t - Vertex texture coordinates.  
-  • r, g, b, a - Vertex color.  
+* Render.setView(aspect, *fov*, *near_clip*, *far_clip*) - Initializes rendering routines. *default aspect is 4/3, widescreen is 16/9. FOV, NearClip and FarClip aren't mandatory.  
+  • aspect - Aspect ratio, 4/3 for 640x448.  
+  • fov - Field of view, default: 0.2  
+  • near_clip - Near clip, default: 0.1  
+  • far_clip - Far clip, default: 2000.0  
+* Render.materialColor(red, green, blue, *alpha*) - alpha isn't mandatory.
+* Render.materialIndex(index, end)
+* Render.material(ambient, diffuse, specular, emission, transmittance, shininess, refraction, transmission_filter, disolve, texture_id) - Returns a material object.  
+  • ambient - Render.materialColor  
+  • diffuse - Render.materialColor  
+  • specular - Render.materialColor  
+  • emission - Render.materialColor  
+  • transmittance - Render.materialColor  
+  • shininess - Float32  
+  • refraction - Float32  
+  • transmission_filter - Render.materialColor  
+  • disolve - Float32  
+  • texture_id - Texture index, -1 for an untextured mesh.  
+  
+* Render.vertexList(positions, normals, texcoords, colors, materials, material_indices) - Returns an object used to build a RenderObject. P.S.: All vertex arrays are Vector4 (x, y, z, w for i+0, i+1, i+2, i+3, in steps of 4).  
+  • positions - Float32Array that stores all vertex positions (x, y, z, w/adc).  
+  • normals - Float32Array that stores all vertex normals (n1, n2, n3, w/adc).  
+  • texcoords - Float32Array that stores all vertex texture coordinates (s, t, q, w/adc).  
+  • colors - Float32Array that stores all vertex colors (r, g, b, a).  
+  • materials - A Render.material array.  
+  • material_indices - A Render.materialIndex array.  
   
 ### RenderObject module
 
 Construction:
 
 ```js
-var model = new RenderObject(mesh, *texture*)
+let model = new RenderObject(mesh, *texture*)
 /* Load simple WaveFront OBJ files or vertex arrays.
 MTL is supported on OBJs (including per-vertex colors and multi-texturing).
 If you don't have a MTL file but you want to bind a texture on it,
@@ -406,7 +426,7 @@ Methods:
 * draw(pos_x, pos_y, pos_z, rot_x, rot_y, rot_z) - Draws the object on screen.
 * drawBounds(pos_x, pos_y, pos_z, rot_x, rot_y, rot_z) - Draws object bounding box.
 * getTexture(id) - Gets the nth texture object from the model.
-* setTexture(id, texture, *range*) - Changes or sets the nth texture on models.
+* setTexture(id, texture) - Changes or sets the nth texture on models.
 * getPipeline() - Returns the current rendering pipeline loaded for the model.
 * setPipeline(pipeline) - Sets the current pipeline for the model. Available pipelines:  
   • Render.PL_NO_LIGHTS_COLORS  - Colors and lights disabled.  
@@ -418,7 +438,13 @@ Methods:
   
 Properties:
 
-* vertices - A Render.vertex array that can be modified and read.
+* positions - Float32Array with x, y, z, adc for each vertex.
+* normals - Float32Array with n1, n2, n3, adc for each vertex.
+* texcoords - Float32Array with s, t, q, w for each vertex.
+* colors - Float32Array with r, g, b, a for each vertex.
+
+* materials - Render.material array.
+* material_indices - Render.materialIndex array.
 * size - Vertex quantity.
 * bounds - Mesh bounding box.
   
@@ -450,11 +476,11 @@ You have 4 lights to use in 3D scenes, use set to configure them.
 * Screen.clearColor(*color*) - Sets a constant clear color for Screen.display function.
 * Screen.clear(*color*) - Clears screen with the specified color. If you don't specify any argument, it will use black as default.  
 * Screen.flip() - Run the render queue and jump to the next frame, i.e.: Updates your screen.  
-* var freevram = Screen.getFreeVRAM() - Returns the total of free Video Memory.  
+* let freevram = Screen.getFreeVRAM() - Returns the total of free Video Memory.  
 * Screen.setVSync(bool) - Toggles VSync, which makes the framerate stable in 15, 30, 60(depending on the mode) on screen.  
 * Screen.setFrameCounter(bool) - Toggles frame counting and FPS collecting.  
 * Screen.waitVblankStart() - Waits for a vertical sync.  
-* var fps = Screen.getFPS(frame_interval) - Get Frames per second measure within the specified frame_interval in msec. Dependant on Screen.setFrameCounter(true) to work.
+* let fps = Screen.getFPS(frame_interval) - Get Frames per second measure within the specified frame_interval in msec. Dependant on Screen.setFrameCounter(true) to work.
 * const canvas = Screen.getMode() - Get actual video mode parameters. Returns an object.
   • canvas.mode - Available modes: NTSC, DTV_480p, PAL, DTV_576p, DTV_720p, DTV_1080i.  
   • canvas.width - Screen width. Default: 640.  
@@ -472,12 +498,12 @@ You have 4 lights to use in 3D scenes, use set to configure them.
 Construction:  
 
 ```js
-var font = new Font(path);  // It supports png, bmp, jpg, otf, ttf.
+let font = new Font(path);  // It supports png, bmp, jpg, otf, ttf.
 ```
   path - Path to a font file, E.g.: "images/atlas.png", "fonts/font.png".  
 ```js
-var osdfnt = new Font();  //Load BIOS font, not available for all console models  
-var font = new Font("Segoe UI.ttf"); //Load trueType font 
+let osdfnt = new Font();  //Load BIOS font, not available for all console models  
+let font = new Font("Segoe UI.ttf"); //Load trueType font 
 ``` 
 
 Properties:
@@ -508,7 +534,7 @@ Methods:
   • Pads.L3  
   • Pads.R3  
 
-* var pad = Pads.get(*port*) - Returns a pad object:  
+* let pad = Pads.get(*port*) - Returns a pad object:  
 Properties:  
   • pad.btns - Button state on the current check.  
   • pad.old_btns = Button state on the last check.  
@@ -542,28 +568,28 @@ Methods:
   
 ### Keyboard module
 * Keyboard.init() - Initialize keyboard routines.
-* var c = Keyboard.get() - Get keyboard current char.
+* let c = Keyboard.get() - Get keyboard current char.
 * Keyboard.setRepeatRate(msec) - Set keyboard repeat rate.
 * Keyboard.setBlockingMode(mode) - Sets keyboard to block(or not) the thread waiting for the next key to be pressed.
 * Keyboard.deinit() - Destroy keyboard routines.
 
 ### Mouse module
 * Mouse.init() - Initialize mouse routines.
-* var mouse = Mouse.get() - Returns mouse actual properties on the object format below:  
+* let mouse = Mouse.get() - Returns mouse actual properties on the object format below:  
   • mouse.x  
   • mouse.y  
   • mouse.wheel  
   • mouse.buttons  
 * Mouse.setBoundary(minx, maxx, miny, maxy) - Set mouse x and y bounds.
-* var mode = Mouse.getMode() - Get mouse mode(absolute or relative).
+* let mode = Mouse.getMode() - Get mouse mode(absolute or relative).
 * Mouse.setMode(mode) - Set mouse mode.
-* var accel = Mouse.getAccel() - Get mouse acceleration.
+* let accel = Mouse.getAccel() - Get mouse acceleration.
 * Mouse.setAccel(val) - Set mouse acceleration.
 * Mouse.setPosition(x, y) - Set mouse pointer position.
   
 ### System module
 
-* var listdir = System.listDir(*path*)
+* let listdir = System.listDir(*path*)
   • listdir[index].name - return file name on indicated index(string)  
   • listdir[index].size - return file size on indicated index(integer)  
   • listdir[index].directory - return if indicated index is a file or a directory(bool)  
@@ -574,13 +600,13 @@ Methods:
 * System.sleep(sec)
 * System.exitToBrowser()
 * System.setDarkMode(value)
-* var temps = System.getTemperature() // It only works with SCPH-500XX and later models.
-* var info = System.getMCInfo(slot)  
+* let temps = System.getTemperature() // It only works with SCPH-500XX and later models.
+* let info = System.getMCInfo(slot)  
   • info.type  
   • info.freemem  
   • info.format  
   
-* var ee_info = System.getCPUInfo()  
+* let ee_info = System.getCPUInfo()  
   • ee_info.implementation  
   • ee_info.revision  
   • ee_info.FPUimplementation  
@@ -590,11 +616,11 @@ Methods:
   • ee_info.RAMSize  
   • ee_info.MachineSize  
   
-* var gs_info = System.getGPUInfo()  
+* let gs_info = System.getGPUInfo()  
   • gs_info.id  
   • gs_info.revision  
   
-* var ram_usage = System.getMemoryStats()  
+* let ram_usage = System.getMemoryStats()  
   • ram_usage.core - Kernel + Native code size in RAM  
   • ram_usage.nativeStack - Kernel + Native stack size  
   • ram_usage.allocs - Dynamic allocated memory tracking  
@@ -602,13 +628,13 @@ Methods:
   
 Asynchronous functions:  
 * System.threadCopyFile(source, dest)
-* var progress = System.getFileProgress()  
+* let progress = System.getFileProgress()  
   • progress.current  
   • progress.final  
 
 ### Timer module
 
-* var timer = Timer.new()
+* let timer = Timer.new()
 * Timer.getTime(timer)
 * Timer.setTime(src, value)
 * Timer.destroy(timer)
@@ -620,11 +646,11 @@ Asynchronous functions:
 ### Sound module
 
 * Sound.setVolume(volume, *slot*) *If slot is specified, it will change ADPCM slot volume, else it will change master volume.
-* var audio = Sound.load(path)
+* let audio = Sound.load(path)
 * Sound.play(audio, *slot*) *ADPCM: If slot isn't specified, it will use 0.
 * Sound.free(audio)
-* var playing = Sound.isPlaying() *Doesn't apply for ADPCM
-* var msec = Sound.duration()
+* let playing = Sound.isPlaying() *Doesn't apply for ADPCM
+* let msec = Sound.duration()
 * Sound.repeat(false)  *Doesn't apply for ADPCM
 * Sound.pause(audio)  *Doesn't apply for ADPCM
 * Sound.resume(audio)  *Doesn't apply for ADPCM
@@ -632,16 +658,16 @@ Asynchronous functions:
 
 ### Archive module
 
-* var zip = Archive.open(fname)
-* var list = Archive.list(zip)
+* let zip = Archive.open(fname)
+* let list = Archive.list(zip)
 * Archive.extractAll(zip)
 * Archive.close(zip)
 * Archive.untar(fname)
 
 ### IOP module
 
-* var result = IOP.loadModule(fname, *arg_len*, *args*)
-* var result = IOP.loadModuleBuffer(mod_buf, *arg_len*, *args*)
+* let result = IOP.loadModule(fname, *arg_len*, *args*)
+* let result = IOP.loadModuleBuffer(mod_buf, *arg_len*, *args*)
 * IOP.loadDefaultModule(mod_id)  
   • IOP.keyboard - USB Keyboard  
   • IOP.mouse - USB Mouse  
@@ -658,7 +684,7 @@ Asynchronous functions:
   • IOP.boot_device - Storage device used to boot Athena    
   
 * IOP.reset()
-* var stats = IOP.getMemoryStats() - P.S.: Requires IOP.loadDefaultModule(IOP.freeram) first!
+* let stats = IOP.getMemoryStats() - P.S.: Requires IOP.loadDefaultModule(IOP.freeram) first!
   • stats.free  
   • stats.used  
 
@@ -670,7 +696,7 @@ Network.init("192.168.0.10", "255.255.255.0", "192.168.0.1", "192.168.0.1"); //S
 Network.init(); //DHCP Mode, dynamic.  
 ```
 
-* var conf = Network.getConfig()  
+* let conf = Network.getConfig()  
   Returns conf.ip, conf.netmask, conf.gateway, conf.dns.
   
 * Network.deinit()  
@@ -681,9 +707,9 @@ Network.init(); //DHCP Mode, dynamic.
 
 Construction:  
 
-* var r = new Request()  
+* let r = new Request()  
 ```js
-var r = new Request();
+let r = new Request();
 ```
 
 Properties:
@@ -712,9 +738,9 @@ Asynchronous methods:
 
 Construction:  
 
-* var s = new Socket(domain, type)  
+* let s = new Socket(domain, type)  
 ```js
-var s = new Socket(AF_INET, SOCK_STREAM);
+let s = new Socket(AF_INET, SOCK_STREAM);
 ```
 
 Methods:
@@ -731,9 +757,9 @@ Methods:
 
 Construction:  
 
-* var s = new WebSocket(url)  
+* let s = new WebSocket(url)  
 ```js
-var s = new WebSocket("wss://example.com");
+let s = new WebSocket("wss://example.com");
 ```
 
 Methods:
