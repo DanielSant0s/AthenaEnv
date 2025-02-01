@@ -567,54 +567,16 @@ static JSValue athena_initrender(JSContext *ctx, JSValue this_val, int argc, JSV
 static JSValue athena_newmaterial(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
 	JSValue obj = JS_NewObject(ctx);
 
-	JSValue arr = JS_NewArray(ctx);
-	JS_DefinePropertyValueUint32(ctx, arr, 0, JS_NewFloat32(ctx, 1.0f), JS_PROP_C_W_E);
-	JS_DefinePropertyValueUint32(ctx, arr, 1, JS_NewFloat32(ctx, 1.0f), JS_PROP_C_W_E);
-	JS_DefinePropertyValueUint32(ctx, arr, 2, JS_NewFloat32(ctx, 1.0f), JS_PROP_C_W_E);
-
-	JS_DefinePropertyValueStr(ctx, obj, "ambient", arr, JS_PROP_C_W_E);
-
-	arr = JS_NewArray(ctx);
-	JS_DefinePropertyValueUint32(ctx, arr, 0, JS_NewFloat32(ctx, 1.0f), JS_PROP_C_W_E);
-	JS_DefinePropertyValueUint32(ctx, arr, 1, JS_NewFloat32(ctx, 1.0f), JS_PROP_C_W_E);
-	JS_DefinePropertyValueUint32(ctx, arr, 2, JS_NewFloat32(ctx, 1.0f), JS_PROP_C_W_E);
-
-	JS_DefinePropertyValueStr(ctx, obj, "diffuse", arr, JS_PROP_C_W_E);
-
-	arr = JS_NewArray(ctx);
-	JS_DefinePropertyValueUint32(ctx, arr, 0, JS_NewFloat32(ctx, 1.0f), JS_PROP_C_W_E);
-	JS_DefinePropertyValueUint32(ctx, arr, 1, JS_NewFloat32(ctx, 1.0f), JS_PROP_C_W_E);
-	JS_DefinePropertyValueUint32(ctx, arr, 2, JS_NewFloat32(ctx, 1.0f), JS_PROP_C_W_E);
-
-	JS_DefinePropertyValueStr(ctx, obj, "specular", arr, JS_PROP_C_W_E);
-
-	arr = JS_NewArray(ctx);
-	JS_DefinePropertyValueUint32(ctx, arr, 0, JS_NewFloat32(ctx, 1.0f), JS_PROP_C_W_E);
-	JS_DefinePropertyValueUint32(ctx, arr, 1, JS_NewFloat32(ctx, 1.0f), JS_PROP_C_W_E);
-	JS_DefinePropertyValueUint32(ctx, arr, 2, JS_NewFloat32(ctx, 1.0f), JS_PROP_C_W_E);
-
-	JS_DefinePropertyValueStr(ctx, obj, "emission", arr, JS_PROP_C_W_E);
-
-	arr = JS_NewArray(ctx);
-	JS_DefinePropertyValueUint32(ctx, arr, 0, JS_NewFloat32(ctx, 1.0f), JS_PROP_C_W_E);
-	JS_DefinePropertyValueUint32(ctx, arr, 1, JS_NewFloat32(ctx, 1.0f), JS_PROP_C_W_E);
-	JS_DefinePropertyValueUint32(ctx, arr, 2, JS_NewFloat32(ctx, 1.0f), JS_PROP_C_W_E);
-
-	JS_DefinePropertyValueStr(ctx, obj, "transmittance", arr, JS_PROP_C_W_E);
-
-	JS_DefinePropertyValueStr(ctx, obj, "shininess", JS_NewFloat32(ctx, 1.0f), JS_PROP_C_W_E);
-	JS_DefinePropertyValueStr(ctx, obj, "refraction", JS_NewFloat32(ctx, 1.0f), JS_PROP_C_W_E);
-
-	arr = JS_NewArray(ctx);
-	JS_DefinePropertyValueUint32(ctx, arr, 0, JS_NewFloat32(ctx, 1.0f), JS_PROP_C_W_E);
-	JS_DefinePropertyValueUint32(ctx, arr, 1, JS_NewFloat32(ctx, 1.0f), JS_PROP_C_W_E);
-	JS_DefinePropertyValueUint32(ctx, arr, 2, JS_NewFloat32(ctx, 1.0f), JS_PROP_C_W_E);
-
-	JS_DefinePropertyValueStr(ctx, obj, "transmission_filter", arr, JS_PROP_C_W_E);
-
-	JS_DefinePropertyValueStr(ctx, obj, "disolve", JS_NewFloat32(ctx, 1.0f), JS_PROP_C_W_E);
-
-	JS_DefinePropertyValueStr(ctx, obj, "texture_id", JS_NewInt32(ctx, -1), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "ambient",             argv[0], JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "diffuse",             argv[1], JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "specular",            argv[2], JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "emission",            argv[3], JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "transmittance",       argv[4], JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "shininess",           argv[5], JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "refraction",          argv[6], JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "transmission_filter", argv[7], JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "disolve",             argv[8], JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "texture_id",          argv[9], JS_PROP_C_W_E);
 
 	return obj;
 }
@@ -623,6 +585,16 @@ static JSValue athena_newmaterialindex(JSContext *ctx, JSValue this_val, int arg
 	JSValue obj = JS_NewObject(ctx);
 	JS_DefinePropertyValueStr(ctx, obj, "index", argv[0], JS_PROP_C_W_E);
 	JS_DefinePropertyValueStr(ctx, obj, "end",   argv[1], JS_PROP_C_W_E);
+
+	return obj;
+}
+
+static JSValue athena_materialcolor(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
+	JSValue obj = JS_NewObject(ctx);
+	JS_DefinePropertyValueStr(ctx, obj, "r", argv[0], JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "g", argv[1], JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "b", argv[2], JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "a", (argc > 3? argv[3] : JS_NewFloat32(ctx, 1.0f)), JS_PROP_C_W_E);
 
 	return obj;
 }
@@ -642,6 +614,7 @@ static JSValue athena_newvertex(JSContext *ctx, JSValue this_val, int argc, JSVa
 static const JSCFunctionListEntry render_funcs[] = {
     JS_CFUNC_DEF( "setView",         4,                athena_initrender),
 	JS_CFUNC_DEF( "vertexList",      6,                 athena_newvertex),
+	JS_CFUNC_DEF( "materialColor",   3,             athena_materialcolor),
 	JS_CFUNC_DEF( "material",        0,               athena_newmaterial),
 	JS_CFUNC_DEF( "materialIndex",   2,          athena_newmaterialindex),
 
