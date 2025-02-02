@@ -535,20 +535,20 @@ void ApplyMatrix(VECTOR v0, MATRIX m0,VECTOR v1)
 "	c.olt.s %2,$f0\n"
 "	li.s    $f0,1.57079637050628662109e0	\n"
 "	bc1f    _RotMatrixZ_01\n"
-"	add.s   %2,$f0,%2			#rx=rx+ƒÎ/2\n"
-"	li 	$7,1				#cos(rx)=sin(rx+ƒÎ/2)\n"
+"	add.s   %2,$f0,%2			#rx=rx+ï¿½ï¿½/2\n"
+"	li 	$7,1				#cos(rx)=sin(rx+ï¿½ï¿½/2)\n"
 "	j	_RotMatrixZ_02\n"
 "_RotMatrixZ_01:\n"
-"	sub.s   %2,$f0,%2			#rx=ƒÎ/2-rx\n"
+"	sub.s   %2,$f0,%2			#rx=ï¿½ï¿½/2-rx\n"
 "	move	$7,$0\n"
 "_RotMatrixZ_02:\n"
 
 "        mfc1    $8,%2\n"
 "        qmtc2    $8,$vf6\n"
-"	move	$6,$31	# ra •Û‘¶ (–{“–‚ÍƒXƒ^ƒbƒN‚ðŽg‚¤‚×‚«)\n"
+"	move	$6,$31	# ra ï¿½Û‘ï¿½ (ï¿½{ï¿½ï¿½ï¿½ÍƒXï¿½^ï¿½bï¿½Nï¿½ï¿½ï¿½gï¿½ï¿½ï¿½×‚ï¿½)\n"
 
 "	jal	_ecossin	# sin(roll), cos(roll)\n"
-"	move	$31,$6	# ra ‰ñ•œ\n"
+"	move	$31,$6	# ra ï¿½ï¿½\n"
 "			#vf05:0,0,0,0 |x,y,z,w\n"
 "	vmove.xyzw $vf06,$vf05\n"
 "	vmove.xyzw $vf07,$vf05\n"
@@ -584,19 +584,19 @@ void RotMatrixX(MATRIX m0, MATRIX m1, float rx)
 	"c.olt.s %2,$f0\n"
 	"li.s    $f0,1.57079637050628662109e0	\n"
 	"bc1f    _RotMatrixX_01\n"
-	"add.s   %2,$f0,%2			#rx=rx+ƒÎ/2\n"
-	"li 	$7,1				#cos(rx)=sin(rx+ƒÎ/2)\n"
+	"add.s   %2,$f0,%2			#rx=rx+ï¿½ï¿½/2\n"
+	"li 	$7,1				#cos(rx)=sin(rx+ï¿½ï¿½/2)\n"
 	"j	_RotMatrixX_02\n"
 "_RotMatrixX_01:\n"
-"	sub.s   %2,$f0,%2			#rx=ƒÎ/2-rx\n"
+"	sub.s   %2,$f0,%2			#rx=ï¿½ï¿½/2-rx\n"
 "	move	$7,$0\n"
 "_RotMatrixX_02:\n"
 
 	"mfc1    $8,%2\n"
 	"qmtc2    $8,$vf6\n"
-	"move	$6,$31	# ra •Û‘¶ (–{“–‚ÍƒXƒ^ƒbƒN‚ðŽg‚¤‚×‚«)\n"
+	"move	$6,$31	# ra ï¿½Û‘ï¿½ (ï¿½{ï¿½ï¿½ï¿½ÍƒXï¿½^ï¿½bï¿½Nï¿½ï¿½ï¿½gï¿½ï¿½ï¿½×‚ï¿½)\n"
 	"jal	_ecossin	# sin(roll), cos(roll)\n"
-	"move	$31,$6	# ra ‰ñ•œ\n"
+	"move	$31,$6	# ra ï¿½ï¿½\n"
 	"		#vf05:0,0,0,0 |x,y,z,w\n"
 	"vmove.xyzw $vf06,$vf05\n"
 	"vmove.xyzw $vf07,$vf05\n"
@@ -633,19 +633,19 @@ void RotMatrixY(MATRIX m0, MATRIX m1, float ry)
 	"c.olt.s %2,$f0\n"
 	"li.s    $f0,1.57079637050628662109e0	\n"
 	"bc1f    _RotMatrixY_01\n"
-	"add.s   %2,$f0,%2			#rx=rx+ƒÎ/2\n"
-	"li 	$7,1				#cos(rx)=sin(rx+ƒÎ/2)\n"
+	"add.s   %2,$f0,%2			#rx=rx+ï¿½ï¿½/2\n"
+	"li 	$7,1				#cos(rx)=sin(rx+ï¿½ï¿½/2)\n"
 	"j	_RotMatrixY_02\n"
 "_RotMatrixY_01:\n"
-	"sub.s   %2,$f0,%2			#rx=ƒÎ/2-rx\n"
+	"sub.s   %2,$f0,%2			#rx=ï¿½ï¿½/2-rx\n"
 	"move	$7,$0\n"
 "_RotMatrixY_02:\n"
 
 	"mfc1    $8,%2\n"
 	"qmtc2    $8,$vf6\n"
-	"move	$6,$31	# ra •Û‘¶ (–{“–‚ÍƒXƒ^ƒbƒN‚ðŽg‚¤‚×‚«)\n"
+	"move	$6,$31	# ra ï¿½Û‘ï¿½ (ï¿½{ï¿½ï¿½ï¿½ÍƒXï¿½^ï¿½bï¿½Nï¿½ï¿½ï¿½gï¿½ï¿½ï¿½×‚ï¿½)\n"
 	"jal	_ecossin	# sin(roll), cos(roll)\n"
-	"move	$31,$6	# ra ‰ñ•œ\n"
+	"move	$31,$6	# ra ï¿½ï¿½\n"
 	"		#vf05:0,0,0,0 |x,y,z,w\n"
 	"vmove.xyzw $vf06,$vf05\n"
 	"vmove.xyzw $vf07,$vf05\n"
@@ -811,5 +811,20 @@ void LookAtCameraMatrix(MATRIX m, VECTOR position, VECTOR target, VECTOR up)
 	InversMatrix(m, m0);
 }
 
+void create_view(MATRIX view_screen, float fov, float near, float far, float w, float h) {
+	float left = -tanf(fov/2) * (2048.0f / (w * 0.5f));
+	float right = tanf(fov/2) * (2048.0f / (w * 0.5f));
+	float top = tanf(fov/2) * ((2048.0f * (h / w)) / (h * 0.5f));
+	float bottom = -tanf(fov/2) * ((2048.0f * (h / w)) / (h * 0.5f));
 
+	matrix_unit(view_screen);
+	view_screen[0x00] = (2 * 1.0f) / (right - left);
+	view_screen[0x05] = -(2 * 1.0f) / (top - bottom);
+	view_screen[0x08] = (right + left) / (right - left);
+	view_screen[0x09] = (top + bottom) / (top - bottom);
+	view_screen[0x0A] = (far + near) / (far - near);
+	view_screen[0x0B] = -1.00f;
+	view_screen[0x0E] = (2 * far * near) / (far - near);
+	view_screen[0x0F] = 0.00f;
+}
 

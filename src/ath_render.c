@@ -550,17 +550,17 @@ static const JSCFunctionListEntry js_object_proto_funcs[] = {
 };
 
 static JSValue athena_initrender(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
-	float aspect, fov = 0.2f, near = 0.1f, far = 2000.0f;
-	JS_ToFloat32(ctx, &aspect, argv[0]);
-	if (argc > 1) {
-		JS_ToFloat32(ctx, &fov, argv[1]);
+	float fov = 60.0f, near = 0.1f, far = 2000.0f;
 
-		if (argc > 2) {
-			JS_ToFloat32(ctx, &near, argv[2]);
-			JS_ToFloat32(ctx, &far, argv[3]);
+	if (argc > 0) {
+		JS_ToFloat32(ctx, &fov, argv[0]);
+
+		if (argc > 1) {
+			JS_ToFloat32(ctx, &near, argv[1]);
+			JS_ToFloat32(ctx, &far, argv[2]);
 		}
 	}
-  	init3D(aspect, fov, near, far);
+  	init3D(fov, near, far);
 	return JS_UNDEFINED;
 }
 

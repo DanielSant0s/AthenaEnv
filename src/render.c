@@ -12,6 +12,8 @@
 
 #include "vif.h"
 
+#define DEG2RAD(deg) ((deg) * (M_PI / 180.0f))
+
 register_vu_program(VU1Draw3D);
 register_vu_program(VU1Draw3DNoTex);
 register_vu_program(VU1Draw3DPVC);
@@ -26,10 +28,12 @@ register_vu_program(VU1Draw3DSpecNoTex);
 MATRIX view_screen;
 MATRIX world_view;
 
-void init3D(float aspect, float fov, float near, float far)
+void init3D(float fov, float near, float far)
 {
+	GSGLOBAL* gsGlobal = getGSGLOBAL();
+
 	initCamera(&world_view);
-	create_view_screen(view_screen, aspect, -fov, fov, -fov, fov, near, far);
+	create_view(view_screen, DEG2RAD(fov), near, far, gsGlobal->Width, gsGlobal->Height);
 	vu1_set_double_buffer_settings(26, 496);
 
 }
