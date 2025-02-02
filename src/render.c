@@ -492,11 +492,7 @@ void draw_vu1(model* m, float pos_x, float pos_y, float pos_z, float rot_x, floa
 		while (idxs_to_draw > 0) {
 			dmaKit_wait(DMA_CHANNEL_VIF1, 0);
 
-			int count = BATCH_SIZE;
-			if (idxs_to_draw < BATCH_SIZE)
-			{
-				count = idxs_to_draw;
-			}
+			int count = idxs_to_draw < BATCH_SIZE? idxs_to_draw : BATCH_SIZE;
 
 			float fX = 2048.0f+gsGlobal->Width/2;
 			float fY = 2048.0f+gsGlobal->Height/2;
@@ -607,11 +603,7 @@ void draw_vu1_notex(model* m, float pos_x, float pos_y, float pos_z, float rot_x
 	while (idxs_to_draw > 0) {
 		dmaKit_wait(DMA_CHANNEL_VIF1, 0);
 
-		int count = BATCH_SIZE;
-		if (idxs_to_draw < BATCH_SIZE)
-		{
-			count = idxs_to_draw;
-		}
+		int count = idxs_to_draw < BATCH_SIZE? idxs_to_draw : BATCH_SIZE;
 
 		float fX = 2048.0f+gsGlobal->Width/2;
 		float fY = 2048.0f+gsGlobal->Height/2;
@@ -712,11 +704,7 @@ void draw_vu1_pvc(model* m, float pos_x, float pos_y, float pos_z, float rot_x, 
 		while (idxs_to_draw > 0) {
 			dmaKit_wait(DMA_CHANNEL_VIF1, 0);
 
-			int count = BATCH_SIZE;
-			if (idxs_to_draw < BATCH_SIZE)
-			{
-				count = idxs_to_draw;
-			}
+			int count = idxs_to_draw < BATCH_SIZE? idxs_to_draw : BATCH_SIZE;
 
 			float fX = 2048.0f+gsGlobal->Width/2;
 			float fY = 2048.0f+gsGlobal->Height/2;
@@ -829,11 +817,7 @@ void draw_vu1_pvc_notex(model* m, float pos_x, float pos_y, float pos_z, float r
 	while (idxs_to_draw > 0) {
 		dmaKit_wait(DMA_CHANNEL_VIF1, 0);
 
-		int count = BATCH_SIZE;
-		if (idxs_to_draw < BATCH_SIZE)
-		{
-			count = idxs_to_draw;
-		}
+		int count = idxs_to_draw < BATCH_SIZE? idxs_to_draw : BATCH_SIZE;
 
 		float fX = 2048.0f+gsGlobal->Width/2;
 		float fY = 2048.0f+gsGlobal->Height/2;
@@ -933,11 +917,7 @@ void draw_vu1_with_colors(model* m, float pos_x, float pos_y, float pos_z, float
 		while (idxs_to_draw > 0) {
 			dmaKit_wait(DMA_CHANNEL_VIF1, 0);
 
-			int count = BATCH_SIZE;
-			if (idxs_to_draw < BATCH_SIZE)
-			{
-				count = idxs_to_draw;
-			}
+			int count = idxs_to_draw < BATCH_SIZE? idxs_to_draw : BATCH_SIZE;
 
 			float fX = 2048.0f+gsGlobal->Width/2;
 			float fY = 2048.0f+gsGlobal->Height/2;
@@ -1060,11 +1040,7 @@ void draw_vu1_with_colors_notex(model* m, float pos_x, float pos_y, float pos_z,
 		while (idxs_to_draw > 0) {
 			dmaKit_wait(DMA_CHANNEL_VIF1, 0);
 
-			int count = BATCH_SIZE;
-			if (idxs_to_draw < BATCH_SIZE)
-			{
-				count = idxs_to_draw;
-			}
+			int count = idxs_to_draw < BATCH_SIZE? idxs_to_draw : BATCH_SIZE;
 
 			float fX = 2048.0f+gsGlobal->Width/2;
 			float fY = 2048.0f+gsGlobal->Height/2;
@@ -1198,11 +1174,7 @@ void draw_vu1_with_lights(model* m, float pos_x, float pos_y, float pos_z, float
 		while (idxs_to_draw > 0) {
 			dmaKit_wait(DMA_CHANNEL_VIF1, 0);
 
-			int count = BATCH_SIZE;
-			if (idxs_to_draw < BATCH_SIZE)
-			{
-				count = idxs_to_draw;
-			}
+			int count = idxs_to_draw < BATCH_SIZE? idxs_to_draw : BATCH_SIZE;
 
 			float fX = 2048.0f+gsGlobal->Width/2;
 			float fY = 2048.0f+gsGlobal->Height/2;
@@ -1350,11 +1322,7 @@ void draw_vu1_with_lights_notex(model* m, float pos_x, float pos_y, float pos_z,
 		while (idxs_to_draw > 0) {
 			dmaKit_wait(DMA_CHANNEL_VIF1, 0);
 
-			int count = BATCH_SIZE;
-			if (idxs_to_draw < BATCH_SIZE)
-			{
-				count = idxs_to_draw;
-			}
+			int count = idxs_to_draw < BATCH_SIZE? idxs_to_draw : BATCH_SIZE;
 
 			float fX = 2048.0f+gsGlobal->Width/2;
 			float fY = 2048.0f+gsGlobal->Height/2;
@@ -1490,11 +1458,7 @@ void draw_vu1_with_spec_lights(model* m, float pos_x, float pos_y, float pos_z, 
 		while (idxs_to_draw > 0) {
 			dmaKit_wait(DMA_CHANNEL_VIF1, 0);
 
-			int count = BATCH_SIZE;
-			if (idxs_to_draw < BATCH_SIZE)
-			{
-				count = idxs_to_draw;
-			}
+			int count = idxs_to_draw < BATCH_SIZE? idxs_to_draw : BATCH_SIZE;
 
 			float fX = 2048.0f+gsGlobal->Width/2;
 			float fY = 2048.0f+gsGlobal->Height/2;
@@ -1643,11 +1607,7 @@ void draw_vu1_with_spec_lights_notex(model* m, float pos_x, float pos_y, float p
 		while (idxs_to_draw > 0) {
 			dmaKit_wait(DMA_CHANNEL_VIF1, 0);
 
-			int count = BATCH_SIZE;
-			if (idxs_to_draw < BATCH_SIZE)
-			{
-				count = idxs_to_draw;
-			}
+			int count = idxs_to_draw < BATCH_SIZE? idxs_to_draw : BATCH_SIZE;
 
 			float fX = 2048.0f+gsGlobal->Width/2;
 			float fY = 2048.0f+gsGlobal->Height/2;
