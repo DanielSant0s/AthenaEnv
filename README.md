@@ -383,9 +383,8 @@ canvas.psmz = Z16S;
 Screen.setMode(canvas);
 ```
 
-* Render.setView(aspect, *fov*, *near_clip*, *far_clip*) - Initializes rendering routines. *default aspect is 4/3, widescreen is 16/9. FOV, NearClip and FarClip aren't mandatory.  
-  • aspect - Aspect ratio, 4/3 for 640x448.  
-  • fov - Field of view, default: 0.2  
+* Render.setView(*fov*, *near_clip*, *far_clip*) - Initializes rendering routines. FOV, NearClip and FarClip aren't mandatory.  
+  • fov - Field of view, default: 60  
   • near_clip - Near clip, default: 0.1  
   • far_clip - Far clip, default: 2000.0  
 * Render.materialColor(red, green, blue, *alpha*) - alpha isn't mandatory.

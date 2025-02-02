@@ -113,7 +113,7 @@ void RotCameraMatrix(MATRIX m, VECTOR p, VECTOR zd, VECTOR yd, VECTOR rot);
 
 void LookAtCameraMatrix(MATRIX m, VECTOR position, VECTOR target, VECTOR up);
 
-void init3D(float aspect, float fov, float near, float far);
+void init3D(float fov, float near, float far);
 
 VECTOR *getCameraPosition();
 void    setCameraPosition(float x, float y, float z);
@@ -139,6 +139,8 @@ void SetLenVector(VECTOR v, float newLength);
 void Normalize(VECTOR v0, VECTOR v1);
 void OuterProduct(VECTOR v0, VECTOR v1, VECTOR v2);
 void ScaleVector(VECTOR res, VECTOR v, float size);
+
+void create_view(MATRIX view_screen, float fov, float near, float far, float w, float h);
 
 #define alloc_vectors(cnt) (VECTOR*)malloc(cnt * sizeof(VECTOR))
 #define copy_vectors(dst, src, cnt) memcpy(dst, src, cnt*sizeof(VECTOR))
