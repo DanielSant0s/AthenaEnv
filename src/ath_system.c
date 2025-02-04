@@ -18,32 +18,32 @@
 
 static JSValue athena_dir(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
 {
-	
+
 	if (argc != 0 && argc != 1) return JS_ThrowSyntaxError(ctx, "Argument error: System.listDir([path]) takes zero or one argument.");
-	
+
 	JSValue arr = JS_NewArray(ctx);
 
     const char *temp_path = "";
 	char path[255], tpath[384];
-	
+
 	getcwd((char *)path, 256);
 	dbgprintf("current dir %s\n",(char *)path);
-	
-	if (argc != 0) 
+
+	if (argc != 0)
 	{
 		temp_path = JS_ToCString(ctx, argv[0]);
 		// append the given path to the boot_path
-	        
+
 	        strcpy ((char *)path, boot_path);
-	        
+
 	        if (strchr(temp_path, ':'))
-	           // workaround in case of temp_path is containing 
+	           // workaround in case of temp_path is containing
 	           // a device name again
 	           strcpy ((char *)path, temp_path);
 	        else
 	           strcat ((char *)path, temp_path);
 	}
-	
+
 	//strcpy(path, __ps2_normalize_path(path));
 	dbgprintf("\nchecking path : %s\n",path);
 
@@ -74,7 +74,7 @@ static JSValue athena_dir(JSContext *ctx, JSValue this_val, int argc, JSValueCon
 	    }
 	    closedir(d);
 	}
-	
+
 	return arr;
 }
 
@@ -83,7 +83,7 @@ static JSValue athena_removeDir(JSContext *ctx, JSValue this_val, int argc, JSVa
 	const char *path = JS_ToCString(ctx, argv[0]);
 	if(!path) return JS_ThrowSyntaxError(ctx, "Argument error: System.removeDirectory(directory) takes a directory name as string as argument.");
 	rmdir(path);
-	
+
 	return JS_UNDEFINED;
 }
 
@@ -135,7 +135,7 @@ static JSValue athena_rename(JSContext *ctx, JSValue this_val, int argc, JSValue
     close(dest);
 
 	remove(oldName);
-	
+
 	return JS_UNDEFINED;
 }
 
@@ -158,7 +158,7 @@ static JSValue athena_copyfile(JSContext *ctx, JSValue this_val, int argc, JSVal
 
     close(source);
     close(dest);
-	
+
 	return JS_UNDEFINED;
 }
 
@@ -330,7 +330,7 @@ static JSValue athena_getDiscType(JSContext *ctx, JSValue this_val, int argc, JS
     int discType;
     int iz;
     discType = sceCdGetDiskType();
-    
+
     int DiscType_ix = 0;
         for (iz = 0; DiscTypes[iz].name[0]; iz++)
             if (DiscTypes[iz].type == discType)
@@ -476,13 +476,13 @@ static JSValue athena_gettemps(JSContext *ctx, JSValue this_val, int argc, JSVal
 	int stat = 0;
 
     memset(&out_buffer, 0, 16);
-	
+
 	in_buffer[0]= 0xEF;
 	if((result=sceCdApplySCmd(0x03, in_buffer, sizeof(in_buffer), out_buffer))!=0)
 	{
 		stat=out_buffer[0];
 	}
-    
+
 	if( !stat) {
 		unsigned short temp = out_buffer[1] * 256 + out_buffer[2];
 		return JS_NewFloat32(ctx, (float)((temp - (temp%128) ) / 128.0f) + (float)((temp%128))/10.0f);
@@ -551,7 +551,7 @@ static JSValue athena_sifloadmodule(JSContext *ctx, JSValue this_val, int argc, 
 		JS_ToInt32(ctx, &arg_len, argv[1]);
 		args = JS_ToCString(ctx, argv[2]);
 	}
-	
+
 	int result = SifLoadModule(path, arg_len, args);
 	return JS_NewInt32(ctx, result);
 }
@@ -591,8 +591,10 @@ static JSValue athena_sifloaddefaultmodule(JSContext *ctx, JSValue this_val, int
 
 static JSValue athena_resetiop(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	if (argc != 0) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
+	#ifdef ATHENA_PADEMU
 	if(ds34bt_started) ds34bt_deinit();
 	if(ds34usb_started) ds34usb_deinit();
+	#endif
 	if(pads_started) padEnd();
 	#ifdef ATHENA_AUDIO
 	if(audio_started) audsrv_quit();

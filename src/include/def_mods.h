@@ -9,10 +9,10 @@
 #include <smem.h>
 
 #include <libpwroff.h>
-
+#ifdef ATHENA_PADEMU
 #include <libds34bt.h>
 #include <libds34usb.h>
-
+#endif
 #include "pad.h"
 
 #ifdef ATHENA_AUDIO
@@ -112,10 +112,13 @@ irx_define(ps2mouse);
 irx_define(ps2cam);
 #endif
 
-irx_define(freeram);
+#ifdef ATHENA_PADEMU
 irx_define(ds34bt);
 irx_define(ds34usb);
+#endif
+
 irx_define(poweroff);
+irx_define(freeram);
 
 int get_boot_device(const char* path);
 
