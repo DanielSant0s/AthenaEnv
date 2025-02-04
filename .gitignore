@@ -5,8 +5,12 @@
 *.irx
 src/main.js.c
 .vscode/settings.json
-.vscode/settings.json
 
 obj/
 embed/
 bin/brew_data.json
+
+.*
+!.gitignore
+!.gitattributes
+!.github
