@@ -1,8 +1,10 @@
 #include "ath_env.h"
 #include "include/pad.h"
 
+#ifdef ATHENA_PADEMU
 #include <libds34bt.h>
 #include <libds34usb.h>
+#endif
 
 static JSClassID js_pads_class_id;
 
@@ -79,8 +81,8 @@ static JSValue athena_getpad(JSContext *ctx, JSValueConst this_val, int argc, JS
         if (ret != 0) {
             paddata = 0xffff ^ buttons.btns;
         }
-    } 
-
+    }
+	#ifdef ATHENA_PADEMU
 	if (ds34bt_get_status(port) & DS34BT_STATE_RUNNING) {
         ret = ds34bt_get_data(port, (u8 *)&buttons.btns);
         if (ret != 0) {
@@ -94,7 +96,7 @@ static JSValue athena_getpad(JSContext *ctx, JSValueConst this_val, int argc, JS
             paddata |= 0xffff ^ buttons.btns;
         }
     }
-
+	#endif
 	pad->btns = paddata;
 	pad->lx = buttons.ljoy_h-127;
 	pad->ly = buttons.ljoy_v-127;
@@ -123,8 +125,8 @@ void js_pads_update(JSPads *pad) {
         if (ret != 0) {
             paddata = 0xffff ^ buttons.btns;
         }
-    } 
-
+    }
+	#ifdef ATHENA_PADEMU
 	if (ds34bt_get_status(pad->port) & DS34BT_STATE_RUNNING) {
         ret = ds34bt_get_data(pad->port, (u8 *)&buttons.btns);
         if (ret != 0) {
@@ -138,12 +140,12 @@ void js_pads_update(JSPads *pad) {
             paddata |= 0xffff ^ buttons.btns;
         }
     }
-
+	#endif
 	pad->old_btns = pad->btns;
-	pad->old_lx = pad->lx; 
-	pad->old_ly = pad->ly; 
-	pad->old_rx = pad->rx; 
-	pad->old_ry = pad->ry; 
+	pad->old_lx = pad->lx;
+	pad->old_ly = pad->ly;
+	pad->old_rx = pad->rx;
+	pad->old_ry = pad->ry;
 
 	pad->btns = paddata;
 	pad->lx = buttons.ljoy_h-127;
@@ -167,8 +169,8 @@ static JSValue athena_update(JSContext *ctx, JSValue this_val, int argc, JSValue
         if (ret != 0) {
             paddata = 0xffff ^ buttons.btns;
         }
-    } 
-
+    }
+	#ifdef ATHENA_PADEMU
 	if (ds34bt_get_status(pad->port) & DS34BT_STATE_RUNNING) {
         ret = ds34bt_get_data(pad->port, (u8 *)&buttons.btns);
         if (ret != 0) {
@@ -182,12 +184,12 @@ static JSValue athena_update(JSContext *ctx, JSValue this_val, int argc, JSValue
             paddata |= 0xffff ^ buttons.btns;
         }
     }
-
+	#endif
 	pad->old_btns = pad->btns;
-	pad->old_lx = pad->lx; 
-	pad->old_ly = pad->ly; 
-	pad->old_rx = pad->rx; 
-	pad->old_ry = pad->ry; 
+	pad->old_lx = pad->lx;
+	pad->old_ly = pad->ly;
+	pad->old_rx = pad->rx;
+	pad->old_ry = pad->ry;
 
 	pad->btns = paddata;
 	pad->lx = buttons.ljoy_h-127;
@@ -208,7 +210,7 @@ static JSValue athena_getpressure(JSContext *ctx, JSValue this_val, int argc, JS
 	} else {
 		JS_ToUint32(ctx, &button, argv[0]);
 	}
-	
+
 	struct padButtonStatus pad;
 
 	unsigned char pressure = 255;
@@ -216,8 +218,10 @@ static JSValue athena_getpressure(JSContext *ctx, JSValue this_val, int argc, JS
 	int state = padGetState(port, 0);
 
 	if ((state == PAD_STATE_STABLE) || (state == PAD_STATE_FINDCTP1)) padRead(port, 0, &pad);
+	#ifdef ATHENA_PADEMU
 	if (ds34bt_get_status(port) & DS34BT_STATE_RUNNING) ds34bt_get_data(port, (u8 *)&pad.btns);
 	if (ds34usb_get_status(port) & DS34USB_STATE_RUNNING) ds34usb_get_data(port, (u8 *)&pad.btns);
+	#endif
 
 	switch (button) {
 	    case PAD_RIGHT:
@@ -279,8 +283,10 @@ static JSValue athena_rumble(JSContext *ctx, JSValue this_val, int argc, JSValue
 
 	int state = padGetState(port, 0);
 	if ((state == PAD_STATE_STABLE) || (state == PAD_STATE_FINDCTP1)) padSetActDirect(port, 0, actAlign);
+	#ifdef ATHENA_PADEMU
 	if (ds34bt_get_status(port) & DS34BT_STATE_RUNNING) ds34bt_set_rumble(port, actAlign[1], actAlign[1]);
 	if (ds34usb_get_status(port) & DS34USB_STATE_RUNNING) ds34usb_set_rumble(port, actAlign[1], actAlign[1]);
+	#endif
 
 	return JS_UNDEFINED;
 }
@@ -326,10 +332,10 @@ static JSValue athena_set_led(JSContext *ctx, JSValue this_val, int argc, JSValu
 	}
 
 	led[3] = 0;
-
+	#ifdef ATHENA_PADEMU
 	if (ds34bt_get_status(port) & DS34BT_STATE_RUNNING) ds34bt_set_led(port, led);
 	if (ds34usb_get_status(port) & DS34USB_STATE_RUNNING) ds34usb_set_led(port, led);
-
+	#endif
 	return JS_UNDEFINED;
 }
 
@@ -337,7 +343,7 @@ static JSValue js_pad_get_prop(JSContext *ctx, JSValueConst this_val, int magic)
 {
 	JSValue val = JS_UNDEFINED;
     JSPads *pad = JS_GetOpaque2(ctx, this_val, js_pads_class_id);
-	
+
     if (!pad){
 		return JS_EXCEPTION;
 	}
@@ -431,7 +437,7 @@ static const JSCFunctionListEntry module_funcs[] = {
     JS_CFUNC_DEF("getPressure", 2, athena_getpressure),
     JS_CFUNC_DEF("rumble", 3, athena_rumble),
     JS_CFUNC_DEF("setLED", 4, athena_set_led),
-	
+
 	JS_CFUNC_DEF("newEvent", 3, athena_new_pad_event),
 	JS_CFUNC_DEF("deleteEvent", 1, athena_delete_pad_event),
 
@@ -494,7 +500,7 @@ static const JSCFunctionListEntry js_pad_proto_funcs[] = {
 static JSClassDef js_pads_class = {
     "Pad",
     //.finalizer = js_std_file_finalizer,
-}; 
+};
 
 static int js_pads_init(JSContext *ctx, JSModuleDef *m)
 {
