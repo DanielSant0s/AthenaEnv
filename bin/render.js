@@ -28,7 +28,7 @@ canvas.psmz = Z16S;
 
 Screen.setMode(canvas);
 
-Render.setView(70.0);
+Render.setView(70.0, 2.0, 200.0);
 
 // Change your root folder to "render" so we can work with file path magic :p
 os.chdir("render");
@@ -103,7 +103,8 @@ boombox.getTexture(0).filter = LINEAR;
 
 const model = [dragonmesh, monkeymesh, car, listtest, boombox, mill];
 
-Camera.position(0.0f, 0.0f, 50.0f);
+Camera.type(Camera.LOOKAT)
+Camera.position(0.0f, 0.0f, 35.0f);
 Camera.rotation(0.0f, 0.0f,  0.0f);
 
 const light = Lights.new();
@@ -123,8 +124,10 @@ let ry = null;
 
 let savedlx = 0.0f;
 let savedly = 180.0f;
-let savedrx = 100.0f;
+
+let savedrx = 0.0f;
 let savedry = 0.0f;
+let savedrz = 0.0f;
 
 let ee_info = System.getCPUInfo();
 
@@ -150,9 +153,15 @@ while(true) {
     rx = ((pad.rx > 25 || pad.rx < -25)? pad.rx : 0) / 1024.0f;
     ry = ((pad.ry > 25 || pad.ry < -25)? pad.ry : 0) / 1024.0f;
     savedrx = savedrx - rx;
-    savedry = savedry - ry;
+    savedry = savedry + ry;
 
-    Camera.position(0.0f, savedry,  savedrx);
+    if(pad.pressed(Pads.R2)){
+        savedrz -= 0.05f;
+    } else if(pad.pressed(Pads.L2)){
+        savedrz += 0.05f;
+    }
+
+    Camera.target(savedrx, savedry, savedrz);
 
     if(pad.justPressed(Pads.LEFT) && modeltodisplay > 0){
         modeltodisplay -= 1;
@@ -179,7 +188,7 @@ while(true) {
         bbox ^= 1;
     }
 
-    model[modeltodisplay].draw(0.0f, 0.0f, 30.0f, savedly, savedlx, 0.0f);
+    model[modeltodisplay].draw(0.0f, 0.0f, 0.0f, savedly, savedlx, 0.0f);
 
     if(bbox) {
         model[modeltodisplay].drawBounds(0.0f, 0.0f, 30.0f, savedly, savedlx, 0.0f, Color.new(128, 0, 255));

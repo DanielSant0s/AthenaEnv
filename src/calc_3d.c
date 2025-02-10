@@ -149,7 +149,7 @@ unsigned int get_max_z(GSGLOBAL* gsGlobal)
 			return -1;
 	}
 
-	max_z = 1 << (z - 1);
+	max_z = (1 << (z - 1)) / z;
 
 	// End function.
 	return max_z;
@@ -713,20 +713,20 @@ void ScaleVector(VECTOR res, VECTOR v, float size) {
 	res[3] = 0.0f;
 }
 
-void CameraMatrix(MATRIX m, VECTOR position, VECTOR target, VECTOR up)
+void CameraMatrix(MATRIX m, VECTOR position, VECTOR zd, VECTOR yd)
 {
 	MATRIX	m0;
 	VECTOR	xd;
 
 	UnitMatrix(m0);	
 
-	OuterProduct(xd, up, target);
+	OuterProduct(xd, yd, zd);
 
 	VECTOR left;
 	Normalize(left, xd);
 
 	VECTOR forward;
-	Normalize(forward, target);
+	Normalize(forward, zd);
 
 	VECTOR nup;
 	OuterProduct(nup, forward, left);
@@ -734,17 +734,17 @@ void CameraMatrix(MATRIX m, VECTOR position, VECTOR target, VECTOR up)
 	m0[0] = left[0];
 	m0[1] = left[1];
 	m0[2] = left[2];
-	m0[3] = left[3];
+	m0[3] = 0.0f;
 
 	m0[4] = nup[0];
 	m0[5] = nup[1];
 	m0[6] = nup[2];
-	m0[7] = nup[3];
+	m0[7] = 0.0f;
 
-	m0[8] = forward[0];
-	m0[9] = forward[1];
-	m0[10] = forward[2];
-	m0[11] = forward[3];
+	m0[8] =  -forward[0];
+	m0[9] =  -forward[1];
+	m0[10] = -forward[2];
+	m0[11] = 0.0f;
 
 	m0[12] = position[0];
 	m0[13] = position[1];
@@ -777,8 +777,6 @@ void LookAtCameraMatrix(MATRIX m, VECTOR position, VECTOR target, VECTOR up)
 
 	VECTOR left, forward, nup;
 
-	UnitMatrix(m0);	
-
 	SubVector(work, target, position);
 	Normalize(forward, work);
 
@@ -787,20 +785,20 @@ void LookAtCameraMatrix(MATRIX m, VECTOR position, VECTOR target, VECTOR up)
 
 	OuterProduct(nup, forward, left);
 
-	m0[0] = left[0];
-	m0[1] = left[1];
-	m0[2] = left[2];
-	m0[3] = left[3];
+	m0[0] = -left[0];
+	m0[1] = -left[1];
+	m0[2] = -left[2];
+	m0[3] = 0.0f;
 
 	m0[4] = nup[0];
 	m0[5] = nup[1];
 	m0[6] = nup[2];
-	m0[7] = nup[3];
+	m0[7] = 0.0f;
 
-	m0[8] =  -forward[0];
-	m0[9] =  -forward[1];
-	m0[10] = -forward[2];
-	m0[11] = forward[3];
+	m0[8] =  forward[0];
+	m0[9] =  forward[1];
+	m0[10] = forward[2];
+	m0[11] = 0.0f;
 
 	m0[12] = position[0];
 	m0[13] = position[1];
@@ -818,13 +816,16 @@ void create_view(MATRIX view_screen, float fov, float near, float far, float w, 
 	float bottom = -tanf(fov/2) * ((2048.0f * (h / w)) / (h * 0.5f));
 
 	matrix_unit(view_screen);
-	view_screen[0x00] = (2 * 1.0f) / (right - left);
-	view_screen[0x05] = -(2 * 1.0f) / (top - bottom);
-	view_screen[0x08] = (right + left) / (right - left);
-	view_screen[0x09] = (top + bottom) / (top - bottom);
-	view_screen[0x0A] = (far + near) / (far - near);
-	view_screen[0x0B] = -1.00f;
-	view_screen[0x0E] = (2 * far * near) / (far - near);
-	view_screen[0x0F] = 0.00f;
+	view_screen[0] = 2.0f / (right - left);
+
+	view_screen[5] = -2.0f / (top - bottom);
+	
+	view_screen[8] = (right + left) / (right - left);
+	view_screen[9] = (top + bottom) / (top - bottom);
+	view_screen[10] = -(far + near) / (far - near);
+	view_screen[11] = 1.00f;
+
+	view_screen[14] = (2 * far * near) / (far - near);
+	view_screen[15] = 0.00f;
 }
 
