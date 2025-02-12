@@ -14,8 +14,6 @@
 
 #define DEG2RAD(deg) ((deg) * (M_PI / 180.0f))
 
-register_vu_program(VU1Draw3D);
-register_vu_program(VU1Draw3DNoTex);
 register_vu_program(VU1Draw3DPVC);
 register_vu_program(VU1Draw3DPVCNoTex);
 register_vu_program(VU1Draw3DColors);
@@ -83,9 +81,6 @@ void SetLightAttribute(int id, float x, float y, float z, int attr) {
 	}
 }
 
-void draw_vu1_notex(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z);
-void draw_vu1(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z);
-
 void draw_vu1_pvc_notex(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z);
 void draw_vu1_pvc(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z);
 
@@ -100,19 +95,6 @@ void draw_vu1_with_spec_lights(model* m, float pos_x, float pos_y, float pos_z, 
 
 int athena_render_set_pipeline(model* m, int pl_id) {
 	switch (pl_id) {
-		case PL_NO_LIGHTS_COLORS:
-			if (m->texture_count) {
-				m->render = draw_vu1;
-				m->pipeline = PL_NO_LIGHTS_COLORS;
-			} else {
-				m->render = draw_vu1_notex;
-				m->pipeline = PL_NO_LIGHTS_COLORS_TEX;
-			}
-			break;
-		case PL_NO_LIGHTS_COLORS_TEX:
-			m->render = draw_vu1_notex;
-			m->pipeline = PL_NO_LIGHTS_COLORS_TEX;
-			break;
 		case PL_PVC:
 			if (!m->colours)
 				break;
@@ -446,224 +428,6 @@ static u32* last_mpg = NULL;
 			last_mpg = &name##_CodeStart; \
 		} \
 	} while (0)
-
-void draw_vu1(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z) {
-	GSGLOBAL *gsGlobal = getGSGLOBAL();
-
-	VECTOR object_position = { pos_x, pos_y, pos_z, 1.00f };
-	VECTOR object_rotation = { rot_x, rot_y, rot_z, 1.00f };
-
-	MATRIX local_world;
-	MATRIX local_screen;
-
-	update_vu_program(VU1Draw3D);
-
-	gsGlobal->PrimAAEnable = GS_SETTING_ON;
-	gsKit_set_test(gsGlobal, GS_ZTEST_ON);
-
-	create_local_world(local_world, object_position, object_rotation);
-	create_local_screen(local_screen, local_world, world_view, view_screen);
-
-	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
-
-	curr_vif_packet = vu_add_unpack_data(vif_packets[context], 0, &local_screen, 4, 0);
-
-	dma_add_end_tag(curr_vif_packet);
-
-	vifSendPacket(vif_packets[context], DMA_CHANNEL_VIF1);
-
-	dma_packet_create(&attr_packet, cube_packet, 0);
-
-	int last_index = -1;
-	GSTEXTURE* tex = NULL;
-	for(int i = 0; i < m->material_index_count; i++) {
-		GSTEXTURE *cur_tex = m->textures[m->materials[m->material_indices[i].index].texture_id];
-		if (cur_tex != tex) {
-			gsKit_TexManager_bind(gsGlobal, cur_tex);
-			tex = cur_tex;
-		}
-	
-		VECTOR* positions = &m->positions[last_index+1];
-		VECTOR* texcoords = &m->texcoords[last_index+1];
-
-		int idxs_to_draw = (m->material_indices[i].end-last_index);
-		int idxs_drawn = 0;
-
-		while (idxs_to_draw > 0) {
-			dmaKit_wait(DMA_CHANNEL_VIF1, 0);
-
-			int count = BATCH_SIZE;
-			if (idxs_to_draw < BATCH_SIZE)
-			{
-				count = idxs_to_draw;
-			}
-
-			float fX = 2048.0f+gsGlobal->Width/2;
-			float fY = 2048.0f+gsGlobal->Height/2;
-			float fZ = ((float)get_max_z(gsGlobal));
-
-			dma_packet_reset(&attr_packet);
-
-			dma_packet_add_float(&attr_packet, fX);
-			dma_packet_add_float(&attr_packet, fY);
-			dma_packet_add_float(&attr_packet, fZ);
-
-			dma_packet_add_uint(&attr_packet, count);
-		
-			dma_packet_add_tag(&attr_packet, GIF_AD, GIFTAG(1, 0, 0, 0, 0, 1));
-		
-			dma_packet_add_tag(&attr_packet, GS_TEX1_1, GS_SETREG_TEX1(1, 0, tex->Filter, tex->Filter, 0, 0, 0));
-		
-			int tw, th;
-			athena_set_tw_th(tex, &tw, &th);
-
-			dma_packet_add_tag(&attr_packet, 
-							   GS_TEX0_1, 
-							   GS_SETREG_TEX0(tex->Vram/256, 
-											  tex->TBW, 
-											  tex->PSM,
-											  tw, th, 
-											  gsGlobal->PrimAlphaEnable, 
-											  COLOR_MODULATE,
-											  tex->VramClut/256, 
-											  tex->ClutPSM, 
-											  0, 0, 
-											  tex->VramClut? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD)
-								);
-
-			dma_packet_add_tag(&attr_packet, 
-			                   DRAW_STQ2_REGLIST, 
-							   VU_GS_GIFTAG(count, 
-							                1, 1, 
-											VU_GS_PRIM(m->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE, 
-													   1, 1, 
-													   gsGlobal->PrimFogEnable, 
-													   gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 0, 0, 0),
-    		    							0, 3)
-								);
-
-			dma_packet_add_uint(&attr_packet, 128);
-			dma_packet_add_uint(&attr_packet, 128);
-			dma_packet_add_uint(&attr_packet, 128);
-			dma_packet_add_uint(&attr_packet, 128);
-
-			dma_packet_create(&draw_packet, vif_packets[context], 0);
-
-			unpack_list_open(&draw_packet, 0, true);
-			{
-				unpack_list_append(&draw_packet, attr_packet.base, 6);
-				unpack_list_append(&draw_packet, &positions[idxs_drawn], count);
-				unpack_list_append(&draw_packet, &texcoords[idxs_drawn], count);
-			}
-			unpack_list_close(&draw_packet);
-
-			dma_packet_start_program(&draw_packet, last_index == -1);
-			dma_packet_add_end_tag(&draw_packet);
-
-			dma_packet_send(&draw_packet, DMA_CHANNEL_VIF1);
-
-			dma_packet_destroy(&draw_packet);
-
-			idxs_to_draw -= count;
-			idxs_drawn += count;
-		}
-
-		last_index = m->material_indices[i].end;
-	}
-
-	context = !context;
-}
-
-void draw_vu1_notex(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z) {
-	GSGLOBAL *gsGlobal = getGSGLOBAL();
-
-	VECTOR object_position = { pos_x, pos_y, pos_z, 1.00f };
-	VECTOR object_rotation = { rot_x, rot_y, rot_z, 1.00f };
-
-	MATRIX local_world;
-	MATRIX local_screen;
-
-	update_vu_program(VU1Draw3DNoTex);
-
-	gsGlobal->PrimAAEnable = GS_SETTING_ON;
-	gsKit_set_test(gsGlobal, GS_ZTEST_ON);
-
-	create_local_world(local_world, object_position, object_rotation);
-	create_local_screen(local_screen, local_world, world_view, view_screen);
-
-	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
-
-	curr_vif_packet = vu_add_unpack_data(vif_packets[context], 0, &local_screen, 4, 0);
-
-	dma_add_end_tag(curr_vif_packet);
-
-	vifSendPacket(vif_packets[context], DMA_CHANNEL_VIF1);
-
-	int idxs_to_draw = m->index_count;
-	int idxs_drawn = 0;
-
-	dma_packet_create(&attr_packet, cube_packet, 0);
-
-	while (idxs_to_draw > 0) {
-		dmaKit_wait(DMA_CHANNEL_VIF1, 0);
-
-		int count = BATCH_SIZE;
-		if (idxs_to_draw < BATCH_SIZE)
-		{
-			count = idxs_to_draw;
-		}
-
-		float fX = 2048.0f+gsGlobal->Width/2;
-		float fY = 2048.0f+gsGlobal->Height/2;
-		float fZ = ((float)get_max_z(gsGlobal));
-
-		float texCol = 128.0f;
-
-		dma_packet_reset(&attr_packet);
-
-		dma_packet_add_float(&attr_packet, fX);
-		dma_packet_add_float(&attr_packet, fY);
-		dma_packet_add_float(&attr_packet, fZ);
-
-		dma_packet_add_uint(&attr_packet, count);
-
-		dma_packet_add_tag(&attr_packet, 
-		                   DRAW_NOTEX_REGLIST, 
-						   VU_GS_GIFTAG(count, 
-						                1, 1, 
-										VU_GS_PRIM(m->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE, 
-												   1, 0, 
-												   gsGlobal->PrimFogEnable, 
-												   gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 0, 0, 0),
-    	    							0, 2)
-							);
-
-		dma_packet_add_uint(&attr_packet, 128);
-		dma_packet_add_uint(&attr_packet, 128);
-		dma_packet_add_uint(&attr_packet, 128);
-		dma_packet_add_uint(&attr_packet, 128);
-
-		dma_packet_create(&draw_packet, vif_packets[context], 0);
-
-		unpack_list_open(&draw_packet, 0, true);
-		{
-			unpack_list_append(&draw_packet, attr_packet.base, 3);
-			unpack_list_append(&draw_packet, &m->positions[idxs_drawn], count);
-		}
-		unpack_list_close(&draw_packet);
-
-		dma_packet_start_program(&draw_packet, (!idxs_drawn));
-		dma_packet_add_end_tag(&draw_packet);
-
-		dma_packet_send(&draw_packet, DMA_CHANNEL_VIF1);
-		dma_packet_destroy(&draw_packet);
-
-		idxs_to_draw -= count;
-		idxs_drawn += count;
-	}
-
-	context = !context;
-}
 
 void draw_vu1_pvc(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z) {
 	GSGLOBAL *gsGlobal = getGSGLOBAL();

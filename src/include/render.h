@@ -20,8 +20,6 @@ typedef enum {
 } eLightAttributes;
 
 typedef enum {
-	PL_NO_LIGHTS_COLORS,
-	PL_NO_LIGHTS_COLORS_TEX,
 	PL_NO_LIGHTS,
 	PL_NO_LIGHTS_TEX,
 	PL_DEFAULT,

@@ -2,8 +2,6 @@
 
 
 const pipelines = [
-    "NO_LIGHTS_COLORS",
-    "NO_LIGHTS_COLORS_TEX",
     "NO_LIGHTS",
     "NO_LIGHTS_TEX",
     "DEFAULT",

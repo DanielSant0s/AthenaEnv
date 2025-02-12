@@ -76,7 +76,6 @@ JS_CORE = quickjs/cutils.o quickjs/libbf.o quickjs/libregexp.o quickjs/libunicod
 
 VU1_MPGS = draw_3D_pvc.o draw_3D_pvc_notex.o \
            draw_3D_colors.o draw_3D_colors_notex.o \
-           draw_3D.o draw_3D_notex.o \
            draw_3D_lights.o draw_3D_lights_notex.o \
            draw_3D_spec.o draw_3D_spec_notex.o
 
@@ -163,7 +162,7 @@ all: $(EXT_LIBS) $(EE_BIN) $(EE_EMBED_DIR) $(EE_OBJS_DIR)
 	mv $(EE_BIN) bin/
 #	mv $(EE_BIN_PKD) bin/
 
-# mpgs: src/draw_3D.vsm src/draw_3D_notex.vsm src/draw_3D_pvc.vsm src/draw_3D_pvc_notex.vsm src/draw_3D_colors.vsm src/draw_3D_colors_notex.vsm src/draw_3D_lights.vsm src/draw_3D_lights_notex.vsm src/draw_3D_spec.vsm src/draw_3D_spec_notex.vsm
+# mpgs: src/draw_3D_pvc.vsm src/draw_3D_pvc_notex.vsm src/draw_3D_colors.vsm src/draw_3D_colors_notex.vsm src/draw_3D_lights.vsm src/draw_3D_lights_notex.vsm src/draw_3D_spec.vsm src/draw_3D_spec_notex.vsm
 
 debug: $(EXT_LIBS) $(EE_BIN)
 	echo "Building $(EE_BIN) with debug symbols..."
