@@ -26,7 +26,7 @@ canvas.psmz = Z16S;
 
 Screen.setMode(canvas);
 
-Render.setView(70.0, 2.0, 200.0);
+Render.setView(60.0, 5.0, 4000.0);
 
 // Change your root folder to "render" so we can work with file path magic :p
 os.chdir("render");

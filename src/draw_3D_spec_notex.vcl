@@ -22,6 +22,19 @@
 .init_vf_all
 .init_vi_all
 
+SCREEN_SCALE        .assign  0
+
+SCREEN_MATRIX       .assign  1
+LIGHT_MATRIX        .assign  5
+
+NUM_DIR_LIGHTS      .assign  9
+CAMERA_POSITION     .assign 10
+
+LIGHT_DIRECTION_PTR .assign 11
+LIGHT_AMBIENT_PTR   .assign 15
+LIGHT_DIFFUSE_PTR   .assign 19
+LIGHT_SPECULAR_PTR  .assign 23
+
 .include "vcl_sml.i"
 
 --enter
@@ -29,14 +42,24 @@
 
     ;//////////// --- Load data 1 --- /////////////
     ; Updated once per mesh
-    MatrixLoad	ObjectToScreen, 0,       vi00 ; load view-projection matrix
-    MatrixLoad	LocalLight,     4,       vi00 ; load local light matrix
-    ilw.x       dirLightQnt,    8(vi00)       ; load active directional lights
-    lq          CamPos,         9(vi00)       ; load program params
-    iaddiu      lightDirs,      vi00,    10       
-    iaddiu      lightAmbs,      vi00,    14
-    iaddiu      lightDiffs,     vi00,    18    
-    iaddiu      lightSpecs,     vi00,    22 
+    
+    MatrixLoad	ObjectToScreen, SCREEN_MATRIX,       vi00 ; load view-projection matrix
+    MatrixLoad	LocalLight,     LIGHT_MATRIX,        vi00 ; load local light matrix
+    ilw.x       dirLightQnt,    NUM_DIR_LIGHTS(vi00)       ; load active directional lights
+    lq          CamPos,         CAMERA_POSITION(vi00)       ; load program params
+    iaddiu      lightDirs,      vi00,    LIGHT_DIRECTION_PTR       
+    iaddiu      lightAmbs,      vi00,    LIGHT_AMBIENT_PTR
+    iaddiu      lightDiffs,     vi00,    LIGHT_DIFFUSE_PTR    
+    iaddiu      lightSpecs,     vi00,    LIGHT_SPECULAR_PTR 
+
+    lq scale, SCREEN_SCALE(vi00)
+
+    loi            2048.0
+    addi.xy        offset, vf00, i
+    add.zw          offset, vf00, vf00
+
+    add.xyzw offset, scale, offset
+    
     ;/////////////////////////////////////////////
 
 	fcset   0x000000	; VCL won't let us use CLIP without first zeroing
@@ -47,15 +70,16 @@
 init:
     xtop    iBase
 
-    lq.xyz  scale,          0(iBase) ; load program params
-                                     ; float : X, Y, Z - scale vector that we will use to scale the verts after projecting them.
-                                     ; float : W - vert count.
-    lq      primTag,        1(iBase) ; GIF tag - tell GS how many data we will send
-    lq      matDiffuse,     2(iBase) ; RGBA
+    lq      primTag,        0(iBase) ; GIF tag - tell GS how many data we will send
+    lq      matDiffuse,     1(iBase) ; RGBA
                                      ; u32 : R, G, B, A (0-128)
 
-    iaddiu  vertexData,     iBase,      3           ; pointer to vertex data
-    ilw.w   vertCount,      0(iBase)                ; load vert count from scale vector
+    iaddiu  vertexData,     iBase,      2           ; pointer to vertex data
+
+    iaddiu   Mask, vi00, 0x7fff
+    mtir     vertCount, primTag[x]
+    iand     vertCount, vertCount, Mask              ; Get the number of verts (bit 0-14) from the PRIM giftag
+
     iadd    normalData,     vertexData,  vertCount   ; pointer to normals
     iadd    dataPointers,  normalData,  vertCount
 
@@ -98,9 +122,11 @@ init:
         
         div         q,      vf00[w],    vertex[w]   ; perspective divide (1/vert[w]):
         mul.xyz     vertex, vertex,     q
-        mula.xyz    acc,    scale,      vf00[w]     ; scale to GS screen space
-        madd.xyz    vertex, vertex,     scale       ; multiply and add the scales -> vert = vert * scale + scale
-        ftoi4.xyz   vertex, vertex                  ; convert vertex to 12:4 fixed point format
+
+        mul.xyz    vertex, vertex,     scale
+        add.xyz    vertex, vertex,     offset
+
+        VertexFpToGsXYZ2  vertex,vertex
         ;////////////////////////////////////////////
 
         ;//////////////// - NORMALS - /////////////////
