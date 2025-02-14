@@ -6,51 +6,55 @@
 		.global	VU1Draw3DPVC_CodeEnd
 VU1Draw3DPVC_CodeStart:
 __v_src_draw_3D_pvc_vcl_4:
-; _LNOPT_w=[ normal2 ] 5 [5 0] 5   [__v_src_draw_3D_pvc_vcl_4]
-         NOP                                                        lq            VF01,0(VI00)                        
-         NOP                                                        lq            VF02,1(VI00)                        
-         NOP                                                        lq            VF03,2(VI00)                        
-         NOP                                                        lq            VF04,3(VI00)                        
-         NOP                                                        fcset         0                                   
+; _LNOPT_w=[ normal2 ] 7 [7 0] 7   [__v_src_draw_3D_pvc_vcl_4]
+         NOP                                                        lq.xyz        VF05,0(VI00)                        
+         max.z         VF06,VF00,VF00                               loi           0x45000000                          
+         addi.xy       VF06,VF00,I                                  lq            VF01,1(VI00)                        
+         NOP                                                        lq            VF02,2(VI00)                        
+         NOP                                                        lq            VF03,3(VI00)                        
+         NOP                                                        lq            VF04,4(VI00)                        
+         add.xyz       VF06,VF05,VF06                               fcset         0                                   
 init:
-; _LNOPT_w=[ normal2 ] 19 [19 0] 19   [init]
+; _LNOPT_w=[ normal2 ] 20 [20 0] 20   [init]
          NOP                                                        xtop          VI02                                
-         NOP                                                        lq            VF06,1(VI02)                        
-         NOP                                                        lq            VF08,2(VI02)                        
-         NOP                                                        iaddiu        VI03,VI02,0x00000006                
-         NOP                                                        ilw.w         VI08,0(VI02)                        
-         NOP                                                        lq            VF09,3(VI02)                        
-         NOP                                                        lq            VF07,4(VI02)                        
-         NOP                                                        lq.xyz        VF05,0(VI02)                        
+         NOP                                                        lq            VF08,3(VI02)                        
+         NOP                                                        lq            VF07,0(VI02)                        
+         NOP                                                        iaddiu        VI08,VI00,0x00007fff                
+         NOP                                                        iaddiu        VI03,VI02,0x00000005                
+         NOP                                                        mtir          VI04,VF08x                          
+         NOP                                                        iand          VI08,VI04,VI08                      
+         NOP                                                        lq            VF09,1(VI02)                        
          NOP                                                        iadd          VI04,VI03,VI08                      
          NOP                                                        iadd          VI05,VI04,VI08                      
+         NOP                                                        lq            VF10,2(VI02)                        
          NOP                                                        iadd          VI07,VI05,VI08                      
-         NOP                                                        sqi           VF06,(VI07++)                       
-         NOP                                                        sqi           VF08,(VI07++)                       
-         NOP                                                        sqi           VF06,(VI07++)                       
-         NOP                                                        sqi           VF09,(VI07++)                       
-         NOP                                                        lq            VF06,5(VI02)                        
-         NOP                                                        iadd          VI06,VI05,VI08                      
          NOP                                                        sqi           VF07,(VI07++)                       
+         NOP                                                        sqi           VF09,(VI07++)                       
+         NOP                                                        sqi           VF07,(VI07++)                       
+         NOP                                                        sqi           VF10,(VI07++)                       
+         NOP                                                        lq            VF07,4(VI02)                        
+         NOP                                                        iadd          VI06,VI05,VI08                      
+         NOP                                                        sqi           VF08,(VI07++)                       
          NOP                                                        iadd          VI08,VI02,VI08                      
 vertexLoop:
-; _LNOPT_w=[ vuta1 ] 18 [31 16] 31   [vertexLoop]
-         NOP                                                        lq            VF07,0(VI03)                        
-         mulax         ACC,VF01,VF07x                               iaddiu        VI07,VI07,0x00000003                       ;	STALL_LATENCY ?3
-         madday        ACC,VF02,VF07y                               isubiu        VI08,VI08,1                         
-         maddaz        ACC,VF03,VF07z                               lq            VF08,0(VI05)                        
-         maddw         VF07,VF04,VF07w                              NOP                                               
-         mul           VF08,VF08,VF06                               NOP                                                      ;	STALL_LATENCY ?2
-         mulaw.xyz     ACC,VF05,VF00w                               div           Q,VF00w,VF07w                       
-         ftoi0         VF09,VF08                                    lq            VF08,0(VI04)                               ;	STALL_LATENCY ?2
-         mulq.xyz      VF09,VF07,Q                                  sq            VF09,-2(VI07)                              ;	STALL_LATENCY ?3
-         clipw.xyz     VF07xyz,VF07w                                iaddiu        VI05,VI05,0x00000001                
-         mulq          VF07,VF08,Q                                  iaddiu        VI04,VI04,0x00000001                
-         madd.xyz      VF08,VF09,VF05                               iaddiu        VI03,VI03,0x00000001                       ;	STALL_LATENCY ?1
-         NOP                                                        fcand         VI01,262143                         
-         ftoi4.xyz     VF08,VF08                                    iaddiu        VI01,VI01,0x00007fff                       ;	STALL_LATENCY ?2
-         NOP                                                        isw.w         VI01,-1(VI07)                       
-         NOP                                                        sq            VF07,-3(VI07)                       
+; _LNOPT_w=[ vuta1 ] 19 [35 17] 36   [vertexLoop]
+         NOP                                                        lq            VF08,0(VI03)                        
+         mulax         ACC,VF01,VF08x                               iaddiu        VI05,VI05,0x00000001                       ;	STALL_LATENCY ?3
+         madday        ACC,VF02,VF08y                               iaddiu        VI04,VI04,0x00000001                
+         maddaz        ACC,VF03,VF08z                               iaddiu        VI07,VI07,0x00000003                
+         maddw         VF08,VF04,VF08w                              isubiu        VI08,VI08,1                         
+         NOP                                                        div           Q,VF00w,VF08w                              ;	STALL_LATENCY ?3
+         clipw.xyz     VF08xyz,VF08w                                lq            VF09,-1(VI05)                       
+         mulq.xyz      VF08,VF08,Q                                  waitq                                                    ;	STALL_LATENCY ?5
+         mul           VF09,VF09,VF07                               NOP                                               
+         mul.xyz       VF08,VF08,VF05                               NOP                                                      ;	STALL_LATENCY ?2
+         ftoi0         VF10,VF09                                    lq            VF09,-1(VI04)                       
+         add.xyz       VF08,VF08,VF06                               iaddiu        VI03,VI03,0x00000001                       ;	STALL_LATENCY ?2
+         mulq          VF09,VF09,Q                                  fcand         VI01,262143                         
+         ftoi4.xy      VF08,VF08                                    iaddiu        VI01,VI01,0x00007fff                       ;	STALL_LATENCY ?2
+         ftoi0.z       VF08,VF08                                    isw.w         VI01,-1(VI07)                       
+         NOP                                                        sq            VF10,-2(VI07)                       
+         NOP                                                        sq            VF09,-3(VI07)                       
          NOP                                                        ibne          VI08,VI02,vertexLoop                
          NOP                                                        sq.xyz        VF08,-1(VI07)                       
 ; _LNOPT_w=[ normal2 ] 1 [1 0] 1   [__v_src_draw_3D_pvc_vcl_7]
@@ -63,7 +67,7 @@ vertexLoop:
          NOP                                                        NOP                                               
 		.align 4
 VU1Draw3DPVC_CodeEnd:
-;	iCount=47
+;	iCount=51
 ; register stats:
 ;   9 VU User integer
-;  10 VU User floating point
+;  11 VU User floating point

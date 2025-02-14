@@ -1374,6 +1374,9 @@ void init_graphics()
 		gsGlobal->Height = 448;
 	}
 
+	//gsGlobal->OffsetX = (int)((2048.0f-(gsGlobal->Width/2)) * 16.0f);
+	//gsGlobal->OffsetY = (int)((2048.0f-(gsGlobal->Height/2)) * 16.0f);
+
 	gsGlobal->PSM  = GS_PSM_CT24;
 	gsGlobal->PSMZ = GS_PSMZ_16S;
 	gsGlobal->ZBuffering = GS_SETTING_OFF;

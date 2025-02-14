@@ -24,17 +24,46 @@
 
 .include "vcl_sml.i"
 
+
+SCREEN_SCALE        .assign  0
+
+SCREEN_MATRIX       .assign  1
+LIGHT_MATRIX        .assign  5
+
+NUM_DIR_LIGHTS      .assign  9
+CAMERA_POSITION     .assign 10
+
+LIGHT_DIRECTION_PTR .assign 11
+LIGHT_AMBIENT_PTR   .assign 15
+LIGHT_DIFFUSE_PTR   .assign 19
+LIGHT_SPECULAR_PTR  .assign 23
+
 --enter
 --endenter
 
+    loi 0.5
+    add.xy     clip_scale, vf00, i
+    loi 1.0
+    add.z      clip_scale,  vf00, i
+    mul.w      clip_scale, vf00, vf00
+
     ;//////////// --- Load data 1 --- /////////////
     ; Updated once per mesh
-    MatrixLoad	ObjectToScreen, 0, vi00 ; load view-projection matrix
-    MatrixLoad	LocalLight,     4, vi00     ; load local light matrix
-    ilw.x       dirLightQnt,    8(vi00) ; load active directional lights
-    iaddiu      lightDirs,      vi00,    9       
-    iaddiu      lightAmbs,      vi00,    13
-    iaddiu      lightDiffs,     vi00,    17    
+    MatrixLoad	ObjectToScreen, SCREEN_MATRIX, vi00 ; load view-projection matrix
+    MatrixLoad	LocalLight,     LIGHT_MATRIX, vi00     ; load local light matrix
+    ilw.x       dirLightQnt,    NUM_DIR_LIGHTS(vi00) ; load active directional lights
+    iaddiu      lightDirs,      vi00,    LIGHT_DIRECTION_PTR       
+    iaddiu      lightAmbs,      vi00,    LIGHT_AMBIENT_PTR
+    iaddiu      lightDiffs,     vi00,    LIGHT_DIFFUSE_PTR    
+
+    lq scale,             SCREEN_SCALE(vi00)
+
+    loi            2048.0
+    addi.xy        offset, vf00, i
+    add.zw          offset, vf00, vf00
+
+    add.xyzw offset, scale, offset
+
     ;/////////////////////////////////////////////
 
 	fcset   0x000000	; VCL won't let us use CLIP without first zeroing
@@ -45,17 +74,18 @@
 init:
     xtop    iBase
 
-    lq.xyz  scale,          0(iBase) ; load program params
-                                     ; float : X, Y, Z - scale vector that we will use to scale the verts after projecting them.
-                                     ; float : W - vert count.
-    lq      gifSetTag,      1(iBase) ; GIF tag - set
-    lq      texGifTag1,     2(iBase) ; GIF tag - texture LOD
-    lq      texGifTag2,     3(iBase) ; GIF tag - texture buffer & CLUT
-    lq      primTag,        4(iBase) ; GIF tag - tell GS how many data we will send
-    lq      matDiffuse,     5(iBase) ; RGBA 
+    lq      gifSetTag,      0(iBase) ; GIF tag - set
+    lq      texGifTag1,     1(iBase) ; GIF tag - texture LOD
+    lq      texGifTag2,     2(iBase) ; GIF tag - texture buffer & CLUT
+    lq      primTag,        3(iBase) ; GIF tag - tell GS how many data we will send
+    lq      matDiffuse,     4(iBase) ; RGBA 
                                      ; u32 : R, G, B, A (0-128)
-    iaddiu  vertexData,     iBase,      6           ; pointer to vertex data
-    ilw.w   vertCount,      0(iBase)                ; load vert count from scale vector
+    iaddiu  vertexData,     iBase,      5           ; pointer to vertex data
+
+    iaddiu   Mask, vi00, 0x7fff
+    mtir     vertCount, primTag[x]
+    iand     vertCount, vertCount, Mask              ; Get the number of verts (bit 0-14) from the PRIM giftag
+    
     iadd    stqData,        vertexData, vertCount   ; pointer to stq
     iadd    normalData,      stqData,  vertCount   ; pointer to colors
     iadd     dataPointers,   normalData,  vertCount
@@ -90,8 +120,10 @@ init:
 
         ;////////////// --- Vertex --- //////////////
         MatrixMultiplyVertex	vertex, ObjectToScreen, inVert ; transform each vertex by the matrix
-       
-        clipw.xyz	vertex, vertex			; Dr. Fortuna: This instruction checks if the vertex is outside
+
+        mul clip_vertex, vertex, clip_scale
+
+        clipw.xyz	clip_vertex, clip_vertex			; Dr. Fortuna: This instruction checks if the vertex is outside
 							; the viewing frustum. If it is, then the appropriate
 							; clipping flags are set
         fcand		VI01,   0x3FFFF                 ; Bitwise AND the clipping flags with 0x3FFFF, this makes
@@ -106,10 +138,13 @@ init:
         isw.w		iADC,   2(destAddress)
         
         div         q,      vf00[w],    vertex[w]   ; perspective divide (1/vert[w]):
+
         mul.xyz     vertex, vertex,     q
-        mula.xyz    acc,    scale,      vf00[w]     ; scale to GS screen space
-        madd.xyz    vertex, vertex,     scale       ; multiply and add the scales -> vert = vert * scale + scale
-        ftoi4.xyz   vertex, vertex                  ; convert vertex to 12:4 fixed point format
+
+        mul.xyz    vertex, vertex,     scale
+        add.xyz    vertex, vertex,     offset
+
+        VertexFpToGsXYZ2  vertex,vertex
         ;////////////////////////////////////////////
 
 

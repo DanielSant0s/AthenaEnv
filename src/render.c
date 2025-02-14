@@ -20,11 +20,14 @@ register_vu_program(VU1Draw3DColors);
 register_vu_program(VU1Draw3DColorsNoTex);
 register_vu_program(VU1Draw3DLightsColors);
 register_vu_program(VU1Draw3DLightsColorsNoTex);
+register_vu_program(VU1Draw3DLCS);
 register_vu_program(VU1Draw3DSpec);
 register_vu_program(VU1Draw3DSpecNoTex);
 
 MATRIX view_screen;
 MATRIX world_view;
+
+VECTOR screen_scale;
 
 void init3D(float fov, float near, float far)
 {
@@ -32,7 +35,12 @@ void init3D(float fov, float near, float far)
 
 	initCamera(&world_view);
 	create_view(view_screen, DEG2RAD(fov), near, far, gsGlobal->Width, gsGlobal->Height);
-	vu1_set_double_buffer_settings(26, 496);
+	vu1_set_double_buffer_settings(141, 400);
+
+	screen_scale[0] = gsGlobal->Width/2;
+	screen_scale[1] = gsGlobal->Height/2;
+	screen_scale[2] = ((float)get_max_z(gsGlobal));
+	screen_scale[3] = 1.0f;
 
 }
 
@@ -449,11 +457,21 @@ void draw_vu1_pvc(model* m, float pos_x, float pos_y, float pos_z, float rot_x, 
 
 	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
 
-	curr_vif_packet = vu_add_unpack_data(vif_packets[context], 0, &local_screen, 4, 0);
+	dma_packet_create(&draw_packet, vif_packets[context], 0);
 
-	dma_add_end_tag(curr_vif_packet);
+	unpack_list_open(&draw_packet, 0, false);
+	{
+		unpack_list_append(&draw_packet, &screen_scale,       1);
 
-	vifSendPacket(vif_packets[context], DMA_CHANNEL_VIF1);
+		unpack_list_append(&draw_packet, &local_screen,       4);
+	}
+	unpack_list_close(&draw_packet);
+
+	dma_packet_add_end_tag(&draw_packet);
+
+	dma_packet_send(&draw_packet, DMA_CHANNEL_VIF1);
+
+	dma_packet_destroy(&draw_packet);
 
 	dma_packet_create(&attr_packet, cube_packet, 0);
 
@@ -482,17 +500,7 @@ void draw_vu1_pvc(model* m, float pos_x, float pos_y, float pos_z, float rot_x, 
 				count = idxs_to_draw;
 			}
 
-			float fX = 2048.0f+gsGlobal->Width/2;
-			float fY = 2048.0f+gsGlobal->Height/2;
-			float fZ = ((float)get_max_z(gsGlobal));
-
 			dma_packet_reset(&attr_packet);
-
-			dma_packet_add_float(&attr_packet, fX);
-			dma_packet_add_float(&attr_packet, fY);
-			dma_packet_add_float(&attr_packet, fZ);
-
-			dma_packet_add_uint(&attr_packet, count);
 		
 			dma_packet_add_tag(&attr_packet, GIF_AD, GIFTAG(1, 0, 0, 0, 0, 1));
 		
@@ -535,7 +543,7 @@ void draw_vu1_pvc(model* m, float pos_x, float pos_y, float pos_z, float rot_x, 
 
 			unpack_list_open(&draw_packet, 0, true);
 			{
-				unpack_list_append(&draw_packet, attr_packet.base, 6);
+				unpack_list_append(&draw_packet, attr_packet.base, 5);
 				unpack_list_append(&draw_packet, &positions[idxs_drawn], count);
 				unpack_list_append(&draw_packet, &texcoords[idxs_drawn], count);
 				unpack_list_append(&draw_packet,   &colours[idxs_drawn], count);
@@ -582,11 +590,21 @@ void draw_vu1_pvc_notex(model* m, float pos_x, float pos_y, float pos_z, float r
 
 	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
 
-	curr_vif_packet = vu_add_unpack_data(vif_packets[context], 0, &local_screen, 4, 0);
+	dma_packet_create(&draw_packet, vif_packets[context], 0);
 
-	dma_add_end_tag(curr_vif_packet);
+	unpack_list_open(&draw_packet, 0, false);
+	{
+		unpack_list_append(&draw_packet, &screen_scale,       1);
 
-	vifSendPacket(vif_packets[context], DMA_CHANNEL_VIF1);
+		unpack_list_append(&draw_packet, &local_screen,       4);
+	}
+	unpack_list_close(&draw_packet);
+
+	dma_packet_add_end_tag(&draw_packet);
+
+	dma_packet_send(&draw_packet, DMA_CHANNEL_VIF1);
+
+	dma_packet_destroy(&draw_packet);
 
 	dma_packet_create(&attr_packet, cube_packet, 0);
 
@@ -599,17 +617,7 @@ void draw_vu1_pvc_notex(model* m, float pos_x, float pos_y, float pos_z, float r
 			count = idxs_to_draw;
 		}
 
-		float fX = 2048.0f+gsGlobal->Width/2;
-		float fY = 2048.0f+gsGlobal->Height/2;
-		float fZ = ((float)get_max_z(gsGlobal));
-
 		dma_packet_reset(&attr_packet);
-
-		dma_packet_add_float(&attr_packet, fX);
-		dma_packet_add_float(&attr_packet, fY);
-		dma_packet_add_float(&attr_packet, fZ);
-
-		dma_packet_add_uint(&attr_packet, count);
 
 		dma_packet_add_tag(&attr_packet, 
 		                   DRAW_NOTEX_REGLIST, 
@@ -631,7 +639,7 @@ void draw_vu1_pvc_notex(model* m, float pos_x, float pos_y, float pos_z, float r
 
 		unpack_list_open(&draw_packet, 0, true);
 		{
-			unpack_list_append(&draw_packet, attr_packet.base, 3);
+			unpack_list_append(&draw_packet, attr_packet.base, 2);
 			unpack_list_append(&draw_packet, &m->positions[idxs_drawn], count);
 			unpack_list_append(&draw_packet,   &m->colours[idxs_drawn], count);
 		}
@@ -671,11 +679,21 @@ void draw_vu1_with_colors(model* m, float pos_x, float pos_y, float pos_z, float
 
 	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
 
-	curr_vif_packet = vu_add_unpack_data(vif_packets[context], 0, &local_screen, 4, 0);
+	dma_packet_create(&draw_packet, vif_packets[context], 0);
 
-	dma_add_end_tag(curr_vif_packet);
+	unpack_list_open(&draw_packet, 0, false);
+	{
+		unpack_list_append(&draw_packet, &screen_scale,       1);
 
-	vifSendPacket(vif_packets[context], DMA_CHANNEL_VIF1);
+		unpack_list_append(&draw_packet, &local_screen,       4);
+	}
+	unpack_list_close(&draw_packet);
+
+	dma_packet_add_end_tag(&draw_packet);
+
+	dma_packet_send(&draw_packet, DMA_CHANNEL_VIF1);
+
+	dma_packet_destroy(&draw_packet);
 
 	dma_packet_create(&attr_packet, cube_packet, 0);
 
@@ -703,17 +721,7 @@ void draw_vu1_with_colors(model* m, float pos_x, float pos_y, float pos_z, float
 				count = idxs_to_draw;
 			}
 
-			float fX = 2048.0f+gsGlobal->Width/2;
-			float fY = 2048.0f+gsGlobal->Height/2;
-			float fZ = ((float)get_max_z(gsGlobal));
-
 			dma_packet_reset(&attr_packet);
-
-			dma_packet_add_float(&attr_packet, fX);
-			dma_packet_add_float(&attr_packet, fY);
-			dma_packet_add_float(&attr_packet, fZ);
-
-			dma_packet_add_uint(&attr_packet, count);
 		
 			dma_packet_add_tag(&attr_packet, GIF_AD, GIFTAG(1, 0, 0, 0, 0, 1));
 		
@@ -763,7 +771,7 @@ void draw_vu1_with_colors(model* m, float pos_x, float pos_y, float pos_z, float
 
 			unpack_list_open(&draw_packet, 0, true);
 			{
-				unpack_list_append(&draw_packet, attr_packet.base, 6);
+				unpack_list_append(&draw_packet, attr_packet.base, 5);
 				unpack_list_append(&draw_packet, &positions[idxs_drawn], count);
 				unpack_list_append(&draw_packet, &texcoords[idxs_drawn], count);
 			}
@@ -806,11 +814,21 @@ void draw_vu1_with_colors_notex(model* m, float pos_x, float pos_y, float pos_z,
 
 	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
 
-	curr_vif_packet = vu_add_unpack_data(vif_packets[context], 0, &local_screen, 4, 0);
+	dma_packet_create(&draw_packet, vif_packets[context], 0);
 
-	dma_add_end_tag(curr_vif_packet);
+	unpack_list_open(&draw_packet, 0, false);
+	{
+		unpack_list_append(&draw_packet, &screen_scale,       1);
 
-	vifSendPacket(vif_packets[context], DMA_CHANNEL_VIF1);
+		unpack_list_append(&draw_packet, &local_screen,       4);
+	}
+	unpack_list_close(&draw_packet);
+
+	dma_packet_add_end_tag(&draw_packet);
+
+	dma_packet_send(&draw_packet, DMA_CHANNEL_VIF1);
+
+	dma_packet_destroy(&draw_packet);
 
 	dma_packet_create(&attr_packet, cube_packet, 0);
 
@@ -830,17 +848,7 @@ void draw_vu1_with_colors_notex(model* m, float pos_x, float pos_y, float pos_z,
 				count = idxs_to_draw;
 			}
 
-			float fX = 2048.0f+gsGlobal->Width/2;
-			float fY = 2048.0f+gsGlobal->Height/2;
-			float fZ = ((float)get_max_z(gsGlobal));
-
 			dma_packet_reset(&attr_packet);
-
-			dma_packet_add_float(&attr_packet, fX);
-			dma_packet_add_float(&attr_packet, fY);
-			dma_packet_add_float(&attr_packet, fZ);
- 
-			dma_packet_add_uint(&attr_packet, count);
 
 			dma_packet_add_tag(&attr_packet, 
 			                   DRAW_NOTEX_REGLIST, 
@@ -869,7 +877,7 @@ void draw_vu1_with_colors_notex(model* m, float pos_x, float pos_y, float pos_z,
 
 			unpack_list_open(&draw_packet, 0, true);
 			{
-				unpack_list_append(&draw_packet, attr_packet.base, 3);
+				unpack_list_append(&draw_packet, attr_packet.base, 2);
 				unpack_list_append(&draw_packet, &positions[idxs_drawn], count);
 			}
 			unpack_list_close(&draw_packet);
@@ -894,7 +902,14 @@ void draw_vu1_with_colors_notex(model* m, float pos_x, float pos_y, float pos_z,
 void draw_vu1_with_lights(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z) {
 	GSGLOBAL *gsGlobal = getGSGLOBAL();
 
-	update_vu_program(VU1Draw3DLightsColors);
+	uint64_t clipfan_tag[2] = {  
+								VU_GS_GIFTAG(11, 1, 1, 
+									VU_GS_PRIM(GS_PRIM_PRIM_TRIFAN, 1, 1, gsGlobal->PrimFogEnable, gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 0, 0, 0), 
+								0, 3) ,
+								DRAW_STQ2_REGLIST
+	};
+
+	update_vu_program(VU1Draw3DLCS);
 
 	gsGlobal->PrimAAEnable = GS_SETTING_ON;
 	gsKit_set_test(gsGlobal, GS_ZTEST_ON);
@@ -928,10 +943,16 @@ void draw_vu1_with_lights(model* m, float pos_x, float pos_y, float pos_z, float
 
 	unpack_list_open(&draw_packet, 0, false);
 	{
+		unpack_list_append(&draw_packet, &screen_scale,       1);
+
 		unpack_list_append(&draw_packet, &local_screen,       4);
 		unpack_list_append(&draw_packet, &local_light,        4);
+
 		unpack_list_append(&draw_packet, &active_dir_lights,  1);
-		unpack_list_append(&draw_packet, &dir_lights,         12);
+		unpack_list_append(&draw_packet, getCameraPosition(), 1);
+		unpack_list_append(&draw_packet, &dir_lights,        12);
+
+		unpack_list_append(&draw_packet, &clipfan_tag,        1);
 	}
 	unpack_list_close(&draw_packet);
 
@@ -968,16 +989,7 @@ void draw_vu1_with_lights(model* m, float pos_x, float pos_y, float pos_z, float
 				count = idxs_to_draw;
 			}
 
-			float fX = 2048.0f+gsGlobal->Width/2;
-			float fY = 2048.0f+gsGlobal->Height/2;
-			float fZ = ((float)get_max_z(gsGlobal));
 			dma_packet_reset(&attr_packet);
-
-			dma_packet_add_float(&attr_packet, fX);
-			dma_packet_add_float(&attr_packet, fY);
-			dma_packet_add_float(&attr_packet, fZ);
-
-			dma_packet_add_uint(&attr_packet, count);
 		
 			dma_packet_add_tag(&attr_packet, GIF_AD, GIFTAG(1, 0, 0, 0, 0, 1));
 		
@@ -1027,7 +1039,7 @@ void draw_vu1_with_lights(model* m, float pos_x, float pos_y, float pos_z, float
 
 			unpack_list_open(&draw_packet, 0, true);
 			{
-				unpack_list_append(&draw_packet, attr_packet.base, 6);
+				unpack_list_append(&draw_packet, attr_packet.base, 5);
 				unpack_list_append(&draw_packet, &positions[idxs_drawn], count);
 				unpack_list_append(&draw_packet, &texcoords[idxs_drawn], count);
 				unpack_list_append(&draw_packet, &normals[idxs_drawn], count);
@@ -1088,9 +1100,13 @@ void draw_vu1_with_lights_notex(model* m, float pos_x, float pos_y, float pos_z,
 
 	unpack_list_open(&draw_packet, 0, false);
 	{
+		unpack_list_append(&draw_packet, &screen_scale,       1);
+
 		unpack_list_append(&draw_packet, &local_screen,       4);
 		unpack_list_append(&draw_packet, &local_light,        4);
+
 		unpack_list_append(&draw_packet, &active_dir_lights,  1);
+		unpack_list_append(&draw_packet, getCameraPosition(), 1);
 		unpack_list_append(&draw_packet, &dir_lights,         12);
 	}
 	unpack_list_close(&draw_packet);
@@ -1120,17 +1136,7 @@ void draw_vu1_with_lights_notex(model* m, float pos_x, float pos_y, float pos_z,
 				count = idxs_to_draw;
 			}
 
-			float fX = 2048.0f+gsGlobal->Width/2;
-			float fY = 2048.0f+gsGlobal->Height/2;
-			float fZ = ((float)get_max_z(gsGlobal));
-
 			dma_packet_reset(&attr_packet);
-
-			dma_packet_add_float(&attr_packet, fX);
-			dma_packet_add_float(&attr_packet, fY);
-			dma_packet_add_float(&attr_packet, fZ);
-
-			dma_packet_add_uint(&attr_packet, count);
 
 			dma_packet_add_tag(&attr_packet, 
 			                   DRAW_NOTEX_REGLIST, 
@@ -1159,7 +1165,7 @@ void draw_vu1_with_lights_notex(model* m, float pos_x, float pos_y, float pos_z,
 
 			unpack_list_open(&draw_packet, 0, true);
 			{
-				unpack_list_append(&draw_packet, attr_packet.base, 3);
+				unpack_list_append(&draw_packet, attr_packet.base, 2);
 				unpack_list_append(&draw_packet, &positions[idxs_drawn], count);
 				unpack_list_append(&draw_packet, &normals[idxs_drawn], count);
 			}
@@ -1219,8 +1225,11 @@ void draw_vu1_with_spec_lights(model* m, float pos_x, float pos_y, float pos_z, 
 
 	unpack_list_open(&draw_packet, 0, false);
 	{
+		unpack_list_append(&draw_packet, &screen_scale,       1);
+
 		unpack_list_append(&draw_packet, &local_screen,       4);
 		unpack_list_append(&draw_packet, &local_light,        4);
+
 		unpack_list_append(&draw_packet, &active_dir_lights,  1);
 		unpack_list_append(&draw_packet, getCameraPosition(), 1);
 		unpack_list_append(&draw_packet, &dir_lights,         16);
@@ -1260,17 +1269,7 @@ void draw_vu1_with_spec_lights(model* m, float pos_x, float pos_y, float pos_z, 
 				count = idxs_to_draw;
 			}
 
-			float fX = 2048.0f+gsGlobal->Width/2;
-			float fY = 2048.0f+gsGlobal->Height/2;
-			float fZ = ((float)get_max_z(gsGlobal));
-
 			dma_packet_reset(&attr_packet);
-
-			dma_packet_add_float(&attr_packet, fX);
-			dma_packet_add_float(&attr_packet, fY);
-			dma_packet_add_float(&attr_packet, fZ);
-
-			dma_packet_add_uint(&attr_packet, count);
 		
 			dma_packet_add_tag(&attr_packet, GIF_AD, GIFTAG(1, 0, 0, 0, 0, 1));
 		
@@ -1319,7 +1318,7 @@ void draw_vu1_with_spec_lights(model* m, float pos_x, float pos_y, float pos_z, 
 
 			unpack_list_open(&draw_packet, 0, true);
 			{
-				unpack_list_append(&draw_packet, attr_packet.base, 6);
+				unpack_list_append(&draw_packet, attr_packet.base, 5);
 				unpack_list_append(&draw_packet, &positions[idxs_drawn], count);
 				unpack_list_append(&draw_packet, &texcoords[idxs_drawn], count);
 				unpack_list_append(&draw_packet, &normals[idxs_drawn], count);
@@ -1380,8 +1379,11 @@ void draw_vu1_with_spec_lights_notex(model* m, float pos_x, float pos_y, float p
 
 	unpack_list_open(&draw_packet, 0, false);
 	{
+		unpack_list_append(&draw_packet, &screen_scale,       1);
+
 		unpack_list_append(&draw_packet, &local_screen,       4);
 		unpack_list_append(&draw_packet, &local_light,        4);
+
 		unpack_list_append(&draw_packet, &active_dir_lights,  1);
 		unpack_list_append(&draw_packet, getCameraPosition(), 1);
 		unpack_list_append(&draw_packet, &dir_lights,         16);
@@ -1413,17 +1415,7 @@ void draw_vu1_with_spec_lights_notex(model* m, float pos_x, float pos_y, float p
 				count = idxs_to_draw;
 			}
 
-			float fX = 2048.0f+gsGlobal->Width/2;
-			float fY = 2048.0f+gsGlobal->Height/2;
-			float fZ = ((float)get_max_z(gsGlobal));
-
 			dma_packet_reset(&attr_packet);
-
-			dma_packet_add_float(&attr_packet, fX);
-			dma_packet_add_float(&attr_packet, fY);
-			dma_packet_add_float(&attr_packet, fZ);
-
-			dma_packet_add_uint(&attr_packet, count);
 
 			dma_packet_add_tag(&attr_packet, 
 			                   DRAW_NOTEX_REGLIST, 
@@ -1452,7 +1444,7 @@ void draw_vu1_with_spec_lights_notex(model* m, float pos_x, float pos_y, float p
 
 			unpack_list_open(&draw_packet, 0, true);
 			{
-				unpack_list_append(&draw_packet, attr_packet.base, 3);
+				unpack_list_append(&draw_packet, attr_packet.base, 2);
 				unpack_list_append(&draw_packet, &positions[idxs_drawn], count);
 				unpack_list_append(&draw_packet, &normals[idxs_drawn], count);
 			}
