@@ -4,9 +4,12 @@
 *.elf
 *.irx
 src/main.js.c
-.vscode/settings.json
-.vscode/settings.json
 
 obj/
 embed/
 bin/brew_data.json
+
+.*
+!.github
+!.gitignore
+!modules/mmceman/mmceman.irx

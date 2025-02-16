@@ -24,6 +24,7 @@ bool usbd_started = false;
 bool usb_mass_started = false;
 bool pads_started = false;
 bool audio_started = false;
+bool mmceman_started = false;
 bool cdfs_started = false;
 bool dev9_started = false;
 bool mc_started = false;
@@ -58,6 +59,7 @@ void prepare_IOP() {
 	usb_mass_started = false;
 	pads_started = false;
 	audio_started = false;
+    mmceman_started = false;
 	cdfs_started = false;
 	dev9_started = false;
 	mc_started = false;
@@ -91,6 +93,8 @@ int get_boot_device(const char* path) {
 		device = USB_MASS_MODULE;
 	} else if(started_from("mc")) {
 		device = MC_MODULE;
+	} else if(started_from("mmce")) {
+		device = MMCEMAN_MODULE;
 	} else if(started_from("cdfs") || started_from("cdrom")) {
 		device = CDFS_MODULE;
 	} else if(started_from("hdd")) {
@@ -243,13 +247,19 @@ int load_default_module(int id) {
 				usb_mass_started = LOAD_SUCCESS();
 			}
 			break;
-		case CDFS_MODULE:
+        case MMCEMAN_MODULE:
+            if (!mmceman_started) {
+                ID = SifExecModuleBuffer(&mmceman_irx, size_mmceman_irx, 0, NULL, &ret);
+                REPORT("MMCEMAN");
+                mmceman_started = LOAD_SUCCESS();
+            }
+            break;
+        case CDFS_MODULE:
 			if (!cdfs_started) {
 				ID = SifExecModuleBuffer(&cdfs_irx, size_cdfs_irx, 0, NULL, &ret);
 				REPORT("CDFS");
 				cdfs_started = LOAD_SUCCESS();
 			}
-
 			break;
 		case DEV9_MODULE:
 			if (!dev9_started) {
@@ -257,7 +267,7 @@ int load_default_module(int id) {
 				REPORT("DEV9");
 				dev9_started = LOAD_SUCCESS();
 			}
-		break;
+		    break;
 		case HDD_MODULE:
 			if (!filexio_started)
 				load_default_module(FILEXIO_MODULE);
