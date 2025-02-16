@@ -35,17 +35,17 @@ bool HDD_USABLE = false;
 void prepare_IOP() {
     dbgprintf("AthenaEnv: Starting IOP Reset...\n");
     SifInitRpc(0);
-    #if defined(RESET_IOP)  
+    #if defined(RESET_IOP)
     while (!SifIopReset("", 0)){};
     #endif
     while (!SifIopSync()){};
     SifInitRpc(0);
     dbgprintf("AthenaEnv: IOP reset done.\n");
-    
+
     // install sbv patch fix
     dbgprintf("AthenaEnv: Installing SBV Patches...\n");
     sbv_patch_enable_lmb();
-    sbv_patch_disable_prefix_check(); 
+    sbv_patch_disable_prefix_check();
 
 	kbd_started = false;
 	mouse_started = false;
@@ -228,7 +228,7 @@ int load_default_module(int id) {
 			}
 			break;
 		#endif
-		
+
 		case USB_MASS_MODULE:
 			if (!usbd_started)
 				load_default_module(USBD_MODULE);
@@ -265,14 +265,14 @@ int load_default_module(int id) {
 				load_default_module(DEV9_MODULE);
 			if ((!hdd_started) && filexio_started) {
 
-    			ID = SifExecModuleBuffer(&ps2atad_irx, size_ps2atad_irx, 0, NULL, &ret);
-				REPORT("ATAD");
+    			ID = SifExecModuleBuffer(&ata_bd_irx, size_ata_bd_irx, 0, NULL, &ret);
+				REPORT("ATA_BD");
 
     			ID = SifExecModuleBuffer(&ps2hdd_irx, size_ps2hdd_irx, sizeof(hddarg), hddarg, &ret);
 				REPORT("PS2HDD");
 
     			HDDSTAT = fileXioDevctl("hdd0:", HDIOC_STATUS, NULL, 0, NULL, 0); /* 0 = HDD connected and formatted, 1 = not formatted, 2 = HDD not usable, 3 = HDD not connected. */
-				dbgprintf("%s: HDD status is %d\n", __func__, HDDSTAT); 
+				dbgprintf("%s: HDD status is %d\n", __func__, HDDSTAT);
     			HDD_USABLE = (HDDSTAT == 0 || HDDSTAT == 1); // ONLY if HDD is usable. as we will offer HDD Formatting operation
 
     			if (HDD_USABLE)
@@ -283,7 +283,7 @@ int load_default_module(int id) {
     			} else {
 					hdd_started = false;
 				}
-				
+
 			}
 			break;
 		case FILEXIO_MODULE:

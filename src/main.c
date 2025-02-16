@@ -33,9 +33,9 @@ bool dark_mode, boot_logo;
 
 static void init_drivers() {
     load_default_module(MC_MODULE);
-    load_default_module(USB_MASS_MODULE);
     load_default_module(CDFS_MODULE);
     load_default_module(HDD_MODULE);
+    load_default_module(USB_MASS_MODULE);
     load_default_module(PADS_MODULE);
     load_default_module(DS34BT_MODULE);
     load_default_module(DS34USB_MODULE);
@@ -93,7 +93,7 @@ int main(int argc, char **argv) {
     bool ignore_ini = false;
     bool reset_iop = true;
 
-    char MountPoint[32+6+1]; // max partition name + 'hdd0:/' + '\0' 
+    char MountPoint[32+6+1]; // max partition name + 'hdd0:/' + '\0'
     char newCWD[255];
 
     init_memory_manager();

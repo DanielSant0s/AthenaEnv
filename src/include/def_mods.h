@@ -86,7 +86,7 @@ irx_define(bdm);
 irx_define(bdmfs_fatfs);
 irx_define(usbmass_bd);
 irx_define(ps2dev9);
-irx_define(ps2atad);
+irx_define(ata_bd);
 irx_define(ps2hdd);
 irx_define(ps2fs);
 
