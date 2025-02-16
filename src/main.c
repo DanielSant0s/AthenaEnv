@@ -35,6 +35,7 @@ static void init_drivers() {
     load_default_module(MC_MODULE);
     load_default_module(CDFS_MODULE);
     load_default_module(HDD_MODULE);
+    load_default_module(MMCEMAN_MODULE);
     load_default_module(USB_MASS_MODULE);
     load_default_module(PADS_MODULE);
     load_default_module(DS34BT_MODULE);

@@ -88,7 +88,7 @@ ATHENA_MODULES = ath_env.o ath_physics.o ath_vector.o ath_pads.o ath_system.o at
 IOP_MODULES = iomanx.o filexio.o sio2man.o mcman.o mcserv.o padman.o  \
 			  usbd.o bdm.o bdmfs_fatfs.o usbmass_bd.o cdfs.o ds34bt.o \
 			  ds34usb.o freeram.o ps2dev9.o mtapman.o poweroff.o ata_bd.o \
-			  ps2hdd.o ps2fs.o
+			  ps2hdd.o ps2fs.o mmceman.o
 
 EMBEDDED_ASSETS = quicksand_regular.o owl_indices.o owl_palette.o
 

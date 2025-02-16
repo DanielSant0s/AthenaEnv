@@ -41,6 +41,7 @@ extern bool usbd_started;
 extern bool usb_mass_started;
 extern bool pads_started;
 extern bool audio_started;
+extern bool mmceman_started;
 extern bool cdfs_started;
 extern bool dev9_started;
 extern bool mc_started;
@@ -62,6 +63,7 @@ enum MODLIST {
     USB_MASS_MODULE,
     PADS_MODULE,
     AUDIO_MODULE,
+    MMCEMAN_MODULE,
     CDFS_MODULE,
     MC_MODULE,
     HDD_MODULE,
@@ -80,6 +82,7 @@ irx_define(mcman);
 irx_define(mcserv);
 irx_define(padman);
 irx_define(mtapman);
+irx_define(mmceman);
 irx_define(cdfs);
 irx_define(usbd);
 irx_define(bdm);

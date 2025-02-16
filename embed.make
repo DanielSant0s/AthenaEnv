@@ -56,6 +56,9 @@ $(EE_EMBED_DIR)cdfs.c: $(PS2SDK)/iop/irx/cdfs.irx | $(EE_EMBED_DIR)
 $(EE_EMBED_DIR)poweroff.c: $(PS2SDK)/iop/irx/poweroff.irx | $(EE_EMBED_DIR)
 	$(BIN2S) $< $@ poweroff_irx
 
+$(EE_EMBED_DIR)mmceman.c: modules/mmceman/mmceman.irx | $(EE_EMBED_DIR)
+	$(BIN2S) $< $@ mmceman_irx
+
 modules/ds34bt/ee/libds34bt.a: modules/ds34bt/ee
 	$(MAKE) -C $<
 
