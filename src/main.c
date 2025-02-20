@@ -33,9 +33,9 @@ bool dark_mode, boot_logo;
 
 static void init_drivers() {
     load_default_module(MC_MODULE);
+    load_default_module(MMCEMAN_MODULE);
     load_default_module(CDFS_MODULE);
     load_default_module(HDD_MODULE);
-    load_default_module(MMCEMAN_MODULE);
     load_default_module(USB_MASS_MODULE);
     load_default_module(PADS_MODULE);
     load_default_module(DS34BT_MODULE);
@@ -93,6 +93,9 @@ int main(int argc, char **argv) {
 
     bool ignore_ini = false;
     bool reset_iop = true;
+#if defined(RESET_IOP)
+    reset_iop = RESET_IOP;
+#endif
 
     char MountPoint[32+6+1]; // max partition name + 'hdd0:/' + '\0'
     char newCWD[255];
@@ -131,30 +134,6 @@ int main(int argc, char **argv) {
 	init_graphics();
     #endif
 
-    if (reset_iop) {
-        prepare_IOP();
-
-        init_base_fs_drivers();
-
-        if ((!strncmp(boot_path, "hdd0:", 5)) && (strstr(boot_path, ":pfs:") != NULL) && HDD_USABLE) // we booted from HDD and our modules are loaded and running...
-        {
-            if (getMountInfo(boot_path, NULL, MountPoint, newCWD)) // ...if we can parse the boot path...
-            {
-                if (mnt(MountPoint, 0, FIO_MT_RDWR)==0) // ...mount the partition...
-                {
-                    strcpy(boot_path, newCWD); // ...replace boot path with mounted pfs path.
-                    chdir(newCWD);
-    #ifdef RESERVE_PFS0
-                    bootpath_is_on_HDD = 1;
-    #endif
-                }
-
-            }
-        }
-
-        wait_device(boot_path);
-    }
-
     if (!ignore_ini) {
         if (readini_open(&ini, default_cfg)) {
             while(readini_getline(&ini)) {
@@ -179,7 +158,27 @@ int main(int argc, char **argv) {
     }
 
     if (reset_iop) {
+        prepare_IOP();
+
         init_drivers();
+
+        if ((!strncmp(boot_path, "hdd0:", 5)) && (strstr(boot_path, ":pfs:") != NULL) && HDD_USABLE) // we booted from HDD and our modules are loaded and running...
+        {
+            if (getMountInfo(boot_path, NULL, MountPoint, newCWD)) // ...if we can parse the boot path...
+            {
+                if (mnt(MountPoint, 0, FIO_MT_RDWR)==0) // ...mount the partition...
+                {
+                    strcpy(boot_path, newCWD); // ...replace boot path with mounted pfs path.
+                    chdir(newCWD);
+    #ifdef RESERVE_PFS0
+                    bootpath_is_on_HDD = 1;
+    #endif
+                }
+
+            }
+        }
+
+        wait_device(boot_path);
     }
 
     #ifdef ATHENA_GRAPHICS
