@@ -293,6 +293,8 @@ int load_default_module(int id) {
 
     			ID = SifExecModuleBuffer(&ps2hdd_irx, size_ps2hdd_irx, sizeof(hddarg), hddarg, &ret);
 				REPORT("PS2HDD");
+                // Introduce delay to prevent ps2hdd module from hanging
+                sleep(1);
 
     			HDDSTAT = fileXioDevctl("hdd0:", HDIOC_STATUS, NULL, 0, NULL, 0); /* 0 = HDD connected and formatted, 1 = not formatted, 2 = HDD not usable, 3 = HDD not connected. */
 				dbgprintf("%s: HDD status is %d\n", __func__, HDDSTAT);
@@ -316,6 +318,8 @@ int load_default_module(int id) {
     			ID = SifExecModuleBuffer(&fileXio_irx, size_fileXio_irx, 0, NULL, &ret);
 				REPORT("FILEXIO");
 				filexio_started = LOAD_SUCCESS();
+
+                fileXioInit();
 			}
 			break;
 		#ifdef ATHENA_CAMERA
