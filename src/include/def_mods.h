@@ -41,6 +41,7 @@ extern bool usbd_started;
 extern bool usb_mass_started;
 extern bool pads_started;
 extern bool audio_started;
+extern bool bdm_started;
 extern bool mmceman_started;
 extern bool cdfs_started;
 extern bool dev9_started;
@@ -64,6 +65,7 @@ enum MODLIST {
     PADS_MODULE,
     AUDIO_MODULE,
     MMCEMAN_MODULE,
+    BDM_MODULE,
     CDFS_MODULE,
     MC_MODULE,
     HDD_MODULE,

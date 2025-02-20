@@ -24,6 +24,7 @@ bool usbd_started = false;
 bool usb_mass_started = false;
 bool pads_started = false;
 bool audio_started = false;
+bool bdm_started = false;
 bool mmceman_started = false;
 bool cdfs_started = false;
 bool dev9_started = false;
@@ -59,6 +60,7 @@ void prepare_IOP() {
 	usb_mass_started = false;
 	pads_started = false;
 	audio_started = false;
+    bdm_started = false;
     mmceman_started = false;
 	cdfs_started = false;
 	dev9_started = false;
@@ -190,6 +192,8 @@ int load_default_module(int id) {
 		#endif
 
 		case SIO2MAN_MODULE:
+			if (!filexio_started)
+				load_default_module(FILEXIO_MODULE);
 			if (!sio2man_started) {
 				ID = SifExecModuleBuffer(&sio2man_irx, size_sio2man_irx, 0, NULL, &ret);
 				REPORT("SIO2MAN");
@@ -233,14 +237,24 @@ int load_default_module(int id) {
 			break;
 		#endif
 
-		case USB_MASS_MODULE:
-			if (!usbd_started)
-				load_default_module(USBD_MODULE);
-			if (!usb_mass_started) {
+		case BDM_MODULE:
+			if (!bdm_started) {
     			ID = SifExecModuleBuffer(&bdm_irx, size_bdm_irx, 0, NULL, &ret);
 				REPORT("BDM");
     			ID = SifExecModuleBuffer(&bdmfs_fatfs_irx, size_bdmfs_fatfs_irx, 0, NULL, &ret);
 				REPORT("BDMFS_FATFS");
+    			ID = SifExecModuleBuffer(&ata_bd_irx, size_ata_bd_irx, 0, NULL, &ret);
+				REPORT("ATA_BD");
+
+				bdm_started = LOAD_SUCCESS();
+			}
+			break;
+        case USB_MASS_MODULE:
+			if (!bdm_started)
+				load_default_module(BDM_MODULE);
+			if (!usbd_started)
+				load_default_module(USBD_MODULE);
+			if (!usb_mass_started) {
     			ID = SifExecModuleBuffer(&usbmass_bd_irx, size_usbmass_bd_irx, 0, NULL, &ret);
 				REPORT("USMASS_BD");
 
@@ -273,10 +287,9 @@ int load_default_module(int id) {
 				load_default_module(FILEXIO_MODULE);
 			if (!dev9_started)
 				load_default_module(DEV9_MODULE);
+			if (!usb_mass_started)
+				load_default_module(USB_MASS_MODULE);
 			if ((!hdd_started) && filexio_started) {
-
-    			ID = SifExecModuleBuffer(&ata_bd_irx, size_ata_bd_irx, 0, NULL, &ret);
-				REPORT("ATA_BD");
 
     			ID = SifExecModuleBuffer(&ps2hdd_irx, size_ps2hdd_irx, sizeof(hddarg), hddarg, &ret);
 				REPORT("PS2HDD");
