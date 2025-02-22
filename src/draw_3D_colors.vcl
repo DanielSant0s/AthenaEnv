@@ -24,17 +24,18 @@
 
 
 SCREEN_SCALE        .assign  0
+RENDER_FLAGS        .assign  0
 
 SCREEN_MATRIX       .assign  1
 LIGHT_MATRIX        .assign  5
 
-NUM_DIR_LIGHTS      .assign  9
-CAMERA_POSITION     .assign 10
+CAMERA_POSITION     .assign  9 ; x, y, z
+NUM_DIR_LIGHTS      .assign  9 ; w
 
-LIGHT_DIRECTION_PTR .assign 11
-LIGHT_AMBIENT_PTR   .assign 15
-LIGHT_DIFFUSE_PTR   .assign 19
-LIGHT_SPECULAR_PTR  .assign 23
+LIGHT_DIRECTION_PTR .assign 10
+LIGHT_AMBIENT_PTR   .assign 14
+LIGHT_DIFFUSE_PTR   .assign 18
+LIGHT_SPECULAR_PTR  .assign 22
 
 .include "vcl_sml.i"
 
@@ -51,7 +52,7 @@ LIGHT_SPECULAR_PTR  .assign 23
     addi.xy        offset, vf00, i
     add.zw          offset, vf00, vf00
 
-    add.xyzw offset, scale, offset
+    add.xyz offset, scale, offset
 
     ;/////////////////////////////////////////////
 

@@ -19,10 +19,10 @@ __v_src_draw_3D_lights_vcl_4:
          NOP                                                        lq            VF09,8(VI00)                        
          max.z         VF11,VF00,VF00                               lq.xyz        VF10,0(VI00)                        
          addi.z        VF01,VF00,I                                  loi           0x45000000                          
-         addi.xy       VF11,VF00,I                                  ilw.x         VI02,9(VI00)                        
-         NOP                                                        iaddiu        VI03,VI00,0x0000000b                
-         NOP                                                        iaddiu        VI04,VI00,0x0000000f                
-         mul.w         VF01,VF00,VF00                               iaddiu        VI05,VI00,0x00000013                
+         addi.xy       VF11,VF00,I                                  ilw.w         VI02,9(VI00)                        
+         NOP                                                        iaddiu        VI03,VI00,0x0000000a                
+         NOP                                                        iaddiu        VI04,VI00,0x0000000e                
+         mul.w         VF01,VF00,VF00                               iaddiu        VI05,VI00,0x00000012                
          add.xyz       VF11,VF10,VF11                               fcset         0                                   
 init:
 ; _LNOPT_w=[ normal2 ] 14 [14 0] 14   [init]

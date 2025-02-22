@@ -182,6 +182,15 @@ while(true) {
         bbox ^= 1;
     }
 
+    if(pad.justPressed(Pads.CIRCLE)) {
+        model[modeltodisplay].texture_mapping ^= 1;
+    }
+
+    if(pad.justPressed(Pads.CROSS)) {
+        model[modeltodisplay].accurate_clipping ^= 1;
+    }
+
+
     model[modeltodisplay].draw(0.0f, 0.0f, 0.0f, savedly, savedlx, 0.0f);
 
     if(bbox) {
