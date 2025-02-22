@@ -176,13 +176,6 @@ inline void dma_packet_add_tag(dma_packet *packet, uint64_t a1, uint64_t a2) {
 	packet->ptr+=2;
 }
 
-#define dma_packet_add_end_tag(packet) \
-    dma_packet_add_tag(packet, (VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32), DMA_TAG(0, 0, DMA_END, 0, 0 , 0))
-
-#define dma_packet_start_program(packet, init) \
-    dma_packet_add_tag(packet, ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, (init? VIF_MSCALF : VIF_MSCNT), 0) << 32)), DMA_TAG(0, 0, DMA_CNT, 0, 0, 0))
-
-
 inline void dma_packet_add_uquad(dma_packet *packet, __uint128_t a1) {
 	asm volatile ( 	
         "lq    $7,0x0(%1)\n" 
@@ -202,6 +195,20 @@ inline void dma_packet_add_float(dma_packet *packet, float a1) {
 	*tmp++ = a1;
     packet->ptr = (uint64_t *)tmp;
 }
+
+inline void dma_packet_add_ulong(dma_packet *packet, uint64_t a1) {
+    *packet->ptr++ = a1;
+}
+
+#define dma_packet_add_cnt_tag(packet, count) \
+    dma_packet_add_tag(packet, 0, DMA_TAG(count, 0, DMA_CNT, 0, 0, 0))
+
+#define dma_packet_add_end_tag(packet) \
+    dma_packet_add_tag(packet, (VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32), DMA_TAG(0, 0, DMA_END, 0, 0 , 0))
+
+#define dma_packet_start_program(packet, init) \
+    dma_packet_add_tag(packet, ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, (init? VIF_MSCALF : VIF_MSCNT), 0) << 32)), DMA_TAG(0, 0, DMA_CNT, 0, 0, 0))
+
 
 inline void unpack_list_open(dma_packet *packet, uint32_t vu_base, bool top) {
     packet->unpack_opened = true;

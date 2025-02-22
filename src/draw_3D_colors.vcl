@@ -63,13 +63,10 @@ LIGHT_SPECULAR_PTR  .assign 23
 init:
     xtop    iBase
 
-    lq      gifSetTag,      0(iBase) ; GIF tag - set
-    lq      texGifTag1,     1(iBase) ; GIF tag - texture LOD
-    lq      texGifTag2,     2(iBase) ; GIF tag - texture buffer & CLUT
-    lq      primTag,        3(iBase) ; GIF tag - tell GS how many data we will send
-    lq      matDiffuse,     4(iBase) ; RGBA
+    lq      primTag,        0(iBase) ; GIF tag - tell GS how many data we will send
+    lq      matDiffuse,     1(iBase) ; RGBA
                                      ; u32 : R, G, B, A (0-128)
-    iaddiu  vertexData,     iBase,      5           ; pointer to vertex data
+    iaddiu  vertexData,     iBase,      2           ; pointer to vertex data
 
     iaddiu   Mask, vi00, 0x7fff
     mtir     vertCount, primTag[x]
@@ -81,10 +78,6 @@ init:
     ;////////////////////////////////////////////
 
     ;/////////// --- Store tags --- /////////////
-    sqi gifSetTag,  (destAddress++) ;
-    sqi texGifTag1, (destAddress++) ; texture LOD tag
-    sqi gifSetTag,  (destAddress++) ;
-    sqi texGifTag2, (destAddress++) ; texture buffer & CLUT tag
     sqi primTag,    (destAddress++) ; prim + tell gs how many data will be
     ;////////////////////////////////////////////
 

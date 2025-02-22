@@ -103,39 +103,42 @@ static JSValue athena_object_ctor(JSContext *ctx, JSValueConst new_target, int a
 
 			JS_FreeValue(ctx, ((ta_buf != JS_EXCEPTION)? ta_buf : vert_arr));
 		}
+		
+		ro->m.materials = (ath_mat *)malloc(sizeof(ath_mat));
+		ro->m.material_count = 1;
+
+		ro->m.material_indices = (material_index *)malloc(sizeof(material_index));
+		ro->m.material_index_count = 1;
+
+		init_vector(ro->m.materials[0].ambient);
+		init_vector(ro->m.materials[0].diffuse);
+		init_vector(ro->m.materials[0].specular);
+		init_vector(ro->m.materials[0].emission);
+		init_vector(ro->m.materials[0].transmittance);
+		init_vector(ro->m.materials[0].transmission_filter);
+
+		ro->m.materials[0].shininess = 1.0f;
+		ro->m.materials[0].refraction = 1.0f;
+		ro->m.materials[0].disolve = 1.0f;
+
+		ro->m.materials[0].texture_id = -1;
+
+		ro->m.material_indices[0].index = 0;
+		ro->m.material_indices[0].end = ro->m.index_count;
 
 		if(argc > 1) {
 			JS_DupValue(ctx, argv[1]);
 			image = JS_GetOpaque2(ctx, argv[1], get_img_class_id());
 
 			image->tex->Filter = GS_FILTER_LINEAR;
-	
-			ro->m.materials = (ath_mat *)malloc(sizeof(ath_mat));
-			ro->m.material_count = 1;
-
-			ro->m.material_indices = (material_index *)malloc(sizeof(material_index));
-			ro->m.material_index_count = 1;
-
-			init_vector(ro->m.materials[0].ambient);
-			init_vector(ro->m.materials[0].diffuse);
-			init_vector(ro->m.materials[0].specular);
-			init_vector(ro->m.materials[0].emission);
-			init_vector(ro->m.materials[0].transmittance);
-			init_vector(ro->m.materials[0].transmission_filter);
-
-			ro->m.materials[0].shininess = 1.0f;
-			ro->m.materials[0].refraction = 1.0f;
-			ro->m.materials[0].disolve = 1.0f;
-
-			ro->m.materials[0].texture_id = -1;
-			ro->m.material_indices[0].index = 0;
-			ro->m.material_indices[0].end = ro->m.index_count;
 
 			ro->m.textures = malloc(sizeof(GSTEXTURE*));
 			ro->textures = malloc(sizeof(JSValue));
 
 			ro->m.textures[0] = image->tex;
 			ro->m.texture_count = 1;
+
+			ro->m.materials[0].texture_id = image->tex;
 
 			ro->textures[0] = argv[1];
 		}
@@ -619,14 +622,10 @@ static const JSCFunctionListEntry render_funcs[] = {
 	JS_CFUNC_DEF( "materialIndex",   2,          athena_newmaterialindex),
 
 	JS_PROP_INT32_DEF("PL_NO_LIGHTS",                       PL_NO_LIGHTS, JS_PROP_CONFIGURABLE),
-	JS_PROP_INT32_DEF("PL_NO_LIGHTS_TEX",               PL_NO_LIGHTS_TEX, JS_PROP_CONFIGURABLE),
 	JS_PROP_INT32_DEF("PL_DEFAULT",                           PL_DEFAULT, JS_PROP_CONFIGURABLE),
-	JS_PROP_INT32_DEF("PL_DEFAULT_NO_TEX",             PL_DEFAULT_NO_TEX, JS_PROP_CONFIGURABLE),
 	JS_PROP_INT32_DEF("PL_SPECULAR",                         PL_SPECULAR, JS_PROP_CONFIGURABLE),
-	JS_PROP_INT32_DEF("PL_SPECULAR_NO_TEX",           PL_SPECULAR_NO_TEX, JS_PROP_CONFIGURABLE),
 
-	JS_PROP_INT32_DEF("PL_PVC",                         PL_SPECULAR, JS_PROP_CONFIGURABLE),
-	JS_PROP_INT32_DEF("PL_PVC_NO_TEX",           PL_SPECULAR_NO_TEX, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("PL_PVC",                         	PL_PVC, JS_PROP_CONFIGURABLE),
 };
 
 static int render_init(JSContext *ctx, JSModuleDef *m)

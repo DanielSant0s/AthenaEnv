@@ -95,32 +95,25 @@ done:
 init:
     xtop    iBase
 
-    lq      gifSetTag,      0(iBase) ; GIF tag - set
-    lq      texGifTag1,     1(iBase) ; GIF tag - texture LOD
-    lq      texGifTag2,     2(iBase) ; GIF tag - texture buffer & CLUT
-    lq      primTag,        3(iBase) ; GIF tag - tell GS how many data we will send
-    lq      matDiffuse,     4(iBase) ; material diffuse color
+    lq      primTag,        0(iBase) ; GIF tag - tell GS how many data we will send
+    lq      matDiffuse,     1(iBase) ; material diffuse color
 
     iaddiu   Mask, vi00, 0x7fff
     mtir     vertCount, primTag[x]
     iand     vertCount, vertCount, Mask              ; Get the number of verts (bit 0-14) from the PRIM giftag
 
-    iaddiu  vertexData,     iBase,      5           ; pointer to vertex data
-    iadd    stqData,        vertexData, vertCount   ; pointer to stq
-    iadd    normalData,     stqData,    vertCount   ; pointer to colors
+    iaddiu  vertexData,     iBase,      2           ; pointer to vertex data
+    iadd    normalData,     vertexData, vertCount   ; pointer to stq
+    iadd    stqData,     normalData,    vertCount   ; pointer to colors
 
     iaddiu     kickAddress,    vertexData, INBUF_SIZE
     ;////////////////////////////////////////////
 
     ;/////////// --- Store tags --- /////////////
-    sq gifSetTag,  0(kickAddress) ;
-    sq texGifTag1, 1(kickAddress) ; texture LOD tag
-    sq gifSetTag,  2(kickAddress) ;
-    sq texGifTag2, 3(kickAddress) ; texture buffer & CLUT tag
-    sq primTag,    4(kickAddress) ; prim + tell gs how many data will be
+    sq primTag,    0(kickAddress) ; prim + tell gs how many data will be
     ;////////////////////////////////////////////
 
-    iaddiu    outputAddress,    kickAddress,  5       ; helper pointer for data inserting
+    iaddiu    outputAddress,    kickAddress,  1       ; helper pointer for data inserting
 
     ;=====================================================================================
     ; These are the clip flag results for the last 3 verts.
@@ -639,14 +632,10 @@ init:
 
         iaddiu               kickAddress, kickAddress, 1
 
-        sq                   gifSetTag,  0(kickAddress) ;
-        sq                   texGifTag1, 1(kickAddress) ; texture LOD tag
-        sq                   gifSetTag,  2(kickAddress) ;
-        sq                   texGifTag2, 3(kickAddress) ; texture buffer & CLUT tag
-        sq                   ClipTag,    4(kickAddress) ; prim + tell gs how many data will be
+        sq                   ClipTag,    0(kickAddress) ; prim + tell gs how many data will be
 
         iadd                 vertexData, vi00, ClipWorkBuf0
-        iaddiu               outputAddress, kickAddress, 5
+        iaddiu               outputAddress, kickAddress, 1
 
         ; Clear the GifTag's NLOOP to 0 (for a dummy XGKick stall)
         iaddiu               Mask, vi00, 0x7fff
@@ -658,7 +647,7 @@ init:
         ; Set the GifTag EOP bit to 1 and NLOOP to the number of vertices
         iaddiu               Mask, vertCount, 0x7fff
         iaddiu               Mask, Mask, 0x01
-        isw.x                Mask, 4(kickAddress)
+        isw.x                Mask, 0(kickAddress)
 
     LOOP2:
         ;=====================================================================================

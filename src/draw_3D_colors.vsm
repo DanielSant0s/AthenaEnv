@@ -15,23 +15,16 @@ __v_src_draw_3D_colors_vcl_4:
          NOP                                                        lq            VF04,4(VI00)                        
          add.xyz       VF06,VF05,VF06                               fcset         0                                   
 init:
-; _LNOPT_w=[ normal2 ] 19 [19 0] 19   [init]
+; _LNOPT_w=[ normal2 ] 12 [12 0] 12   [init]
          NOP                                                        xtop          VI02                                
-         NOP                                                        lq            VF08,3(VI02)                        
-         NOP                                                        lq            VF07,0(VI02)                        
+         NOP                                                        lq            VF08,0(VI02)                        
          NOP                                                        iaddiu        VI07,VI00,0x00007fff                
-         NOP                                                        lq            VF09,1(VI02)                        
+         NOP                                                        iaddiu        VI03,VI02,0x00000002                
+         NOP                                                        lq            VF07,1(VI02)                        
          NOP                                                        mtir          VI04,VF08x                          
-         NOP                                                        iaddiu        VI03,VI02,0x00000005                
          NOP                                                        iand          VI07,VI04,VI07                      
          NOP                                                        iadd          VI04,VI03,VI07                      
-         NOP                                                        lq            VF10,2(VI02)                        
          NOP                                                        iadd          VI06,VI04,VI07                      
-         NOP                                                        sqi           VF07,(VI06++)                       
-         NOP                                                        sqi           VF09,(VI06++)                       
-         NOP                                                        sqi           VF07,(VI06++)                       
-         NOP                                                        sqi           VF10,(VI06++)                       
-         NOP                                                        lq            VF07,4(VI02)                        
          NOP                                                        iadd          VI05,VI04,VI07                      
          NOP                                                        sqi           VF08,(VI06++)                       
          NOP                                                        iadd          VI07,VI02,VI07                      
@@ -66,7 +59,7 @@ vertexLoop:
          NOP                                                        NOP                                               
 		.align 4
 VU1Draw3DColors_CodeEnd:
-;	iCount=50
+;	iCount=43
 ; register stats:
 ;   8 VU User integer
-;  11 VU User floating point
+;  10 VU User floating point
