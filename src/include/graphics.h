@@ -14,6 +14,8 @@
 #include <packet2.h>
 #include <packet2_utils.h>
 
+extern GSGLOBAL *gsGlobal;
+
 /// GSKit CLUT base struct. This should've been in gsKit from the start :)
 typedef struct
 {

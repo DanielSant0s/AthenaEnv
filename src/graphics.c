@@ -22,7 +22,7 @@ static const u64 BLACK_RGBAQ   = GS_SETREG_RGBAQ(0x00,0x00,0x00,0x80,0x00);
 /* Size of Oneshot drawbuffer (Double Buffered, so it uses this size * 2) */
 #define RENDER_QUEUE_OS_POOLSIZE 1024 * 1024 * 2 // 2048K of oneshot renderqueue
 
-static GSGLOBAL *gsGlobal = NULL;
+GSGLOBAL *gsGlobal = NULL;
 static GSFONTM *gsFontM = NULL;
 
 void (*flipScreen)();

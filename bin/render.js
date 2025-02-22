@@ -3,14 +3,10 @@
 
 const pipelines = [
     "NO_LIGHTS",
-    "NO_LIGHTS_TEX",
     "DEFAULT",
-    "DEFAULT_NO_TEX",
     "SPECULAR",
-    "SPECULAR_NO_TEX",
 
     "PVC",
-    "PVC_NO_TEX",
 ];
 
 const font = new Font("default");
