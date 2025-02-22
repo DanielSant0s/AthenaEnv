@@ -46,6 +46,7 @@ GRAPHICS ?= 1
 AUDIO ?= 1
 KEYBOARD ?= 1
 MOUSE ?= 1
+NETWORK ?= 1
 CAMERA ?= 0
 
 EE_LIBS = -L$(PS2SDK)/ports/lib -lmc -lpad -lpatches -ldebug -lz -llzma -lzip -lfileXio -lelf-loader-nocolour -lerl
