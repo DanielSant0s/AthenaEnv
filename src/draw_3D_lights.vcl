@@ -5,7 +5,7 @@
 ;
 ; 
 ;---------------------------------------------------------------
-; draw_3D_lights.vcl                                                   |
+; draw_3D_lights.vcl                                           |
 ;---------------------------------------------------------------
 ; A VU1 microprogram to draw 3D object using XYZ2, RGBAQ and ST|
 ; This program uses double buffering (xtop)                    |
@@ -26,17 +26,18 @@
 
 
 SCREEN_SCALE        .assign  0
+RENDER_FLAGS        .assign  0
 
 SCREEN_MATRIX       .assign  1
 LIGHT_MATRIX        .assign  5
 
-NUM_DIR_LIGHTS      .assign  9
-CAMERA_POSITION     .assign 10
+CAMERA_POSITION     .assign  9 ; x, y, z
+NUM_DIR_LIGHTS      .assign  9 ; w
 
-LIGHT_DIRECTION_PTR .assign 11
-LIGHT_AMBIENT_PTR   .assign 15
-LIGHT_DIFFUSE_PTR   .assign 19
-LIGHT_SPECULAR_PTR  .assign 23
+LIGHT_DIRECTION_PTR .assign 10
+LIGHT_AMBIENT_PTR   .assign 14
+LIGHT_DIFFUSE_PTR   .assign 18
+LIGHT_SPECULAR_PTR  .assign 22
 
 --enter
 --endenter
@@ -51,7 +52,7 @@ LIGHT_SPECULAR_PTR  .assign 23
     ; Updated once per mesh
     MatrixLoad	ObjectToScreen, SCREEN_MATRIX, vi00 ; load view-projection matrix
     MatrixLoad	LocalLight,     LIGHT_MATRIX, vi00     ; load local light matrix
-    ilw.x       dirLightQnt,    NUM_DIR_LIGHTS(vi00) ; load active directional lights
+    ilw.w       dirLightQnt,    NUM_DIR_LIGHTS(vi00) ; load active directional lights
     iaddiu      lightDirs,      vi00,    LIGHT_DIRECTION_PTR       
     iaddiu      lightAmbs,      vi00,    LIGHT_AMBIENT_PTR
     iaddiu      lightDiffs,     vi00,    LIGHT_DIFFUSE_PTR    
@@ -62,7 +63,7 @@ LIGHT_SPECULAR_PTR  .assign 23
     addi.xy        offset, vf00, i
     add.zw          offset, vf00, vf00
 
-    add.xyzw offset, scale, offset
+    add.xyz offset, scale, offset
 
     ;/////////////////////////////////////////////
 
@@ -116,17 +117,9 @@ init:
 
         mul clip_vertex, vertex, clip_scale
 
-        clipw.xyz	clip_vertex, clip_vertex			; Dr. Fortuna: This instruction checks if the vertex is outside
-							; the viewing frustum. If it is, then the appropriate
-							; clipping flags are set
-        fcand		VI01,   0x3FFFF                 ; Bitwise AND the clipping flags with 0x3FFFF, this makes
-							; sure that we get the clipping judgement for the last three
-							; verts (i.e. that make up the triangle we are about to draw)
-        iaddiu		iADC,   VI01,       0x7FFF      ; Add 0x7FFF. If any of the clipping flags were set this will
-							; cause the triangle not to be drawn (any values above 0x8000
-							; that are stored in the w component of XYZ2 will set the ADC
-							; bit, which tells the GS not to perform a drawing kick on this
-							; triangle.
+        clipw.xyz	clip_vertex, clip_vertex	
+        fcand		VI01,   0x3FFFF  
+        iaddiu		iADC,   VI01,       0x7FFF 
 
         isw.w		iADC,   2(destAddress)
         

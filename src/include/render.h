@@ -6,6 +6,13 @@
 //3D math
 
 typedef struct {
+	float    x;
+	float    y;
+	float    z;
+	uint32_t w;
+} FIVECTOR;
+
+typedef struct {
 	VECTOR direction[4];
 	VECTOR ambient[4];
 	VECTOR diffuse[4];
@@ -26,6 +33,20 @@ typedef enum {
 
 	PL_PVC,
 } eRenderPipelines;
+
+typedef enum {
+	SHADE_FLAT,
+	SHADE_GOURAUD,
+	SHADE_BLINN_PHONG,
+} eRenderShadeModels;
+
+typedef struct {
+	uint32_t accurate_clipping: 1; 
+	uint32_t backface_culling:  1; 
+	uint32_t texture_mapping:   1;
+	uint32_t shade_model:       2; // 0 = flat, 1 = gouraud, 2 = blinn-phong
+} RenderAttributes;
+
 
 typedef struct
 {
@@ -57,6 +78,8 @@ typedef struct ath_model {
 
     VECTOR bounding_box[8];
 
+	uint32_t *microprogram;
+
     void (*render)(struct ath_model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z);
     eRenderPipelines pipeline;
 
@@ -68,6 +91,8 @@ typedef struct ath_model {
 
 	material_index *material_indices;
 	int material_index_count;
+
+	RenderAttributes attributes;
 
 	bool tristrip;
 } model;

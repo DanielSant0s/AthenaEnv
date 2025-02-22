@@ -17,7 +17,7 @@
 ;---------------------------------------------------------------
 
 .syntax new
-.name VU1Draw3DLCS
+.name VU1Draw3DLCSS
 .vu
 .init_vf_all
 .init_vi_all
@@ -165,9 +165,11 @@ init:
         iadd  currDirLight, vi00, vi00
         directionaLightsLoop:
             ilw.w       dirLightQnt,    NUM_DIR_LIGHTS(vi00) ; load active directional lights
+            lq.xyz      CamPos,         CAMERA_POSITION(vi00) ; load program params
             iaddiu      lightDirs,      vi00,    LIGHT_DIRECTION_PTR      
             iaddiu      lightAmbs,      vi00,    LIGHT_AMBIENT_PTR  
-            iaddiu      lightDiffs,     vi00,    LIGHT_DIFFUSE_PTR      
+            iaddiu      lightDiffs,     vi00,    LIGHT_DIFFUSE_PTR     
+            iaddiu      lightSpecs,     vi00,    LIGHT_SPECULAR_PTR  
 
             iadd  currLightPtr, lightAmbs, currDirLight
             lq LightAmbient, 0(currLightPtr)
@@ -188,6 +190,33 @@ init:
 
             mul diffuse, LightDiffuse, intensity[x]
             add light, light, diffuse
+
+
+            ; Blinn-Phong Lighting Calculation
+            ;VectorNormalize CamPos, CamPos
+
+            ;sub lightDir, lightvert, CamPos ; Compute light direction vector
+            ;VectorNormalize lightDir, lightDir
+
+            ; Compute halfway vector
+            ;add halfDir, LightDirection, CamPos
+            ;VectorNormalize halfDir, halfDir
+            HalfAngle halfDir, LightDirection, CamPos
+
+            iadd  currLightPtr, lightSpecs, currDirLight
+            lq LightSpecular, 0(currLightPtr)
+
+            add specAngle, vf00, vf00
+            VectorDotProduct specAngle, normal, halfDir
+            maxx		specAngle, specAngle, vf00			; Clamp to > 0
+            mul  		specAngle, specAngle, specAngle	; Square it
+	        mul  		specAngle, specAngle, specAngle	; 4th power
+	        mul  		specAngle, specAngle, specAngle	; 8th power
+	        mul  		specAngle, specAngle, specAngle	; 16th power
+	        ;mul 		specAngle, specAngle, specAngle	; 32nd power
+            ;mul 		specAngle, specAngle, specAngle	; 64nd power
+            mul         specAngle, LightSpecular, specAngle[x]
+            add         light, light, specAngle 
 
             iaddiu   currDirLight,  currDirLight,  1; increment the loop counter 
             ibne    dirLightQnt,  currDirLight,  directionaLightsLoop	; and repeat if needed

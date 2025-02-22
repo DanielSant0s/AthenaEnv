@@ -17,7 +17,7 @@
 ;---------------------------------------------------------------
 
 .syntax new
-.name VU1Draw3DLCS
+.name VU1Draw3DCS
 .vu
 .init_vf_all
 .init_vi_all
@@ -105,8 +105,7 @@ init:
     iand     vertCount, vertCount, Mask              ; Get the number of verts (bit 0-14) from the PRIM giftag
 
     iaddiu  vertexData,     iBase,      2           ; pointer to vertex data
-    iadd    normalData,     vertexData, vertCount   ; pointer to stq
-    iadd    stqData,     normalData,    vertCount   ; pointer to colors
+    iadd    stqData,     vertexData,    vertCount   ; pointer to colors
 
     iaddiu     kickAddress,    vertexData, INBUF_SIZE
     ;////////////////////////////////////////////
@@ -138,7 +137,6 @@ init:
         ;////////// --- Load loop data --- //////////
         lq inVert, 0(vertexData)   
         lq stq,    0(stqData)       
-        lq inNorm, 0(normalData) 
         ;////////////////////////////////////////////    
 
 
@@ -152,50 +150,9 @@ init:
         VertexFpToGsXYZ2  vertex,vertex
         ;////////////////////////////////////////////
 
-        ;//////////////// - NORMALS - /////////////////
-        MatrixLoad	LocalLight,     LIGHT_MATRIX, vi00     ; load local light matrix
-
-        MatrixMultiplyVertex	normal,    LocalLight, inNorm ; transform each normal by the matrix
-        div         q,      vf00[w],    normal[w]   ; perspective divide (1/vert[w]):
-        mul.xyz     normal, normal,     q
-        
-        add light, vf00, vf00
-        add intensity, vf00, vf00
-
-        iadd  currDirLight, vi00, vi00
-        directionaLightsLoop:
-            ilw.w       dirLightQnt,    NUM_DIR_LIGHTS(vi00) ; load active directional lights
-            iaddiu      lightDirs,      vi00,    LIGHT_DIRECTION_PTR      
-            iaddiu      lightAmbs,      vi00,    LIGHT_AMBIENT_PTR  
-            iaddiu      lightDiffs,     vi00,    LIGHT_DIFFUSE_PTR      
-
-            iadd  currLightPtr, lightAmbs, currDirLight
-            lq LightAmbient, 0(currLightPtr)
-
-            ; Ambient lighting
-            add light, light, LightAmbient
-
-            iadd  currLightPtr, lightDirs, currDirLight
-            lq LightDirection, 0(currLightPtr)
-            
-            ; Diffuse lighting
-            VectorDotProduct intensity, normal, LightDirection
-
-            maxx.xyzw  intensity, intensity, vf00
-
-            iadd  currLightPtr, lightDiffs, currDirLight
-            lq LightDiffuse, 0(currLightPtr)
-
-            mul diffuse, LightDiffuse, intensity[x]
-            add light, light, diffuse
-
-            iaddiu   currDirLight,  currDirLight,  1; increment the loop counter 
-            ibne    dirLightQnt,  currDirLight,  directionaLightsLoop	; and repeat if needed
-
-        mul.xyzw    color, matDiffuse, light       ; color = color * light
-        VectorClamp color, color 0.0 1.0
-        loi 128.0
-        mul color, color, i                        ; normalize RGBA
+        ;//////////////// - COLORS - /////////////////
+        loi 128.0 
+        mul color, matDiffuse, i                   ; normalize RGBA
         ColorFPtoGsRGBAQ intColor, color           ; convert to int
         ;///////////////////////////////////////////
 
@@ -714,7 +671,6 @@ init:
     after_scissoring:
         iaddiu          vertexData,     vertexData,     1                         
         iaddiu          stqData,        stqData,        1   
-        iaddiu          normalData,     normalData,     1
 
         iaddiu          outputAddress,  outputAddress,  3
 

@@ -30,8 +30,8 @@ typedef struct {
 } dma_packet;
 
 #define register_vu_program(name)               \
-	extern u32 name##_CodeStart __attribute__((section(".vudata"))); \
-	extern u32 name##_CodeEnd __attribute__((section(".vudata")))
+	extern uint32_t name##_CodeStart __attribute__((section(".vudata"))); \
+	extern uint32_t name##_CodeEnd __attribute__((section(".vudata")))
 
 #define dma_add_end_tag(packet) \
 	do { \
@@ -123,14 +123,13 @@ typedef enum {
 #define ALPHA_EXPAND_TRANSPARENT	1
 
 #define VU_GS_PRIM(PRIM, IIP, TME, FGE, ABE, AA1, FST, CTXT, FIX) (u128)(((FIX << 10) | (CTXT << 9) | (FST << 8) | (AA1 << 7) | (ABE << 6) | (FGE << 5) | (TME << 4) | (IIP << 3) | (PRIM)))
-#define VU_GS_GIFTAG(NLOOP, EOP, PRE, PRIM, FLG, NREG) (((u64)(NREG) << 60) | ((u64)(FLG) << 58) | ((u64)(PRIM) << 47) | ((u64)(PRE) << 46) | (EOP << 15) | (NLOOP << 0))
+#define NO_CUSTOM_DATA 0 
+#define VU_GS_GIFTAG(NLOOP, EOP, DATA, PRE, PRIM, FLG, NREG) (((u64)(NREG) << 60) | ((u64)(FLG) << 58) | ((u64)(PRIM) << 47) | ((u64)(PRE) << 46) | ((u64)(DATA) << 16) | (EOP << 15) | (NLOOP << 0))
 
-inline uint64_t *vu_add_unpack_data(uint64_t *p_data, u32 t_dest_address, void *t_data, u32 t_size, u8 t_use_top) {
-    *p_data++ = DMA_TAG(t_size, 0, DMA_REF, 0, t_data, 0);
-	*p_data++ = (VIF_CODE(0x0101 | (0 << 8), 0, VIF_STCYCL, 0) | (u64)
-	VIF_CODE(t_dest_address | ((u32)1 << 14) | ((u32)t_use_top << 15), ((t_size == 256) ? 0 : t_size), UNPACK_V4_32 | ((u32)0 << 4) | 0x60, 0) << 32 );
-
-	return p_data;
+inline void vu_add_unpack_data(dma_packet *packet, uint32_t t_dest_address, void *t_data, uint32_t t_size, uint8_t t_use_top) {
+    *packet->ptr++ = DMA_TAG(t_size, 0, DMA_REF, 0, t_data, 0);
+	*packet->ptr++ = (VIF_CODE(0x0101 | (0 << 8), 0, VIF_STCYCL, 0) | (uint64_t)
+	VIF_CODE(t_dest_address | ((uint32_t)1 << 14) | ((uint32_t)t_use_top << 15), ((t_size == 256) ? 0 : t_size), UNPACK_V4_32 | ((uint32_t)0 << 4) | 0x60, 0) << 32 );
 }
 
 void vu1_upload_micro_program(u32* start, u32* end);

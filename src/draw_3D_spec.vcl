@@ -23,17 +23,18 @@
 .init_vi_all
 
 SCREEN_SCALE        .assign  0
+RENDER_FLAGS        .assign  0
 
 SCREEN_MATRIX       .assign  1
 LIGHT_MATRIX        .assign  5
 
-NUM_DIR_LIGHTS      .assign  9
-CAMERA_POSITION     .assign 10
+CAMERA_POSITION     .assign  9 
+NUM_DIR_LIGHTS      .assign  9 
 
-LIGHT_DIRECTION_PTR .assign 11
-LIGHT_AMBIENT_PTR   .assign 15
-LIGHT_DIFFUSE_PTR   .assign 19
-LIGHT_SPECULAR_PTR  .assign 23
+LIGHT_DIRECTION_PTR .assign 10
+LIGHT_AMBIENT_PTR   .assign 14
+LIGHT_DIFFUSE_PTR   .assign 18
+LIGHT_SPECULAR_PTR  .assign 22
 
 .include "vcl_sml.i"
 
@@ -44,8 +45,8 @@ LIGHT_SPECULAR_PTR  .assign 23
     ; Updated once per mesh
     MatrixLoad	ObjectToScreen, SCREEN_MATRIX, vi00   ; load view-projection matrix
     MatrixLoad	LocalLight,     LIGHT_MATRIX,  vi00   ; load local light matrix
-    ilw.x       dirLightQnt,    NUM_DIR_LIGHTS(vi00)  ; load active directional lights
-    lq          CamPos,         CAMERA_POSITION(vi00) ; load program params
+    ilw.w       dirLightQnt,    NUM_DIR_LIGHTS(vi00)  ; load active directional lights
+    lq.xyz      CamPos,         CAMERA_POSITION(vi00) ; load program params
     iaddiu      lightDirs,      vi00,    LIGHT_DIRECTION_PTR       
     iaddiu      lightAmbs,      vi00,    LIGHT_AMBIENT_PTR
     iaddiu      lightDiffs,     vi00,    LIGHT_DIFFUSE_PTR    
@@ -57,7 +58,7 @@ LIGHT_SPECULAR_PTR  .assign 23
     addi.xy        offset, vf00, i
     add.zw          offset, vf00, vf00
 
-    add.xyzw offset, scale, offset
+    add.xyz offset, scale, offset
     ;/////////////////////////////////////////////
 
 	fcset   0x000000	; VCL won't let us use CLIP without first zeroing
