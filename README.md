@@ -428,14 +428,9 @@ Methods:
 * setTexture(id, texture) - Changes or sets the nth texture on models.
 * getPipeline() - Returns the current rendering pipeline loaded for the model.
 * setPipeline(pipeline) - Sets the current pipeline for the model. Available pipelines:  
-  • Render.PL_NO_LIGHTS_COLORS  - Colors and lights disabled.  
-  • Render.PL_NO_LIGHTS_COLORS_TEX - Colors, lights and textures disabled.  
   • Render.PL_NO_LIGHTS - Lights disabled, colors still working.  
-  • Render.PL_NO_LIGHTS_TEX - Textures and lights disabled, colors still working.  
   • Render.PL_SPECULAR - Diffuse and specular lights and colors enabled.  
-  • Render.PL_SPECULAR_NO_TEX - Diffuse and specular lights and colors enabled, textures disabled.  
   • Render.PL_DEFAULT - Default for textured models. Lights and colors enabled.  
-  • Render.PL_DEFAULT_NO_TEX - Default for non-textured models. Lights and colors enabled.  
   
 Properties:
 
@@ -448,6 +443,11 @@ Properties:
 * material_indices - Render.materialIndex array.
 * size - Vertex quantity.
 * bounds - Mesh bounding box.
+
+* accurate_clipping - Toggle accurate clipping.
+* backface_culling - Toggle backface culling. (Not implemented yet)
+* texture_mapping - Toggle texture mapping. (it can be used to disable texturing on a whole textured model)
+* shade_model - Flat = 0, Gouraud = 1.
   
 **Camera**   
 * Camera.type(type) - Change camera function types.  
