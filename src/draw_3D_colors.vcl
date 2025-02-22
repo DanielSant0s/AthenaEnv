@@ -42,6 +42,12 @@ LIGHT_SPECULAR_PTR  .assign 22
 --enter
 --endenter
 
+    loi 0.5
+    add.xy     clip_scale, vf00, i
+    loi 1.0
+    add.z      clip_scale,  vf00, i
+    mul.w      clip_scale, vf00, vf00
+
     ;//////////// --- Load data 1 --- /////////////
     ; Updated once per mesh
     MatrixLoad	ObjectToScreen, SCREEN_MATRIX, vi00 ; load view-projection matrix
@@ -101,17 +107,11 @@ init:
         ;////////////// --- Vertex --- //////////////
         MatrixMultiplyVertex	vertex, ObjectToScreen, vertex ; transform each vertex by the matrix
        
-        clipw.xyz	vertex, vertex			; Dr. Fortuna: This instruction checks if the vertex is outside
-							; the viewing frustum. If it is, then the appropriate
-							; clipping flags are set
-        fcand		VI01,   0x3FFFF                 ; Bitwise AND the clipping flags with 0x3FFFF, this makes
-							; sure that we get the clipping judgement for the last three
-							; verts (i.e. that make up the triangle we are about to draw)
-        iaddiu		iADC,   VI01,       0x7FFF      ; Add 0x7FFF. If any of the clipping flags were set this will
-							; cause the triangle not to be drawn (any values above 0x8000
-							; that are stored in the w component of XYZ2 will set the ADC
-							; bit, which tells the GS not to perform a drawing kick on this
-							; triangle.
+        mul clip_vertex, vertex, clip_scale
+
+        clipw.xyz	clip_vertex, clip_vertex	
+        fcand		VI01,   0x3FFFF  
+        iaddiu		iADC,   VI01,       0x7FFF 
 
         isw.w		iADC,   2(destAddress)
         
