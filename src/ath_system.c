@@ -18,7 +18,6 @@
 
 static JSValue athena_dir(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
 {
-
 	if (argc != 0 && argc != 1) return JS_ThrowSyntaxError(ctx, "Argument error: System.listDir([path]) takes zero or one argument.");
 
 	JSValue arr = JS_NewArray(ctx);
@@ -47,22 +46,22 @@ static JSValue athena_dir(JSContext *ctx, JSValue this_val, int argc, JSValueCon
 	//strcpy(path, __ps2_normalize_path(path));
 	dbgprintf("\nchecking path : %s\n",path);
 
-	int i = 0;
+    int i = 0;
 
-	DIR *d;
-	struct dirent *dir;
+    DIR *d;
+    struct dirent *dir;
 
-	d = opendir(path);
+    d = opendir(path);
 
-	struct stat     statbuf;
+    struct stat     statbuf;
 
-	if (d) {
-		while ((dir = readdir(d)) != NULL) {
+    if (d) {
+        while ((dir = readdir(d)) != NULL) {
 
-			strcpy(tpath, path);
-			strcat(tpath, "/");
-			strcat(tpath, dir->d_name);
-    		stat(tpath, &statbuf);
+            strcpy(tpath, path);
+            strcat(tpath, "/");
+            strcat(tpath, dir->d_name);
+            stat(tpath, &statbuf);
 
 			JSValue obj = JS_NewObject(ctx);
 
@@ -255,7 +254,7 @@ static JSValue athena_loadELF(JSContext *ctx, JSValue this_val, int argc, JSValu
 		if (!JS_ToBool(ctx, argv[2]))
 			LoadExecPS2(path, n, args);
 	}
-	
+
 	LoadELFFromFile(path, n, args);
 
 	return JS_UNDEFINED;
@@ -640,6 +639,8 @@ static const JSCFunctionListEntry sif_funcs[] = {
 	JS_PROP_INT32_DEF("memcard", MC_MODULE, JS_PROP_CONFIGURABLE),
 	JS_PROP_INT32_DEF("audio", AUDIO_MODULE, JS_PROP_CONFIGURABLE),
 	JS_PROP_INT32_DEF("usb_mass", USB_MASS_MODULE, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("bdm", BDM_MODULE, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("mmceman", MMCEMAN_MODULE, JS_PROP_CONFIGURABLE),
 	JS_PROP_INT32_DEF("cdfs", CDFS_MODULE, JS_PROP_CONFIGURABLE),
 	JS_PROP_INT32_DEF("hdd", HDD_MODULE, JS_PROP_CONFIGURABLE),
 	JS_PROP_INT32_DEF("boot_device", BOOT_MODULE, JS_PROP_CONFIGURABLE),

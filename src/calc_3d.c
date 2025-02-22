@@ -810,18 +810,16 @@ void LookAtCameraMatrix(MATRIX m, VECTOR position, VECTOR target, VECTOR up)
 }
 
 void create_view(MATRIX view_screen, float fov, float near, float far, float w, float h) {
-	float left = -tanf(fov/2) * (2048.0f / (w * 0.5f));
-	float right = tanf(fov/2) * (2048.0f / (w * 0.5f));
-	float top = tanf(fov/2) * ((2048.0f * (h / w)) / (h * 0.5f));
-	float bottom = -tanf(fov/2) * ((2048.0f * (h / w)) / (h * 0.5f));
+	float aspect = h/w;
+	float hfov_tan = tanf(fov/2);
 
 	matrix_unit(view_screen);
-	view_screen[0] = 2.0f / (right - left);
+	view_screen[0] = 1.0f / hfov_tan;
 
-	view_screen[5] = -2.0f / (top - bottom);
+	view_screen[5] = -1.0f / hfov_tan/aspect;
 	
-	view_screen[8] = (right + left) / (right - left);
-	view_screen[9] = (top + bottom) / (top - bottom);
+	view_screen[8] = 0;
+	view_screen[9] = 0;
 	view_screen[10] = -(far + near) / (far - near);
 	view_screen[11] = 1.00f;
 

@@ -10,6 +10,9 @@ embed/
 bin/brew_data.json
 
 .*
+
+!.github
 !.gitignore
 !.gitattributes
-!.github
+!modules/mmceman/mmceman.irx
+

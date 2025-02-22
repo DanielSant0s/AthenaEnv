@@ -72,6 +72,11 @@ static JSValue athena_object_ctor(JSContext *ctx, JSValueConst new_target, int a
     if (!ro)
         return JS_EXCEPTION;
 
+	ro->m.attributes.accurate_clipping = true;
+	ro->m.attributes.backface_culling = false;
+	ro->m.attributes.texture_mapping = true;
+	ro->m.attributes.shade_model = SHADE_GOURAUD;
+
 	if (JS_IsObject(argv[0])) {
 		memset(ro, 0, sizeof(JSRenderObject));
 
@@ -103,39 +108,42 @@ static JSValue athena_object_ctor(JSContext *ctx, JSValueConst new_target, int a
 
 			JS_FreeValue(ctx, ((ta_buf != JS_EXCEPTION)? ta_buf : vert_arr));
 		}
+		
+		ro->m.materials = (ath_mat *)malloc(sizeof(ath_mat));
+		ro->m.material_count = 1;
+
+		ro->m.material_indices = (material_index *)malloc(sizeof(material_index));
+		ro->m.material_index_count = 1;
+
+		init_vector(ro->m.materials[0].ambient);
+		init_vector(ro->m.materials[0].diffuse);
+		init_vector(ro->m.materials[0].specular);
+		init_vector(ro->m.materials[0].emission);
+		init_vector(ro->m.materials[0].transmittance);
+		init_vector(ro->m.materials[0].transmission_filter);
+
+		ro->m.materials[0].shininess = 1.0f;
+		ro->m.materials[0].refraction = 1.0f;
+		ro->m.materials[0].disolve = 1.0f;
+
+		ro->m.materials[0].texture_id = -1;
+
+		ro->m.material_indices[0].index = 0;
+		ro->m.material_indices[0].end = ro->m.index_count;
 
 		if(argc > 1) {
 			JS_DupValue(ctx, argv[1]);
 			image = JS_GetOpaque2(ctx, argv[1], get_img_class_id());
 
 			image->tex->Filter = GS_FILTER_LINEAR;
-	
-			ro->m.materials = (ath_mat *)malloc(sizeof(ath_mat));
-			ro->m.material_count = 1;
-
-			ro->m.material_indices = (material_index *)malloc(sizeof(material_index));
-			ro->m.material_index_count = 1;
-
-			init_vector(ro->m.materials[0].ambient);
-			init_vector(ro->m.materials[0].diffuse);
-			init_vector(ro->m.materials[0].specular);
-			init_vector(ro->m.materials[0].emission);
-			init_vector(ro->m.materials[0].transmittance);
-			init_vector(ro->m.materials[0].transmission_filter);
-
-			ro->m.materials[0].shininess = 1.0f;
-			ro->m.materials[0].refraction = 1.0f;
-			ro->m.materials[0].disolve = 1.0f;
-
-			ro->m.materials[0].texture_id = -1;
-			ro->m.material_indices[0].index = 0;
-			ro->m.material_indices[0].end = ro->m.index_count;
 
 			ro->m.textures = malloc(sizeof(GSTEXTURE*));
 			ro->textures = malloc(sizeof(JSValue));
 
 			ro->m.textures[0] = image->tex;
 			ro->m.texture_count = 1;
+
+			ro->m.materials[0].texture_id = image->tex;
 
 			ro->textures[0] = argv[1];
 		}
@@ -362,74 +370,94 @@ static JSValue js_object_get(JSContext *ctx, JSValueConst this_val, int magic)
     JSRenderObject* ro = JS_GetOpaque2(ctx, this_val, js_object_class_id);
     if (!ro)
         return JS_EXCEPTION;
-		
-    if (magic == 0) {
-		JSValue obj = JS_NewObject(ctx);
 
-		if (ro->m.positions)
-			JS_DefinePropertyValueStr(ctx, obj, "positions", JS_NewArrayBuffer(ctx, ro->m.positions, ro->m.index_count*sizeof(VECTOR), NULL, NULL, false), JS_PROP_C_W_E);
+	switch (magic) {
+		case 0:
+			{
+				JSValue obj = JS_NewObject(ctx);
 
-		if (ro->m.normals)
-			JS_DefinePropertyValueStr(ctx, obj, "normals",   JS_NewArrayBuffer(ctx, ro->m.normals, ro->m.index_count*sizeof(VECTOR), NULL, NULL, false), JS_PROP_C_W_E);
+				if (ro->m.positions)
+					JS_DefinePropertyValueStr(ctx, obj, "positions", JS_NewArrayBuffer(ctx, ro->m.positions, ro->m.index_count*sizeof(VECTOR), NULL, NULL, false), JS_PROP_C_W_E);
 
-		if (ro->m.texcoords)
-			JS_DefinePropertyValueStr(ctx, obj, "texcoords", JS_NewArrayBuffer(ctx, ro->m.texcoords, ro->m.index_count*sizeof(VECTOR), NULL, NULL, false), JS_PROP_C_W_E);
+				if (ro->m.normals)
+					JS_DefinePropertyValueStr(ctx, obj, "normals",   JS_NewArrayBuffer(ctx, ro->m.normals, ro->m.index_count*sizeof(VECTOR), NULL, NULL, false), JS_PROP_C_W_E);
 
-		if (ro->m.colours)
-			JS_DefinePropertyValueStr(ctx, obj, "colors",    JS_NewArrayBuffer(ctx, ro->m.colours, ro->m.index_count*sizeof(VECTOR), NULL, NULL, false), JS_PROP_C_W_E);
+				if (ro->m.texcoords)
+					JS_DefinePropertyValueStr(ctx, obj, "texcoords", JS_NewArrayBuffer(ctx, ro->m.texcoords, ro->m.index_count*sizeof(VECTOR), NULL, NULL, false), JS_PROP_C_W_E);
 
-		return obj;
-	} else if (magic == 1) {
-		JSValue arr = JS_NewArray(ctx);
+				if (ro->m.colours)
+					JS_DefinePropertyValueStr(ctx, obj, "colors",    JS_NewArrayBuffer(ctx, ro->m.colours, ro->m.index_count*sizeof(VECTOR), NULL, NULL, false), JS_PROP_C_W_E);
 
-		for (int i = 0; i < ro->m.material_count; i++) {
-			JSValue obj = JS_NewObject(ctx);
+				return obj;
+			}
+		case 1:
+			{
+				JSValue arr = JS_NewArray(ctx);
 
-			JS_DefinePropertyValueStr(ctx, obj, "ambient", JS_NewMaterial(ctx, &ro->m.materials[i].ambient), JS_PROP_C_W_E);
-			JS_DefinePropertyValueStr(ctx, obj, "diffuse", JS_NewMaterial(ctx, &ro->m.materials[i].diffuse), JS_PROP_C_W_E);
-			JS_DefinePropertyValueStr(ctx, obj, "specular", JS_NewMaterial(ctx, &ro->m.materials[i].specular), JS_PROP_C_W_E);
-			JS_DefinePropertyValueStr(ctx, obj, "emission", JS_NewMaterial(ctx, &ro->m.materials[i].emission), JS_PROP_C_W_E);
-			JS_DefinePropertyValueStr(ctx, obj, "transmittance", JS_NewMaterial(ctx, &ro->m.materials[i].transmittance), JS_PROP_C_W_E);
-			JS_DefinePropertyValueStr(ctx, obj, "shininess", JS_NewFloat32(ctx, ro->m.materials[i].shininess), JS_PROP_C_W_E);
-			JS_DefinePropertyValueStr(ctx, obj, "refraction", JS_NewFloat32(ctx, ro->m.materials[i].refraction), JS_PROP_C_W_E);
-			JS_DefinePropertyValueStr(ctx, obj, "transmission_filter", JS_NewMaterial(ctx, &ro->m.materials[i].transmission_filter), JS_PROP_C_W_E);
-			JS_DefinePropertyValueStr(ctx, obj, "disolve", JS_NewFloat32(ctx, ro->m.materials[i].disolve), JS_PROP_C_W_E);
+				for (int i = 0; i < ro->m.material_count; i++) {
+					JSValue obj = JS_NewObject(ctx);
 
-			JS_DefinePropertyValueStr(ctx, obj, "texture_id", JS_NewInt32(ctx, ro->m.materials[i].texture_id), JS_PROP_C_W_E);
+					JS_DefinePropertyValueStr(ctx, obj, "ambient", JS_NewMaterial(ctx, &ro->m.materials[i].ambient), JS_PROP_C_W_E);
+					JS_DefinePropertyValueStr(ctx, obj, "diffuse", JS_NewMaterial(ctx, &ro->m.materials[i].diffuse), JS_PROP_C_W_E);
+					JS_DefinePropertyValueStr(ctx, obj, "specular", JS_NewMaterial(ctx, &ro->m.materials[i].specular), JS_PROP_C_W_E);
+					JS_DefinePropertyValueStr(ctx, obj, "emission", JS_NewMaterial(ctx, &ro->m.materials[i].emission), JS_PROP_C_W_E);
+					JS_DefinePropertyValueStr(ctx, obj, "transmittance", JS_NewMaterial(ctx, &ro->m.materials[i].transmittance), JS_PROP_C_W_E);
+					JS_DefinePropertyValueStr(ctx, obj, "shininess", JS_NewFloat32(ctx, ro->m.materials[i].shininess), JS_PROP_C_W_E);
+					JS_DefinePropertyValueStr(ctx, obj, "refraction", JS_NewFloat32(ctx, ro->m.materials[i].refraction), JS_PROP_C_W_E);
+					JS_DefinePropertyValueStr(ctx, obj, "transmission_filter", JS_NewMaterial(ctx, &ro->m.materials[i].transmission_filter), JS_PROP_C_W_E);
+					JS_DefinePropertyValueStr(ctx, obj, "disolve", JS_NewFloat32(ctx, ro->m.materials[i].disolve), JS_PROP_C_W_E);
 
-			JS_DefinePropertyValueUint32(ctx, arr, i, obj, JS_PROP_C_W_E);
-		}
+					JS_DefinePropertyValueStr(ctx, obj, "texture_id", JS_NewInt32(ctx, ro->m.materials[i].texture_id), JS_PROP_C_W_E);
 
-		return arr;
-	} else if (magic == 2) {
-		JSValue arr = JS_NewArray(ctx);
+					JS_DefinePropertyValueUint32(ctx, arr, i, obj, JS_PROP_C_W_E);
+				}
 
-		for (int i = 0; i < ro->m.material_index_count; i++) {
-			JSValue obj = JS_NewObject(ctx);
+				return arr;
+			}
+		case 2:
+			{
+				JSValue arr = JS_NewArray(ctx);
 
-			JS_DefinePropertyValueStr(ctx, obj, "index", JS_NewUint32(ctx, ro->m.material_indices[i].index), JS_PROP_C_W_E);
-			JS_DefinePropertyValueStr(ctx, obj, "end",   JS_NewUint32(ctx, ro->m.material_indices[i].end),   JS_PROP_C_W_E);
+				for (int i = 0; i < ro->m.material_index_count; i++) {
+					JSValue obj = JS_NewObject(ctx);
 
-			JS_DefinePropertyValueUint32(ctx, arr, i, obj, JS_PROP_C_W_E);
-		}
+					JS_DefinePropertyValueStr(ctx, obj, "index", JS_NewUint32(ctx, ro->m.material_indices[i].index), JS_PROP_C_W_E);
+					JS_DefinePropertyValueStr(ctx, obj, "end",   JS_NewUint32(ctx, ro->m.material_indices[i].end),   JS_PROP_C_W_E);
 
-		return arr;
-	} else if (magic == 7) {
-		return JS_NewUint32(ctx, ro->m.index_count);
-	} else if (magic == 8) {
-		JSValue array = JS_NewArray(ctx);
+					JS_DefinePropertyValueUint32(ctx, arr, i, obj, JS_PROP_C_W_E);
+				}
 
-		for (int i = 0; i < 8; i++) {
-			JSValue obj = JS_NewObject(ctx);
-		
-			JS_DefinePropertyValueStr(ctx, obj, "x", JS_NewFloat32(ctx, ro->m.bounding_box[i][0]), JS_PROP_C_W_E);
-			JS_DefinePropertyValueStr(ctx, obj, "y", JS_NewFloat32(ctx, ro->m.bounding_box[i][1]), JS_PROP_C_W_E);
-			JS_DefinePropertyValueStr(ctx, obj, "z", JS_NewFloat32(ctx, ro->m.bounding_box[i][2]), JS_PROP_C_W_E);
-			JS_DefinePropertyValueUint32(ctx, array, i, obj, JS_PROP_C_W_E);
-		}
-		
-		return array;
+				return arr;
+			}
+		case 3:
+			return JS_NewBool(ctx,   ro->m.attributes.accurate_clipping);
+		case 4:
+			return JS_NewBool(ctx,   ro->m.attributes.backface_culling);
+		case 5:
+			return JS_NewBool(ctx,   ro->m.attributes.texture_mapping);
+		case 6:
+			return JS_NewUint32(ctx,   ro->m.attributes.shade_model);
+		case 7:
+			return JS_NewUint32(ctx, ro->m.index_count);
+		case 8:
+			{
+				JSValue array = JS_NewArray(ctx);
+
+				for (int i = 0; i < 8; i++) {
+					JSValue obj = JS_NewObject(ctx);
+
+					JS_DefinePropertyValueStr(ctx, obj, "x", JS_NewFloat32(ctx, ro->m.bounding_box[i][0]), JS_PROP_C_W_E);
+					JS_DefinePropertyValueStr(ctx, obj, "y", JS_NewFloat32(ctx, ro->m.bounding_box[i][1]), JS_PROP_C_W_E);
+					JS_DefinePropertyValueStr(ctx, obj, "z", JS_NewFloat32(ctx, ro->m.bounding_box[i][2]), JS_PROP_C_W_E);
+					JS_DefinePropertyValueUint32(ctx, array, i, obj, JS_PROP_C_W_E);
+				}
+
+				return array;
+			}
+			break;
 	}
+
+	return JS_UNDEFINED;
 }
 
 static JSValue js_object_set(JSContext *ctx, JSValueConst this_val, JSValue val, int magic)
@@ -438,99 +466,126 @@ static JSValue js_object_set(JSContext *ctx, JSValueConst this_val, JSValue val,
     if (!ro)
         return JS_EXCEPTION;
 
-    if (magic == 0) {
-		uint32_t size = 0;
-		JSValue vert_arr, ta_buf;
-		void *tmp_vert_ptr = NULL;
+	switch (magic) {
+		case 0:
+			{
+				uint32_t size = 0;
+				JSValue vert_arr, ta_buf;
+				void *tmp_vert_ptr = NULL;
 
-		VECTOR** attributes_ptr[] = {
-			&ro->m.positions,
-			&ro->m.normals,
-			&ro->m.texcoords,
-			&ro->m.colours
-		};
+				VECTOR** attributes_ptr[] = {
+					&ro->m.positions,
+					&ro->m.normals,
+					&ro->m.texcoords,
+					&ro->m.colours
+				};
 
-		for (int i = 0; i < 4; i++) {
-			if (*attributes_ptr[i])
-				free(*attributes_ptr[i]);
+				for (int i = 0; i < 4; i++) {
+					if (*attributes_ptr[i])
+						free(*attributes_ptr[i]);
 
-			vert_arr = JS_GetPropertyStr(ctx, val, vert_attributes[i]);
+					vert_arr = JS_GetPropertyStr(ctx, val, vert_attributes[i]);
 
-			ta_buf = JS_GetTypedArrayBuffer(ctx, vert_arr, NULL, NULL, NULL);
+					ta_buf = JS_GetTypedArrayBuffer(ctx, vert_arr, NULL, NULL, NULL);
 
-			tmp_vert_ptr = JS_GetArrayBuffer(ctx, &size, ((ta_buf != JS_EXCEPTION)? ta_buf : vert_arr));
+					tmp_vert_ptr = JS_GetArrayBuffer(ctx, &size, ((ta_buf != JS_EXCEPTION)? ta_buf : vert_arr));
 
-			if (!i)
-				ro->m.index_count = size/sizeof(VECTOR);
+					if (!i)
+						ro->m.index_count = size/sizeof(VECTOR);
 
-			if (tmp_vert_ptr) {
-				*attributes_ptr[i] = malloc(size);
-				memcpy(*attributes_ptr[i], tmp_vert_ptr, size);
-			}			
-		}
+					if (tmp_vert_ptr) {
+						*attributes_ptr[i] = malloc(size);
+						memcpy(*attributes_ptr[i], tmp_vert_ptr, size);
+					}			
+				}
+			}
+			break;
+		case 1:
+			{
+				uint32_t material_count = 0;
 
-	} else if (magic == 1) {
-		uint32_t material_count = 0;
+				JS_ToUint32(ctx, &material_count, JS_GetPropertyStr(ctx, val, "length"));
 
-		JS_ToUint32(ctx, &material_count, JS_GetPropertyStr(ctx, val, "length"));
+				if (material_count > ro->m.material_count) {
+					ro->m.materials = realloc(ro->m.materials, material_count);
+				}
 
-		if (material_count > ro->m.material_count) {
-			ro->m.materials = realloc(ro->m.materials, material_count);
-		}
+				for (int i = 0; i < material_count; i++) {
+					JSValue obj = JS_GetPropertyUint32(ctx, val, i);
 
-		for (int i = 0; i < material_count; i++) {
-			JSValue obj = JS_GetPropertyUint32(ctx, val, i);
+					JS_ToMaterial(ctx, &ro->m.materials[i].ambient,             JS_GetPropertyStr(ctx, obj, "ambient"));
+					JS_ToMaterial(ctx, &ro->m.materials[i].diffuse,             JS_GetPropertyStr(ctx, obj, "diffuse"));
+					JS_ToMaterial(ctx, &ro->m.materials[i].specular,            JS_GetPropertyStr(ctx, obj, "specular"));
+					JS_ToMaterial(ctx, &ro->m.materials[i].emission,            JS_GetPropertyStr(ctx, obj, "emission"));
+					JS_ToMaterial(ctx, &ro->m.materials[i].transmittance,       JS_GetPropertyStr(ctx, obj, "transmittance"));
+					JS_ToFloat32(ctx,  &ro->m.materials[i].shininess,           JS_GetPropertyStr(ctx, obj, "shininess"));
+					JS_ToFloat32(ctx,  &ro->m.materials[i].refraction,          JS_GetPropertyStr(ctx, obj, "refraction"));
+					JS_ToMaterial(ctx, &ro->m.materials[i].transmission_filter, JS_GetPropertyStr(ctx, obj, "transmission_filter"));
+					JS_ToFloat32(ctx,  &ro->m.materials[i].disolve,             JS_GetPropertyStr(ctx, obj, "disolve"));
 
-			JS_ToMaterial(ctx, &ro->m.materials[i].ambient,             JS_GetPropertyStr(ctx, obj, "ambient"));
-			JS_ToMaterial(ctx, &ro->m.materials[i].diffuse,             JS_GetPropertyStr(ctx, obj, "diffuse"));
-			JS_ToMaterial(ctx, &ro->m.materials[i].specular,            JS_GetPropertyStr(ctx, obj, "specular"));
-			JS_ToMaterial(ctx, &ro->m.materials[i].emission,            JS_GetPropertyStr(ctx, obj, "emission"));
-			JS_ToMaterial(ctx, &ro->m.materials[i].transmittance,       JS_GetPropertyStr(ctx, obj, "transmittance"));
-			JS_ToFloat32(ctx,  &ro->m.materials[i].shininess,           JS_GetPropertyStr(ctx, obj, "shininess"));
-			JS_ToFloat32(ctx,  &ro->m.materials[i].refraction,          JS_GetPropertyStr(ctx, obj, "refraction"));
-			JS_ToMaterial(ctx, &ro->m.materials[i].transmission_filter, JS_GetPropertyStr(ctx, obj, "transmission_filter"));
-			JS_ToFloat32(ctx,  &ro->m.materials[i].disolve,             JS_GetPropertyStr(ctx, obj, "disolve"));
+					JS_ToInt32(ctx,    &ro->m.materials[i].texture_id,          JS_GetPropertyStr(ctx, obj, "texture_id"));
 
-			JS_ToInt32(ctx,    &ro->m.materials[i].texture_id,          JS_GetPropertyStr(ctx, obj, "texture_id"));
+					JS_FreeValue(ctx, obj);
+				}
 
-			JS_FreeValue(ctx, obj);
-		}
+				ro->m.material_count = material_count;
+			}
+			break;
+		case 2:
+			{
+				uint32_t material_index_count = 0;
 
-		ro->m.material_count = material_count;
+				JS_ToUint32(ctx, &material_index_count, JS_GetPropertyStr(ctx, val, "length"));
 
-	} else if (magic == 2) {
-		uint32_t material_index_count = 0;
+				if (material_index_count > ro->m.material_index_count) {
+					ro->m.material_indices = realloc(ro->m.material_indices, material_index_count);
+				}
 
-		JS_ToUint32(ctx, &material_index_count, JS_GetPropertyStr(ctx, val, "length"));
+				for (int i = 0; i < material_index_count; i++) {
+					JSValue obj = JS_GetPropertyUint32(ctx, val, i);
 
-		if (material_index_count > ro->m.material_index_count) {
-			ro->m.material_indices = realloc(ro->m.material_indices, material_index_count);
-		}
+					JS_ToUint32(ctx, &ro->m.material_indices[i].index, JS_GetPropertyStr(ctx, obj, "index"));
+					JS_ToUint32(ctx, &ro->m.material_indices[i].end,   JS_GetPropertyStr(ctx, obj, "end"));
 
-		for (int i = 0; i < material_index_count; i++) {
-			JSValue obj = JS_GetPropertyUint32(ctx, val, i);
+					JS_FreeValue(ctx, obj);
+				}
 
-			JS_ToUint32(ctx, &ro->m.material_indices[i].index, JS_GetPropertyStr(ctx, obj, "index"));
-			JS_ToUint32(ctx, &ro->m.material_indices[i].end,   JS_GetPropertyStr(ctx, obj, "end"));
+				ro->m.material_index_count = material_index_count;
+			}
+			break;
+		case 3:
+			ro->m.attributes.accurate_clipping = JS_ToBool(ctx, val);
+			break;
+		case 4:
+			ro->m.attributes.backface_culling = JS_ToBool(ctx, val);
+			break;
+		case 5:
+			ro->m.attributes.texture_mapping = JS_ToBool(ctx, val);
+			break;
+		case 6:
+			{
+				uint32_t shade_model;
+				JS_ToUint32(ctx, &shade_model, val);
 
-			JS_FreeValue(ctx, obj);
-		}
+				ro->m.attributes.shade_model = shade_model;
+			}
+			break;
+		case 7:
+			break;
+		case 8:
+			for (int i = 0; i < 8; i++) {
+				JSValue vertex = JS_GetPropertyUint32(ctx, val, i);
 
-		ro->m.material_index_count = material_index_count;
+				JS_ToFloat32(ctx, &ro->m.bounding_box[i][0], JS_GetPropertyStr(ctx, vertex, "x"));
+				JS_ToFloat32(ctx, &ro->m.bounding_box[i][1], JS_GetPropertyStr(ctx, vertex, "y"));
+				JS_ToFloat32(ctx, &ro->m.bounding_box[i][2], JS_GetPropertyStr(ctx, vertex, "z"));
+				ro->m.bounding_box[i][3] = 1.0f;
 
-	} else if (magic == 8) {
+				JS_FreeValue(ctx, vertex);
+			}
+			break;
+	}
 
-		for (int i = 0; i < 8; i++) {
-			JSValue vertex = JS_GetPropertyUint32(ctx, val, i);
-
-			JS_ToFloat32(ctx, &ro->m.bounding_box[i][0], JS_GetPropertyStr(ctx, vertex, "x"));
-			JS_ToFloat32(ctx, &ro->m.bounding_box[i][1], JS_GetPropertyStr(ctx, vertex, "y"));
-			JS_ToFloat32(ctx, &ro->m.bounding_box[i][2], JS_GetPropertyStr(ctx, vertex, "z"));
-			ro->m.bounding_box[i][3] = 1.0f;
-
-			JS_FreeValue(ctx, vertex);
-		}
-	}	
     return JS_UNDEFINED;
 }
 
@@ -542,11 +597,15 @@ static const JSCFunctionListEntry js_object_proto_funcs[] = {
 	JS_CFUNC_DEF("setTexture",  3,  athena_settexture),
 	JS_CFUNC_DEF("getTexture",  1,  athena_gettexture),
 
-	JS_CGETSET_MAGIC_DEF("vertices",         js_object_get, js_object_set, 0),
-	JS_CGETSET_MAGIC_DEF("materials",        js_object_get, js_object_set, 1),
-	JS_CGETSET_MAGIC_DEF("material_indices", js_object_get, js_object_set, 2),
-	JS_CGETSET_MAGIC_DEF("size",             js_object_get, js_object_set, 7),
-	JS_CGETSET_MAGIC_DEF("bounds",           js_object_get, js_object_set, 8),
+	JS_CGETSET_MAGIC_DEF("vertices",          js_object_get, js_object_set, 0),
+	JS_CGETSET_MAGIC_DEF("materials",         js_object_get, js_object_set, 1),
+	JS_CGETSET_MAGIC_DEF("material_indices",  js_object_get, js_object_set, 2),
+	JS_CGETSET_MAGIC_DEF("accurate_clipping", js_object_get, js_object_set, 3),
+	JS_CGETSET_MAGIC_DEF("backface_culling",  js_object_get, js_object_set, 4),
+	JS_CGETSET_MAGIC_DEF("texture_mapping",   js_object_get, js_object_set, 5),
+	JS_CGETSET_MAGIC_DEF("shade_model",       js_object_get, js_object_set, 6),
+	JS_CGETSET_MAGIC_DEF("size",              js_object_get, js_object_set, 7),
+	JS_CGETSET_MAGIC_DEF("bounds",            js_object_get, js_object_set, 8),
 };
 
 static JSValue athena_initrender(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
@@ -619,14 +678,10 @@ static const JSCFunctionListEntry render_funcs[] = {
 	JS_CFUNC_DEF( "materialIndex",   2,          athena_newmaterialindex),
 
 	JS_PROP_INT32_DEF("PL_NO_LIGHTS",                       PL_NO_LIGHTS, JS_PROP_CONFIGURABLE),
-	JS_PROP_INT32_DEF("PL_NO_LIGHTS_TEX",               PL_NO_LIGHTS_TEX, JS_PROP_CONFIGURABLE),
 	JS_PROP_INT32_DEF("PL_DEFAULT",                           PL_DEFAULT, JS_PROP_CONFIGURABLE),
-	JS_PROP_INT32_DEF("PL_DEFAULT_NO_TEX",             PL_DEFAULT_NO_TEX, JS_PROP_CONFIGURABLE),
 	JS_PROP_INT32_DEF("PL_SPECULAR",                         PL_SPECULAR, JS_PROP_CONFIGURABLE),
-	JS_PROP_INT32_DEF("PL_SPECULAR_NO_TEX",           PL_SPECULAR_NO_TEX, JS_PROP_CONFIGURABLE),
 
-	JS_PROP_INT32_DEF("PL_PVC",                         PL_SPECULAR, JS_PROP_CONFIGURABLE),
-	JS_PROP_INT32_DEF("PL_PVC_NO_TEX",           PL_SPECULAR_NO_TEX, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("PL_PVC",                         	PL_PVC, JS_PROP_CONFIGURABLE),
 };
 
 static int render_init(JSContext *ctx, JSModuleDef *m)

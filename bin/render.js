@@ -3,14 +3,10 @@
 
 const pipelines = [
     "NO_LIGHTS",
-    "NO_LIGHTS_TEX",
     "DEFAULT",
-    "DEFAULT_NO_TEX",
     "SPECULAR",
-    "SPECULAR_NO_TEX",
 
     "PVC",
-    "PVC_NO_TEX",
 ];
 
 const font = new Font("default");
@@ -26,7 +22,7 @@ canvas.psmz = Z16S;
 
 Screen.setMode(canvas);
 
-Render.setView(70.0, 2.0, 200.0);
+Render.setView(60.0, 5.0, 4000.0);
 
 // Change your root folder to "render" so we can work with file path magic :p
 os.chdir("render");
@@ -185,6 +181,15 @@ while(true) {
     if(pad.justPressed(Pads.SQUARE)) {
         bbox ^= 1;
     }
+
+    if(pad.justPressed(Pads.CIRCLE)) {
+        model[modeltodisplay].texture_mapping ^= 1;
+    }
+
+    if(pad.justPressed(Pads.CROSS)) {
+        model[modeltodisplay].accurate_clipping ^= 1;
+    }
+
 
     model[modeltodisplay].draw(0.0f, 0.0f, 0.0f, savedly, savedlx, 0.0f);
 

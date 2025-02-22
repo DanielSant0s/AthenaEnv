@@ -69,20 +69,21 @@ EE_VCLPP = vclpp
 JS_CORE = quickjs/cutils.o quickjs/libbf.o quickjs/libregexp.o quickjs/libunicode.o \
 				 quickjs/realpath.o quickjs/quickjs.o quickjs/quickjs-libc.o
 
-VU1_MPGS = draw_3D_pvc.o draw_3D_pvc_notex.o \
-           draw_3D_colors.o draw_3D_colors_notex.o \
-           draw_3D_lights.o draw_3D_lights_notex.o \
-           draw_3D_spec.o draw_3D_spec_notex.o
+VU1_MPGS = draw_3D_pvc.o \
+           draw_3D_colors.o draw_3D_colors_scissor.o \
+           draw_3D_lights.o draw_3D_lights_scissor.o \
+           draw_3D_spec.o draw_3D_spec_scissor.o
 
-APP_CORE = main.o bootlogo.o vif.o athena_math.o memory.o ee_tools.o module_system.o taskman.o pad.o system.o strUtils.o 
+APP_CORE = main.o bootlogo.o vif.o athena_math.o memory.o ee_tools.o module_system.o taskman.o pad.o system.o strUtils.o
 
 INI_READER = readini/src/readini.o
 
 ATHENA_MODULES = ath_env.o ath_physics.o ath_vector.o ath_pads.o ath_system.o ath_archive.o ath_timer.o ath_task.o
 
 IOP_MODULES = iomanx.o filexio.o sio2man.o mcman.o mcserv.o padman.o  \
-			  mtapman.o usbd.o bdm.o bdmfs_fatfs.o usbmass_bd.o cdfs.o \
-			  ps2hdd.o ps2fs.o ps2dev9.o ps2atad.o poweroff.o freeram.o
+			  usbd.o bdm.o bdmfs_fatfs.o usbmass_bd.o cdfs.o \
+			  freeram.o ps2dev9.o mtapman.o poweroff.o ata_bd.o \
+			  ps2hdd.o ps2fs.o mmceman.o
 
 EMBEDDED_ASSETS = quicksand_regular.o owl_indices.o owl_palette.o
 
@@ -93,6 +94,7 @@ ifeq ($(GRAPHICS),1)
   EE_INCS += -I$(PS2DEV)/gsKit/include -I$(PS2SDK)/ports/include/freetype2
   EE_CFLAGS += -DATHENA_GRAPHICS
   APP_CORE += graphics.o atlas.o fntsys.o render.o camera.o calc_3d.o fast_obj/fast_obj.o
+
   ATHENA_MODULES += ath_color.o ath_font.o ath_render.o ath_lights.o ath_3dcamera.o ath_screen.o ath_image.o ath_imagelist.o ath_shape.o 
   EE_OBJS += $(VU1_MPGS)
 endif
@@ -110,6 +112,7 @@ ifeq ($(AUDIO),1)
   APP_CORE += sound.o audsrv.o
   ATHENA_MODULES += ath_sound.o
   IOP_MODULES += libsd.o
+
   EE_LIBS += -laudsrv -lvorbisfile -lvorbis -logg
 endif
 
@@ -125,6 +128,7 @@ ifeq ($(KEYBOARD),1)
   EE_CFLAGS += -DATHENA_KEYBOARD
   ATHENA_MODULES += ath_keyboard.o
   IOP_MODULES += ps2kbd.o
+
   EE_LIBS += -lkbd
 endif
 
@@ -132,6 +136,7 @@ ifeq ($(MOUSE),1)
   EE_CFLAGS += -DATHENA_MOUSE
   ATHENA_MODULES += ath_mouse.o
   IOP_MODULES += ps2mouse.o
+
   EE_LIBS += -lmouse
 endif
 
@@ -167,13 +172,12 @@ all: $(EXT_LIBS) $(EE_BIN) $(EE_EMBED_DIR) $(EE_OBJS_DIR)
 	echo "Building $(EE_BIN)..."
 	$(EE_STRIP) $(EE_BIN)
 
-# echo "Compressing $(EE_BIN_PKD)...\n"
-# ps2-packer $(EE_BIN) $(EE_BIN_PKD) > /dev/null
+	ps2-packer $(EE_BIN) $(EE_BIN_PKD) > /dev/null
 
 	mv $(EE_BIN) bin/
-#	mv $(EE_BIN_PKD) bin/
+	mv $(EE_BIN_PKD) bin/
 
-# mpgs: src/draw_3D_pvc.vsm src/draw_3D_pvc_notex.vsm src/draw_3D_colors.vsm src/draw_3D_colors_notex.vsm src/draw_3D_lights.vsm src/draw_3D_lights_notex.vsm src/draw_3D_spec.vsm src/draw_3D_spec_notex.vsm
+# mpgs: src/draw_3D_pvc.vsm src/draw_3D_colors.vsm src/draw_3D_colors_scissor.vsm src/draw_3D_lights.vsm src/draw_3D_lights_scissor.vsm src/draw_3D_spec.vsm src/draw_3D_spec_scissor.vsm
 
 debug: $(EXT_LIBS) $(EE_BIN)
 	echo "Building $(EE_BIN) with debug symbols..."

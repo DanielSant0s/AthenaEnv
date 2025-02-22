@@ -22,7 +22,7 @@ static const u64 BLACK_RGBAQ   = GS_SETREG_RGBAQ(0x00,0x00,0x00,0x80,0x00);
 /* Size of Oneshot drawbuffer (Double Buffered, so it uses this size * 2) */
 #define RENDER_QUEUE_OS_POOLSIZE 1024 * 1024 * 2 // 2048K of oneshot renderqueue
 
-static GSGLOBAL *gsGlobal = NULL;
+GSGLOBAL *gsGlobal = NULL;
 static GSFONTM *gsFontM = NULL;
 
 void (*flipScreen)();
@@ -1373,6 +1373,9 @@ void init_graphics()
 	} else {
 		gsGlobal->Height = 448;
 	}
+
+	//gsGlobal->OffsetX = (int)((2048.0f-(gsGlobal->Width/2)) * 16.0f);
+	//gsGlobal->OffsetY = (int)((2048.0f-(gsGlobal->Height/2)) * 16.0f);
 
 	gsGlobal->PSM  = GS_PSM_CT24;
 	gsGlobal->PSMZ = GS_PSMZ_16S;

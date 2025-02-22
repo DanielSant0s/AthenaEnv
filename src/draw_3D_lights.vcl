@@ -5,7 +5,7 @@
 ;
 ; 
 ;---------------------------------------------------------------
-; draw_3D_lights.vcl                                                   |
+; draw_3D_lights.vcl                                           |
 ;---------------------------------------------------------------
 ; A VU1 microprogram to draw 3D object using XYZ2, RGBAQ and ST|
 ; This program uses double buffering (xtop)                    |
@@ -24,17 +24,47 @@
 
 .include "vcl_sml.i"
 
+
+SCREEN_SCALE        .assign  0
+RENDER_FLAGS        .assign  0
+
+SCREEN_MATRIX       .assign  1
+LIGHT_MATRIX        .assign  5
+
+CAMERA_POSITION     .assign  9 ; x, y, z
+NUM_DIR_LIGHTS      .assign  9 ; w
+
+LIGHT_DIRECTION_PTR .assign 10
+LIGHT_AMBIENT_PTR   .assign 14
+LIGHT_DIFFUSE_PTR   .assign 18
+LIGHT_SPECULAR_PTR  .assign 22
+
 --enter
 --endenter
 
+    loi 0.5
+    add.xy     clip_scale, vf00, i
+    loi 1.0
+    add.z      clip_scale,  vf00, i
+    mul.w      clip_scale, vf00, vf00
+
     ;//////////// --- Load data 1 --- /////////////
     ; Updated once per mesh
-    MatrixLoad	ObjectToScreen, 0, vi00 ; load view-projection matrix
-    MatrixLoad	LocalLight,     4, vi00     ; load local light matrix
-    ilw.x       dirLightQnt,    8(vi00) ; load active directional lights
-    iaddiu      lightDirs,      vi00,    9       
-    iaddiu      lightAmbs,      vi00,    13
-    iaddiu      lightDiffs,     vi00,    17    
+    MatrixLoad	ObjectToScreen, SCREEN_MATRIX, vi00 ; load view-projection matrix
+    MatrixLoad	LocalLight,     LIGHT_MATRIX, vi00     ; load local light matrix
+    ilw.w       dirLightQnt,    NUM_DIR_LIGHTS(vi00) ; load active directional lights
+    iaddiu      lightDirs,      vi00,    LIGHT_DIRECTION_PTR       
+    iaddiu      lightAmbs,      vi00,    LIGHT_AMBIENT_PTR
+    iaddiu      lightDiffs,     vi00,    LIGHT_DIFFUSE_PTR    
+
+    lq scale,             SCREEN_SCALE(vi00)
+
+    loi            2048.0
+    addi.xy        offset, vf00, i
+    add.zw          offset, vf00, vf00
+
+    add.xyz offset, scale, offset
+
     ;/////////////////////////////////////////////
 
 	fcset   0x000000	; VCL won't let us use CLIP without first zeroing
@@ -45,29 +75,23 @@
 init:
     xtop    iBase
 
-    lq.xyz  scale,          0(iBase) ; load program params
-                                     ; float : X, Y, Z - scale vector that we will use to scale the verts after projecting them.
-                                     ; float : W - vert count.
-    lq      gifSetTag,      1(iBase) ; GIF tag - set
-    lq      texGifTag1,     2(iBase) ; GIF tag - texture LOD
-    lq      texGifTag2,     3(iBase) ; GIF tag - texture buffer & CLUT
-    lq      primTag,        4(iBase) ; GIF tag - tell GS how many data we will send
-    lq      matDiffuse,     5(iBase) ; RGBA 
+    lq      primTag,        0(iBase) ; GIF tag - tell GS how many data we will send
+    lq      matDiffuse,     1(iBase) ; RGBA 
                                      ; u32 : R, G, B, A (0-128)
-    iaddiu  vertexData,     iBase,      6           ; pointer to vertex data
-    ilw.w   vertCount,      0(iBase)                ; load vert count from scale vector
-    iadd    stqData,        vertexData, vertCount   ; pointer to stq
-    iadd    normalData,      stqData,  vertCount   ; pointer to colors
-    iadd     dataPointers,   normalData,  vertCount
+    iaddiu  vertexData,     iBase,      2           ; pointer to vertex data
+
+    iaddiu   Mask, vi00, 0x7fff
+    mtir     vertCount, primTag[x]
+    iand     vertCount, vertCount, Mask              ; Get the number of verts (bit 0-14) from the PRIM giftag
+    
+    iadd      normalData,        vertexData, vertCount   ; pointer to stq
+    iadd      stqData,      normalData,  vertCount   ; pointer to colors
+    iadd      dataPointers,   stqData,  vertCount
     iaddiu    kickAddress,    dataPointers,  0       ; pointer for XGKICK
     iaddiu    destAddress,    dataPointers,  0       ; helper pointer for data inserting
     ;////////////////////////////////////////////
 
     ;/////////// --- Store tags --- /////////////
-    sqi gifSetTag,  (destAddress++) ;
-    sqi texGifTag1, (destAddress++) ; texture LOD tag
-    sqi gifSetTag,  (destAddress++) ;
-    sqi texGifTag2, (destAddress++) ; texture buffer & CLUT tag
     sqi primTag,    (destAddress++) ; prim + tell gs how many data will be
     ;////////////////////////////////////////////
 
@@ -90,26 +114,23 @@ init:
 
         ;////////////// --- Vertex --- //////////////
         MatrixMultiplyVertex	vertex, ObjectToScreen, inVert ; transform each vertex by the matrix
-       
-        clipw.xyz	vertex, vertex			; Dr. Fortuna: This instruction checks if the vertex is outside
-							; the viewing frustum. If it is, then the appropriate
-							; clipping flags are set
-        fcand		VI01,   0x3FFFF                 ; Bitwise AND the clipping flags with 0x3FFFF, this makes
-							; sure that we get the clipping judgement for the last three
-							; verts (i.e. that make up the triangle we are about to draw)
-        iaddiu		iADC,   VI01,       0x7FFF      ; Add 0x7FFF. If any of the clipping flags were set this will
-							; cause the triangle not to be drawn (any values above 0x8000
-							; that are stored in the w component of XYZ2 will set the ADC
-							; bit, which tells the GS not to perform a drawing kick on this
-							; triangle.
+
+        mul clip_vertex, vertex, clip_scale
+
+        clipw.xyz	clip_vertex, clip_vertex	
+        fcand		VI01,   0x3FFFF  
+        iaddiu		iADC,   VI01,       0x7FFF 
 
         isw.w		iADC,   2(destAddress)
         
         div         q,      vf00[w],    vertex[w]   ; perspective divide (1/vert[w]):
+
         mul.xyz     vertex, vertex,     q
-        mula.xyz    acc,    scale,      vf00[w]     ; scale to GS screen space
-        madd.xyz    vertex, vertex,     scale       ; multiply and add the scales -> vert = vert * scale + scale
-        ftoi4.xyz   vertex, vertex                  ; convert vertex to 12:4 fixed point format
+
+        mul.xyz    vertex, vertex,     scale
+        add.xyz    vertex, vertex,     offset
+
+        VertexFpToGsXYZ2  vertex,vertex
         ;////////////////////////////////////////////
 
 

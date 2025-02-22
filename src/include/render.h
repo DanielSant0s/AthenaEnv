@@ -6,6 +6,13 @@
 //3D math
 
 typedef struct {
+	float    x;
+	float    y;
+	float    z;
+	uint32_t w;
+} FIVECTOR;
+
+typedef struct {
 	VECTOR direction[4];
 	VECTOR ambient[4];
 	VECTOR diffuse[4];
@@ -21,15 +28,25 @@ typedef enum {
 
 typedef enum {
 	PL_NO_LIGHTS,
-	PL_NO_LIGHTS_TEX,
 	PL_DEFAULT,
-	PL_DEFAULT_NO_TEX,
 	PL_SPECULAR,
-	PL_SPECULAR_NO_TEX,
 
 	PL_PVC,
-	PL_PVC_NO_TEX,
 } eRenderPipelines;
+
+typedef enum {
+	SHADE_FLAT,
+	SHADE_GOURAUD,
+	SHADE_BLINN_PHONG,
+} eRenderShadeModels;
+
+typedef struct {
+	uint32_t accurate_clipping: 1; 
+	uint32_t backface_culling:  1; 
+	uint32_t texture_mapping:   1;
+	uint32_t shade_model:       2; // 0 = flat, 1 = gouraud, 2 = blinn-phong
+} RenderAttributes;
+
 
 typedef struct
 {
@@ -61,6 +78,8 @@ typedef struct ath_model {
 
     VECTOR bounding_box[8];
 
+	uint32_t *microprogram;
+
     void (*render)(struct ath_model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z);
     eRenderPipelines pipeline;
 
@@ -72,6 +91,8 @@ typedef struct ath_model {
 
 	material_index *material_indices;
 	int material_index_count;
+
+	RenderAttributes attributes;
 
 	bool tristrip;
 } model;
@@ -89,7 +110,7 @@ void setCameraType(eCameraTypes type);
 
 void cameraUpdate();
 
-#define BATCH_SIZE 69
+#define BATCH_SIZE 51
 
 int clip_bounding_box(MATRIX local_clip, VECTOR *bounding_box);
 void calculate_vertices_clipped(VECTOR *output,  int count, VECTOR *vertices, MATRIX local_screen);

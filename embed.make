@@ -37,12 +37,12 @@ $(EE_EMBED_DIR)bdmfs_fatfs.c: $(PS2SDK)/iop/irx/bdmfs_fatfs.irx | $(EE_EMBED_DIR
 
 $(EE_EMBED_DIR)usbmass_bd.c: $(PS2SDK)/iop/irx/usbmass_bd.irx | $(EE_EMBED_DIR)
 	$(BIN2S) $< $@ usbmass_bd_irx
-	
+
 $(EE_EMBED_DIR)ps2dev9.c: $(PS2SDK)/iop/irx/ps2dev9.irx | $(EE_EMBED_DIR)
 	$(BIN2S) $< $@ ps2dev9_irx
 
-$(EE_EMBED_DIR)ps2atad.c: $(PS2SDK)/iop/irx/ps2atad.irx | $(EE_EMBED_DIR)
-	$(BIN2S) $< $@ ps2atad_irx
+$(EE_EMBED_DIR)ata_bd.c: $(PS2SDK)/iop/irx/ata_bd.irx | $(EE_EMBED_DIR)
+	$(BIN2S) $< $@ ata_bd_irx
 
 $(EE_EMBED_DIR)ps2hdd.c: $(PS2SDK)/iop/irx/ps2hdd.irx | $(EE_EMBED_DIR)
 	$(BIN2S) $< $@ ps2hdd_irx
@@ -55,6 +55,9 @@ $(EE_EMBED_DIR)cdfs.c: $(PS2SDK)/iop/irx/cdfs.irx | $(EE_EMBED_DIR)
 
 $(EE_EMBED_DIR)poweroff.c: $(PS2SDK)/iop/irx/poweroff.irx | $(EE_EMBED_DIR)
 	$(BIN2S) $< $@ poweroff_irx
+
+$(EE_EMBED_DIR)mmceman.c: modules/mmceman/mmceman.irx | $(EE_EMBED_DIR)
+	$(BIN2S) $< $@ mmceman_irx
 
 modules/ds34bt/ee/libds34bt.a: modules/ds34bt/ee
 	$(MAKE) -C $<

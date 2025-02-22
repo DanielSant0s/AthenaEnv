@@ -24,6 +24,8 @@ bool usbd_started = false;
 bool usb_mass_started = false;
 bool pads_started = false;
 bool audio_started = false;
+bool bdm_started = false;
+bool mmceman_started = false;
 bool cdfs_started = false;
 bool dev9_started = false;
 bool mc_started = false;
@@ -58,6 +60,8 @@ void prepare_IOP() {
 	usb_mass_started = false;
 	pads_started = false;
 	audio_started = false;
+    bdm_started = false;
+    mmceman_started = false;
 	cdfs_started = false;
 	dev9_started = false;
 	mc_started = false;
@@ -91,6 +95,8 @@ int get_boot_device(const char* path) {
 		device = USB_MASS_MODULE;
 	} else if(started_from("mc")) {
 		device = MC_MODULE;
+	} else if(started_from("mmce")) {
+		device = MMCEMAN_MODULE;
 	} else if(started_from("cdfs") || started_from("cdrom")) {
 		device = CDFS_MODULE;
 	} else if(started_from("hdd")) {
@@ -188,6 +194,8 @@ int load_default_module(int id) {
 		#endif
 
 		case SIO2MAN_MODULE:
+			if (!filexio_started)
+				load_default_module(FILEXIO_MODULE);
 			if (!sio2man_started) {
 				ID = SifExecModuleBuffer(&sio2man_irx, size_sio2man_irx, 0, NULL, &ret);
 				REPORT("SIO2MAN");
@@ -231,27 +239,43 @@ int load_default_module(int id) {
 			break;
 		#endif
 
-		case USB_MASS_MODULE:
-			if (!usbd_started)
-				load_default_module(USBD_MODULE);
-			if (!usb_mass_started) {
+		case BDM_MODULE:
+			if (!bdm_started) {
     			ID = SifExecModuleBuffer(&bdm_irx, size_bdm_irx, 0, NULL, &ret);
 				REPORT("BDM");
     			ID = SifExecModuleBuffer(&bdmfs_fatfs_irx, size_bdmfs_fatfs_irx, 0, NULL, &ret);
 				REPORT("BDMFS_FATFS");
+    			ID = SifExecModuleBuffer(&ata_bd_irx, size_ata_bd_irx, 0, NULL, &ret);
+				REPORT("ATA_BD");
+
+				bdm_started = LOAD_SUCCESS();
+			}
+			break;
+        case USB_MASS_MODULE:
+			if (!bdm_started)
+				load_default_module(BDM_MODULE);
+			if (!usbd_started)
+				load_default_module(USBD_MODULE);
+			if (!usb_mass_started) {
     			ID = SifExecModuleBuffer(&usbmass_bd_irx, size_usbmass_bd_irx, 0, NULL, &ret);
 				REPORT("USMASS_BD");
 
 				usb_mass_started = LOAD_SUCCESS();
 			}
 			break;
-		case CDFS_MODULE:
+        case MMCEMAN_MODULE:
+            if (!mmceman_started) {
+                ID = SifExecModuleBuffer(&mmceman_irx, size_mmceman_irx, 0, NULL, &ret);
+                REPORT("MMCEMAN");
+                mmceman_started = LOAD_SUCCESS();
+            }
+            break;
+        case CDFS_MODULE:
 			if (!cdfs_started) {
 				ID = SifExecModuleBuffer(&cdfs_irx, size_cdfs_irx, 0, NULL, &ret);
 				REPORT("CDFS");
 				cdfs_started = LOAD_SUCCESS();
 			}
-
 			break;
 		case DEV9_MODULE:
 			if (!dev9_started) {
@@ -259,19 +283,20 @@ int load_default_module(int id) {
 				REPORT("DEV9");
 				dev9_started = LOAD_SUCCESS();
 			}
-		break;
+		    break;
 		case HDD_MODULE:
 			if (!filexio_started)
 				load_default_module(FILEXIO_MODULE);
 			if (!dev9_started)
 				load_default_module(DEV9_MODULE);
+			if (!usb_mass_started)
+				load_default_module(USB_MASS_MODULE);
 			if ((!hdd_started) && filexio_started) {
-
-    			ID = SifExecModuleBuffer(&ps2atad_irx, size_ps2atad_irx, 0, NULL, &ret);
-				REPORT("ATAD");
 
     			ID = SifExecModuleBuffer(&ps2hdd_irx, size_ps2hdd_irx, sizeof(hddarg), hddarg, &ret);
 				REPORT("PS2HDD");
+                // Introduce delay to prevent ps2hdd module from hanging
+                sleep(1);
 
     			HDDSTAT = fileXioDevctl("hdd0:", HDIOC_STATUS, NULL, 0, NULL, 0); /* 0 = HDD connected and formatted, 1 = not formatted, 2 = HDD not usable, 3 = HDD not connected. */
 				dbgprintf("%s: HDD status is %d\n", __func__, HDDSTAT);
@@ -295,6 +320,8 @@ int load_default_module(int id) {
     			ID = SifExecModuleBuffer(&fileXio_irx, size_fileXio_irx, 0, NULL, &ret);
 				REPORT("FILEXIO");
 				filexio_started = LOAD_SUCCESS();
+
+                fileXioInit();
 			}
 			break;
 		#ifdef ATHENA_CAMERA
