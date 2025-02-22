@@ -41,19 +41,16 @@ RESET_IOP ?= 1
 DEBUG ?= 0
 EE_SIO ?= 0
 
-CLI ?= 0
+PADEMU ?= 1
 GRAPHICS ?= 1
 AUDIO ?= 1
-NETWORK ?= 1
 KEYBOARD ?= 1
 MOUSE ?= 1
 CAMERA ?= 0
 
-EE_LIBS = -L$(PS2SDK)/ports/lib -L$(PS2DEV)/gsKit/lib/ -Lmodules/ds34bt/ee/ -Lmodules/ds34usb/ee/ -lmc -lpad -laudsrv -lpatches -ldebug -lmath3d -ljpeg -lfreetype -lgskit_toolkit -lgskit -ldmakit -lpng -lz -lds34bt -lds34usb -lnetman -lps2ip -lcurl -lwolfssl -lkbd -lmouse -lvorbisfile -lvorbis -logg -llzma -lzip -lfileXio -lelf-loader-nocolour -lerl
+EE_LIBS = -L$(PS2SDK)/ports/lib -lmc -lpad -lpatches -ldebug -lz -llzma -lzip -lfileXio -lelf-loader-nocolour -lerl
 
-EE_INCS += -I$(PS2DEV)/gsKit/include -I$(PS2SDK)/ports/include -I$(PS2SDK)/ports/include/freetype2 -I$(PS2SDK)/ports/include/zlib -Isrc/readini/include
-
-EE_INCS += -Imodules/ds34bt/ee -Imodules/ds34usb/ee
+EE_INCS += -I$(PS2SDK)/ports/include -I$(PS2SDK)/ports/include/zlib -Isrc/readini/include
 
 EE_CFLAGS += -Wno-sign-compare -fno-strict-aliasing -fno-exceptions -fpermissive -DCONFIG_VERSION=\"$(shell cat VERSION)\" -D__TM_GMTOFF=tm_gmtoff -DPATH_MAX=256 -DPS2
 ifeq ($(RESET_IOP),1)
@@ -68,8 +65,6 @@ BIN2S = $(PS2SDK)/bin/bin2c
 EE_DVP = dvp-as
 EE_VCL = vcl
 EE_VCLPP = vclpp
-
-EXT_LIBS = modules/ds34usb/ee/libds34usb.a modules/ds34bt/ee/libds34bt.a
 
 JS_CORE = quickjs/cutils.o quickjs/libbf.o quickjs/libregexp.o quickjs/libunicode.o \
 				 quickjs/realpath.o quickjs/quickjs.o quickjs/quickjs-libc.o
@@ -92,10 +87,24 @@ IOP_MODULES = iomanx.o filexio.o sio2man.o mcman.o mcserv.o padman.o  \
 
 EMBEDDED_ASSETS = quicksand_regular.o owl_indices.o owl_palette.o
 
+EE_OBJS = $(APP_CORE) $(INI_READER) $(JS_CORE) $(ATHENA_MODULES) $(IOP_MODULES) $(EMBEDDED_ASSETS) # group them all
+
 ifeq ($(GRAPHICS),1)
+  EE_LIBS += -L$(PS2DEV)/gsKit/lib/ -lmath3d -ljpeg -lfreetype -lgskit_toolkit -lgskit -ldmakit -lpng
+  EE_INCS += -I$(PS2DEV)/gsKit/include -I$(PS2SDK)/ports/include/freetype2
   EE_CFLAGS += -DATHENA_GRAPHICS
   APP_CORE += graphics.o atlas.o fntsys.o render.o camera.o calc_3d.o fast_obj/fast_obj.o
-  ATHENA_MODULES += ath_color.o ath_font.o ath_render.o ath_lights.o ath_3dcamera.o ath_screen.o ath_image.o ath_imagelist.o ath_shape.o
+
+  ATHENA_MODULES += ath_color.o ath_font.o ath_render.o ath_lights.o ath_3dcamera.o ath_screen.o ath_image.o ath_imagelist.o ath_shape.o 
+  EE_OBJS += $(VU1_MPGS)
+endif
+
+ifeq ($(PADEMU),1)
+  EE_CFLAGS += -DATHENA_PADEMU
+  EE_INCS += -Imodules/ds34bt/ee -Imodules/ds34usb/ee
+  EE_LIBS += -Lmodules/ds34bt/ee/ -Lmodules/ds34usb/ee/ -lds34bt -lds34usb
+  IOP_MODULES += ds34usb.o ds34bt.o
+	EXT_LIBS = modules/ds34usb/ee/libds34usb.a modules/ds34bt/ee/libds34bt.a
 endif
 
 ifeq ($(AUDIO),1)
@@ -103,6 +112,8 @@ ifeq ($(AUDIO),1)
   APP_CORE += sound.o audsrv.o
   ATHENA_MODULES += ath_sound.o
   IOP_MODULES += libsd.o
+
+  EE_LIBS += -laudsrv -lvorbisfile -lvorbis -logg
 endif
 
 ifeq ($(NETWORK),1)
@@ -110,18 +121,23 @@ ifeq ($(NETWORK),1)
   APP_CORE += network.o
   ATHENA_MODULES += ath_network.o ath_socket.o
   IOP_MODULES += NETMAN.o SMAP.o ps2ips.o
+  EE_LIBS += -lnetman -lps2ip -lcurl -lwolfssl
 endif
 
 ifeq ($(KEYBOARD),1)
   EE_CFLAGS += -DATHENA_KEYBOARD
   ATHENA_MODULES += ath_keyboard.o
   IOP_MODULES += ps2kbd.o
+
+  EE_LIBS += -lkbd
 endif
 
 ifeq ($(MOUSE),1)
   EE_CFLAGS += -DATHENA_MOUSE
   ATHENA_MODULES += ath_mouse.o
   IOP_MODULES += ps2mouse.o
+
+  EE_LIBS += -lmouse
 endif
 
 ifeq ($(CAMERA),1)
@@ -156,7 +172,6 @@ all: $(EXT_LIBS) $(EE_BIN) $(EE_EMBED_DIR) $(EE_OBJS_DIR)
 	echo "Building $(EE_BIN)..."
 	$(EE_STRIP) $(EE_BIN)
 
-	# echo "Compressing $(EE_BIN_PKD)...\n"
 	ps2-packer $(EE_BIN) $(EE_BIN_PKD) > /dev/null
 
 	mv $(EE_BIN) bin/

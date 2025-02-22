@@ -156,6 +156,7 @@ int load_default_module(int id) {
 				// freeram_started = true; // senseless... FreeRam always returns MODULE_NO_RESIDENT_END. so MODLOAD removes it alwyays...
 			}
 			break;
+        #ifdef ATHENA_PADEMU
 		case DS34BT_MODULE:
 			if (!usbd_started)
 				load_default_module(USBD_MODULE);
@@ -176,6 +177,7 @@ int load_default_module(int id) {
 				ds34usb_started = LOAD_SUCCESS();
 			}
 			break;
+        #endif
 
 		#ifdef ATHENA_NETWORK
 		case NETWORK_MODULE:

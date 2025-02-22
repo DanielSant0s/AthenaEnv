@@ -18,33 +18,33 @@
 
 static JSValue athena_dir(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
 {
-    if (argc != 0 && argc != 1) return JS_ThrowSyntaxError(ctx, "Argument error: System.listDir([path]) takes zero or one argument.");
+	if (argc != 0 && argc != 1) return JS_ThrowSyntaxError(ctx, "Argument error: System.listDir([path]) takes zero or one argument.");
 
-    JSValue arr = JS_NewArray(ctx);
+	JSValue arr = JS_NewArray(ctx);
 
     const char *temp_path = "";
-    char path[255], tpath[384];
+	char path[255], tpath[384];
 
-    getcwd((char *)path, 256);
-    dbgprintf("current dir %s\n",(char *)path);
+	getcwd((char *)path, 256);
+	dbgprintf("current dir %s\n",(char *)path);
 
-    if (argc != 0)
-    {
-        temp_path = JS_ToCString(ctx, argv[0]);
-        // append the given path to the boot_path
+	if (argc != 0)
+	{
+		temp_path = JS_ToCString(ctx, argv[0]);
+		// append the given path to the boot_path
 
-            strcpy ((char *)path, boot_path);
+	        strcpy ((char *)path, boot_path);
 
-            if (strchr(temp_path, ':'))
-               // workaround in case of temp_path is containing
-               // a device name again
-               strcpy ((char *)path, temp_path);
-            else
-               strcat ((char *)path, temp_path);
-    }
+	        if (strchr(temp_path, ':'))
+	           // workaround in case of temp_path is containing
+	           // a device name again
+	           strcpy ((char *)path, temp_path);
+	        else
+	           strcat ((char *)path, temp_path);
+	}
 
-    //strcpy(path, __ps2_normalize_path(path));
-    dbgprintf("\nchecking path : %s\n",path);
+	//strcpy(path, __ps2_normalize_path(path));
+	dbgprintf("\nchecking path : %s\n",path);
 
     int i = 0;
 
@@ -69,12 +69,12 @@ static JSValue athena_dir(JSContext *ctx, JSValue this_val, int argc, JSValueCon
 			JS_DefinePropertyValueStr(ctx, obj, "size", JS_NewUint32(ctx, statbuf.st_size), JS_PROP_C_W_E);
 			JS_DefinePropertyValueStr(ctx, obj, "dir", JS_NewBool(ctx, (dir->d_type == DT_DIR)), JS_PROP_C_W_E);
 
-            JS_DefinePropertyValueUint32(ctx, arr, i++, obj, JS_PROP_C_W_E);
-        }
-        closedir(d);
-    }
+			JS_DefinePropertyValueUint32(ctx, arr, i++, obj, JS_PROP_C_W_E);
+	    }
+	    closedir(d);
+	}
 
-    return arr;
+	return arr;
 }
 
 static JSValue athena_removeDir(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
@@ -590,8 +590,10 @@ static JSValue athena_sifloaddefaultmodule(JSContext *ctx, JSValue this_val, int
 
 static JSValue athena_resetiop(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	if (argc != 0) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
+	#ifdef ATHENA_PADEMU
 	if(ds34bt_started) ds34bt_deinit();
 	if(ds34usb_started) ds34usb_deinit();
+	#endif
 	if(pads_started) padEnd();
 	#ifdef ATHENA_AUDIO
 	if(audio_started) audsrv_quit();
