@@ -59,7 +59,7 @@ static const char* vert_attributes[] = {
 	"positions",
 	"normals",
 	"texcoords",
-	"colors"
+	"colors",
 };
 
 static JSValue athena_object_ctor(JSContext *ctx, JSValueConst new_target, int argc, JSValueConst *argv) {
@@ -71,11 +71,6 @@ static JSValue athena_object_ctor(JSContext *ctx, JSValueConst new_target, int a
 	
     if (!ro)
         return JS_EXCEPTION;
-
-	ro->m.attributes.accurate_clipping = true;
-	ro->m.attributes.backface_culling = false;
-	ro->m.attributes.texture_mapping = true;
-	ro->m.attributes.shade_model = SHADE_GOURAUD;
 
 	if (JS_IsObject(argv[0])) {
 		memset(ro, 0, sizeof(JSRenderObject));
@@ -152,7 +147,7 @@ static JSValue athena_object_ctor(JSContext *ctx, JSValueConst new_target, int a
 		if (argc > 2) 
 			ro->m.tristrip = JS_ToBool(ctx, argv[2]);
 	
-		ro->m.pipeline = athena_render_set_pipeline(&ro->m, PL_PVC);
+		ro->m.pipeline = athena_render_set_pipeline(&ro->m, PL_DEFAULT);
 
 		goto register_3d_object;
 	}
@@ -210,6 +205,11 @@ static JSValue athena_object_ctor(JSContext *ctx, JSValueConst new_target, int a
 register_3d_object:
     proto = JS_GetPropertyStr(ctx, new_target, "prototype");
     obj = JS_NewObjectProtoClass(ctx, proto, js_object_class_id);
+
+	ro->m.attributes.accurate_clipping = 1;
+	ro->m.attributes.backface_culling = 0;
+	ro->m.attributes.texture_mapping = 1;
+	ro->m.attributes.shade_model = 1;
 
 	if (ro->m.texture_count > 0) {
 		JSValue tex_arr = JS_NewArray(ctx);
@@ -664,6 +664,7 @@ static JSValue athena_newvertex(JSContext *ctx, JSValue this_val, int argc, JSVa
 	JS_DefinePropertyValueStr(ctx, obj, "normals",          argv[1], JS_PROP_C_W_E);
 	JS_DefinePropertyValueStr(ctx, obj, "texcoords",        argv[2], JS_PROP_C_W_E);
 	JS_DefinePropertyValueStr(ctx, obj, "colors",           argv[3], JS_PROP_C_W_E);
+
 	JS_DefinePropertyValueStr(ctx, obj, "materials",        argv[4], JS_PROP_C_W_E);
 	JS_DefinePropertyValueStr(ctx, obj, "material_indices", argv[5], JS_PROP_C_W_E);
 
@@ -680,8 +681,6 @@ static const JSCFunctionListEntry render_funcs[] = {
 	JS_PROP_INT32_DEF("PL_NO_LIGHTS",                       PL_NO_LIGHTS, JS_PROP_CONFIGURABLE),
 	JS_PROP_INT32_DEF("PL_DEFAULT",                           PL_DEFAULT, JS_PROP_CONFIGURABLE),
 	JS_PROP_INT32_DEF("PL_SPECULAR",                         PL_SPECULAR, JS_PROP_CONFIGURABLE),
-
-	JS_PROP_INT32_DEF("PL_PVC",                         	PL_PVC, JS_PROP_CONFIGURABLE),
 };
 
 static int render_init(JSContext *ctx, JSModuleDef *m)
