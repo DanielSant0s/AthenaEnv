@@ -70,8 +70,7 @@ EE_VCLPP = vclpp
 JS_CORE = quickjs/cutils.o quickjs/libbf.o quickjs/libregexp.o quickjs/libunicode.o \
 				 quickjs/realpath.o quickjs/quickjs.o quickjs/quickjs-libc.o
 
-VU1_MPGS = draw_3D_pvc.o \
-           draw_3D_colors.o draw_3D_colors_scissor.o \
+VU1_MPGS = draw_3D_colors.o draw_3D_colors_scissor.o \
            draw_3D_lights.o draw_3D_lights_scissor.o \
            draw_3D_spec.o draw_3D_spec_scissor.o
 
@@ -178,7 +177,7 @@ all: $(EXT_LIBS) $(EE_BIN) $(EE_EMBED_DIR) $(EE_OBJS_DIR)
 	mv $(EE_BIN) bin/
 	mv $(EE_BIN_PKD) bin/
 
-# mpgs: src/draw_3D_pvc.vsm src/draw_3D_colors.vsm src/draw_3D_colors_scissor.vsm src/draw_3D_lights.vsm src/draw_3D_lights_scissor.vsm src/draw_3D_spec.vsm src/draw_3D_spec_scissor.vsm
+# mpgs: src/draw_3D_colors.vsm src/draw_3D_colors_scissor.vsm src/draw_3D_lights.vsm src/draw_3D_lights_scissor.vsm src/draw_3D_spec.vsm src/draw_3D_spec_scissor.vsm
 
 debug: $(EXT_LIBS) $(EE_BIN)
 	echo "Building $(EE_BIN) with debug symbols..."

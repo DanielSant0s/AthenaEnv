@@ -122,7 +122,7 @@ typedef enum {
 #define ALPHA_EXPAND_NORMAL			0
 #define ALPHA_EXPAND_TRANSPARENT	1
 
-#define VU_GS_PRIM(PRIM, IIP, TME, FGE, ABE, AA1, FST, CTXT, FIX) (u128)(((FIX << 10) | (CTXT << 9) | (FST << 8) | (AA1 << 7) | (ABE << 6) | (FGE << 5) | (TME << 4) | (IIP << 3) | (PRIM)))
+#define VU_GS_PRIM(PRIM, IIP, TME, FGE, ABE, AA1, FST, CTXT, FIX) (((FIX << 10) | (CTXT << 9) | (FST << 8) | (AA1 << 7) | (ABE << 6) | (FGE << 5) | (TME << 4) | (IIP << 3) | (PRIM)))
 #define NO_CUSTOM_DATA 0 
 #define VU_GS_GIFTAG(NLOOP, EOP, DATA, PRE, PRIM, FLG, NREG) (((u64)(NREG) << 60) | ((u64)(FLG) << 58) | ((u64)(PRIM) << 47) | ((u64)(PRE) << 46) | ((u64)(DATA) << 16) | (EOP << 15) | (NLOOP << 0))
 

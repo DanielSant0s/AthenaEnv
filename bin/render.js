@@ -62,6 +62,15 @@ const vertList = Render.vertexList(triPositions,
 
 const listtest = new RenderObject(vertList);
 
+const trilist_materials = listtest.materials;
+
+trilist_materials[0].diffuse.r = 0.0;
+trilist_materials[0].diffuse.g = 0.0;
+trilist_materials[0].diffuse.b = 0.0;
+//trilist_materials[0].diffuse.a = 0.0;
+
+listtest.materials = trilist_materials;
+
 let dragontex = new Image("dragon.png");
 const dragonmesh = new RenderObject("dragon.obj", dragontex);
 
@@ -178,8 +187,12 @@ while(true) {
         std.reload("main.js");
     }
 
-    if(pad.justPressed(Pads.SQUARE)) {
+    if(pad.justPressed(Pads.R1)) {
         bbox ^= 1;
+    }
+
+    if(pad.justPressed(Pads.SQUARE)) {
+        model[modeltodisplay].shade_model ^= 1;
     }
 
     if(pad.justPressed(Pads.CIRCLE)) {

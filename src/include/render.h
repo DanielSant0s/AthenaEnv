@@ -30,8 +30,6 @@ typedef enum {
 	PL_NO_LIGHTS,
 	PL_DEFAULT,
 	PL_SPECULAR,
-
-	PL_PVC,
 } eRenderPipelines;
 
 typedef enum {
@@ -41,10 +39,10 @@ typedef enum {
 } eRenderShadeModels;
 
 typedef struct {
-	uint32_t accurate_clipping: 1; 
-	uint32_t backface_culling:  1; 
-	uint32_t texture_mapping:   1;
-	uint32_t shade_model:       2; // 0 = flat, 1 = gouraud, 2 = blinn-phong
+	int accurate_clipping; 
+	int backface_culling; 
+	int texture_mapping;
+	int shade_model; // 0 = flat, 1 = gouraud
 } RenderAttributes;
 
 

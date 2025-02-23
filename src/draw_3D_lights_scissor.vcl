@@ -106,7 +106,8 @@ init:
 
     iaddiu  vertexData,     iBase,      2           ; pointer to vertex data
     iadd    normalData,     vertexData, vertCount   ; pointer to stq
-    iadd    stqData,     normalData,    vertCount   ; pointer to colors
+    iadd    colorData,     normalData, vertCount   ; pointer to stq
+    iadd    stqData,     colorData,    vertCount   ; pointer to colors
 
     iaddiu     kickAddress,    vertexData, INBUF_SIZE
     ;////////////////////////////////////////////
@@ -136,9 +137,10 @@ init:
     loop:
 
         ;////////// --- Load loop data --- //////////
-        lq inVert, 0(vertexData)   
-        lq stq,    0(stqData)       
-        lq inNorm, 0(normalData) 
+        lq inVert,  0(vertexData)   
+        lq stq,     0(stqData)       
+        lq inNorm,  0(normalData) 
+        lq inColor, 0(colorData) 
         ;////////////////////////////////////////////    
 
 
@@ -192,7 +194,8 @@ init:
             iaddiu   currDirLight,  currDirLight,  1; increment the loop counter 
             ibne    dirLightQnt,  currDirLight,  directionaLightsLoop	; and repeat if needed
 
-        mul.xyzw    color, matDiffuse, light       ; color = color * light
+        add.xyzw   color, matDiffuse, inColor
+        mul    color, color,      light       ; color = color * light
         VectorClamp color, color 0.0 1.0
         loi 128.0
         mul color, color, i                        ; normalize RGBA
@@ -715,6 +718,7 @@ init:
         iaddiu          vertexData,     vertexData,     1                         
         iaddiu          stqData,        stqData,        1   
         iaddiu          normalData,     normalData,     1
+        iaddiu          colorData,      colorData,      1
 
         iaddiu          outputAddress,  outputAddress,  3
 

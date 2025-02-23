@@ -85,9 +85,10 @@ init:
     mtir     vertCount, primTag[x]
     iand     vertCount, vertCount, Mask              ; Get the number of verts (bit 0-14) from the PRIM giftag
 
-    iadd    normalData,        vertexData, vertCount   ; pointer to stq
-    iadd    stqData,     normalData,  vertCount   ; pointer to colors
-    iadd    dataPointers,  stqData,  vertCount
+    iadd      normalData,        vertexData, vertCount   ; pointer to stq
+    iadd       colorData,     normalData, vertCount   ; pointer to stq
+    iadd      stqData,      colorData,  vertCount   ; pointer to colors
+    iadd      dataPointers,   stqData,  vertCount
 
     iaddiu    kickAddress,    dataPointers,  0       ; pointer for XGKICK
     iaddiu    destAddress,    dataPointers,  0       ; helper pointer for data inserting
@@ -102,15 +103,10 @@ init:
     vertexLoop:
 
         ;////////// --- Load loop data --- //////////
-        lq inVert, 0(vertexData)    ; load xyz
-                                    ; float : X, Y, Z
-                                    ; any32 : _ = 0
-        lq stq,    0(stqData)       ; load stq
-                                    ; float : S, T
-                                    ; any32 : Q = 1     ; 1, because we will mul this by 1/vert[w] and this
-                                                        ; will be our q for texture perspective correction
-                                    ; any32 : _ = 0 
-        lq.xyzw inNorm,  0(normalData) ; load normal                    
+        lq inVert, 0(vertexData)  
+        lq stq,    0(stqData)   
+        lq.xyzw inNorm,  0(normalData)     
+        lq inColor, 0(colorData)             
         ;////////////////////////////////////////////    
 
 
@@ -199,7 +195,9 @@ init:
             iaddiu   currDirLight,  currDirLight,  1; increment the loop counter 
             ibne    dirLightQnt,  currDirLight,  directionaLightsLoop	; and repeat if needed
 
-        mul.xyzw    color, matDiffuse,  light            ; color = color * light
+        add.xyzw   color, matDiffuse, inColor
+        mul    color, color,      light       ; color = color * light
+
         VectorClamp color, color 0.0 1.0
         loi 128.0
         mul color, color, i                     ; normalize RGBA
@@ -216,6 +214,7 @@ init:
         iaddiu          vertexData,     vertexData,     1                         
         iaddiu          stqData,        stqData,        1  
         iaddiu          normalData,     normalData,     1
+        iaddiu          colorData,     colorData,     1
         iaddiu          destAddress,    destAddress,    3
 
         iaddi   vertexCounter,  vertexCounter,  -1	; decrement the loop counter 
