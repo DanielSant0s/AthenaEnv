@@ -37,6 +37,9 @@ EE_SRC_DIR = src/
 EE_OBJS_DIR = obj/
 EE_EMBED_DIR = embed/
 
+JS_API_DIR = js_api/
+VU1_MPGS_DIR = vu1/
+
 RESET_IOP ?= 1
 DEBUG ?= 0
 EE_SIO ?= 0
@@ -51,7 +54,7 @@ CAMERA ?= 0
 
 EE_LIBS = -L$(PS2SDK)/ports/lib -lmc -lpad -lpatches -ldebug -lz -llzma -lzip -lfileXio -lelf-loader-nocolour -lerl
 
-EE_INCS += -I$(PS2SDK)/ports/include -I$(PS2SDK)/ports/include/zlib -Isrc/readini/include
+EE_INCS += -I$(PS2SDK)/ports/include -I$(PS2SDK)/ports/include/zlib -Isrc/readini/include -Isrc/include
 
 EE_CFLAGS += -Wno-sign-compare -fno-strict-aliasing -fno-exceptions -fpermissive -DCONFIG_VERSION=\"$(shell cat VERSION)\" -D__TM_GMTOFF=tm_gmtoff -DPATH_MAX=256 -DPS2
 ifeq ($(RESET_IOP),1)
@@ -70,9 +73,9 @@ EE_VCLPP = vclpp
 JS_CORE = quickjs/cutils.o quickjs/libbf.o quickjs/libregexp.o quickjs/libunicode.o \
 				 quickjs/realpath.o quickjs/quickjs.o quickjs/quickjs-libc.o
 
-VU1_MPGS = vu1/draw_3D_colors.o vu1/draw_3D_colors_scissor.o \
-           vu1/draw_3D_lights.o vu1/draw_3D_lights_scissor.o \
-           vu1/draw_3D_spec.o vu1/draw_3D_spec_scissor.o
+VU1_MPGS = draw_3D_colors.o draw_3D_colors_scissor.o \
+           draw_3D_lights.o draw_3D_lights_scissor.o \
+           draw_3D_spec.o   draw_3D_spec_scissor.o
 
 APP_CORE = main.o bootlogo.o vif.o athena_math.o memory.o ee_tools.o module_system.o taskman.o pad.o system.o strUtils.o
 
@@ -156,6 +159,9 @@ ifneq ($(EE_SIO), 0)
   EE_LIBS += -lsiocookie
 endif
 
+
+ATHENA_MODULES := $(ATHENA_MODULES:%=$(JS_API_DIR)%) #prepend the modules folder
+VU1_MPGS := $(VU1_MPGS:%=$(VU1_MPGS_DIR)%) #prepend the microprograms folder
 
 EE_OBJS = $(APP_CORE) $(INI_READER) $(JS_CORE) $(ATHENA_MODULES) $(VU1_MPGS) $(IOP_MODULES) $(EMBEDDED_ASSETS) # group them all
 EE_OBJS := $(EE_OBJS:%=$(EE_OBJS_DIR)%) #prepend the object folder

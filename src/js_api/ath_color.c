@@ -4,8 +4,8 @@
 #include <unistd.h>
 #include <fcntl.h>
 
-#include "include/graphics.h"
-#include "ath_env.h"
+#include <graphics.h>
+#include <ath_env.h>
 
 static JSValue athena_color_ctor(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	uint32_t r, g, b, a = 0x80;

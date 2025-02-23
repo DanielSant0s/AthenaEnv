@@ -2,8 +2,9 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
-#include "include/pad.h"
-#include "include/dbgprintf.h"
+
+#include <pad.h>
+#include <dbgprintf.h>
 
 static char pad0Buf[256] __attribute__((aligned(64)));
 static char pad1Buf[256] __attribute__((aligned(64)));

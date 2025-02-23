@@ -5,12 +5,14 @@
 #include <unistd.h>
 #include <string.h>
 #include <stdbool.h>
-#include "ath_env.h"
-#include "include/taskman.h"
-#include "include/memory.h"
-#include "include/ee_tools.h"
-#include "include/dbgprintf.h"
-#include "include/strUtils.h"
+
+#include <ath_env.h>
+
+#include <taskman.h>
+#include <memory.h>
+#include <ee_tools.h>
+#include <dbgprintf.h>
+#include <strUtils.h>
 
 extern void *_gp;
 

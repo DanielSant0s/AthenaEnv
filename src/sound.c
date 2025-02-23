@@ -6,8 +6,8 @@
 #include <stdbool.h>
 #include <errno.h>
 
-#include "include/sound.h"
-#include "include/dbgprintf.h"
+#include <sound.h>
+#include <dbgprintf.h>
 
 extern void *_gp;
 

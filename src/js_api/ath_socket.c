@@ -1,7 +1,7 @@
 
 
-#include "ath_env.h"
-#include "include/network.h"
+#include <ath_env.h>
+#include <network.h>
 #include <malloc.h>
 
 typedef struct {

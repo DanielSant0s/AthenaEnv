@@ -1,5 +1,6 @@
 #include <kernel.h>
-#include "include/ee_tools.h"
+
+#include <ee_tools.h>
 
 void RedirectFunction(void* old, void* new) {
     u32* function = old;

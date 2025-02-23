@@ -1,5 +1,6 @@
 
-#include "include/strUtils.h"
+#include <strUtils.h>
+
 #include <stdio.h>
 #include <string.h>
 #include <malloc.h>
@@ -18,11 +19,11 @@ char* s_sprintf(const char* format, ...)
     va_list args;
     va_start(args, format);
 
-    // Determine o tamanho necessário da string
+    // Determine o tamanho necessï¿½rio da string
     int size = vsnprintf(NULL, 0, format, args);
     va_end(args);
 
-    // Aloque memória para a string
+    // Aloque memï¿½ria para a string
     char* str = (char*)malloc(size + 1);
     if (!str) {
         return NULL;

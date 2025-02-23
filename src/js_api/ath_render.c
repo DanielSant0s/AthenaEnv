@@ -4,8 +4,8 @@
 #include <unistd.h>
 #include <fcntl.h>
 
-#include "include/render.h"
-#include "ath_env.h"
+#include <render.h>
+#include <ath_env.h>
 
 static JSClassID js_object_class_id;
 

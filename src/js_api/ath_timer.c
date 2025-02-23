@@ -1,7 +1,7 @@
 #include <stdlib.h>
 #include <time.h>
 #include <stdbool.h>
-#include "ath_env.h"
+#include <ath_env.h>
 
 // if the timer is running:
 // measuredTime is the value of the last call to getCurrentMilliseconds

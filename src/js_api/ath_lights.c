@@ -4,8 +4,8 @@
 #include <unistd.h>
 #include <fcntl.h>
 
-#include "include/render.h"
-#include "ath_env.h"
+#include <render.h>
+#include <ath_env.h>
 
 static JSValue athena_newlight(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	if (argc != 0) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
