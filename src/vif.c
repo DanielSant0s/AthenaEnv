@@ -1,4 +1,4 @@
-#include "vif.h"
+#include <vif.h>
 
 void vifSendPacket(void* packet, u32 vif_channel) {
     dmaKit_wait(vif_channel, 0);

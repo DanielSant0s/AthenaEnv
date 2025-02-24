@@ -9,12 +9,12 @@
 #include <time.h>
 #include <png.h>
 
-#include "include/graphics.h"
-#include "include/athena_math.h"
-#include "include/dbgprintf.h"
-#include "include/fntsys.h"
+#include <graphics.h>
+#include <athena_math.h>
+#include <dbgprintf.h>
+#include <fntsys.h>
 
-#include "include/pad.h"
+#include <pad.h>
 
 static const u64 BLACK_RGBAQ   = GS_SETREG_RGBAQ(0x00,0x00,0x00,0x80,0x00);
 

@@ -1,7 +1,8 @@
 #include <kernel.h>
-#include "include/def_mods.h"
-#include "include/dbgprintf.h"
 #include <string.h>
+
+#include <def_mods.h>
+#include <dbgprintf.h>
 
 #define NEWLIB_PORT_AWARE
 #include <fileXio_rpc.h>

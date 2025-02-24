@@ -4,8 +4,8 @@
 #include <unistd.h>
 #include <fcntl.h>
 
-#include "include/graphics.h"
-#include "ath_env.h"
+#include <graphics.h>
+#include <ath_env.h>
 
 static JSClassID js_image_class_id;
 

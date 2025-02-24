@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <math.h>
 
-#include "include/athena_math.h"
+#include <athena_math.h>
 
 // Took from Tyra
 

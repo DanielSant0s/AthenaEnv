@@ -1,5 +1,5 @@
 
-#include "include/network.h"
+#include <network.h>
 
 CURL* curl = NULL;
 

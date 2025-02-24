@@ -1,5 +1,5 @@
-#include "include/network.h"
-#include "include/taskman.h"
+#include <network.h>
+#include <taskman.h>
 #include <time.h>
 
 static JSClassID js_request_class_id;

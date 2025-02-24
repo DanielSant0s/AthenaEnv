@@ -1,5 +1,5 @@
-#include "ath_env.h"
-#include "include/pad.h"
+#include <ath_env.h>
+#include <pad.h>
 
 #ifdef ATHENA_PADEMU
 #include <libds34bt.h>

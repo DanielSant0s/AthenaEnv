@@ -4,9 +4,9 @@
 #include <unistd.h>
 #include <fcntl.h>
 
-#include "include/graphics.h"
-#include "include/taskman.h"
-#include "ath_env.h"
+#include <graphics.h>
+#include <taskman.h>
+#include <ath_env.h>
 
 static JSClassID js_imagelist_class_id;
 

@@ -5,9 +5,9 @@
 #include <unistd.h>
 #include <fcntl.h>
 
-#include "include/graphics.h"
-#include "include/fntsys.h"
-#include "ath_env.h"
+#include <graphics.h>
+#include <fntsys.h>
+#include <ath_env.h>
 
 enum {
     osdsys_font,

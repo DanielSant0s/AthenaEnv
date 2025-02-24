@@ -4,13 +4,13 @@
 #include <malloc.h>
 #include <math.h>
 #include <fcntl.h>
+
 #include "fast_obj/fast_obj.h"
 
-#include "include/render.h"
+#include <render.h>
+#include <dbgprintf.h>
 
-#include "include/dbgprintf.h"
-
-#include "vif.h"
+#include <vif.h>
 
 #define DEG2RAD(deg) ((deg) * (M_PI / 180.0f))
 

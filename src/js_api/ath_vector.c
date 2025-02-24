@@ -1,8 +1,8 @@
-#include "ath_env.h"
+#include <ath_env.h>
 #include <math.h>
 #include <stdio.h>
 
-#include "include/render.h"
+#include <render.h>
 
 typedef struct {
     float x;

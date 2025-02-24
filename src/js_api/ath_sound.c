@@ -1,5 +1,5 @@
-#include "ath_env.h"
-#include "include/sound.h"
+#include <ath_env.h>
+#include <sound.h>
 
 static JSValue athena_setvolume(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	int slot, volume;

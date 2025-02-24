@@ -9,13 +9,13 @@
 #include <stdbool.h>
 #include <setjmp.h>
 
-#include "quickjs/quickjs-libc.h"
+#include "../quickjs/quickjs-libc.h"
 
 #ifdef ATHENA_GRAPHICS
-#include "include/graphics.h"
+#include <graphics.h>
 #endif
 
-#include "include/dbgprintf.h"
+#include <dbgprintf.h>
 
 extern bool boot_logo, dark_mode;
 

@@ -9,11 +9,11 @@
 #include <math.h>
 #include <unistd.h>
 #include <sys/fcntl.h>
-#include "include/fntsys.h"
-#include "include/utf8.h"
-#include "include/atlas.h"
-#include "include/graphics.h"
-#include "include/dbgprintf.h"
+#include <fntsys.h>
+#include <utf8.h>
+#include <atlas.h>
+#include <graphics.h>
+#include <dbgprintf.h>
 
 #include <sys/types.h>
 #include <ft2build.h>

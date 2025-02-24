@@ -13,7 +13,7 @@
 #include <libds34bt.h>
 #include <libds34usb.h>
 #endif
-#include "pad.h"
+#include <pad.h>
 
 #ifdef ATHENA_AUDIO
 #include <audsrv.h>

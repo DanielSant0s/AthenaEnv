@@ -1,8 +1,8 @@
-#include "ath_env.h"
+#include <ath_env.h>
 #include <math.h>
 #include <stdio.h>
 
-#include "include/render.h"
+#include <render.h>
 
 static bool overlap(float min1, float max1, float min2, float max2) {
     return max1 >= min2 && max2 >= min1;

@@ -6,22 +6,22 @@
 #include <sys/stat.h>
 #include <stdbool.h>
 
-#include "include/memory.h"
+#include <memory.h>
 
-#include "include/def_mods.h"
-#include "include/strUtils.h"
+#include <def_mods.h>
+#include <strUtils.h>
 
-#include "include/taskman.h"
+#include <taskman.h>
 
-#include "ath_env.h"
+#include <ath_env.h>
 
 #define NEWLIB_PORT_AWARE
 #include <fileXio_rpc.h>
 #include <fileio.h>
 
 #ifdef ATHENA_GRAPHICS
-#include "include/graphics.h"
-#include "include/fntsys.h"
+#include <graphics.h>
+#include <fntsys.h>
 #endif
 
 #include <readini.h>
