@@ -4,9 +4,9 @@
 #include <string.h>
 #include <errno.h>
 
-#include "ath_env.h"
+#include <ath_env.h>
 
-#include "include/memory.h"
+#include <memory.h>
 
 #define TRUE 1
 

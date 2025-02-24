@@ -1,4 +1,5 @@
-#include "../ath_env.h"
+#include <ath_env.h>
+
 #include <netman.h>
 #include <sys/socket.h> /* socket, connect */
 #include <arpa/inet.h> /* struct sockaddr_in, struct sockaddr */

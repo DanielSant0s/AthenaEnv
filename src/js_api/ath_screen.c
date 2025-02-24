@@ -4,9 +4,9 @@
 #include <unistd.h>
 #include <fcntl.h>
 
-#include "include/graphics.h"
-#include "include/fntsys.h"
-#include "ath_env.h"
+#include <graphics.h>
+#include <fntsys.h>
+#include <ath_env.h>
 
 static JSValue athena_set_clear_color(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	static Color clear_color = GS_SETREG_RGBAQ(0x00, 0x00, 0x00, 0x80, 0x00);

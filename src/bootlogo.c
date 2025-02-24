@@ -1,7 +1,8 @@
 #include <time.h>
-#include "include/graphics.h"
-#include "include/taskman.h"
-#include "ath_env.h"
+
+#include <graphics.h>
+#include <taskman.h>
+#include <ath_env.h>
 
 extern unsigned char owl_indices[];
 extern unsigned int size_owl_indices;

@@ -1,4 +1,4 @@
-#include "ath_env.h"
+#include <ath_env.h>
 #include <libkbd.h>
 
 static JSValue athena_kbd_init(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){

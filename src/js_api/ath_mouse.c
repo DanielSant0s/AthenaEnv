@@ -1,4 +1,4 @@
-#include "ath_env.h"
+#include <ath_env.h>
 #include <libmouse.h>
 
 static JSValue athena_mouse_init_f(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){

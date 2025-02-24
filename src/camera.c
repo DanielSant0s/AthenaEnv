@@ -4,9 +4,8 @@
 #include <malloc.h>
 #include <math.h>
 
-#include "include/render.h"
-
-#include "include/dbgprintf.h"
+#include <render.h>
+#include <dbgprintf.h>
 
 eCameraTypes camera_type = CAMERA_DEFAULT;
 

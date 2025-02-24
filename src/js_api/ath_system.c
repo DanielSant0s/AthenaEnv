@@ -8,11 +8,11 @@
 #include <timer.h>
 #include <debug.h>
 
-#include "ath_env.h"
-#include "include/system.h"
-#include "include/memory.h"
-#include "include/def_mods.h"
-#include "include/taskman.h"
+#include <ath_env.h>
+#include <system.h>
+#include <memory.h>
+#include <def_mods.h>
+#include <taskman.h>
 
 #define MAX_DIR_FILES 512
 

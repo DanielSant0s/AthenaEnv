@@ -4,7 +4,8 @@
 #include <unistd.h>
 #include <fcntl.h>
 
-#include "ath_env.h"
+#include <ath_env.h>
+
 #include <ps2cam_rpc.h>
 
 //int PS2CamGetDeviceInfo(int handle, PS2CAM_DEVICE_INFO *info);

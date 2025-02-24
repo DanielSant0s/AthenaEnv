@@ -4,9 +4,9 @@
 #include <unistd.h>
 #include <fcntl.h>
 
-#include "ath_env.h"
+#include <ath_env.h>
 
-#include "include/taskman.h"
+#include <taskman.h>
 
 typedef struct {
     JSContext *ctx;
@@ -20,12 +20,12 @@ typedef struct {
 void worker_thread(void *arg) {
     thread_info_t *tinfo = (thread_info_t *)arg;
 
-    // Executa a função
+    // Executa a funï¿½ï¿½o
     if (JS_IsFunction(tinfo->ctx, tinfo->func)) {
         tinfo->ret = JS_Call(tinfo->ctx, tinfo->func, tinfo->this_obj, tinfo->argc, tinfo->argv);
     }
     
-    // Libera a memória alocada para os argumentos
+    // Libera a memï¿½ria alocada para os argumentos
     for (int i = 0; i < tinfo->argc; i++) {
         JS_FreeValue(tinfo->ctx, tinfo->argv[i]);
     }
@@ -33,10 +33,10 @@ void worker_thread(void *arg) {
 }
 
 static JSValue athena_newtask(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    // Aloca a memória para a estrutura thread_info_t
+    // Aloca a memï¿½ria para a estrutura thread_info_t
     thread_info_t *tinfo = (thread_info_t *)malloc(sizeof(thread_info_t));
 
-    // Salva as informações necessárias para executar a função com pthreads
+    // Salva as informaï¿½ï¿½es necessï¿½rias para executar a funï¿½ï¿½o com pthreads
     tinfo->ctx = ctx;
     tinfo->func = argv[0];
     tinfo->this_obj = this_val;
