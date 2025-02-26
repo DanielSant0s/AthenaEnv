@@ -5,8 +5,8 @@
 		.global	VU1Draw3DLCSS_CodeStart
 		.global	VU1Draw3DLCSS_CodeEnd
 VU1Draw3DLCSS_CodeStart:
-__v_src_draw_3D_spec_scissor_vcl_4:
-; _LNOPT_w=[ normal2 ] 14 [14 0] 14   [__v_src_draw_3D_spec_scissor_vcl_4]
+__v_src_vu1_draw_3D_spec_scissor_vcl_4:
+; _LNOPT_w=[ normal2 ] 14 [14 0] 14   [__v_src_vu1_draw_3D_spec_scissor_vcl_4]
          NOP                                                        iaddiu        VI02,VI00,0x000003ff                
          NOP                                                        lq.xyz        VF05,0(VI00)                        
          max.z         VF03,VF00,VF00                               loi           0x45000000                          
@@ -25,19 +25,20 @@ __v_src_draw_3D_spec_scissor_vcl_4:
          NOP                                                        iaddiu        VI03,VI00,0x00000003                
 done:
 init:
-; _LNOPT_w=[ normal2 ] 15 [15 0] 15   [done]
+; _LNOPT_w=[ normal2 ] 16 [16 0] 16   [done]
          NOP                                                        xtop          VI08                                
+         NOP                                                        xitop         VI04                                
          NOP                                                        lq            VF10,0(VI08)                        
          NOP                                                        iaddiu        VI05,VI08,0x00000002                
-         NOP                                                        iaddiu        VI09,VI05,0x000000cc                
-         NOP                                                        iaddiu        VI04,VI00,0x00007fff                
-         NOP                                                        mtir          VI06,VF10x                          
-         NOP                                                        iand          VI04,VI06,VI04                      
+         NOP                                                        iaddiu        VI10,VI04,0x00007fff                
          NOP                                                        iadd          VI06,VI05,VI04                      
+         NOP                                                        iaddiu        VI09,VI05,0x000000cc                
          NOP                                                        iadd          VI07,VI06,VI04                      
+         NOP                                                        iaddiu        VI10,VI10,0x00000001                
          NOP                                                        lq            VF07,1(VI08)                        
          NOP                                                        iadd          VI08,VI07,VI04                      
          NOP                                                        sq            VF10,0(VI09)                        
+         NOP                                                        isw.x         VI10,0(VI09)                        
          NOP                                                        iaddiu        VI10,VI09,0x00000001                
          max           VF08,VF00,VF00                               isubiu        VI11,VI00,2                         
          max           VF09,VF00,VF00                               isubiu        VI12,VI00,2                         
@@ -98,7 +99,7 @@ directionaLightsLoop:
          NOP                                                        NOP                                               
          NOP                                                        ibne          VI13,VI01,directionaLightsLoop      
          add           VF15,VF15,VF16                               NOP                                                      ;	STALL_LATENCY ?1
-; _LNOPT_w=[ vuta1 ] 19 [25 0] 25   [__v_src_draw_3D_spec_scissor_vcl_9]
+; _LNOPT_w=[ vuta1 ] 19 [25 0] 25   [__v_src_vu1_draw_3D_spec_scissor_vcl_9]
          add           VF16,VF07,VF11                               loi           0x00000000                          
          addi.x        VF11,VF00,I                                  move          VF14,VF08                           
          mulax         ACC,VF01,VF10x                               move          VF08,VF09                           
@@ -123,7 +124,7 @@ directionaLightsLoop:
          NOP                                                        NOP                                               
          NOP                                                        ibgtz         VI03,after_scissoring               
          NOP                                                        NOP                                               
-; _LNOPT_w=[ normal2 ] 1 [1 0] 1   [__v_src_draw_3D_spec_scissor_vcl_11]
+; _LNOPT_w=[ normal2 ] 1 [1 0] 1   [__v_src_vu1_draw_3D_spec_scissor_vcl_11]
          NOP                                                        iaddiu        VI03,VI00,0x00000003                
 check:
 ; _LNOPT_w=[ normal2 ] 5 [5 0] 5   [check]
@@ -136,27 +137,27 @@ check:
          NOP                                                        fcor          VI01,16644063                       
          NOP                                                        ibne          VI01,VI00,triangle_outside          
          NOP                                                        NOP                                               
-; _LNOPT_w=[ normal2 ] 3 [3 0] 3   [__v_src_draw_3D_spec_scissor_vcl_14]
+; _LNOPT_w=[ normal2 ] 3 [3 0] 3   [__v_src_vu1_draw_3D_spec_scissor_vcl_14]
          NOP                                                        fcor          VI01,16710639                       
          NOP                                                        ibne          VI01,VI00,triangle_outside          
          NOP                                                        NOP                                               
-; _LNOPT_w=[ normal2 ] 3 [3 0] 3   [__v_src_draw_3D_spec_scissor_vcl_15]
+; _LNOPT_w=[ normal2 ] 3 [3 0] 3   [__v_src_vu1_draw_3D_spec_scissor_vcl_15]
          NOP                                                        fcor          VI01,16743927                       
          NOP                                                        ibne          VI01,VI00,triangle_outside          
          NOP                                                        NOP                                               
-; _LNOPT_w=[ normal2 ] 3 [3 0] 3   [__v_src_draw_3D_spec_scissor_vcl_16]
+; _LNOPT_w=[ normal2 ] 3 [3 0] 3   [__v_src_vu1_draw_3D_spec_scissor_vcl_16]
          NOP                                                        fcor          VI01,16760571                       
          NOP                                                        ibne          VI01,VI00,triangle_outside          
          NOP                                                        NOP                                               
-; _LNOPT_w=[ normal2 ] 3 [3 0] 3   [__v_src_draw_3D_spec_scissor_vcl_17]
+; _LNOPT_w=[ normal2 ] 3 [3 0] 3   [__v_src_vu1_draw_3D_spec_scissor_vcl_17]
          NOP                                                        fcor          VI01,16768893                       
          NOP                                                        ibne          VI01,VI00,triangle_outside          
          NOP                                                        NOP                                               
-; _LNOPT_w=[ normal2 ] 3 [3 0] 3   [__v_src_draw_3D_spec_scissor_vcl_18]
+; _LNOPT_w=[ normal2 ] 3 [3 0] 3   [__v_src_vu1_draw_3D_spec_scissor_vcl_18]
          NOP                                                        fcor          VI01,16773054                       
          NOP                                                        ibne          VI01,VI00,triangle_outside          
          NOP                                                        NOP                                               
-; _LNOPT_w=[ normal2 ] 28 [28 0] 28   [__v_src_draw_3D_spec_scissor_vcl_19]
+; _LNOPT_w=[ normal2 ] 28 [28 0] 28   [__v_src_vu1_draw_3D_spec_scissor_vcl_19]
          NOP                                                        sqd           VF14,(--VI02)                       
          NOP                                                        lq            VF10,-2(VI08)                       
          add           VF13,VF14,VF08                               lq            VF12,-1(VI08)                       
@@ -185,7 +186,7 @@ check:
          NOP                                                        sq            VF10,70(VI13)                       
          NOP                                                        ibltz         VI03,STRIP_COLOR                    
          NOP                                                        sq            VF09,69(VI13)                       
-; _LNOPT_w=[ normal2 ] 11 [9 0] 13   [__v_src_draw_3D_spec_scissor_vcl_20]
+; _LNOPT_w=[ normal2 ] 11 [9 0] 13   [__v_src_vu1_draw_3D_spec_scissor_vcl_20]
          NOP                                                        lq            VF08,-5(VI10)                       
          NOP                                                        lq            VF10,-2(VI10)                       
          NOP                                                        lq            VF09,1(VI10)                        
@@ -221,18 +222,18 @@ LOOP_Z_MINUS:
 ; _LNOPT_w=[ normal2 ] 2 [2 0] 2   [LOOP_Z_MINUS]
          NOP                                                        bal           VI12,scissor_interpolation          
          NOP                                                        NOP                                               
-; _LNOPT_w=[ normal2 ] 4 [4 0] 4   [__v_src_draw_3D_spec_scissor_vcl_25]
+; _LNOPT_w=[ normal2 ] 4 [4 0] 4   [__v_src_vu1_draw_3D_spec_scissor_vcl_25]
          NOP                                                        isubiu        VI10,VI10,0x00000001                
          NOP                                                        NOP                                               
          NOP                                                        ibne          VI10,VI00,LOOP_Z_MINUS              
          NOP                                                        NOP                                               
-; _LNOPT_w=[ normal2 ] 2 [2 0] 2   [__v_src_draw_3D_spec_scissor_vcl_26]
+; _LNOPT_w=[ normal2 ] 2 [2 0] 2   [__v_src_vu1_draw_3D_spec_scissor_vcl_26]
          NOP                                                        bal           VI03,SAVE_LAST_LOOP                 
          NOP                                                        iaddiu        VI02,VI00,0x00000065                
-; _LNOPT_w=[ normal2 ] 2 [2 0] 2   [__v_src_draw_3D_spec_scissor_vcl_27]
+; _LNOPT_w=[ normal2 ] 2 [2 0] 2   [__v_src_vu1_draw_3D_spec_scissor_vcl_27]
          NOP                                                        ibeq          VI11,VI00,SCISSOR_END               
          NOP                                                        NOP                                               
-; _LNOPT_w=[ normal2 ] 10 [10 0] 10   [__v_src_draw_3D_spec_scissor_vcl_28]
+; _LNOPT_w=[ normal2 ] 10 [10 0] 10   [__v_src_vu1_draw_3D_spec_scissor_vcl_28]
          NOP                                                        iaddiu        VI05,VI00,0x00000065                
          NOP                                                        iaddiu        VI02,VI00,0x00000400                
          NOP                                                        iaddiu        VI03,VI00,0x00000010                
@@ -247,18 +248,18 @@ LOOP_Z_PLUS:
 ; _LNOPT_w=[ normal2 ] 2 [2 0] 2   [LOOP_Z_PLUS]
          NOP                                                        bal           VI12,scissor_interpolation          
          NOP                                                        NOP                                               
-; _LNOPT_w=[ normal2 ] 4 [4 0] 4   [__v_src_draw_3D_spec_scissor_vcl_30]
+; _LNOPT_w=[ normal2 ] 4 [4 0] 4   [__v_src_vu1_draw_3D_spec_scissor_vcl_30]
          NOP                                                        isubiu        VI10,VI10,0x00000001                
          NOP                                                        NOP                                               
          NOP                                                        ibne          VI10,VI00,LOOP_Z_PLUS               
          NOP                                                        NOP                                               
-; _LNOPT_w=[ normal2 ] 2 [2 0] 2   [__v_src_draw_3D_spec_scissor_vcl_31]
+; _LNOPT_w=[ normal2 ] 2 [2 0] 2   [__v_src_vu1_draw_3D_spec_scissor_vcl_31]
          NOP                                                        bal           VI03,SAVE_LAST_LOOP                 
          NOP                                                        iaddiu        VI02,VI00,0x0000003d                
-; _LNOPT_w=[ normal2 ] 2 [2 0] 2   [__v_src_draw_3D_spec_scissor_vcl_32]
+; _LNOPT_w=[ normal2 ] 2 [2 0] 2   [__v_src_vu1_draw_3D_spec_scissor_vcl_32]
          NOP                                                        ibeq          VI11,VI00,SCISSOR_END               
          NOP                                                        NOP                                               
-; _LNOPT_w=[ normal2 ] 10 [10 0] 10   [__v_src_draw_3D_spec_scissor_vcl_33]
+; _LNOPT_w=[ normal2 ] 10 [10 0] 10   [__v_src_vu1_draw_3D_spec_scissor_vcl_33]
          NOP                                                        iaddiu        VI05,VI00,0x0000003d                
          NOP                                                        iaddiu        VI02,VI00,0x00000080                
          NOP                                                        iaddiu        VI03,VI00,0x00000002                
@@ -273,18 +274,18 @@ LOOP_X_MINUS:
 ; _LNOPT_w=[ normal2 ] 2 [2 0] 2   [LOOP_X_MINUS]
          NOP                                                        bal           VI12,scissor_interpolation          
          NOP                                                        NOP                                               
-; _LNOPT_w=[ normal2 ] 4 [4 0] 4   [__v_src_draw_3D_spec_scissor_vcl_35]
+; _LNOPT_w=[ normal2 ] 4 [4 0] 4   [__v_src_vu1_draw_3D_spec_scissor_vcl_35]
          NOP                                                        isubiu        VI10,VI10,0x00000001                
          NOP                                                        NOP                                               
          NOP                                                        ibne          VI10,VI00,LOOP_X_MINUS              
          NOP                                                        NOP                                               
-; _LNOPT_w=[ normal2 ] 2 [2 0] 2   [__v_src_draw_3D_spec_scissor_vcl_36]
+; _LNOPT_w=[ normal2 ] 2 [2 0] 2   [__v_src_vu1_draw_3D_spec_scissor_vcl_36]
          NOP                                                        bal           VI03,SAVE_LAST_LOOP                 
          NOP                                                        iaddiu        VI02,VI00,0x00000065                
-; _LNOPT_w=[ normal2 ] 2 [2 0] 2   [__v_src_draw_3D_spec_scissor_vcl_37]
+; _LNOPT_w=[ normal2 ] 2 [2 0] 2   [__v_src_vu1_draw_3D_spec_scissor_vcl_37]
          NOP                                                        ibeq          VI11,VI00,SCISSOR_END               
          NOP                                                        NOP                                               
-; _LNOPT_w=[ normal2 ] 10 [10 0] 10   [__v_src_draw_3D_spec_scissor_vcl_38]
+; _LNOPT_w=[ normal2 ] 10 [10 0] 10   [__v_src_vu1_draw_3D_spec_scissor_vcl_38]
          NOP                                                        iaddiu        VI05,VI00,0x00000065                
          NOP                                                        iaddiu        VI02,VI00,0x00000040                
          NOP                                                        iaddiu        VI03,VI00,0x00000001                
@@ -299,18 +300,18 @@ LOOP_X_PLUS:
 ; _LNOPT_w=[ normal2 ] 2 [2 0] 2   [LOOP_X_PLUS]
          NOP                                                        bal           VI12,scissor_interpolation          
          NOP                                                        NOP                                               
-; _LNOPT_w=[ normal2 ] 4 [4 0] 4   [__v_src_draw_3D_spec_scissor_vcl_40]
+; _LNOPT_w=[ normal2 ] 4 [4 0] 4   [__v_src_vu1_draw_3D_spec_scissor_vcl_40]
          NOP                                                        isubiu        VI10,VI10,0x00000001                
          NOP                                                        NOP                                               
          NOP                                                        ibne          VI10,VI00,LOOP_X_PLUS               
          NOP                                                        NOP                                               
-; _LNOPT_w=[ normal2 ] 2 [2 0] 2   [__v_src_draw_3D_spec_scissor_vcl_41]
+; _LNOPT_w=[ normal2 ] 2 [2 0] 2   [__v_src_vu1_draw_3D_spec_scissor_vcl_41]
          NOP                                                        bal           VI03,SAVE_LAST_LOOP                 
          NOP                                                        iaddiu        VI02,VI00,0x0000003d                
-; _LNOPT_w=[ normal2 ] 2 [2 0] 2   [__v_src_draw_3D_spec_scissor_vcl_42]
+; _LNOPT_w=[ normal2 ] 2 [2 0] 2   [__v_src_vu1_draw_3D_spec_scissor_vcl_42]
          NOP                                                        ibeq          VI11,VI00,SCISSOR_END               
          NOP                                                        NOP                                               
-; _LNOPT_w=[ normal2 ] 10 [10 0] 10   [__v_src_draw_3D_spec_scissor_vcl_43]
+; _LNOPT_w=[ normal2 ] 10 [10 0] 10   [__v_src_vu1_draw_3D_spec_scissor_vcl_43]
          NOP                                                        iaddiu        VI05,VI00,0x0000003d                
          NOP                                                        iaddiu        VI02,VI00,0x00000200                
          NOP                                                        iaddiu        VI03,VI00,0x00000008                
@@ -325,18 +326,18 @@ LOOP_Y_MINUS:
 ; _LNOPT_w=[ normal2 ] 2 [2 0] 2   [LOOP_Y_MINUS]
          NOP                                                        bal           VI12,scissor_interpolation          
          NOP                                                        NOP                                               
-; _LNOPT_w=[ normal2 ] 4 [4 0] 4   [__v_src_draw_3D_spec_scissor_vcl_45]
+; _LNOPT_w=[ normal2 ] 4 [4 0] 4   [__v_src_vu1_draw_3D_spec_scissor_vcl_45]
          NOP                                                        isubiu        VI10,VI10,0x00000001                
          NOP                                                        NOP                                               
          NOP                                                        ibne          VI10,VI00,LOOP_Y_MINUS              
          NOP                                                        NOP                                               
-; _LNOPT_w=[ normal2 ] 2 [2 0] 2   [__v_src_draw_3D_spec_scissor_vcl_46]
+; _LNOPT_w=[ normal2 ] 2 [2 0] 2   [__v_src_vu1_draw_3D_spec_scissor_vcl_46]
          NOP                                                        bal           VI03,SAVE_LAST_LOOP                 
          NOP                                                        iaddiu        VI02,VI00,0x00000065                
-; _LNOPT_w=[ normal2 ] 2 [2 0] 2   [__v_src_draw_3D_spec_scissor_vcl_47]
+; _LNOPT_w=[ normal2 ] 2 [2 0] 2   [__v_src_vu1_draw_3D_spec_scissor_vcl_47]
          NOP                                                        ibeq          VI11,VI00,SCISSOR_END               
          NOP                                                        NOP                                               
-; _LNOPT_w=[ normal2 ] 10 [10 0] 10   [__v_src_draw_3D_spec_scissor_vcl_48]
+; _LNOPT_w=[ normal2 ] 10 [10 0] 10   [__v_src_vu1_draw_3D_spec_scissor_vcl_48]
          NOP                                                        iaddiu        VI05,VI00,0x00000065                
          NOP                                                        iaddiu        VI02,VI00,0x00000100                
          NOP                                                        iaddiu        VI03,VI00,0x00000004                
@@ -351,18 +352,18 @@ LOOP_Y_PLUS:
 ; _LNOPT_w=[ normal2 ] 2 [2 0] 2   [LOOP_Y_PLUS]
          NOP                                                        bal           VI12,scissor_interpolation          
          NOP                                                        NOP                                               
-; _LNOPT_w=[ normal2 ] 4 [4 0] 4   [__v_src_draw_3D_spec_scissor_vcl_50]
+; _LNOPT_w=[ normal2 ] 4 [4 0] 4   [__v_src_vu1_draw_3D_spec_scissor_vcl_50]
          NOP                                                        isubiu        VI10,VI10,0x00000001                
          NOP                                                        NOP                                               
          NOP                                                        ibne          VI10,VI00,LOOP_Y_PLUS               
          NOP                                                        NOP                                               
-; _LNOPT_w=[ normal2 ] 2 [2 0] 2   [__v_src_draw_3D_spec_scissor_vcl_51]
+; _LNOPT_w=[ normal2 ] 2 [2 0] 2   [__v_src_vu1_draw_3D_spec_scissor_vcl_51]
          NOP                                                        bal           VI03,SAVE_LAST_LOOP                 
          NOP                                                        iaddiu        VI02,VI00,0x0000003d                
-; _LNOPT_w=[ normal2 ] 2 [2 0] 2   [__v_src_draw_3D_spec_scissor_vcl_52]
+; _LNOPT_w=[ normal2 ] 2 [2 0] 2   [__v_src_vu1_draw_3D_spec_scissor_vcl_52]
          NOP                                                        ibeq          VI11,VI00,SCISSOR_END               
          NOP                                                        NOP                                               
-; _LNOPT_w=[ normal2 ] 16 [16 0] 16   [__v_src_draw_3D_spec_scissor_vcl_53]
+; _LNOPT_w=[ normal2 ] 16 [16 0] 16   [__v_src_vu1_draw_3D_spec_scissor_vcl_53]
          NOP                                                        iaddiu        VI04,VI00,0x0000003d                
          NOP                                                        iaddiu        VI02,VI11,0                         
          NOP                                                        iaddiu        VI11,VI00,0x000003ff                
@@ -396,7 +397,7 @@ LOOP2:
          NOP                                                        sq            VF09,-3(VI05)                       
          NOP                                                        ibne          VI02,VI00,LOOP2                     
          NOP                                                        sq            VF08,-1(VI05)                              ;	STALL_LATENCY ?1
-; _LNOPT_w=[ normal2 ] 1 [1 0] 1   [__v_src_draw_3D_spec_scissor_vcl_55]
+; _LNOPT_w=[ normal2 ] 1 [1 0] 1   [__v_src_vu1_draw_3D_spec_scissor_vcl_55]
          NOP                                                        xgkick        VI03                                
 SCISSOR_END:
 ; _LNOPT_w=[ normal2 ] 12 [12 0] 12   [SCISSOR_END]
@@ -426,12 +427,12 @@ after_scissoring:
          NOP                                                        iaddiu        VI07,VI07,0x00000001                
          NOP                                                        ibne          VI04,VI00,loop                      
          NOP                                                        iaddiu        VI10,VI10,0x00000003                
-; _LNOPT_w=[ normal2 ] 1 [1 0] 1   [__v_src_draw_3D_spec_scissor_vcl_59]
+; _LNOPT_w=[ normal2 ] 1 [1 0] 1   [__v_src_vu1_draw_3D_spec_scissor_vcl_59]
          NOP                                                        xgkick        VI09                                
-; _LNOPT_w=[ normal2 ] 2 [0 0] 2   [__v_src_draw_3D_spec_scissor_vcl_60]
+; _LNOPT_w=[ normal2 ] 2 [0 0] 2   [__v_src_vu1_draw_3D_spec_scissor_vcl_60]
          NOP[E]                                                     NOP                                               
          NOP                                                        NOP                                               
-; _LNOPT_w=[ normal2 ] 2 [2 0] 2   [__v_src_draw_3D_spec_scissor_vcl_61]
+; _LNOPT_w=[ normal2 ] 2 [2 0] 2   [__v_src_vu1_draw_3D_spec_scissor_vcl_61]
          NOP                                                        b             init                                
          NOP                                                        NOP                                               
 SAVE_LAST_LOOP:
@@ -471,7 +472,7 @@ CO_NEXT_IN:
 ; _LNOPT_w=[ normal2 ] 2 [2 0] 2   [CO_NEXT_IN]
          NOP                                                        bal           VI13,INTERPOLATE                    
          NOP                                                        NOP                                               
-; _LNOPT_w=[ normal2 ] 7 [5 0] 7   [__v_src_draw_3D_spec_scissor_vcl_70]
+; _LNOPT_w=[ normal2 ] 7 [5 0] 7   [__v_src_vu1_draw_3D_spec_scissor_vcl_70]
          NOP                                                        NOP                                               
          NOP                                                        NOP                                               
          NOP                                                        iaddiu        VI11,VI11,0x00000001                
@@ -488,7 +489,7 @@ CUR_IN:
 ; _LNOPT_w=[ normal2 ] 2 [2 0] 2   [CI_NEXT_OUT]
          NOP                                                        bal           VI13,INTERPOLATE                    
          NOP                                                        NOP                                               
-; _LNOPT_w=[ normal2 ] 8 [8 0] 8   [__v_src_draw_3D_spec_scissor_vcl_74]
+; _LNOPT_w=[ normal2 ] 8 [8 0] 8   [__v_src_vu1_draw_3D_spec_scissor_vcl_74]
          NOP                                                        sqi           VF15,(VI09++)                       
          NOP                                                        sqi           VF14,(VI09++)                       
          NOP                                                        sqi           VF13,(VI09++)                       
@@ -514,7 +515,7 @@ LOOP_ROT:
 ; _LNOPT_w=[ normal2 ] 2 [2 0] 2   [LOOP_ROT]
          NOP                                                        ibeq          VI14,VI00,LOOP_ROT_END              
          NOP                                                        NOP                                               
-; _LNOPT_w=[ normal2 ] 4 [4 0] 4   [__v_src_draw_3D_spec_scissor_vcl_80]
+; _LNOPT_w=[ normal2 ] 4 [4 0] 4   [__v_src_vu1_draw_3D_spec_scissor_vcl_80]
          NOP                                                        isubiu        VI14,VI14,0x00000001                
          NOP                                                        mr32          VF19,VF19                           
          NOP                                                        b             LOOP_ROT                            
@@ -536,7 +537,7 @@ LOOP_ROT_END:
          add           VF16,VF16,VF15                               NOP                                               
 		.align 4
 VU1Draw3DLCSS_CodeEnd:
-;	iCount=432
+;	iCount=433
 ; register stats:
 ;  16 VU User integer
 ;  21 VU User floating point

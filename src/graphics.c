@@ -14,6 +14,8 @@
 #include <dbgprintf.h>
 #include <fntsys.h>
 
+#include <owl_packet.h>
+
 #include <pad.h>
 
 static const u64 BLACK_RGBAQ   = GS_SETREG_RGBAQ(0x00,0x00,0x00,0x80,0x00);
@@ -36,6 +38,8 @@ static float fps = 0.0f;
 
 static int frames = 0;
 static int frame_interval = -1;
+
+static uint8_t owl_packet_buffer[RENDER_QUEUE_PER_POOLSIZE] __attribute__((aligned(128)));
 
 //2D drawing functions
 int athena_load_png(GSTEXTURE* tex, FILE* File, bool delayed)
@@ -1221,6 +1225,8 @@ static void flipScreenSingleBuffering()
 	gsKit_queue_exec(gsGlobal);
 
 	gsKit_TexManager_nextFrame(gsGlobal);
+
+	
 }
 
 static void flipScreenSingleBufferingPerf()
@@ -1232,6 +1238,8 @@ static void flipScreenSingleBufferingPerf()
 	gsKit_TexManager_nextFrame(gsGlobal);
 
 	processFrameCounter();
+
+	
 }
 
 static void flipScreenDoubleBuffering()
@@ -1244,6 +1252,8 @@ static void flipScreenDoubleBuffering()
 	gsKit_finish();
 	
 	gsKit_TexManager_nextFrame(gsGlobal);
+
+	
 }
 
 static void flipScreenDoubleBufferingPerf()
@@ -1258,6 +1268,8 @@ static void flipScreenDoubleBufferingPerf()
 	gsKit_TexManager_nextFrame(gsGlobal);
 
 	processFrameCounter();
+
+	
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////
@@ -1266,15 +1278,18 @@ static void flipScreenSingleBufferingNoVSync()
 {
 	gsKit_queue_exec(gsGlobal);
 	gsKit_TexManager_nextFrame(gsGlobal);
+
+	
 }
 
 static void flipScreenSingleBufferingPerfNoVSync()
 {
-
 	gsKit_queue_exec(gsGlobal);
 	gsKit_TexManager_nextFrame(gsGlobal);
 
 	processFrameCounter();
+
+	
 }
 
 static void flipScreenDoubleBufferingNoVSync()
@@ -1283,6 +1298,8 @@ static void flipScreenDoubleBufferingNoVSync()
 	gsKit_queue_exec(gsGlobal);
 	gsKit_finish();
 	gsKit_TexManager_nextFrame(gsGlobal);
+
+	
 }
 
 static void flipScreenDoubleBufferingPerfNoVSync()
@@ -1293,6 +1310,8 @@ static void flipScreenDoubleBufferingPerfNoVSync()
 	gsKit_TexManager_nextFrame(gsGlobal);
 
 	processFrameCounter();
+
+	
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////
@@ -1303,6 +1322,8 @@ static void flipScreenHiRes()
 	gsKit_hires_flip(gsGlobal);
 	gsKit_TexManager_nextFrame(gsGlobal);
 
+	
+
 }
 
 static void flipScreenHiResPerf()
@@ -1312,6 +1333,8 @@ static void flipScreenHiResPerf()
 	gsKit_TexManager_nextFrame(gsGlobal);
 
 	processFrameCounter();
+
+	
 }
 
 static void switchFlipScreenFunction()
@@ -1416,6 +1439,8 @@ void init_graphics()
 	gsKit_clear(gsGlobal, BLACK_RGBAQ);	
 	gsKit_vsync_wait();
 	flipScreen();
+
+	owl_init(owl_packet_buffer, RENDER_QUEUE_PER_POOLSIZE/sizeof(owl_qword));
 }
 
 void graphicWaitVblankStart(){

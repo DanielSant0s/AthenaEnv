@@ -2,6 +2,7 @@
 #define ATHENA_RENDER_H
 
 #include <graphics.h>
+#include <owl_packet.h>
 
 //3D math
 
@@ -48,6 +49,9 @@ typedef struct {
 
 typedef struct
 {
+	owl_qword prim_tag;
+	owl_qword clip_prim_tag;
+
     VECTOR ambient; 
     VECTOR diffuse;
     VECTOR specular;  

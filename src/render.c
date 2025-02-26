@@ -10,7 +10,7 @@
 #include <render.h>
 #include <dbgprintf.h>
 
-#include <vif.h>
+#include <owl_packet.h>
 
 #define DEG2RAD(deg) ((deg) * (M_PI / 180.0f))
 
@@ -35,6 +35,7 @@ void init3D(float fov, float near, float far)
 	initCamera(&world_view);
 	create_view(view_screen, DEG2RAD(fov), near, far, gsGlobal->Width, gsGlobal->Height);
 	vu1_set_double_buffer_settings(141, 400);
+	owl_flush_packet();
 
 	screen_scale.x = gsGlobal->Width/2;
 	screen_scale.y = gsGlobal->Height/2;
@@ -369,44 +370,31 @@ void draw_bbox(model* m, float pos_x, float pos_y, float pos_z, float rot_x, flo
 	free(xyz);
 }
 
-
-u64 vif_packets[2][44] __attribute__((aligned(64)));
-u64* curr_vif_packet;
-
-/** Cube data */
-u64 cube_packet[20] __attribute__((aligned(64)));
-
-dma_packet draw_packet;
-dma_packet attr_packet;
-
-u8 context = 0;
-
-static u32* last_mpg = NULL;
+static uint32_t* last_mpg = NULL;
 
 #define update_vu_program(name) \
 	do { \
 		if (last_mpg != &name##_CodeStart) { \
-			dmaKit_wait(DMA_CHANNEL_VIF1, 0); \
 			vu1_upload_micro_program(&name##_CodeStart, &name##_CodeEnd); \
 			last_mpg = &name##_CodeStart; \
 		} \
 	} while (0)
 
-void append_texture_tags(dma_packet* packet, GSTEXTURE *texture, eColorFunctions func) {
-	dma_packet_add_cnt_tag(packet, 4); // 4 quadwords for vif
-	dma_packet_add_uint(packet, VIF_NOP);
-	dma_packet_add_uint(packet, VIF_NOP);
-	dma_packet_add_uint(packet, VIF_NOP);
-	dma_packet_add_uint(packet, (VIF_DIRECT << 24) | 3); // 3 giftags
+void append_texture_tags(owl_packet* packet, GSTEXTURE *texture, eColorFunctions func) {
+	owl_add_cnt_tag_fill(packet, 4); // 4 quadwords for vif
+	owl_add_uint(packet, VIF_NOP);
+	owl_add_uint(packet, VIF_NOP);
+	owl_add_uint(packet, VIF_NOP);
+	owl_add_uint(packet, (VIF_DIRECT << 24) | 3); // 3 giftags
 	
-	dma_packet_add_tag(packet, GIF_AD, GIFTAG(2, 1, 0, 0, 0, 1));
+	owl_add_tag(packet, GIF_AD, GIFTAG(2, 1, 0, 0, 0, 1));
 	
-	dma_packet_add_tag(packet, GS_TEX1_1, GS_SETREG_TEX1(1, 0, texture->Filter, texture->Filter, 0, 0, 0));
+	owl_add_tag(packet, GS_TEX1_1, GS_SETREG_TEX1(1, 0, texture->Filter, texture->Filter, 0, 0, 0));
 	
 	int tw, th;
 	athena_set_tw_th(texture, &tw, &th);
 
-	dma_packet_add_tag(packet, 
+	owl_add_tag(packet, 
 					   GS_TEX0_1, 
 					   GS_SETREG_TEX0(texture->Vram/256, 
 									  texture->TBW, 
@@ -440,25 +428,17 @@ void draw_vu1_with_colors(model* m, float pos_x, float pos_y, float pos_z, float
 	create_local_world(local_world, object_position, object_rotation);
 	create_local_screen(local_screen, local_world, world_view, view_screen);
 
-	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
+	owl_packet *packet = owl_open_packet(CHANNEL_VIF1, 4);
 
-	dma_packet_create(&draw_packet, vif_packets[context], 0);
-
-	unpack_list_open(&draw_packet, 0, false);
+	unpack_list_open(packet, 0, false);
 	{
-		unpack_list_append(&draw_packet, &screen_scale,       1);
+		unpack_list_append(packet, &screen_scale,       1);
 
-		unpack_list_append(&draw_packet, &local_screen,       4);
+		unpack_list_append(packet, &local_screen,       4);
 	}
-	unpack_list_close(&draw_packet);
+	unpack_list_close(packet);
 
-	dma_packet_add_end_tag(&draw_packet);
-
-	dma_packet_send(&draw_packet, DMA_CHANNEL_VIF1);
-
-	dma_packet_destroy(&draw_packet);
-
-	dma_packet_create(&attr_packet, cube_packet, 0);
+	//owl_add_end_tag(packet);
 
 	int last_index = -1;
 	GSTEXTURE* tex = NULL;
@@ -481,7 +461,7 @@ void draw_vu1_with_colors(model* m, float pos_x, float pos_y, float pos_z, float
 		int idxs_drawn = 0;
 
 		while (idxs_to_draw > 0) {
-			dmaKit_wait(DMA_CHANNEL_VIF1, 0);
+			owl_open_packet(CHANNEL_VIF1, texture_mapping? 13 : 7);
 
 			int count = BATCH_SIZE;
 			if (idxs_to_draw < BATCH_SIZE)
@@ -489,62 +469,60 @@ void draw_vu1_with_colors(model* m, float pos_x, float pos_y, float pos_z, float
 				count = idxs_to_draw;
 			}
 
-			dma_packet_reset(&attr_packet);
-		
-			dma_packet_add_tag(&attr_packet,  
-			                   DRAW_STQ2_REGLIST, 
-							   VU_GS_GIFTAG(count, 
-							                1, NO_CUSTOM_DATA, 1, 
-											VU_GS_PRIM(m->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE, 
-													   m->attributes.shade_model, texture_mapping, 
-													   gsGlobal->PrimFogEnable, 
-													   gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 0, 0, 0),
-    		    							0, 3)
-								);
+			m->materials[m->material_indices[i].index].clip_prim_tag.dword[1] = DRAW_STQ2_REGLIST;
+			m->materials[m->material_indices[i].index].clip_prim_tag.dword[0] = VU_GS_GIFTAG(m->tristrip? 5 : 11, 
+							                							1, NO_CUSTOM_DATA, 1, 
+																		VU_GS_PRIM(GS_PRIM_PRIM_TRIFAN, 
+																				   m->attributes.shade_model, texture_mapping, 
+																				   gsGlobal->PrimFogEnable, 
+																				   gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 0, 0, 0),
+    		    														0, 3);
 
-			union {
-				VECTOR v;
-				__uint128_t q;
-			} diffuse;
+			owl_add_unpack_data(packet, 26, (void*)&m->materials[m->material_indices[i].index].clip_prim_tag, 1, 0);
 
-			__asm volatile ( 	
-				"lq    $7,0x0(%1)\n"
-				"sq    $7,0x0(%0)\n"
-				 : : "r" (&diffuse), "r" (m->materials[m->material_indices[i].index].diffuse):"$7","memory");
-
-			dma_packet_add_uquad(&attr_packet, diffuse.q);
-
-			dma_packet_create(&draw_packet, vif_packets[context], 0);
+			m->materials[m->material_indices[i].index].prim_tag.dword[1] = DRAW_STQ2_REGLIST;
+			m->materials[m->material_indices[i].index].prim_tag.dword[0] = VU_GS_GIFTAG(0, 
+							                							1, NO_CUSTOM_DATA, 1, 
+																		VU_GS_PRIM(m->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE, 
+																				   m->attributes.shade_model, texture_mapping, 
+																				   gsGlobal->PrimFogEnable, 
+																				   gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 0, 0, 0),
+    		    														0, 3);
 
 			if (texture_mapping) {
-				append_texture_tags(&draw_packet, tex, COLOR_MODULATE);
+				append_texture_tags(packet, tex, COLOR_MODULATE);
 			}
 
-			unpack_list_open(&draw_packet, 0, true);
+			unpack_list_open(packet, 0, true);
 			{
-				unpack_list_append(&draw_packet, attr_packet.base, 2);
-				unpack_list_append(&draw_packet, &positions[idxs_drawn], count);
-				unpack_list_append(&draw_packet, &colours[idxs_drawn], count);
+				unpack_list_append(packet, (void*)&m->materials[m->material_indices[i].index].prim_tag, 1);
+				unpack_list_append(packet, (void*)&m->materials[m->material_indices[i].index].diffuse, 1);
+				unpack_list_append(packet, &positions[idxs_drawn], count);
+				unpack_list_append(packet, &colours[idxs_drawn], count);
 				if (texcoords) 
-					unpack_list_append(&draw_packet, &texcoords[idxs_drawn], count);
+					unpack_list_append(packet, &texcoords[idxs_drawn], count);
 			}
-			unpack_list_close(&draw_packet);
+			unpack_list_close(packet);
 
-			dma_packet_start_program(&draw_packet, last_index == -1);
-			dma_packet_add_end_tag(&draw_packet);
-
-			dma_packet_send(&draw_packet, DMA_CHANNEL_VIF1);
-
-			dma_packet_destroy(&draw_packet);
+			owl_add_cnt_tag(packet, 0, owl_vif_code_double(VIF_CODE(0, 0, (last_index == -1? VIF_MSCALF : VIF_MSCNT), 0), VIF_CODE(count, 0, VIF_ITOP, 0)));
 
 			idxs_to_draw -= count;
 			idxs_drawn += count;
 		}
 
+		owl_add_vif_codes(packet,
+			VIF_CODE(0, 0, VIF_FLUSH, 0),
+			VIF_CODE(0, 0, VIF_FLUSH, 0),
+			VIF_CODE(0, 0, VIF_NOP, 0),
+			VIF_CODE(0, 0, VIF_NOP, 0)
+		);
+
+		owl_add_end_tag(packet);
+
+		owl_flush_packet();
+
 		last_index = m->material_indices[i].end;
 	}
-
-	context = !context;
 }
 
 void draw_vu1_with_lights(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z) {
@@ -579,34 +557,26 @@ void draw_vu1_with_lights(model* m, float pos_x, float pos_y, float pos_z, float
   	matrix_multiply(local_screen, local_screen, world_view);
   	matrix_multiply(local_screen, local_screen, view_screen);
 
-	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
+	owl_packet *packet = owl_open_packet(CHANNEL_VIF1, 7); // 5 for unpack static data + 2 for flush with end
 
-	dma_packet_create(&draw_packet, vif_packets[context], 0);
-
-	unpack_list_open(&draw_packet, 0, false);
+	unpack_list_open(packet, 0, false);
 	{
-		unpack_list_append(&draw_packet, &screen_scale,       1);
+		unpack_list_append(packet, &screen_scale,       1); 
 
-		unpack_list_append(&draw_packet, &local_screen,       4);
-		unpack_list_append(&draw_packet, &local_light,        4);
+		unpack_list_append(packet, &local_screen,       4);
+		unpack_list_append(packet, &local_light,        4);
 
 		static FIVECTOR camera_pos_light_qt; // xyz for camera position and w for directional light quantity
 
 		memcpy(&camera_pos_light_qt, getCameraPosition(), sizeof(FIVECTOR));
 		camera_pos_light_qt.w = active_dir_lights;
 
-		unpack_list_append(&draw_packet, &camera_pos_light_qt, 1);
-		unpack_list_append(&draw_packet, &dir_lights,        16);
+		unpack_list_append(packet, &camera_pos_light_qt, 1);
+		unpack_list_append(packet, &dir_lights,        16);
 	}
-	unpack_list_close(&draw_packet);
+	unpack_list_close(packet);
 
-	dma_packet_add_end_tag(&draw_packet);
-
-	dma_packet_send(&draw_packet, DMA_CHANNEL_VIF1);
-
-	dma_packet_destroy(&draw_packet);
-
-	dma_packet_create(&attr_packet, cube_packet, 0);
+	//owl_add_end_tag(packet);
 
 	int last_index = -1;
 	GSTEXTURE* tex = NULL;
@@ -630,7 +600,8 @@ void draw_vu1_with_lights(model* m, float pos_x, float pos_y, float pos_z, float
 		int idxs_drawn = 0;
 
 		while (idxs_to_draw > 0) {
-			dmaKit_wait(DMA_CHANNEL_VIF1, 0);
+			//dmaKit_wait(CHANNEL_VIF1, 0);
+			owl_open_packet(CHANNEL_VIF1, texture_mapping? 13 : 7);
 
 			int count = BATCH_SIZE;
 			if (idxs_to_draw < BATCH_SIZE)
@@ -638,72 +609,65 @@ void draw_vu1_with_lights(model* m, float pos_x, float pos_y, float pos_z, float
 				count = idxs_to_draw;
 			}
 
-			dma_packet_reset(&attr_packet);
-
-			dma_packet_add_tag(&attr_packet, 
-			                   DRAW_STQ2_REGLIST, 
-							   VU_GS_GIFTAG(count, 
-							                1, NO_CUSTOM_DATA, 1, 
-											VU_GS_PRIM(m->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE, 
-													   m->attributes.shade_model, texture_mapping, 
-													   gsGlobal->PrimFogEnable, 
-													   gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 0, 0, 0),
-    		    							0, 3)
-								);
-
-			union {
-				VECTOR v;
-				__uint128_t q;
-			} diffuse;
-
-			__asm volatile ( 	
-				"lq    $7,0x0(%1)\n"
-				"sq    $7,0x0(%0)\n"
-				 : : "r" (&diffuse), "r" (m->materials[m->material_indices[i].index].diffuse):"$7","memory");
-
-			dma_packet_add_uquad(&attr_packet, diffuse.q);
-
-			dma_packet_create(&draw_packet, vif_packets[context], 0);
-
 			if (texture_mapping) {
-				append_texture_tags(&draw_packet, tex, COLOR_MODULATE);
+				append_texture_tags(packet, tex, COLOR_MODULATE);
 			}
 
-			uint64_t clipfan_tag[2] = {  
-						VU_GS_GIFTAG(11, 1, NULL, 1, 
-							VU_GS_PRIM(GS_PRIM_PRIM_TRIFAN, m->attributes.shade_model, texture_mapping, gsGlobal->PrimFogEnable, gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 0, 0, 0), 
-						0, 3) ,
-						DRAW_STQ2_REGLIST
-			};
+			m->materials[m->material_indices[i].index].clip_prim_tag.dword[1] = DRAW_STQ2_REGLIST;
+			m->materials[m->material_indices[i].index].clip_prim_tag.dword[0] = VU_GS_GIFTAG(m->tristrip? 5 : 11, 
+							                							1, NO_CUSTOM_DATA, 1, 
+																		VU_GS_PRIM(GS_PRIM_PRIM_TRIFAN, 
+																				   m->attributes.shade_model, texture_mapping, 
+																				   gsGlobal->PrimFogEnable, 
+																				   gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 0, 0, 0),
+    		    														0, 3);
 
-			vu_add_unpack_data(&draw_packet, 26, clipfan_tag, 1, 0);
+			owl_add_unpack_data(packet, 26, (void*)&m->materials[m->material_indices[i].index].clip_prim_tag, 1, 0);
 
-			unpack_list_open(&draw_packet, 0, true);
+			m->materials[m->material_indices[i].index].prim_tag.dword[1] = DRAW_STQ2_REGLIST;
+			m->materials[m->material_indices[i].index].prim_tag.dword[0] = VU_GS_GIFTAG(0, 
+							                							1, NO_CUSTOM_DATA, 1, 
+																		VU_GS_PRIM(m->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE, 
+																				   m->attributes.shade_model, texture_mapping, 
+																				   gsGlobal->PrimFogEnable, 
+																				   gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 0, 0, 0),
+    		    														0, 3);
+
+			unpack_list_open(packet, 0, true);
 			{
-				unpack_list_append(&draw_packet, attr_packet.base, 2);
-				unpack_list_append(&draw_packet, &positions[idxs_drawn], count);
-				unpack_list_append(&draw_packet, &normals[idxs_drawn], count);
-				unpack_list_append(&draw_packet, &colours[idxs_drawn], count);
+				unpack_list_append(packet, (void*)&m->materials[m->material_indices[i].index].prim_tag, 1);
+				unpack_list_append(packet, (void*)&m->materials[m->material_indices[i].index].diffuse, 1);
+				unpack_list_append(packet, &positions[idxs_drawn], count);
+				unpack_list_append(packet, &normals[idxs_drawn], count);
+				unpack_list_append(packet, &colours[idxs_drawn], count);
 				if (texcoords) 
-					unpack_list_append(&draw_packet, &texcoords[idxs_drawn], count);
+					unpack_list_append(packet, &texcoords[idxs_drawn], count);
 			}
-			unpack_list_close(&draw_packet);
+			unpack_list_close(packet);
 
-			dma_packet_start_program(&draw_packet, last_index == -1);
-			dma_packet_add_end_tag(&draw_packet);
-
-			dma_packet_send(&draw_packet, DMA_CHANNEL_VIF1);
-
-			dma_packet_destroy(&draw_packet);
+			owl_add_cnt_tag(packet, 0, owl_vif_code_double(VIF_CODE(0, 0, (last_index == -1? VIF_MSCALF : VIF_MSCNT), 0), VIF_CODE(count, 0, VIF_ITOP, 0)));
 
 			idxs_to_draw -= count;
 			idxs_drawn += count;
+			
 		}
+
+		owl_add_vif_codes(packet,
+			VIF_CODE(0, 0, VIF_FLUSH, 0),
+			VIF_CODE(0, 0, VIF_FLUSH, 0),
+			VIF_CODE(0, 0, VIF_NOP, 0),
+			VIF_CODE(0, 0, VIF_NOP, 0)
+		);
+
+		owl_add_end_tag(packet);
+
+		owl_flush_packet();
 
 		last_index = m->material_indices[i].end;
 	}
 
-	context = !context;
+	
+	//dmaKit_wait(CHANNEL_VIF1, 0);
 }
 
 void draw_vu1_with_spec_lights(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z) {
@@ -738,36 +702,28 @@ void draw_vu1_with_spec_lights(model* m, float pos_x, float pos_y, float pos_z, 
   	matrix_multiply(local_screen, local_screen, world_view);
   	matrix_multiply(local_screen, local_screen, view_screen);
 
-	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
-
-	dma_packet_create(&draw_packet, vif_packets[context], 0);
+	owl_packet *packet = owl_open_packet(CHANNEL_VIF1, 7);
 
 	screen_scale.w = *((uint32_t*)&m->attributes);
 
-	unpack_list_open(&draw_packet, 0, false);
+	unpack_list_open(packet, 0, false);
 	{
-		unpack_list_append(&draw_packet, &screen_scale,       1);
+		unpack_list_append(packet, &screen_scale,       1);
 
-		unpack_list_append(&draw_packet, &local_screen,       4);
-		unpack_list_append(&draw_packet, &local_light,        4);
+		unpack_list_append(packet, &local_screen,       4);
+		unpack_list_append(packet, &local_light,        4);
 
 		static FIVECTOR camera_pos_light_qt; // xyz for camera position and w for directional light quantity
 
 		memcpy(&camera_pos_light_qt, getCameraPosition(), sizeof(FIVECTOR));
 		camera_pos_light_qt.w = active_dir_lights;
 
-		unpack_list_append(&draw_packet, &camera_pos_light_qt, 1);
-		unpack_list_append(&draw_packet, &dir_lights,         16);
+		unpack_list_append(packet, &camera_pos_light_qt, 1);
+		unpack_list_append(packet, &dir_lights,         16);
 	}
-	unpack_list_close(&draw_packet);
+	unpack_list_close(packet);
 
-	dma_packet_add_end_tag(&draw_packet);
-
-	dma_packet_send(&draw_packet, DMA_CHANNEL_VIF1);
-
-	dma_packet_destroy(&draw_packet);
-
-	dma_packet_create(&attr_packet, cube_packet, 0);
+	//owl_add_end_tag(packet);
 
 	int last_index = -1;
 	GSTEXTURE* tex = NULL;
@@ -791,78 +747,66 @@ void draw_vu1_with_spec_lights(model* m, float pos_x, float pos_y, float pos_z, 
 		int idxs_drawn = 0;
 
 		while (idxs_to_draw > 0) {
-			dmaKit_wait(DMA_CHANNEL_VIF1, 0);
+			owl_open_packet(CHANNEL_VIF1, texture_mapping? 13 : 7);
 
 			int count = BATCH_SIZE;
 			if (idxs_to_draw < BATCH_SIZE)
 			{
 				count = idxs_to_draw;
 			}
-
-			dma_packet_reset(&attr_packet);
-
-			dma_packet_add_tag(&attr_packet, 
-			                   DRAW_STQ2_REGLIST, 
-							   VU_GS_GIFTAG(count, 
-							                1, NO_CUSTOM_DATA, 1, 
-											VU_GS_PRIM(m->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE, 
-													   m->attributes.shade_model, texture_mapping, 
-													   gsGlobal->PrimFogEnable, 
-													   gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 0, 0, 0),
-    		    							0, 3)
-								);
-
-			union {
-				VECTOR v;
-				__uint128_t q;
-			} diffuse;
-
-			__asm volatile ( 	
-				"lq    $7,0x0(%1)\n"
-				"sq    $7,0x0(%0)\n"
-				 : : "r" (&diffuse), "r" (m->materials[m->material_indices[i].index].diffuse):"$7","memory");
-
-			dma_packet_add_uquad(&attr_packet, diffuse.q);
-
-			dma_packet_create(&draw_packet, vif_packets[context], 0);
-
 			if (texture_mapping) {
-				append_texture_tags(&draw_packet, tex, COLOR_MODULATE);
+				append_texture_tags(packet, tex, COLOR_MODULATE);
 			}
 
-			uint64_t clipfan_tag[2] = {  
-						VU_GS_GIFTAG(11, 1, NULL, 1, 
-							VU_GS_PRIM(GS_PRIM_PRIM_TRIFAN, m->attributes.shade_model, texture_mapping, gsGlobal->PrimFogEnable, gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 0, 0, 0), 
-						0, 3) ,
-						DRAW_STQ2_REGLIST
-			};
+			m->materials[m->material_indices[i].index].clip_prim_tag.dword[1] = DRAW_STQ2_REGLIST;
+			m->materials[m->material_indices[i].index].clip_prim_tag.dword[0] = VU_GS_GIFTAG(m->tristrip? 5 : 11, 
+							                							1, NO_CUSTOM_DATA, 1, 
+																		VU_GS_PRIM(GS_PRIM_PRIM_TRIFAN, 
+																				   m->attributes.shade_model, texture_mapping, 
+																				   gsGlobal->PrimFogEnable, 
+																				   gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 0, 0, 0),
+    		    														0, 3);
 
-			vu_add_unpack_data(&draw_packet, 26, clipfan_tag, 1, 0);
+			owl_add_unpack_data(packet, 26, (void*)&m->materials[m->material_indices[i].index].clip_prim_tag, 1, 0);
 
-			unpack_list_open(&draw_packet, 0, true);
+			m->materials[m->material_indices[i].index].prim_tag.dword[1] = DRAW_STQ2_REGLIST;
+			m->materials[m->material_indices[i].index].prim_tag.dword[0] = VU_GS_GIFTAG(0, 
+							                							1, NO_CUSTOM_DATA, 1, 
+																		VU_GS_PRIM(m->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE, 
+																				   m->attributes.shade_model, texture_mapping, 
+																				   gsGlobal->PrimFogEnable, 
+																				   gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 0, 0, 0),
+    		    														0, 3);
+
+			unpack_list_open(packet, 0, true);
 			{
-				unpack_list_append(&draw_packet, attr_packet.base, 2);
-				unpack_list_append(&draw_packet, &positions[idxs_drawn], count);
-				unpack_list_append(&draw_packet, &normals[idxs_drawn], count);
-				unpack_list_append(&draw_packet, &colours[idxs_drawn], count);
+				unpack_list_append(packet, (void*)&m->materials[m->material_indices[i].index].prim_tag, 1);
+				unpack_list_append(packet, (void*)&m->materials[m->material_indices[i].index].diffuse, 1);
+				unpack_list_append(packet, &positions[idxs_drawn], count);
+				unpack_list_append(packet, &normals[idxs_drawn], count);
+				unpack_list_append(packet, &colours[idxs_drawn], count);
 				if (texcoords) 
-					unpack_list_append(&draw_packet, &texcoords[idxs_drawn], count);
+					unpack_list_append(packet, &texcoords[idxs_drawn], count);
 			}
-			unpack_list_close(&draw_packet);
+			unpack_list_close(packet);
 
-			dma_packet_start_program(&draw_packet, last_index == -1);
-			dma_packet_add_end_tag(&draw_packet);
-
-			dma_packet_send(&draw_packet, DMA_CHANNEL_VIF1);
-
-			dma_packet_destroy(&draw_packet);
+			owl_add_cnt_tag(packet, 0, owl_vif_code_double(VIF_CODE(0, 0, (last_index == -1? VIF_MSCALF : VIF_MSCNT), 0), VIF_CODE(count, 0, VIF_ITOP, 0)));
 
 			idxs_to_draw -= count;
 			idxs_drawn += count;
 		}
 
+		owl_add_vif_codes(packet,
+			VIF_CODE(0, 0, VIF_FLUSH, 0),
+			VIF_CODE(0, 0, VIF_FLUSH, 0),
+			VIF_CODE(0, 0, VIF_NOP, 0),
+			VIF_CODE(0, 0, VIF_NOP, 0)
+		);
+
+		owl_add_end_tag(packet);
+
+		owl_flush_packet();
+
 		last_index = m->material_indices[i].end;
 	}
-
-	context = !context;
 }
