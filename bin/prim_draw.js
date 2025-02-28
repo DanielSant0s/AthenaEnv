@@ -36,5 +36,9 @@ while(true) {
 
     Draw.quad(450, 300, 450, 330, 480, 300, 480, 330, Color.new(255, 0, 0), Color.new(0, 255, 0), Color.new(0, 0, 255), Color.new(255, 255, 0));  // gouraud quad
 
+    Draw.circle(100, 100, 50, Color.new(64, 64, 64), true);
+
+    Draw.circle(100, 100, 50, Color.new(255, 0, 0), false);
+
     Screen.flip();
 }

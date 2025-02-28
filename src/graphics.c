@@ -1220,21 +1220,39 @@ void drawQuad_gouraud(float x, float y, float x2, float y2, float x3, float y3, 
 
 void drawCircle(float x, float y, float radius, u64 color, u8 filled)
 {
-	float v[37*2];
-	int a;
+	owl_packet *packet = owl_open_packet(CHANNEL_VIF1, (42 + (int)(!filled)));
 
-	for (a = 0; a < 36; a++) {
-		v[a*2] = (cosf(a * (M_PI*2)/36) * radius) + x;
-		v[a*2+1] = (sinf(a * (M_PI*2)/36) * radius) + y;
+	owl_add_cnt_tag_fill(packet, (41 + (int)(!filled))); // 4 quadwords for vif
+	owl_add_uint(packet, VIF_NOP);
+	owl_add_uint(packet, VIF_NOP);
+	owl_add_uint(packet, VIF_NOP);
+	owl_add_uint(packet, (VIF_DIRECT << 24) | (40 + (int)(!filled))); // 3 giftags
+	
+	owl_add_tag(packet, GIF_AD, GIFTAG(2, 1, 0, 0, 0, 1));
+
+	owl_add_tag(packet, GS_TEST_1, GS_SETREG_TEST_1(0, 0, 0, 0, 0, 0, 1, 1));
+
+	owl_add_tag(packet, GS_REG_RGBAQ, color);
+
+	owl_add_tag(packet, 
+					   ((uint64_t)(GS_XYZ2) << 0), 
+					   	VU_GS_GIFTAG((36 + (int)(!filled)), 
+							1, NO_CUSTOM_DATA, 1, 
+							VU_GS_PRIM(filled? GS_PRIM_PRIM_TRIFAN : GS_PRIM_PRIM_LINESTRIP, 
+									   0, 0, 
+									   gsGlobal->PrimFogEnable, 
+									   gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 1, gsGlobal->PrimContext, 0),
+    						0, 1)
+						);
+
+	for (int a = 0; a < 36; a++) {
+		owl_add_tag(packet, 1, (uint64_t)((int)gsGlobal->OffsetX+((int)((cosf(a * (M_PI*2)/36) * radius) + x) << 4)) | 
+							  ((uint64_t)((int)gsGlobal->OffsetY+((int)((sinf(a * (M_PI*2)/36) * radius) + y) << 4)) << 32));
 	}
 
-	if (filled) {
-		gsKit_prim_triangle_fan(gsGlobal, v, 36, 1, color);
-	} else {
-		v[36*2] = radius + x;
-		v[36*2 + 1] = y;
-
-		gsKit_prim_line_strip(gsGlobal, v, 37, 1, color);
+	if (!filled) {
+		owl_add_tag(packet, 1, (uint64_t)((int)gsGlobal->OffsetX+((int)(radius + x) << 4)) | 
+							  ((uint64_t)((int)gsGlobal->OffsetY+((int)(y) << 4)) << 32));
 	}
 }
 
