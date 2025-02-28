@@ -414,8 +414,6 @@ void draw_vu1_with_colors(model* m, float pos_x, float pos_y, float pos_z, float
 	VECTOR object_rotation = { rot_x, rot_y, rot_z, 1.00f };
 
 	MATRIX local_world;
-	MATRIX local_light;
-	MATRIX local_screen;
 
 	if (m->attributes.accurate_clipping)
 		update_vu_program(VU1Draw3DCS);
@@ -426,7 +424,7 @@ void draw_vu1_with_colors(model* m, float pos_x, float pos_y, float pos_z, float
 	gsKit_set_test(gsGlobal, GS_ZTEST_ON);
 
 	create_local_world(local_world, object_position, object_rotation);
-	create_local_screen(local_screen, local_world, world_view, view_screen);
+	create_local_screen(m->local_screen, local_world, world_view, view_screen);
 
 	owl_packet *packet = owl_open_packet(CHANNEL_VIF1, 4);
 
@@ -434,7 +432,7 @@ void draw_vu1_with_colors(model* m, float pos_x, float pos_y, float pos_z, float
 	{
 		unpack_list_append(packet, &screen_scale,       1);
 
-		unpack_list_append(packet, &local_screen,       4);
+		unpack_list_append(packet, m->local_screen,       4);
 	}
 	unpack_list_close(packet);
 
@@ -510,19 +508,15 @@ void draw_vu1_with_colors(model* m, float pos_x, float pos_y, float pos_z, float
 			idxs_drawn += count;
 		}
 
-		owl_add_vif_codes(packet,
-			VIF_CODE(0, 0, VIF_FLUSH, 0),
-			VIF_CODE(0, 0, VIF_FLUSH, 0),
-			VIF_CODE(0, 0, VIF_NOP, 0),
-			VIF_CODE(0, 0, VIF_NOP, 0)
-		);
-
-		owl_add_end_tag(packet);
-
-		owl_flush_packet();
-
 		last_index = m->material_indices[i].end;
 	}
+
+	owl_add_vif_codes(packet,
+		VIF_CODE(0, 0, VIF_FLUSH, 0),
+		VIF_CODE(0, 0, VIF_FLUSH, 0),
+		VIF_CODE(0, 0, VIF_NOP, 0),
+		VIF_CODE(0, 0, VIF_NOP, 0)
+	);
 }
 
 void draw_vu1_with_lights(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z) {
@@ -530,7 +524,7 @@ void draw_vu1_with_lights(model* m, float pos_x, float pos_y, float pos_z, float
 		update_vu_program(VU1Draw3DLCS);
 	else
 		update_vu_program(VU1Draw3DLightsColors);
-
+		
 	gsGlobal->PrimAAEnable = GS_SETTING_ON;
 	gsKit_set_test(gsGlobal, GS_ZTEST_ON);
 
@@ -538,8 +532,6 @@ void draw_vu1_with_lights(model* m, float pos_x, float pos_y, float pos_z, float
 	VECTOR object_rotation = { rot_x, rot_y, rot_z, 1.00f };
 
 	MATRIX local_world;
-	MATRIX local_light;
-	MATRIX local_screen;
 
   	// Create the local_world matrix.
   	matrix_unit(local_world);
@@ -547,15 +539,15 @@ void draw_vu1_with_lights(model* m, float pos_x, float pos_y, float pos_z, float
   	matrix_translate(local_world, local_world, object_position);
 
   	// Create the local_light matrix.
-  	matrix_unit(local_light);
-  	matrix_rotate(local_light, local_light, object_rotation);
+  	matrix_unit(m->local_light);
+  	matrix_rotate(m->local_light, m->local_light, object_rotation);
 
   	// Create the local_screen matrix.
-  	matrix_unit(local_screen);
+  	matrix_unit(m->local_screen);
 
-  	matrix_multiply(local_screen, local_screen, local_world);
-  	matrix_multiply(local_screen, local_screen, world_view);
-  	matrix_multiply(local_screen, local_screen, view_screen);
+  	matrix_multiply(m->local_screen, m->local_screen, local_world);
+  	matrix_multiply(m->local_screen, m->local_screen, world_view);
+  	matrix_multiply(m->local_screen, m->local_screen, view_screen);
 
 	owl_packet *packet = owl_open_packet(CHANNEL_VIF1, 7); // 5 for unpack static data + 2 for flush with end
 
@@ -563,8 +555,8 @@ void draw_vu1_with_lights(model* m, float pos_x, float pos_y, float pos_z, float
 	{
 		unpack_list_append(packet, &screen_scale,       1); 
 
-		unpack_list_append(packet, &local_screen,       4);
-		unpack_list_append(packet, &local_light,        4);
+		unpack_list_append(packet, m->local_screen,       4);
+		unpack_list_append(packet, m->local_light,        4);
 
 		static FIVECTOR camera_pos_light_qt; // xyz for camera position and w for directional light quantity
 
@@ -600,7 +592,6 @@ void draw_vu1_with_lights(model* m, float pos_x, float pos_y, float pos_z, float
 		int idxs_drawn = 0;
 
 		while (idxs_to_draw > 0) {
-			//dmaKit_wait(CHANNEL_VIF1, 0);
 			owl_open_packet(CHANNEL_VIF1, texture_mapping? 13 : 7);
 
 			int count = BATCH_SIZE;
@@ -652,22 +643,17 @@ void draw_vu1_with_lights(model* m, float pos_x, float pos_y, float pos_z, float
 			
 		}
 
-		owl_add_vif_codes(packet,
-			VIF_CODE(0, 0, VIF_FLUSH, 0),
-			VIF_CODE(0, 0, VIF_FLUSH, 0),
-			VIF_CODE(0, 0, VIF_NOP, 0),
-			VIF_CODE(0, 0, VIF_NOP, 0)
-		);
-
-		owl_add_end_tag(packet);
-
-		owl_flush_packet();
-
 		last_index = m->material_indices[i].end;
 	}
 
+	owl_add_vif_codes(packet,
+		VIF_CODE(0, 0, VIF_FLUSH, 0),
+		VIF_CODE(0, 0, VIF_FLUSH, 0),
+		VIF_CODE(0, 0, VIF_NOP, 0),
+		VIF_CODE(0, 0, VIF_NOP, 0)
+	);
+
 	
-	//dmaKit_wait(CHANNEL_VIF1, 0);
 }
 
 void draw_vu1_with_spec_lights(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z) {
@@ -683,8 +669,6 @@ void draw_vu1_with_spec_lights(model* m, float pos_x, float pos_y, float pos_z, 
 	VECTOR object_rotation = { rot_x, rot_y, rot_z, 1.00f };
 
 	MATRIX local_world;
-	MATRIX local_light;
-	MATRIX local_screen;
 
   	// Create the local_world matrix.
   	matrix_unit(local_world);
@@ -692,15 +676,15 @@ void draw_vu1_with_spec_lights(model* m, float pos_x, float pos_y, float pos_z, 
   	matrix_translate(local_world, local_world, object_position);
 
   	// Create the local_light matrix.
-  	matrix_unit(local_light);
-  	matrix_rotate(local_light, local_light, object_rotation);
+  	matrix_unit(m->local_light);
+  	matrix_rotate(m->local_light, m->local_light, object_rotation);
 
   	// Create the local_screen matrix.
-  	matrix_unit(local_screen);
+  	matrix_unit(m->local_screen);
 
-  	matrix_multiply(local_screen, local_screen, local_world);
-  	matrix_multiply(local_screen, local_screen, world_view);
-  	matrix_multiply(local_screen, local_screen, view_screen);
+  	matrix_multiply(m->local_screen, m->local_screen, local_world);
+  	matrix_multiply(m->local_screen, m->local_screen, world_view);
+  	matrix_multiply(m->local_screen, m->local_screen, view_screen);
 
 	owl_packet *packet = owl_open_packet(CHANNEL_VIF1, 7);
 
@@ -710,8 +694,8 @@ void draw_vu1_with_spec_lights(model* m, float pos_x, float pos_y, float pos_z, 
 	{
 		unpack_list_append(packet, &screen_scale,       1);
 
-		unpack_list_append(packet, &local_screen,       4);
-		unpack_list_append(packet, &local_light,        4);
+		unpack_list_append(packet, m->local_screen,       4);
+		unpack_list_append(packet, m->local_light,        4);
 
 		static FIVECTOR camera_pos_light_qt; // xyz for camera position and w for directional light quantity
 
@@ -796,17 +780,13 @@ void draw_vu1_with_spec_lights(model* m, float pos_x, float pos_y, float pos_z, 
 			idxs_drawn += count;
 		}
 
-		owl_add_vif_codes(packet,
-			VIF_CODE(0, 0, VIF_FLUSH, 0),
-			VIF_CODE(0, 0, VIF_FLUSH, 0),
-			VIF_CODE(0, 0, VIF_NOP, 0),
-			VIF_CODE(0, 0, VIF_NOP, 0)
-		);
-
-		owl_add_end_tag(packet);
-
-		owl_flush_packet();
-
 		last_index = m->material_indices[i].end;
 	}
+
+	owl_add_vif_codes(packet,
+		VIF_CODE(0, 0, VIF_FLUSH, 0),
+		VIF_CODE(0, 0, VIF_FLUSH, 0),
+		VIF_CODE(0, 0, VIF_NOP, 0),
+		VIF_CODE(0, 0, VIF_NOP, 0)
+	);
 }

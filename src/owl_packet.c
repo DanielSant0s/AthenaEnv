@@ -20,6 +20,8 @@ void owl_flush_packet() {
         return;
     }
 
+    owl_add_end_tag(&packet);
+
     dmaKit_wait(controller.channel, 0);
 	FlushCache(0);
 	dmaKit_send_chain(controller.channel, (void *)((uint32_t)(controller.base + (controller.context? controller.size : 0)) & 0x0FFFFFFF), 0);
@@ -36,7 +38,7 @@ owl_packet *owl_open_packet(owl_channel channel, size_t size) {
             owl_flush_packet();
 
         controller.channel = channel;
-    } else if ((controller.alloc + size) >= controller.size) {
+    } else if ((controller.alloc + size) + 1 >= controller.size) { // + 1 for end tag
         owl_flush_packet();
     }
 
@@ -82,8 +84,8 @@ void vu1_upload_micro_program(uint32_t* start, uint32_t* end)
         dest += curr_count;
     }
 
-    owl_add_tag(packet, (VIF_CODE(0, 0, VIF_NOP, 0) | (uint64_t)VIF_CODE(0, 0, VIF_NOP, 0) << 32),
-                        DMA_TAG(0, 0, DMA_END, 0, 0 , 0));
+    //owl_add_tag(packet, (VIF_CODE(0, 0, VIF_NOP, 0) | (uint64_t)VIF_CODE(0, 0, VIF_NOP, 0) << 32),
+    //                    DMA_TAG(0, 0, DMA_END, 0, 0 , 0));
 }
 
 void vu1_set_double_buffer_settings(uint32_t base, uint32_t offset)
@@ -93,7 +95,7 @@ void vu1_set_double_buffer_settings(uint32_t base, uint32_t offset)
     owl_add_tag(packet, (VIF_CODE(base, 0, VIF_BASE, 0) | (uint64_t)VIF_CODE(offset, 0, VIF_OFFSET, 0) << 32), 
                         DMA_TAG(0, 0, DMA_CNT, 0, 0 , 0));
 
-    owl_add_tag(packet, (VIF_CODE(0, 0, VIF_NOP, 0) | (uint64_t)VIF_CODE(0, 0, VIF_NOP, 0) << 32),
-                    DMA_TAG(0, 0, DMA_END, 0, 0 , 0));
+    //owl_add_tag(packet, (VIF_CODE(0, 0, VIF_NOP, 0) | (uint64_t)VIF_CODE(0, 0, VIF_NOP, 0) << 32),
+    //                DMA_TAG(0, 0, DMA_END, 0, 0 , 0));
 
 }
