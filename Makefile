@@ -77,7 +77,7 @@ VU1_MPGS = draw_3D_colors.o draw_3D_colors_scissor.o \
            draw_3D_lights.o draw_3D_lights_scissor.o \
            draw_3D_spec.o   draw_3D_spec_scissor.o
 
-APP_CORE = main.o bootlogo.o vif.o athena_math.o memory.o ee_tools.o module_system.o taskman.o pad.o system.o strUtils.o
+APP_CORE = main.o bootlogo.o owl_packet.o vif.o athena_math.o memory.o ee_tools.o module_system.o taskman.o pad.o system.o strUtils.o
 
 INI_READER = readini/src/readini.o
 

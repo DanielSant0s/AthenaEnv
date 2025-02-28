@@ -2,6 +2,7 @@
 #define ATHENA_RENDER_H
 
 #include <graphics.h>
+#include <owl_packet.h>
 
 //3D math
 
@@ -48,6 +49,9 @@ typedef struct {
 
 typedef struct
 {
+	owl_qword prim_tag;
+	owl_qword clip_prim_tag;
+
     VECTOR ambient; 
     VECTOR diffuse;
     VECTOR specular;  
@@ -67,6 +71,9 @@ typedef struct {
 } material_index;
 
 typedef struct ath_model {
+	MATRIX local_light;
+	MATRIX local_screen;
+
     uint32_t index_count;
 
     VECTOR* positions;
@@ -75,8 +82,6 @@ typedef struct ath_model {
     VECTOR* colours;
 
     VECTOR bounding_box[8];
-
-	uint32_t *microprogram;
 
     void (*render)(struct ath_model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z);
     eRenderPipelines pipeline;

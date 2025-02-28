@@ -36,7 +36,7 @@ LIGHT_AMBIENT_PTR   .assign 14
 LIGHT_DIFFUSE_PTR   .assign 18
 LIGHT_SPECULAR_PTR  .assign 22
 
-.include "vcl_sml.i"
+.include "vu1/vcl_sml.i"
 
 --enter
 --endenter
@@ -74,6 +74,7 @@ LIGHT_SPECULAR_PTR  .assign 22
     ; Updated dynamically
 init:
     xtop    iBase
+    xitop   vertCount
 
     lq      primTag,        0(iBase) ; GIF tag - tell GS how many data we will send
     lq      matDiffuse,     1(iBase) ; RGBA
@@ -81,21 +82,22 @@ init:
 
     iaddiu  vertexData,     iBase,      2           ; pointer to vertex data
 
-    iaddiu   Mask, vi00, 0x7fff
-    mtir     vertCount, primTag[x]
-    iand     vertCount, vertCount, Mask              ; Get the number of verts (bit 0-14) from the PRIM giftag
-
     iadd      normalData,        vertexData, vertCount   ; pointer to stq
     iadd       colorData,     normalData, vertCount   ; pointer to stq
     iadd      stqData,      colorData,  vertCount   ; pointer to colors
     iadd      dataPointers,   stqData,  vertCount
 
     iaddiu    kickAddress,    dataPointers,  0       ; pointer for XGKICK
-    iaddiu    destAddress,    dataPointers,  0       ; helper pointer for data inserting
+    iaddiu    destAddress,    dataPointers,  1       ; helper pointer for data inserting
     ;////////////////////////////////////////////
 
     ;/////////// --- Store tags --- /////////////
-    sqi primTag,    (destAddress++) ; prim + tell gs how many data will be
+    sq primTag,    0(kickAddress) ; prim + tell gs how many data will be
+
+    ; Set the GifTag EOP bit to 1 and NLOOP to the number of vertices
+    iaddiu               Mask, vertCount, 0x7fff
+    iaddiu               Mask, Mask, 0x01
+    isw.x                Mask, 0(kickAddress)
     ;////////////////////////////////////////////
 
     ;/////////////// --- Loop --- ///////////////
