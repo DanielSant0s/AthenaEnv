@@ -5,8 +5,8 @@
 		.global	VU1Draw3DColors_CodeStart
 		.global	VU1Draw3DColors_CodeEnd
 VU1Draw3DColors_CodeStart:
-__v_src_draw_3D_colors_vcl_4:
-; _LNOPT_w=[ normal2 ] 9 [9 0] 9   [__v_src_draw_3D_colors_vcl_4]
+__v_src_vu1_draw_3D_colors_vcl_4:
+; _LNOPT_w=[ normal2 ] 9 [9 0] 9   [__v_src_vu1_draw_3D_colors_vcl_4]
          NOP                                                        loi           0x3f000000                          
          addi.xy       VF01,VF00,I                                  loi           0x3f800000                          
          max.z         VF07,VF00,VF00                               lq.xyz        VF06,0(VI00)                        
@@ -17,19 +17,20 @@ __v_src_draw_3D_colors_vcl_4:
          mul.w         VF01,VF00,VF00                               lq            VF05,4(VI00)                        
          add.xyz       VF07,VF06,VF07                               fcset         0                                   
 init:
-; _LNOPT_w=[ normal2 ] 13 [13 0] 13   [init]
+; _LNOPT_w=[ normal2 ] 14 [14 0] 14   [init]
          NOP                                                        xtop          VI02                                
+         NOP                                                        xitop         VI08                                
          NOP                                                        lq            VF09,0(VI02)                        
-         NOP                                                        iaddiu        VI08,VI00,0x00007fff                
          NOP                                                        iaddiu        VI03,VI02,0x00000002                
-         NOP                                                        lq            VF08,1(VI02)                        
-         NOP                                                        mtir          VI04,VF09x                          
-         NOP                                                        iand          VI08,VI04,VI08                      
+         NOP                                                        iaddiu        VI01,VI08,0x00007fff                
          NOP                                                        iadd          VI04,VI03,VI08                      
          NOP                                                        iadd          VI05,VI04,VI08                      
-         NOP                                                        iadd          VI07,VI05,VI08                      
          NOP                                                        iadd          VI06,VI05,VI08                      
-         NOP                                                        sqi           VF09,(VI07++)                       
+         NOP                                                        iaddiu        VI01,VI01,0x00000001                
+         NOP                                                        lq            VF08,1(VI02)                        
+         NOP                                                        iaddiu        VI07,VI06,0x00000001                
+         NOP                                                        sq            VF09,0(VI06)                        
+         NOP                                                        isw.x         VI01,0(VI06)                        
          NOP                                                        iadd          VI08,VI02,VI08                      
 vertexLoop:
 ; _LNOPT_w=[ vuta1 ] 24 [35 20] 36   [vertexLoop]
@@ -57,17 +58,17 @@ vertexLoop:
          NOP                                                        sq            VF10,-2(VI07)                       
          NOP                                                        ibne          VI08,VI02,vertexLoop                
          NOP                                                        sq.xyz        VF09,-1(VI07)                       
-; _LNOPT_w=[ normal2 ] 1 [1 0] 1   [__v_src_draw_3D_colors_vcl_7]
+; _LNOPT_w=[ normal2 ] 1 [1 0] 1   [__v_src_vu1_draw_3D_colors_vcl_7]
          NOP                                                        xgkick        VI06                                
-; _LNOPT_w=[ normal2 ] 2 [0 0] 2   [__v_src_draw_3D_colors_vcl_8]
+; _LNOPT_w=[ normal2 ] 2 [0 0] 2   [__v_src_vu1_draw_3D_colors_vcl_8]
          NOP[E]                                                     NOP                                               
          NOP                                                        NOP                                               
-; _LNOPT_w=[ normal2 ] 2 [2 0] 2   [__v_src_draw_3D_colors_vcl_9]
+; _LNOPT_w=[ normal2 ] 2 [2 0] 2   [__v_src_vu1_draw_3D_colors_vcl_9]
          NOP                                                        b             init                                
          NOP                                                        NOP                                               
 		.align 4
 VU1Draw3DColors_CodeEnd:
-;	iCount=51
+;	iCount=52
 ; register stats:
 ;   9 VU User integer
 ;  14 VU User floating point

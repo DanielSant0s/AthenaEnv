@@ -16,34 +16,9 @@
                 ((u64)(FLG)	<< 58)	| \
                 ((u64)(NREG)	<< 60)
 
-typedef struct {
-    uint32_t vu_addr;
-    bool top;
-} unpack_list;
-
-typedef struct {
-    uint64_t *base;
-    uint64_t *ptr;
-    bool unpack_opened; // true when under a unpack list
-    bool internal_buf; // true when using malloc instead of a static mem buffer
-    unpack_list list;
-} dma_packet;
-
 #define register_vu_program(name)               \
 	extern uint32_t name##_CodeStart __attribute__((section(".vudata"))); \
 	extern uint32_t name##_CodeEnd __attribute__((section(".vudata")))
-
-#define dma_add_end_tag(packet) \
-	do { \
-		*packet++ = DMA_TAG(0, 0, DMA_END, 0, 0 , 0); \
-		*packet++ = (VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32); \
-	} while (0)
-
-#define vu_start_program(packet, init) \
-	do { \
-		*packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0); \
-		*packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, (init? VIF_MSCALF : VIF_MSCNT), 0) << 32)); \
-	} while (0)
 
 typedef struct {
     uint32_t VPS : 2;   // VIF command status
@@ -125,107 +100,5 @@ typedef enum {
 #define VU_GS_PRIM(PRIM, IIP, TME, FGE, ABE, AA1, FST, CTXT, FIX) (((FIX << 10) | (CTXT << 9) | (FST << 8) | (AA1 << 7) | (ABE << 6) | (FGE << 5) | (TME << 4) | (IIP << 3) | (PRIM)))
 #define NO_CUSTOM_DATA 0 
 #define VU_GS_GIFTAG(NLOOP, EOP, DATA, PRE, PRIM, FLG, NREG) (((u64)(NREG) << 60) | ((u64)(FLG) << 58) | ((u64)(PRIM) << 47) | ((u64)(PRE) << 46) | ((u64)(DATA) << 16) | (EOP << 15) | (NLOOP << 0))
-
-inline void vu_add_unpack_data(dma_packet *packet, uint32_t t_dest_address, void *t_data, uint32_t t_size, uint8_t t_use_top) {
-    *packet->ptr++ = DMA_TAG(t_size, 0, DMA_REF, 0, t_data, 0);
-	*packet->ptr++ = (VIF_CODE(0x0101 | (0 << 8), 0, VIF_STCYCL, 0) | (uint64_t)
-	VIF_CODE(t_dest_address | ((uint32_t)1 << 14) | ((uint32_t)t_use_top << 15), ((t_size == 256) ? 0 : t_size), UNPACK_V4_32 | ((uint32_t)0 << 4) | 0x60, 0) << 32 );
-}
-
-void vu1_upload_micro_program(u32* start, u32* end);
-
-void vu1_set_double_buffer_settings(u32 base, u32 offset);
-
-void vifSendPacket(void* packet, u32 vif_channel);
-
-void *vifCreatePacket(uint32_t size);
-
-void vifDestroyPacket(void* packet);
-
-inline void dma_packet_create(dma_packet *packet, void* addr, uint32_t size) {
-    packet->base = (addr? addr : vifCreatePacket(size));
-    packet->internal_buf = !addr;
-    packet->ptr = packet->base;
-    packet->unpack_opened = false;
-}
-
-inline void dma_packet_reset(dma_packet *packet) {
-    packet->ptr = packet->base;
-}
-
-inline void dma_packet_destroy(dma_packet *packet) {
-    if (packet->internal_buf)
-        vifDestroyPacket(packet->base);
-
-    packet->base = NULL;
-    packet->internal_buf = false;
-    packet->ptr = NULL;
-    packet->unpack_opened = false;
-}
-
-inline void dma_packet_send(dma_packet *packet, uint32_t channel) {
-    vifSendPacket(packet->base, channel);
-}
-
-inline void dma_packet_add_tag(dma_packet *packet, uint64_t a1, uint64_t a2) {
-	asm volatile ( 	
-		"pcpyld $7, %1, %2 \n"
-		"sq    $7,0x0(%0) \n"
-		 : : "r" (packet->ptr), "r" (a1), "r" (a2):"$7","memory");
-	packet->ptr+=2;
-}
-
-inline void dma_packet_add_uquad(dma_packet *packet, __uint128_t a1) {
-	asm volatile ( 	
-        "lq    $7,0x0(%1)\n" 
-		"sq    $7,0x0(%0) \n"
-		 : : "r" (packet->ptr), "r" (&a1):"$7","memory");
-	packet->ptr+=2;
-}
-
-inline void dma_packet_add_uint(dma_packet *packet, uint32_t a1) {
-    uint32_t* tmp = (uint32_t*)packet->ptr;
-	*tmp++ = a1;
-    packet->ptr = (uint64_t *)tmp;
-}
-
-inline void dma_packet_add_float(dma_packet *packet, float a1) {
-    float* tmp = (float*)packet->ptr;
-	*tmp++ = a1;
-    packet->ptr = (uint64_t *)tmp;
-}
-
-inline void dma_packet_add_ulong(dma_packet *packet, uint64_t a1) {
-    *packet->ptr++ = a1;
-}
-
-#define dma_packet_add_cnt_tag(packet, count) \
-    dma_packet_add_tag(packet, 0, DMA_TAG(count, 0, DMA_CNT, 0, 0, 0))
-
-#define dma_packet_add_end_tag(packet) \
-    dma_packet_add_tag(packet, (VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32), DMA_TAG(0, 0, DMA_END, 0, 0 , 0))
-
-#define dma_packet_start_program(packet, init) \
-    dma_packet_add_tag(packet, ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, (init? VIF_MSCALF : VIF_MSCNT), 0) << 32)), DMA_TAG(0, 0, DMA_CNT, 0, 0, 0))
-
-
-inline void unpack_list_open(dma_packet *packet, uint32_t vu_base, bool top) {
-    packet->unpack_opened = true;
-    packet->list.vu_addr = vu_base;
-    packet->list.top = top;
-}
-
-inline void *unpack_list_append(dma_packet *packet, void *t_data, uint32_t t_size) {
-    *packet->ptr++ = DMA_TAG(t_size, 0, DMA_REF, 0, t_data, 0);
-	*packet->ptr++ = (VIF_CODE(0x0101 | (0 << 8), 0, VIF_STCYCL, 0) | (u64)
-	VIF_CODE(packet->list.vu_addr | ((u32)1 << 14) | ((u32)packet->list.top << 15), ((t_size == 256) ? 0 : t_size), UNPACK_V4_32 | ((u32)0 << 4) | 0x60, 0) << 32 );
-    packet->list.vu_addr += t_size;
-}
-
-inline void unpack_list_close(dma_packet *packet) {
-    packet->unpack_opened = false;
-    packet->list.vu_addr = 0;
-    packet->list.top = false;
-}
 
 #endif

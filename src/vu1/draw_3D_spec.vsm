@@ -5,8 +5,8 @@
 		.global	VU1Draw3DSpec_CodeStart
 		.global	VU1Draw3DSpec_CodeEnd
 VU1Draw3DSpec_CodeStart:
-__v_src_draw_3D_spec_vcl_4:
-; _LNOPT_w=[ normal2 ] 19 [19 0] 19   [__v_src_draw_3D_spec_vcl_4]
+__v_src_vu1_draw_3D_spec_vcl_4:
+; _LNOPT_w=[ normal2 ] 19 [19 0] 19   [__v_src_vu1_draw_3D_spec_vcl_4]
          NOP                                                        loi           0x3f000000                          
          addi.xy       VF01,VF00,I                                  loi           0x3f800000                          
          NOP                                                        lq            VF02,1(VI00)                        
@@ -27,21 +27,22 @@ __v_src_draw_3D_spec_vcl_4:
          mul.w         VF01,VF00,VF00                               iaddiu        VI06,VI00,0x00000016                
          add.xyz       VF12,VF11,VF12                               fcset         0                                   
 init:
-; _LNOPT_w=[ normal2 ] 15 [15 0] 15   [init]
+; _LNOPT_w=[ normal2 ] 16 [16 0] 16   [init]
          NOP                                                        xtop          VI07                                
-         NOP                                                        lq            VF14,0(VI07)                        
-         NOP                                                        iaddiu        VI14,VI00,0x00007fff                
+         NOP                                                        xitop         VI14                                
          NOP                                                        iaddiu        VI08,VI07,0x00000002                
-         NOP                                                        lq            VF13,1(VI07)                        
-         NOP                                                        mtir          VI09,VF14x                          
-         NOP                                                        iand          VI14,VI09,VI14                      
+         NOP                                                        iaddiu        VI13,VI14,0x00007fff                
          NOP                                                        iadd          VI09,VI08,VI14                      
+         NOP                                                        lq            VF14,0(VI07)                        
          NOP                                                        iadd          VI10,VI09,VI14                      
          NOP                                                        iadd          VI11,VI10,VI14                      
-         NOP                                                        iadd          VI12,VI11,VI14                      
-         NOP                                                        iaddiu        VI13,VI12,0                         
-         NOP                                                        iaddiu        VI12,VI12,0                         
-         NOP                                                        sqi           VF14,(VI13++)                       
+         NOP                                                        iadd          VI15,VI11,VI14                      
+         NOP                                                        iaddiu        VI12,VI15,0                         
+         NOP                                                        iaddiu        VI01,VI13,0x00000001                
+         NOP                                                        lq            VF13,1(VI07)                        
+         NOP                                                        iaddiu        VI13,VI15,0x00000001                
+         NOP                                                        sq            VF14,0(VI12)                        
+         NOP                                                        isw.x         VI01,0(VI12)                        
          NOP                                                        iadd          VI14,VI07,VI14                      
 vertexLoop:
 ; _LNOPT_w=[ normal2 ] 19 [31 0] 32   [vertexLoop]
@@ -96,7 +97,7 @@ directionaLightsLoop:
          NOP                                                        NOP                                               
          NOP                                                        ibne          VI02,VI15,directionaLightsLoop      
          add           VF18,VF18,VF19                               NOP                                                      ;	STALL_LATENCY ?1
-; _LNOPT_w=[ normal2 ] 13 [25 0] 25   [__v_src_draw_3D_spec_vcl_8]
+; _LNOPT_w=[ normal2 ] 13 [25 0] 25   [__v_src_vu1_draw_3D_spec_vcl_8]
          add           VF14,VF13,VF14                               loi           0x00000000                          
          addi.x        VF16,VF00,I                                  sq            VF16,0(VI13)                        
          mul           VF15,VF14,VF18                               sq.xyz        VF15,2(VI13)                               ;	STALL_LATENCY ?2
@@ -110,17 +111,17 @@ directionaLightsLoop:
          NOP                                                        iaddiu        VI13,VI13,0x00000003                
          NOP                                                        ibne          VI14,VI07,vertexLoop                
          NOP                                                        sq            VF18,-2(VI13)                       
-; _LNOPT_w=[ normal2 ] 1 [1 0] 1   [__v_src_draw_3D_spec_vcl_9]
+; _LNOPT_w=[ normal2 ] 1 [1 0] 1   [__v_src_vu1_draw_3D_spec_vcl_9]
          NOP                                                        xgkick        VI12                                
-; _LNOPT_w=[ normal2 ] 2 [0 0] 2   [__v_src_draw_3D_spec_vcl_10]
+; _LNOPT_w=[ normal2 ] 2 [0 0] 2   [__v_src_vu1_draw_3D_spec_vcl_10]
          NOP[E]                                                     NOP                                               
          NOP                                                        NOP                                               
-; _LNOPT_w=[ normal2 ] 2 [2 0] 2   [__v_src_draw_3D_spec_vcl_11]
+; _LNOPT_w=[ normal2 ] 2 [2 0] 2   [__v_src_vu1_draw_3D_spec_vcl_11]
          NOP                                                        b             init                                
          NOP                                                        NOP                                               
 		.align 4
 VU1Draw3DSpec_CodeEnd:
-;	iCount=101
+;	iCount=102
 ; register stats:
 ;  16 VU User integer
 ;  22 VU User floating point
