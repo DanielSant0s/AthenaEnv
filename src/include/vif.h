@@ -47,6 +47,16 @@ typedef enum {
 
 #define VIF1_STAT ((VIFn_STAT*)(0x10003C00))
 
+typedef struct {
+    uint32_t RST: 1;
+    uint32_t FBK: 1;
+    uint32_t STP: 1;
+    uint32_t STC: 1;
+} VIFn_FBRST;
+
+#define VIF1_FBRST ((VIFn_FBRST*)(0x10003C10))
+
+
 #define UNPACK_S_32 0x00
 #define UNPACK_S_16 0x01
 #define UNPACK_S_8 0x02

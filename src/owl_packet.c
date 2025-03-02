@@ -1,4 +1,5 @@
 #include <owl_packet.h>
+#include <debug.h>
 
 owl_controller controller = { 0 };
 owl_packet packet = { 0 };
@@ -23,10 +24,11 @@ void owl_flush_packet() {
     owl_add_end_tag(&packet);
 
     dmaKit_wait(controller.channel, 0);
+
 	FlushCache(0);
 	dmaKit_send_chain(controller.channel, (void *)((uint32_t)(controller.base + (controller.context? controller.size : 0)) & 0x0FFFFFFF), 0);
     
-    controller.context = (!controller.context);
+    controller.context = (!controller.context); 
 
     packet.ptr = controller.base + (controller.context? controller.size : 0);
     controller.alloc = 0;
@@ -34,8 +36,10 @@ void owl_flush_packet() {
 
 owl_packet *owl_open_packet(owl_channel channel, size_t size) {
     if (channel != controller.channel) {
-        if (controller.channel != CHANNEL_SIZE)
+        if (controller.channel != CHANNEL_SIZE) {
             owl_flush_packet();
+        }
+            
 
         controller.channel = channel;
     } else if ((controller.alloc + size) + 1 >= controller.size) { // + 1 for end tag

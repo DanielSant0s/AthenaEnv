@@ -315,7 +315,7 @@ int athena_load_png(GSTEXTURE* tex, FILE* File, bool delayed)
 		}
 
 		// Upload texture
-		gsKit_texture_upload(gsGlobal, tex);
+		texture_upload(gsGlobal, tex);
 		// Free texture
 		free(tex->Mem);
 		tex->Mem = NULL;
@@ -624,7 +624,7 @@ int athena_load_bmp(GSTEXTURE* tex, FILE* File, bool delayed)
 		}
 
 		// Upload texture
-		gsKit_texture_upload(gsGlobal, tex);
+		texture_upload(gsGlobal, tex);
 		// Free texture
 		free(tex->Mem);
 		tex->Mem = NULL;
@@ -772,7 +772,7 @@ int athena_load_jpeg(GSTEXTURE* tex, FILE* fp, bool scale_down, bool delayed)
 		}
 
 		// Upload texture
-		gsKit_texture_upload(gsGlobal, tex);
+		texture_upload(gsGlobal, tex);
 		// Free texture
 		free(tex->Mem);
 		tex->Mem = NULL;
@@ -876,7 +876,7 @@ void printFontText(GSFONT* font, const char* text, float x, float y, float scale
 
 void unloadFont(GSFONT* font)
 {
-	gsKit_TexManager_free(gsGlobal, font->Texture);
+	texture_manager_free(gsGlobal, font->Texture);
 	// clut was pointing to static memory, so do not free
 	font->Texture->Clut = NULL;
 	// mem was pointing to 'TexBase', so do not free
@@ -899,7 +899,9 @@ int getFreeVRAM(){
 void drawImage(GSTEXTURE* source, float x, float y, float width, float height, float startx, float starty, float endx, float endy, Color color)
 {
 	if (source->Delayed == true) {
-		gsKit_TexManager_bind(gsGlobal, source);
+		DIntr();
+		//texture_manager_bind(gsGlobal, source);
+		EIntr();
 	}
 
 	owl_packet *packet = owl_open_packet(CHANNEL_VIF1, 12);
@@ -962,7 +964,9 @@ void drawImageRotate(GSTEXTURE* source, float x, float y, float width, float hei
 	float s = sinf(angle);
 
 	if (source->Delayed == true) {
-		gsKit_TexManager_bind(gsGlobal, source);
+		DIntr();
+		//texture_manager_bind(gsGlobal, source);
+		EIntr();
 	}
 	gsKit_prim_quad_texture(gsGlobal, source, 
 							(-width/2)*c - (-height/2)*s+x, (-height/2)*c + (-width/2)*s+y, startx, starty, 
@@ -1258,12 +1262,12 @@ void drawCircle(float x, float y, float radius, u64 color, u8 filled)
 
 void InvalidateTexture(GSTEXTURE *txt)
 {
-    gsKit_TexManager_invalidate(gsGlobal, txt);
+    texture_manager_invalidate(gsGlobal, txt);
 }
 
 void UnloadTexture(GSTEXTURE *txt)
 {
-	gsKit_TexManager_free(gsGlobal, txt);
+	texture_manager_free(gsGlobal, txt);
 	
 }
 
@@ -1324,14 +1328,15 @@ void setVideoMode(s16 mode, int width, int height, int psm, s16 interlace, s16 f
 
 void fntDrawQuad(rm_quad_t *q)
 {
-    gsKit_TexManager_bind(gsGlobal, q->txt);
+    //texture_manager_bind(gsGlobal, q->txt);
+	int texture_id = texture_manager_push(q->txt);
 
 	owl_packet *packet = owl_open_packet(CHANNEL_VIF1, 12);
 
-	owl_add_cnt_tag_fill(packet, 11); // 4 quadwords for vif
-	owl_add_uint(packet, VIF_NOP);
-	owl_add_uint(packet, VIF_NOP);
-	owl_add_uint(packet, VIF_NOP);
+	owl_add_cnt_tag(packet, 11, owl_vif_code_double(VIF_CODE(texture_id, 0, VIF_MARK, 0), VIF_CODE(0, 0, VIF_FLUSHA, 0))); // 4 quadwords for vif
+	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 1)); // do interrupt request
+	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+	owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));
 	owl_add_uint(packet, (VIF_DIRECT << 24) | 10); // 3 giftags
 	
 	owl_add_tag(packet, GIF_AD, GIFTAG(3, 1, 0, 0, 0, 1));
@@ -1498,7 +1503,7 @@ static void flipScreenSingleBuffering()
 	gsKit_sync(gsGlobal);
 	gsKit_queue_exec(gsGlobal);
 
-	gsKit_TexManager_nextFrame(gsGlobal);
+	texture_manager_nextFrame(gsGlobal);
 
 	
 }
@@ -1513,7 +1518,7 @@ static void flipScreenSingleBufferingPerf()
 	gsKit_sync(gsGlobal);
 	gsKit_queue_exec(gsGlobal);
 
-	gsKit_TexManager_nextFrame(gsGlobal);
+	texture_manager_nextFrame(gsGlobal);
 
 	processFrameCounter();
 
@@ -1533,7 +1538,7 @@ static void flipScreenDoubleBuffering()
 	gsKit_queue_exec(gsGlobal);
 	gsKit_finish();
 	
-	gsKit_TexManager_nextFrame(gsGlobal);
+	texture_manager_nextFrame(gsGlobal);
 
 	
 }
@@ -1551,7 +1556,7 @@ static void flipScreenDoubleBufferingPerf()
 	gsKit_queue_exec(gsGlobal);
 	gsKit_finish();
 	
-	gsKit_TexManager_nextFrame(gsGlobal);
+	texture_manager_nextFrame(gsGlobal);
 
 	processFrameCounter();
 
@@ -1567,7 +1572,7 @@ static void flipScreenSingleBufferingNoVSync()
 	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
 
 	gsKit_queue_exec(gsGlobal);
-	gsKit_TexManager_nextFrame(gsGlobal);
+	texture_manager_nextFrame(gsGlobal);
 
 	
 }
@@ -1579,7 +1584,7 @@ static void flipScreenSingleBufferingPerfNoVSync()
 	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
 
 	gsKit_queue_exec(gsGlobal);
-	gsKit_TexManager_nextFrame(gsGlobal);
+	texture_manager_nextFrame(gsGlobal);
 
 	processFrameCounter();
 
@@ -1595,7 +1600,7 @@ static void flipScreenDoubleBufferingNoVSync()
 	gsKit_flip(gsGlobal);
 	gsKit_queue_exec(gsGlobal);
 	gsKit_finish();
-	gsKit_TexManager_nextFrame(gsGlobal);
+	texture_manager_nextFrame(gsGlobal);
 
 	
 }
@@ -1609,7 +1614,7 @@ static void flipScreenDoubleBufferingPerfNoVSync()
 	gsKit_flip(gsGlobal);
 	gsKit_queue_exec(gsGlobal);
 	gsKit_finish();
-	gsKit_TexManager_nextFrame(gsGlobal);
+	texture_manager_nextFrame(gsGlobal);
 
 	processFrameCounter();
 }
@@ -1624,7 +1629,7 @@ static void flipScreenHiRes()
 
 	gsKit_hires_sync(gsGlobal);
 	gsKit_hires_flip(gsGlobal);
-	gsKit_TexManager_nextFrame(gsGlobal);
+	texture_manager_nextFrame(gsGlobal);
 
 	
 
@@ -1638,7 +1643,7 @@ static void flipScreenHiResPerf()
 
 	gsKit_hires_sync(gsGlobal);
 	gsKit_hires_flip(gsGlobal);
-	gsKit_TexManager_nextFrame(gsGlobal);
+	texture_manager_nextFrame(gsGlobal);
 
 	processFrameCounter();
 
@@ -1735,7 +1740,7 @@ void init_graphics()
 
 	gsKit_init_screen(gsGlobal);
 
-	gsKit_TexManager_init(gsGlobal);
+	texture_manager_init(gsGlobal);
 
 	gsKit_add_vsync_handler(vsync_handler);
 
