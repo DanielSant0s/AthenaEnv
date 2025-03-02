@@ -245,8 +245,8 @@ int load_default_module(int id) {
 				REPORT("BDM");
     			ID = SifExecModuleBuffer(&bdmfs_fatfs_irx, size_bdmfs_fatfs_irx, 0, NULL, &ret);
 				REPORT("BDMFS_FATFS");
-    			ID = SifExecModuleBuffer(&ata_bd_irx, size_ata_bd_irx, 0, NULL, &ret);
-				REPORT("ATA_BD");
+    			ID = SifExecModuleBuffer(&ps2atad_irx, size_ps2atad_irx, 0, NULL, &ret);
+				REPORT("ATAD");
 
 				bdm_started = LOAD_SUCCESS();
 			}
@@ -258,7 +258,7 @@ int load_default_module(int id) {
 				load_default_module(USBD_MODULE);
 			if (!usb_mass_started) {
     			ID = SifExecModuleBuffer(&usbmass_bd_irx, size_usbmass_bd_irx, 0, NULL, &ret);
-				REPORT("USMASS_BD");
+				REPORT("USBMASS_BD");
 
 				usb_mass_started = LOAD_SUCCESS();
 			}

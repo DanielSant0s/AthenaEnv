@@ -83,7 +83,7 @@ ATHENA_MODULES = ath_env.o ath_physics.o ath_vector.o ath_pads.o ath_system.o at
 
 IOP_MODULES = iomanx.o filexio.o sio2man.o mcman.o mcserv.o padman.o  \
 			  usbd.o bdm.o bdmfs_fatfs.o usbmass_bd.o cdfs.o \
-			  freeram.o ps2dev9.o mtapman.o poweroff.o ata_bd.o \
+			  freeram.o ps2dev9.o mtapman.o poweroff.o ps2atad.o \
 			  ps2hdd.o ps2fs.o mmceman.o
 
 EMBEDDED_ASSETS = quicksand_regular.o owl_indices.o owl_palette.o
@@ -96,7 +96,7 @@ ifeq ($(GRAPHICS),1)
   EE_CFLAGS += -DATHENA_GRAPHICS
   APP_CORE += graphics.o atlas.o fntsys.o render.o camera.o calc_3d.o fast_obj/fast_obj.o
 
-  ATHENA_MODULES += ath_color.o ath_font.o ath_render.o ath_lights.o ath_3dcamera.o ath_screen.o ath_image.o ath_imagelist.o ath_shape.o 
+  ATHENA_MODULES += ath_color.o ath_font.o ath_render.o ath_lights.o ath_3dcamera.o ath_screen.o ath_image.o ath_imagelist.o ath_shape.o
   EE_OBJS += $(VU1_MPGS)
 endif
 
