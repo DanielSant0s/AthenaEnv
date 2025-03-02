@@ -41,8 +41,8 @@ $(EE_EMBED_DIR)usbmass_bd.c: $(PS2SDK)/iop/irx/usbmass_bd.irx | $(EE_EMBED_DIR)
 $(EE_EMBED_DIR)ps2dev9.c: $(PS2SDK)/iop/irx/ps2dev9.irx | $(EE_EMBED_DIR)
 	$(BIN2S) $< $@ ps2dev9_irx
 
-$(EE_EMBED_DIR)ata_bd.c: $(PS2SDK)/iop/irx/ata_bd.irx | $(EE_EMBED_DIR)
-	$(BIN2S) $< $@ ata_bd_irx
+$(EE_EMBED_DIR)ps2atad.c: $(PS2SDK)/iop/irx/ps2atad.irx | $(EE_EMBED_DIR)
+	$(BIN2S) $< $@ ps2atad_irx
 
 $(EE_EMBED_DIR)ps2hdd.c: $(PS2SDK)/iop/irx/ps2hdd.irx | $(EE_EMBED_DIR)
 	$(BIN2S) $< $@ ps2hdd_irx
