@@ -134,7 +134,10 @@ inline void owl_add_unpack_data(owl_packet *packet, uint32_t t_dest_address, voi
 #define owl_vif_code_double(a, b) ((b | (uint64_t)a << 32))
 
 #define owl_add_vif_codes(packet, a, b, c, d) \
-    owl_add_tag(packet, ((d | (uint64_t)c << 32)), ((b | (uint64_t)a << 32)))
+    packet->ptr->sword[3] = a; \
+    packet->ptr->sword[2] = b; \
+    packet->ptr->sword[1] = c; \
+    packet->ptr->sword[0] = d; \
 
 inline void unpack_list_open(owl_packet *packet, uint32_t vu_base, bool top) {
     packet->unpack_opened = true;
