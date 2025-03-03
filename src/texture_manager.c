@@ -23,6 +23,7 @@
 #include <texture_manager.h>
 
 #define VIF1_INT_INVALID 65535
+#define TRANSFER_REQUEST_MASK 0x80000000
 
 struct SVramBlock {
 	unsigned int iStart;
@@ -47,42 +48,65 @@ GSTEXTURE *texture_upload_queue[TEXTURE_UPLOAD_QUEUE_SIZE] = { NULL };
 uint32_t *VIF1_MARK = (uint32_t *)(0x10003C30);
 
 int upload_texture_handler(int cause) { 
-	int has_transfer;
+	if (cause == INTC_VIF1) {
+		int has_transfer = 0;
+		uint32_t tex_id = *VIF1_MARK;
 
-	if (texture_upload_queue[*VIF1_MARK]) {
-		has_transfer = texture_manager_bind(NULL, texture_upload_queue[*VIF1_MARK]);
-		texture_upload_queue[*VIF1_MARK] = NULL;
+		*VIF1_MARK = 0;
 
-		*VIF1_MARK = VIF1_INT_INVALID;
-		
-		//int tw, th;
-		//athena_set_tw_th(to_upload, &tw, &th);
-	
-		//owl_packet *packet = owl_open_packet(CHANNEL_GIF, 3);
-	
-		//owl_add_cnt_tag_fill(packet, 2);
-	
-		//owl_add_tag(packet, GIF_AD, GIFTAG(1, 1, 0, 0, 0, 1));
-	
-		//owl_add_tag(packet, 
-		//	GS_TEX0_1, 
-		//	GS_SETREG_TEX0(to_upload->Vram/256, 
-		//				  to_upload->TBW, 
-		//				  to_upload->PSM,
-		//				  tw, th, 
-		//				  true, //gsGlobal->PrimAlphaEnable, 
-		//				  COLOR_MODULATE,
-		//				  to_upload->VramClut/256, 
-		//				  to_upload->ClutPSM, 
-		//				  0, 0, 
-		//				  to_upload->VramClut? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD)
-		//);
-		if (has_transfer) {
+		if (texture_upload_queue[tex_id]) {
+			GSTEXTURE *tex = texture_upload_queue[tex_id];
+			texture_upload_queue[tex_id] = NULL;
+
+			if ((tex->Vram & TRANSFER_REQUEST_MASK) == TRANSFER_REQUEST_MASK) {
+				has_transfer = 1;
+				tex->Vram &= ~TRANSFER_REQUEST_MASK;
+
+				gsKit_setup_tbw(tex);
+
+				texture_send(tex->Mem, tex->Width, tex->Height, tex->Vram, tex->PSM, tex->TBW, (tex->Clut? GS_CLUT_TEXTURE : GS_CLUT_NONE));
+			}
+
+			if ((tex->VramClut & TRANSFER_REQUEST_MASK) == TRANSFER_REQUEST_MASK) {
+				has_transfer = 1;
+				tex->VramClut &= ~TRANSFER_REQUEST_MASK;
+
+				if (tex->PSM == GS_PSM_T8) {
+					texture_send(tex->Clut, 16, 16, tex->VramClut, tex->ClutPSM, 1, GS_CLUT_PALLETE);
+
+				} else if (tex->PSM == GS_PSM_T4) {
+					texture_send(tex->Clut, 8,  2, tex->VramClut, tex->ClutPSM, 1, GS_CLUT_PALLETE);
+				}
+			}
+
+			int tw, th;
+			athena_set_tw_th(tex, &tw, &th);
+
+			owl_packet *packet = owl_open_packet(CHANNEL_GIF, 3);
+
+			owl_add_cnt_tag_fill(packet, 2);
+
+			owl_add_tag(packet, GIF_AD, GIFTAG(1, 1, 0, 0, 0, 1));
+
+			owl_add_tag(packet, 
+				GS_TEX0_1, 
+				GS_SETREG_TEX0(tex->Vram/256, 
+							  tex->TBW, 
+							  tex->PSM,
+							  tw, th, 
+							  true, //gsGlobal->PrimAlphaEnable, 
+							  COLOR_MODULATE,
+							  tex->VramClut/256, 
+							  tex->ClutPSM, 
+							  0, 0, 
+							  tex->VramClut? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD)
+			);
+
 			owl_flush_packet();
 		}
-	}
 
-	VIF1_FBRST->STC = true;
+		VIF1_FBRST->STC = true;
+	}
 
 	ExitHandler();	
 	return 0;
@@ -147,7 +171,7 @@ void texture_send(u32 *mem, int width, int height, u32 tbp, u32 psm, u32 tbw, u8
 
 	owl_add_cnt_tag_fill(packet, 5);
 
-	owl_add_tag(packet, GIF_AD, GIFTAG(4, 1, 0, 0, 0, 1));
+	owl_add_tag(packet, GIF_AD, GIFTAG(4, 0, 0, 0, 0, 1));
 
 	owl_add_tag(packet, GS_BITBLTBUF, GS_SETREG_BITBLTBUF(0, 0, 0, tbp/256, tbw, psm));
 	owl_add_tag(packet, GS_TRXPOS, GS_SETREG_TRXPOS(0, 0, 0, 0, 0));
@@ -174,7 +198,7 @@ void texture_send(u32 *mem, int width, int height, u32 tbp, u32 psm, u32 tbw, u8
 		owl_open_packet(CHANNEL_GIF, 3);
 
 		owl_add_cnt_tag_fill(packet, 2);
-		owl_add_tag(packet, GIF_AD, GIFTAG(1, 1, 0, 0, 0, 1));
+		owl_add_tag(packet, GIF_AD, GIFTAG(1, 0, 0, 0, 0, 1));
 		owl_add_tag(packet, GS_TEXFLUSH, 0);
 	}
 }
@@ -391,7 +415,7 @@ int texture_manager_push(GSTEXTURE *tex) {
 }
 
 
-unsigned int texture_manager_bind(GSGLOBAL *gsGlobal, GSTEXTURE *tex)
+unsigned int texture_manager_bind(GSGLOBAL *gsGlobal, GSTEXTURE *tex, bool async)
 {
 
 	struct SVramBlock * block;
@@ -439,7 +463,11 @@ unsigned int texture_manager_bind(GSGLOBAL *gsGlobal, GSTEXTURE *tex)
 		gsKit_setup_tbw(tex);
 		SyncDCache(tex->Mem, (u8 *)(tex->Mem) + tsize);
 
-		texture_send(tex->Mem, tex->Width, tex->Height, tex->Vram, tex->PSM, tex->TBW, tex->Clut ? GS_CLUT_TEXTURE : GS_CLUT_NONE);
+		if (async) {
+			tex->Vram |= TRANSFER_REQUEST_MASK;
+		} else {
+			texture_send(tex->Mem, tex->Width, tex->Height, tex->Vram, tex->PSM, tex->TBW, tex->Clut ? GS_CLUT_TEXTURE : GS_CLUT_NONE);
+		}
 
 	}
 
@@ -447,11 +475,19 @@ unsigned int texture_manager_bind(GSGLOBAL *gsGlobal, GSTEXTURE *tex)
 		tex->VramClut = block->iStart + tsize;
 		SyncDCache(tex->Clut, (u8 *)(tex->Clut) + csize);
 
-		texture_send(tex->Clut, cwidth, cheight, tex->VramClut, tex->ClutPSM, 1, GS_CLUT_PALLETE);
+		if (async) {
+			tex->VramClut |= TRANSFER_REQUEST_MASK;
+		} else {
+			texture_send(tex->Clut, cwidth, cheight, tex->VramClut, tex->ClutPSM, 1, GS_CLUT_PALLETE);
+		}
+		
 
 	}
 
 	block->iUseCount++;
+
+	if (async)
+		return texture_manager_push(tex);
 
 	return (ttransfer|ctransfer);
 }

@@ -30,7 +30,7 @@ int upload_texture_handler();
 void texture_manager_init(GSGLOBAL *gsGlobal);
 
 /// Bind a texture to VRAM, will automatically transfer the texture.
-unsigned int texture_manager_bind(GSGLOBAL *gsGlobal, GSTEXTURE *tex);
+unsigned int texture_manager_bind(GSGLOBAL *gsGlobal, GSTEXTURE *tex, bool async);
 
 /// Invalidate a texture, will automatically transfer the texture on next bind call.
 void texture_manager_invalidate(GSGLOBAL *gsGlobal, GSTEXTURE *tex);
