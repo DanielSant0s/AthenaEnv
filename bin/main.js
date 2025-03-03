@@ -80,7 +80,7 @@ const main_menu = new Menu("JS Apps", js_apps,
     (ctx) => { }, 
     (ctx) => { 
         font_medium.print(210, 125, ctx.entries[0].name);
-        ctx.entries[0].icon.draw(85, 111);
+        //ctx.entries[0].icon.draw(85, 111);
     
         for(let i = 1; i < (ctx.entries.length < 10? ctx.entries.length : 10); i++) {
             font.color = unsel_color;

@@ -4,8 +4,6 @@
 owl_controller controller = { 0 };
 owl_packet packet = { 0 };
 
-static bool in_transfer = false;
-
 void owl_init(void *ptr, size_t size) {
     controller.channel = CHANNEL_SIZE;
 
@@ -37,7 +35,6 @@ void owl_flush_packet() {
 }
 
 owl_packet *owl_open_packet(owl_channel channel, size_t size) {
-    //printf("size %d channel %d\n", channel, size);
     if (channel != controller.channel) {
         if (controller.channel != CHANNEL_SIZE) {
             owl_flush_packet();

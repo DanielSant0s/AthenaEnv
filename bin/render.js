@@ -73,7 +73,6 @@ listtest.materials = trilist_materials;
 
 let dragontex = new Image("dragon.png");
 const dragonmesh = new RenderObject("dragon.obj", dragontex);
-console.log(dragontex.bpp);
 
 let monkeytex = new Image("monkey.png");
 const monkeymesh = new RenderObject("monkey.obj", monkeytex);
