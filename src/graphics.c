@@ -1309,6 +1309,8 @@ void setVideoMode(s16 mode, int width, int height, int psm, s16 interlace, s16 f
 		hires = false;
 	}
 
+	texture_manager_init(gsGlobal);
+
 	switchFlipScreenFunction();
 	
 	gsKit_set_display_offset(gsGlobal, -0.5f, -0.5f);

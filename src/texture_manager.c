@@ -147,7 +147,6 @@ void texture_send(u32 *mem, int width, int height, u32 tbp, u32 psm, u32 tbw, u8
 	int packets;
 	int remain;
 	int qwc;
-	int dmasize;
 
 	qwc = gsKit_texture_size_ee(width, height, psm) / 16;
 	if( gsKit_texture_size_ee(width, height, psm) % 16 )
@@ -160,12 +159,12 @@ void texture_send(u32 *mem, int width, int height, u32 tbp, u32 psm, u32 tbw, u8
 	p_mem   = (u32*)mem;
 
 	if(clut == GS_CLUT_TEXTURE)
-		packet_size = (7+(packets * 3)+remain);
+		packet_size = (6+(packets * 3)+remain);
 	else
 		packet_size = (9+(packets * 3)+remain);
 
 	if(remain > 0)
-		packet_size += 2;
+		packet_size += 3;
 
 	owl_packet *packet = owl_open_packet(CHANNEL_GIF, packet_size);
 
@@ -195,8 +194,6 @@ void texture_send(u32 *mem, int width, int height, u32 tbp, u32 psm, u32 tbw, u8
 
 	if(clut != GS_CLUT_TEXTURE)
 	{
-		owl_open_packet(CHANNEL_GIF, 3);
-
 		owl_add_cnt_tag_fill(packet, 2);
 		owl_add_tag(packet, GIF_AD, GIFTAG(1, 0, 0, 0, 0, 1));
 		owl_add_tag(packet, GS_TEXFLUSH, 0);
