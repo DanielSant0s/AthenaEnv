@@ -73,6 +73,7 @@ listtest.materials = trilist_materials;
 
 let dragontex = new Image("dragon.png");
 const dragonmesh = new RenderObject("dragon.obj", dragontex);
+console.log(dragontex.bpp);
 
 let monkeytex = new Image("monkey.png");
 const monkeymesh = new RenderObject("monkey.obj", monkeytex);
@@ -204,7 +205,7 @@ while(true) {
     }
 
 
-    //model[modeltodisplay].draw(0.0f, 0.0f, 0.0f, savedly, savedlx, 0.0f);
+    model[modeltodisplay].draw(0.0f, 0.0f, 0.0f, savedly, savedlx, 0.0f);
 
     if(bbox) {
         model[modeltodisplay].drawBounds(0.0f, 0.0f, 30.0f, savedly, savedlx, 0.0f, Color.new(128, 0, 255));
