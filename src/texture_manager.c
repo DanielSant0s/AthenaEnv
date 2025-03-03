@@ -58,15 +58,6 @@ int upload_texture_handler(int cause) {
 			GSTEXTURE *tex = texture_upload_queue[tex_id];
 			texture_upload_queue[tex_id] = NULL;
 
-			if ((tex->Vram & TRANSFER_REQUEST_MASK) == TRANSFER_REQUEST_MASK) {
-				has_transfer = 1;
-				tex->Vram &= ~TRANSFER_REQUEST_MASK;
-
-				gsKit_setup_tbw(tex);
-
-				texture_send(tex->Mem, tex->Width, tex->Height, tex->Vram, tex->PSM, tex->TBW, (tex->Clut? GS_CLUT_TEXTURE : GS_CLUT_NONE));
-			}
-
 			if ((tex->VramClut & TRANSFER_REQUEST_MASK) == TRANSFER_REQUEST_MASK) {
 				has_transfer = 1;
 				tex->VramClut &= ~TRANSFER_REQUEST_MASK;
@@ -77,6 +68,14 @@ int upload_texture_handler(int cause) {
 				} else if (tex->PSM == GS_PSM_T4) {
 					texture_send(tex->Clut, 8,  2, tex->VramClut, tex->ClutPSM, 1, GS_CLUT_PALLETE);
 				}
+			}
+
+			if ((tex->Vram & TRANSFER_REQUEST_MASK) == TRANSFER_REQUEST_MASK) {
+				has_transfer = 1;
+				tex->Vram &= ~TRANSFER_REQUEST_MASK;
+
+				gsKit_setup_tbw(tex);
+				texture_send(tex->Mem, tex->Width, tex->Height, tex->Vram, tex->PSM, tex->TBW, ((tex->PSM == GS_PSM_T8 || tex->PSM == GS_PSM_T4) ? GS_CLUT_TEXTURE : GS_CLUT_NONE));
 			}
 
 			int tw, th;
