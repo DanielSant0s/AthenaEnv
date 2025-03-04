@@ -1,5 +1,12 @@
 import { Element, Component, Menu, MenuList, Interface } from 'UI.js'
 
+const canvas = Screen.getMode();
+
+canvas.zbuffering = false;
+canvas.psmz = Z16S;
+
+Screen.setMode(canvas);
+
 const unsel_color = Color.new(255, 255, 255, 64);
 const sel_color = Color.new(255, 255, 255);
 

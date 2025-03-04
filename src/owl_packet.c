@@ -1,13 +1,15 @@
 #include <owl_packet.h>
+#include <debug.h>
+#include <stdlib.h>
 
 owl_controller controller = { 0 };
-owl_packet packet = { 0 };
+owl_packet internal_packet = { 0 };
 
 void owl_init(void *ptr, size_t size) {
     controller.channel = CHANNEL_SIZE;
 
     controller.base = ptr;
-    packet.ptr = ptr;
+    internal_packet.ptr = ptr;
 
     controller.size = size/2;
     controller.alloc = 0;
@@ -20,22 +22,25 @@ void owl_flush_packet() {
         return;
     }
 
-    owl_add_end_tag(&packet);
+    owl_add_end_tag(&internal_packet);
 
     dmaKit_wait(controller.channel, 0);
+
 	FlushCache(0);
 	dmaKit_send_chain(controller.channel, (void *)((uint32_t)(controller.base + (controller.context? controller.size : 0)) & 0x0FFFFFFF), 0);
-    
-    controller.context = (!controller.context);
 
-    packet.ptr = controller.base + (controller.context? controller.size : 0);
+    controller.context = (!controller.context); 
+
+    internal_packet.ptr = controller.base + (controller.context? controller.size : 0);
     controller.alloc = 0;
 }
 
-owl_packet *owl_open_packet(owl_channel channel, size_t size) {
+owl_packet *owl_query_packet(owl_channel channel, size_t size) {
     if (channel != controller.channel) {
-        if (controller.channel != CHANNEL_SIZE)
+        if (controller.channel != CHANNEL_SIZE) {
             owl_flush_packet();
+            
+        }
 
         controller.channel = channel;
     } else if ((controller.alloc + size) + 1 >= controller.size) { // + 1 for end tag
@@ -44,9 +49,40 @@ owl_packet *owl_open_packet(owl_channel channel, size_t size) {
 
     controller.alloc += size;
 
-    return &packet;
+    return &internal_packet;
 }
 
+owl_packet *owl_create_packet(owl_channel channel, size_t size, void* buf) {
+    owl_packet *packet = (owl_packet *)buf;
+
+    if (!packet) {
+        packet = (owl_packet *)memalign(128, size);
+
+        if (!packet)
+            return NULL;
+    }
+
+    packet->channel = channel;
+    packet->size = size-sizeof(owl_packet);
+    packet->base = (owl_qword *)(&packet[1]);
+    packet->ptr = packet->base;
+
+    return packet;
+}
+
+void owl_send_packet(owl_packet *packet, bool free_packet) {
+    dmaKit_wait(packet->channel, 0);
+
+	FlushCache(0);
+	dmaKit_send_chain(packet->channel, ((uint32_t)(packet->base) & 0x0FFFFFFF), 0);
+    packet->ptr = packet->base;
+
+    if (free_packet) {
+        dmaKit_wait(packet->channel, 0); // don't free a packet you don't even sent xD
+        free(packet);
+    }
+
+}
 
 static inline uint32_t get_packet_size_for_program(uint32_t *start, uint32_t *end)
 {
@@ -61,7 +97,7 @@ void vu1_upload_micro_program(uint32_t* start, uint32_t* end)
 {
 	uint32_t packet_size = get_packet_size_for_program(start, end) + 1; // + 1 for end tag
 
-    owl_packet *packet = owl_open_packet(CHANNEL_VIF1, packet_size);
+    owl_packet *internal_packet = owl_query_packet(CHANNEL_VIF1, packet_size);
 
 	// get the size of the code as we can only send 256 instructions in each MPGtag
 	uint32_t dest = 0;
@@ -75,7 +111,7 @@ void vu1_upload_micro_program(uint32_t* start, uint32_t* end)
     {
         uint16_t curr_count = count > 256 ? 256 : count;
 
-        owl_add_tag(packet, (VIF_CODE(0, 0, VIF_NOP, 0) | (uint64_t)VIF_CODE(dest, curr_count & 0xFF, VIF_MPG, 0) << 32),
+        owl_add_tag(internal_packet, (VIF_CODE(0, 0, VIF_NOP, 0) | (uint64_t)VIF_CODE(dest, curr_count & 0xFF, VIF_MPG, 0) << 32),
                             DMA_TAG(curr_count / 2, 0, DMA_REF, 0, (const u128 *)l_start, 0)
                     );
 
@@ -84,18 +120,18 @@ void vu1_upload_micro_program(uint32_t* start, uint32_t* end)
         dest += curr_count;
     }
 
-    //owl_add_tag(packet, (VIF_CODE(0, 0, VIF_NOP, 0) | (uint64_t)VIF_CODE(0, 0, VIF_NOP, 0) << 32),
+    //owl_add_tag(internal_packet, (VIF_CODE(0, 0, VIF_NOP, 0) | (uint64_t)VIF_CODE(0, 0, VIF_NOP, 0) << 32),
     //                    DMA_TAG(0, 0, DMA_END, 0, 0 , 0));
 }
 
 void vu1_set_double_buffer_settings(uint32_t base, uint32_t offset)
 {
-	owl_packet *packet = owl_open_packet(CHANNEL_VIF1, 2);
+	owl_packet *internal_packet = owl_query_packet(CHANNEL_VIF1, 2);
 
-    owl_add_tag(packet, (VIF_CODE(base, 0, VIF_BASE, 0) | (uint64_t)VIF_CODE(offset, 0, VIF_OFFSET, 0) << 32), 
+    owl_add_tag(internal_packet, (VIF_CODE(base, 0, VIF_BASE, 0) | (uint64_t)VIF_CODE(offset, 0, VIF_OFFSET, 0) << 32), 
                         DMA_TAG(0, 0, DMA_CNT, 0, 0 , 0));
 
-    //owl_add_tag(packet, (VIF_CODE(0, 0, VIF_NOP, 0) | (uint64_t)VIF_CODE(0, 0, VIF_NOP, 0) << 32),
+    //owl_add_tag(internal_packet, (VIF_CODE(0, 0, VIF_NOP, 0) | (uint64_t)VIF_CODE(0, 0, VIF_NOP, 0) << 32),
     //                DMA_TAG(0, 0, DMA_END, 0, 0 , 0));
 
 }

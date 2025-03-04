@@ -92,7 +92,7 @@ void bootlogoThread(void* data) {
         flipScreen();
     }
 
-    gsKit_TexManager_free(gsGlobal, &bootlogo);
+    texture_manager_free(gsGlobal, &bootlogo);
 
     exitkill_task();
 }

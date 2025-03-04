@@ -380,33 +380,51 @@ static uint32_t* last_mpg = NULL;
 		} \
 	} while (0)
 
-void append_texture_tags(owl_packet* packet, GSTEXTURE *texture, eColorFunctions func) {
-	owl_add_cnt_tag_fill(packet, 4); // 4 quadwords for vif
-	owl_add_uint(packet, VIF_NOP);
-	owl_add_uint(packet, VIF_NOP);
-	owl_add_uint(packet, VIF_NOP);
-	owl_add_uint(packet, (VIF_DIRECT << 24) | 3); // 3 giftags
+void append_texture_tags(owl_packet* packet, GSTEXTURE *texture, int texture_id, eColorFunctions func) {
+	if (texture_id != -1) {
+		owl_add_cnt_tag(packet, 8, 0); // 4 quadwords for vif
+		owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0)); 
+		owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0)); 
+		owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSH, 0));
+		owl_add_uint(packet, VIF_CODE(2, 0, VIF_DIRECT, 0));
+
+		owl_add_tag(packet, GIF_AD, GIFTAG(1, 1, 0, 0, 0, 1));
+		owl_add_tag(packet, GIF_NOP, 0);
+
+		owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));
+		owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+		owl_add_uint(packet, VIF_CODE(texture_id, 0, VIF_MARK, 0));
+		owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 1));
+
+	} else {
+		owl_add_cnt_tag(packet, 4, 0);
+	}
+
+	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+	owl_add_uint(packet, VIF_CODE(3, 0, VIF_DIRECT, 0)); 
 	
 	owl_add_tag(packet, GIF_AD, GIFTAG(2, 1, 0, 0, 0, 1));
-	
-	owl_add_tag(packet, GS_TEX1_1, GS_SETREG_TEX1(1, 0, texture->Filter, texture->Filter, 0, 0, 0));
-	
+
 	int tw, th;
 	athena_set_tw_th(texture, &tw, &th);
 
 	owl_add_tag(packet, 
-					   GS_TEX0_1, 
-					   GS_SETREG_TEX0(texture->Vram/256, 
-									  texture->TBW, 
-									  texture->PSM,
-									  tw, th, 
-									  gsGlobal->PrimAlphaEnable, 
-									  func,
-									  texture->VramClut/256, 
-									  texture->ClutPSM, 
-									  0, 0, 
-									  texture->VramClut? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD)
-						);
+		GS_TEX0_1, 
+		GS_SETREG_TEX0((texture->Vram & ~TRANSFER_REQUEST_MASK)/256, 
+					  texture->TBW, 
+					  texture->PSM,
+					  tw, th, 
+					  gsGlobal->PrimAlphaEnable, 
+					  COLOR_MODULATE,
+					  (texture->VramClut & ~TRANSFER_REQUEST_MASK)/256, 
+					  texture->ClutPSM, 
+					  0, 0, 
+					  texture->VramClut? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD)
+	);
+	
+	owl_add_tag(packet, GS_TEX1_1, GS_SETREG_TEX1(1, 0, texture->Filter, texture->Filter, 0, 0, 0));
 }
 
 void draw_vu1_with_colors(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z) {
@@ -426,7 +444,7 @@ void draw_vu1_with_colors(model* m, float pos_x, float pos_y, float pos_z, float
 	create_local_world(local_world, object_position, object_rotation);
 	create_local_screen(m->local_screen, local_world, world_view, view_screen);
 
-	owl_packet *packet = owl_open_packet(CHANNEL_VIF1, 4);
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 4);
 
 	unpack_list_open(packet, 0, false);
 	{
@@ -440,13 +458,14 @@ void draw_vu1_with_colors(model* m, float pos_x, float pos_y, float pos_z, float
 
 	int last_index = -1;
 	GSTEXTURE* tex = NULL;
+	int texture_id;
 	for(int i = 0; i < m->material_index_count; i++) {
 		bool texture_mapping = ((m->materials[m->material_indices[i].index].texture_id != -1) && m->attributes.texture_mapping);
 
 		if (texture_mapping) {
 			GSTEXTURE *cur_tex = m->textures[m->materials[m->material_indices[i].index].texture_id];
 			if (cur_tex != tex) {
-				gsKit_TexManager_bind(gsGlobal, cur_tex);
+				texture_id = texture_manager_bind(gsGlobal, cur_tex, true);
 				tex = cur_tex;
 			}
 		}
@@ -459,7 +478,7 @@ void draw_vu1_with_colors(model* m, float pos_x, float pos_y, float pos_z, float
 		int idxs_drawn = 0;
 
 		while (idxs_to_draw > 0) {
-			owl_open_packet(CHANNEL_VIF1, texture_mapping? 13 : 7);
+			owl_query_packet(CHANNEL_VIF1, texture_mapping? 18 : 8);
 
 			int count = BATCH_SIZE;
 			if (idxs_to_draw < BATCH_SIZE)
@@ -488,7 +507,7 @@ void draw_vu1_with_colors(model* m, float pos_x, float pos_y, float pos_z, float
     		    														0, 3);
 
 			if (texture_mapping) {
-				append_texture_tags(packet, tex, COLOR_MODULATE);
+				append_texture_tags(packet, tex, texture_id, COLOR_MODULATE);
 			}
 
 			unpack_list_open(packet, 0, true);
@@ -502,7 +521,12 @@ void draw_vu1_with_colors(model* m, float pos_x, float pos_y, float pos_z, float
 			}
 			unpack_list_close(packet);
 
-			owl_add_cnt_tag(packet, 0, owl_vif_code_double(VIF_CODE(0, 0, (last_index == -1? VIF_MSCALF : VIF_MSCNT), 0), VIF_CODE(count, 0, VIF_ITOP, 0)));
+			owl_add_cnt_tag(packet, 1, owl_vif_code_double(VIF_CODE(0, 0, VIF_NOP, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
+			
+			owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+			owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));
+			owl_add_uint(packet, VIF_CODE(count, 0, VIF_ITOP, 0));
+			owl_add_uint(packet, VIF_CODE(0, 0, (last_index == -1? VIF_MSCALF : VIF_MSCNT), 0)); 
 
 			idxs_to_draw -= count;
 			idxs_drawn += count;
@@ -549,7 +573,7 @@ void draw_vu1_with_lights(model* m, float pos_x, float pos_y, float pos_z, float
   	matrix_multiply(m->local_screen, m->local_screen, world_view);
   	matrix_multiply(m->local_screen, m->local_screen, view_screen);
 
-	owl_packet *packet = owl_open_packet(CHANNEL_VIF1, 7); // 5 for unpack static data + 2 for flush with end
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 7); // 5 for unpack static data + 2 for flush with end
 
 	unpack_list_open(packet, 0, false);
 	{
@@ -572,13 +596,14 @@ void draw_vu1_with_lights(model* m, float pos_x, float pos_y, float pos_z, float
 
 	int last_index = -1;
 	GSTEXTURE* tex = NULL;
+	int texture_id;
 	for(int i = 0; i < m->material_index_count; i++) {
 		bool texture_mapping = ((m->materials[m->material_indices[i].index].texture_id != -1) && m->attributes.texture_mapping);
 
 		if (texture_mapping) {
 			GSTEXTURE *cur_tex = m->textures[m->materials[m->material_indices[i].index].texture_id];
 			if (cur_tex != tex) {
-				gsKit_TexManager_bind(gsGlobal, cur_tex);
+				texture_id = texture_manager_bind(gsGlobal, cur_tex, true);
 				tex = cur_tex;
 			}
 		}
@@ -592,7 +617,7 @@ void draw_vu1_with_lights(model* m, float pos_x, float pos_y, float pos_z, float
 		int idxs_drawn = 0;
 
 		while (idxs_to_draw > 0) {
-			owl_open_packet(CHANNEL_VIF1, texture_mapping? 13 : 7);
+			owl_query_packet(CHANNEL_VIF1, texture_mapping? 18 : 8);
 
 			int count = BATCH_SIZE;
 			if (idxs_to_draw < BATCH_SIZE)
@@ -601,7 +626,7 @@ void draw_vu1_with_lights(model* m, float pos_x, float pos_y, float pos_z, float
 			}
 
 			if (texture_mapping) {
-				append_texture_tags(packet, tex, COLOR_MODULATE);
+				append_texture_tags(packet, tex, texture_id, COLOR_MODULATE);
 			}
 
 			m->materials[m->material_indices[i].index].clip_prim_tag.dword[1] = DRAW_STQ2_REGLIST;
@@ -636,7 +661,12 @@ void draw_vu1_with_lights(model* m, float pos_x, float pos_y, float pos_z, float
 			}
 			unpack_list_close(packet);
 
-			owl_add_cnt_tag(packet, 0, owl_vif_code_double(VIF_CODE(0, 0, (last_index == -1? VIF_MSCALF : VIF_MSCNT), 0), VIF_CODE(count, 0, VIF_ITOP, 0)));
+			owl_add_cnt_tag(packet, 1, owl_vif_code_double(VIF_CODE(0, 0, VIF_NOP, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
+			
+			owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));
+			owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+			owl_add_uint(packet, VIF_CODE(count, 0, VIF_ITOP, 0));
+			owl_add_uint(packet, VIF_CODE(0, 0, (last_index == -1? VIF_MSCALF : VIF_MSCNT), 0)); 
 
 			idxs_to_draw -= count;
 			idxs_drawn += count;
@@ -686,7 +716,7 @@ void draw_vu1_with_spec_lights(model* m, float pos_x, float pos_y, float pos_z, 
   	matrix_multiply(m->local_screen, m->local_screen, world_view);
   	matrix_multiply(m->local_screen, m->local_screen, view_screen);
 
-	owl_packet *packet = owl_open_packet(CHANNEL_VIF1, 7);
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 7);
 
 	screen_scale.w = *((uint32_t*)&m->attributes);
 
@@ -711,13 +741,14 @@ void draw_vu1_with_spec_lights(model* m, float pos_x, float pos_y, float pos_z, 
 
 	int last_index = -1;
 	GSTEXTURE* tex = NULL;
+	int texture_id;
 	for(int i = 0; i < m->material_index_count; i++) {
 		bool texture_mapping = ((m->materials[m->material_indices[i].index].texture_id != -1) && m->attributes.texture_mapping);
 
 		if (texture_mapping) {
 			GSTEXTURE *cur_tex = m->textures[m->materials[m->material_indices[i].index].texture_id];
 			if (cur_tex != tex) {
-				gsKit_TexManager_bind(gsGlobal, cur_tex);
+				texture_id = texture_manager_bind(gsGlobal, cur_tex, true);
 				tex = cur_tex;
 			}
 		}
@@ -731,7 +762,7 @@ void draw_vu1_with_spec_lights(model* m, float pos_x, float pos_y, float pos_z, 
 		int idxs_drawn = 0;
 
 		while (idxs_to_draw > 0) {
-			owl_open_packet(CHANNEL_VIF1, texture_mapping? 13 : 7);
+			owl_query_packet(CHANNEL_VIF1, texture_mapping? 18 : 8);
 
 			int count = BATCH_SIZE;
 			if (idxs_to_draw < BATCH_SIZE)
@@ -739,7 +770,7 @@ void draw_vu1_with_spec_lights(model* m, float pos_x, float pos_y, float pos_z, 
 				count = idxs_to_draw;
 			}
 			if (texture_mapping) {
-				append_texture_tags(packet, tex, COLOR_MODULATE);
+				append_texture_tags(packet, tex, texture_id, COLOR_MODULATE);
 			}
 
 			m->materials[m->material_indices[i].index].clip_prim_tag.dword[1] = DRAW_STQ2_REGLIST;
@@ -774,7 +805,12 @@ void draw_vu1_with_spec_lights(model* m, float pos_x, float pos_y, float pos_z, 
 			}
 			unpack_list_close(packet);
 
-			owl_add_cnt_tag(packet, 0, owl_vif_code_double(VIF_CODE(0, 0, (last_index == -1? VIF_MSCALF : VIF_MSCNT), 0), VIF_CODE(count, 0, VIF_ITOP, 0)));
+			owl_add_cnt_tag(packet, 1, owl_vif_code_double(VIF_CODE(0, 0, VIF_NOP, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
+			
+			owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+			owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+			owl_add_uint(packet, VIF_CODE(count, 0, VIF_ITOP, 0));
+			owl_add_uint(packet, VIF_CODE(0, 0, (last_index == -1? VIF_MSCALF : VIF_MSCNT), 0)); 
 
 			idxs_to_draw -= count;
 			idxs_drawn += count;

@@ -203,7 +203,6 @@ while(true) {
         model[modeltodisplay].accurate_clipping ^= 1;
     }
 
-
     model[modeltodisplay].draw(0.0f, 0.0f, 0.0f, savedly, savedlx, 0.0f);
 
     if(bbox) {

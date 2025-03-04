@@ -315,7 +315,7 @@ int athena_load_png(GSTEXTURE* tex, FILE* File, bool delayed)
 		}
 
 		// Upload texture
-		gsKit_texture_upload(gsGlobal, tex);
+		texture_upload(gsGlobal, tex);
 		// Free texture
 		free(tex->Mem);
 		tex->Mem = NULL;
@@ -624,7 +624,7 @@ int athena_load_bmp(GSTEXTURE* tex, FILE* File, bool delayed)
 		}
 
 		// Upload texture
-		gsKit_texture_upload(gsGlobal, tex);
+		texture_upload(gsGlobal, tex);
 		// Free texture
 		free(tex->Mem);
 		tex->Mem = NULL;
@@ -772,7 +772,7 @@ int athena_load_jpeg(GSTEXTURE* tex, FILE* fp, bool scale_down, bool delayed)
 		}
 
 		// Upload texture
-		gsKit_texture_upload(gsGlobal, tex);
+		texture_upload(gsGlobal, tex);
 		// Free texture
 		free(tex->Mem);
 		tex->Mem = NULL;
@@ -876,7 +876,7 @@ void printFontText(GSFONT* font, const char* text, float x, float y, float scale
 
 void unloadFont(GSFONT* font)
 {
-	gsKit_TexManager_free(gsGlobal, font->Texture);
+	texture_manager_free(gsGlobal, font->Texture);
 	// clut was pointing to static memory, so do not free
 	font->Texture->Clut = NULL;
 	// mem was pointing to 'TexBase', so do not free
@@ -898,40 +898,54 @@ int getFreeVRAM(){
 
 void drawImage(GSTEXTURE* source, float x, float y, float width, float height, float startx, float starty, float endx, float endy, Color color)
 {
-	if (source->Delayed == true) {
-		gsKit_TexManager_bind(gsGlobal, source);
+    int texture_id = texture_manager_bind(gsGlobal, source, true);
+
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, texture_id != -1? 16 : 12);
+
+	owl_add_cnt_tag(packet, texture_id != -1? 15 : 11, 0); // 4 quadwords for vif
+
+	if (texture_id != -1) {
+		owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0)); 
+		owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0)); 
+		owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSH, 0));
+		owl_add_uint(packet, VIF_CODE(2, 0, VIF_DIRECT, 0));
+
+		owl_add_tag(packet, GIF_AD, GIFTAG(1, 1, 0, 0, 0, 1));
+		owl_add_tag(packet, GIF_NOP, 0);
+
+		owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));
+		owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+		owl_add_uint(packet, VIF_CODE(texture_id, 0, VIF_MARK, 0));
+		owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 1));
 	}
 
-	owl_packet *packet = owl_open_packet(CHANNEL_VIF1, 12);
-
-	owl_add_cnt_tag_fill(packet, 11); // 4 quadwords for vif
-	owl_add_uint(packet, VIF_NOP);
-	owl_add_uint(packet, VIF_NOP);
-	owl_add_uint(packet, VIF_NOP);
-	owl_add_uint(packet, (VIF_DIRECT << 24) | 10); // 3 giftags
+	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+	owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));
+	owl_add_uint(packet, VIF_CODE(10, 0, VIF_DIRECT, 0)); // 3 giftags
 	
 	owl_add_tag(packet, GIF_AD, GIFTAG(3, 1, 0, 0, 0, 1));
 
 	owl_add_tag(packet, GS_TEST_1, GS_SETREG_TEST_1(0, 0, 0, 0, 0, 0, 1, 1));
-	
-	owl_add_tag(packet, GS_TEX1_1, GS_SETREG_TEX1(1, 0, source->Filter, source->Filter, 0, 0, 0));
-	
+
 	int tw, th;
 	athena_set_tw_th(source, &tw, &th);
 
 	owl_add_tag(packet, 
-					   GS_TEX0_1, 
-					   GS_SETREG_TEX0(source->Vram/256, 
-									  source->TBW, 
-									  source->PSM,
-									  tw, th, 
-									  gsGlobal->PrimAlphaEnable, 
-									  COLOR_MODULATE,
-									  source->VramClut/256, 
-									  source->ClutPSM, 
-									  0, 0, 
-									  source->VramClut? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD)
-						);
+		GS_TEX0_1, 
+		GS_SETREG_TEX0((source->Vram & ~TRANSFER_REQUEST_MASK)/256, 
+					  source->TBW, 
+					  source->PSM,
+					  tw, th, 
+					  gsGlobal->PrimAlphaEnable, 
+					  COLOR_MODULATE,
+					  (source->VramClut & ~TRANSFER_REQUEST_MASK)/256, 
+					  source->ClutPSM, 
+					  0, 0, 
+					  source->VramClut? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD)
+	);
+	
+	owl_add_tag(packet, GS_TEX1_1, GS_SETREG_TEX1(1, 0, source->Filter, source->Filter, 0, 0, 0));
 
 	owl_add_tag(packet, 
 					   ((uint64_t)(GS_RGBAQ)  << 0 | (uint64_t)(GS_UV) << 4 | (uint64_t)(GS_XYZ2) << 8 | (uint64_t)(GS_UV) << 12 | (uint64_t)(GS_XYZ2) << 16), 
@@ -961,21 +975,91 @@ void drawImageRotate(GSTEXTURE* source, float x, float y, float width, float hei
 	float c = cosf(angle);
 	float s = sinf(angle);
 
-	if (source->Delayed == true) {
-		gsKit_TexManager_bind(gsGlobal, source);
-	}
-	gsKit_prim_quad_texture(gsGlobal, source, 
-							(-width/2)*c - (-height/2)*s+x, (-height/2)*c + (-width/2)*s+y, startx, starty, 
-							(-width/2)*c - height/2*s+x, height/2*c + (-width/2)*s+y, startx, endy, 
-							width/2*c - (-height/2)*s+x, (-height/2)*c + width/2*s+y, endx, starty, 
-							width/2*c - height/2*s+x, height/2*c + width/2*s+y, endx, endy, 
-							1, color);
+	x += width/2;
+	y += height/2;
 
+    int texture_id = texture_manager_bind(gsGlobal, source, true);
+
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, texture_id != -1? 20 : 16);
+
+	owl_add_cnt_tag(packet, texture_id != -1? 19 : 15, 0); // 4 quadwords for vif
+
+	if (texture_id != -1) {
+		owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0)); 
+		owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0)); 
+		owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSH, 0));
+		owl_add_uint(packet, VIF_CODE(2, 0, VIF_DIRECT, 0));
+
+		owl_add_tag(packet, GIF_AD, GIFTAG(1, 1, 0, 0, 0, 1));
+		owl_add_tag(packet, GIF_NOP, 0);
+
+		owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));
+		owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+		owl_add_uint(packet, VIF_CODE(texture_id, 0, VIF_MARK, 0));
+		owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 1));
+	}
+
+	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+	owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));
+	owl_add_uint(packet, VIF_CODE(14, 0, VIF_DIRECT, 0)); // 3 giftags
+	
+	owl_add_tag(packet, GIF_AD, GIFTAG(4, 1, 0, 0, 0, 1));
+
+	owl_add_tag(packet, GS_TEST_1, GS_SETREG_TEST_1(0, 0, 0, 0, 0, 0, 1, 1));
+
+	int tw, th;
+	athena_set_tw_th(source, &tw, &th);
+
+	owl_add_tag(packet, 
+		GS_TEX0_1, 
+		GS_SETREG_TEX0((source->Vram & ~TRANSFER_REQUEST_MASK)/256, 
+					  source->TBW, 
+					  source->PSM,
+					  tw, th, 
+					  gsGlobal->PrimAlphaEnable, 
+					  COLOR_MODULATE,
+					  (source->VramClut & ~TRANSFER_REQUEST_MASK)/256, 
+					  source->ClutPSM, 
+					  0, 0, 
+					  source->VramClut? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD)
+	);
+	
+	owl_add_tag(packet, GS_TEX1_1, GS_SETREG_TEX1(1, 0, source->Filter, source->Filter, 0, 0, 0));
+
+	owl_add_tag(packet, GS_RGBAQ, color);
+
+	owl_add_tag(packet, 
+					   ((uint64_t)(GS_UV) << 0 | (uint64_t)(GS_XYZ2) << 4), 
+					   	VU_GS_GIFTAG(4, 
+							1, NO_CUSTOM_DATA, 1, 
+							VU_GS_PRIM(GS_PRIM_PRIM_TRISTRIP, 
+									   0, 1, 
+									   gsGlobal->PrimFogEnable, 
+									   gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 1, gsGlobal->PrimContext, 0),
+    						0, 2)
+						);
+
+	owl_add_tag(packet, 0, GS_SETREG_STQ( (int)(startx) << 4, (int)(starty) << 4 ));
+
+	owl_add_tag(packet, 1, (uint64_t)((int)gsGlobal->OffsetX+((int)((-width/2)*c - (-height/2)*s+x) << 4)) | ((uint64_t)((int)gsGlobal->OffsetY+((int)((-height/2)*c + (-width/2)*s+y) << 4)) << 32));
+
+	owl_add_tag(packet, 0, GS_SETREG_STQ( (int)(startx) << 4, (int)(endy) << 4 ));
+
+	owl_add_tag(packet, 1, (uint64_t)((int)gsGlobal->OffsetX+((int)((-width/2)*c - height/2*s+x) << 4)) | ((uint64_t)((int)gsGlobal->OffsetY+((int)(height/2*c + (-width/2)*s+y) << 4)) << 32));
+
+	owl_add_tag(packet, 0, GS_SETREG_STQ( (int)(endx) << 4, (int)(starty) << 4 ));
+
+	owl_add_tag(packet, 1, (uint64_t)((int)gsGlobal->OffsetX+((int)(width/2*c - (-height/2)*s+x) << 4)) | ((uint64_t)((int)gsGlobal->OffsetY+((int)((-height/2)*c + width/2*s+y) << 4)) << 32));
+
+	owl_add_tag(packet, 0, GS_SETREG_STQ( (int)(endx) << 4, (int)(endy) << 4 ));
+
+	owl_add_tag(packet, 1, (uint64_t)((int)gsGlobal->OffsetX+((int)(width/2*c - height/2*s+x) << 4)) | ((uint64_t)((int)gsGlobal->OffsetY+((int)(height/2*c + width/2*s+y) << 4)) << 32));
 }
 
 void drawPixel(float x, float y, Color color)
 {
-	owl_packet *packet = owl_open_packet(CHANNEL_VIF1, 7);
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 7);
 
 	owl_add_cnt_tag_fill(packet, 6); // 4 quadwords for vif
 	owl_add_uint(packet, VIF_NOP);
@@ -1005,7 +1089,7 @@ void drawPixel(float x, float y, Color color)
 
 void drawLine(float x, float y, float x2, float y2, Color color)
 {
-	owl_packet *packet = owl_open_packet(CHANNEL_VIF1, 8);
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 8);
 
 	owl_add_cnt_tag_fill(packet, 7); // 4 quadwords for vif
 	owl_add_uint(packet, VIF_NOP);
@@ -1038,7 +1122,7 @@ void drawLine(float x, float y, float x2, float y2, Color color)
 
 void drawRect(float x, float y, int width, int height, Color color)
 {
-	owl_packet *packet = owl_open_packet(CHANNEL_VIF1, 8);
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 8);
 
 	owl_add_cnt_tag_fill(packet, 7); // 4 quadwords for vif
 	owl_add_uint(packet, VIF_NOP);
@@ -1070,7 +1154,7 @@ void drawRect(float x, float y, int width, int height, Color color)
 
 void drawTriangle(float x, float y, float x2, float y2, float x3, float y3, Color color)
 {
-	owl_packet *packet = owl_open_packet(CHANNEL_VIF1, 9);
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 9);
 
 	owl_add_cnt_tag_fill(packet, 8); // 4 quadwords for vif
 	owl_add_uint(packet, VIF_NOP);
@@ -1104,7 +1188,7 @@ void drawTriangle(float x, float y, float x2, float y2, float x3, float y3, Colo
 
 void drawTriangle_gouraud(float x, float y, float x2, float y2, float x3, float y3, Color color, Color color2, Color color3)
 {
-	owl_packet *packet = owl_open_packet(CHANNEL_VIF1, 11);
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 11);
 
 	owl_add_cnt_tag_fill(packet, 10); // 4 quadwords for vif
 	owl_add_uint(packet, VIF_NOP);
@@ -1142,7 +1226,7 @@ void drawTriangle_gouraud(float x, float y, float x2, float y2, float x3, float 
 
 void drawQuad(float x, float y, float x2, float y2, float x3, float y3, float x4, float y4, Color color)
 {
-	owl_packet *packet = owl_open_packet(CHANNEL_VIF1, 10);
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 10);
 
 	owl_add_cnt_tag_fill(packet, 9); // 4 quadwords for vif
 	owl_add_uint(packet, VIF_NOP);
@@ -1178,7 +1262,7 @@ void drawQuad(float x, float y, float x2, float y2, float x3, float y3, float x4
 
 void drawQuad_gouraud(float x, float y, float x2, float y2, float x3, float y3, float x4, float y4, Color color, Color color2, Color color3, Color color4)
 {
-	owl_packet *packet = owl_open_packet(CHANNEL_VIF1, 13);
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 13);
 
 	owl_add_cnt_tag_fill(packet, 12); // 4 quadwords for vif
 	owl_add_uint(packet, VIF_NOP);
@@ -1220,7 +1304,7 @@ void drawQuad_gouraud(float x, float y, float x2, float y2, float x3, float y3, 
 
 void drawCircle(float x, float y, float radius, u64 color, u8 filled)
 {
-	owl_packet *packet = owl_open_packet(CHANNEL_VIF1, (42 + (int)(!filled)));
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, (42 + (int)(!filled)));
 
 	owl_add_cnt_tag_fill(packet, (41 + (int)(!filled))); // 4 quadwords for vif
 	owl_add_uint(packet, VIF_NOP);
@@ -1258,12 +1342,12 @@ void drawCircle(float x, float y, float radius, u64 color, u8 filled)
 
 void InvalidateTexture(GSTEXTURE *txt)
 {
-    gsKit_TexManager_invalidate(gsGlobal, txt);
+    texture_manager_invalidate(gsGlobal, txt);
 }
 
 void UnloadTexture(GSTEXTURE *txt)
 {
-	gsKit_TexManager_free(gsGlobal, txt);
+	texture_manager_free(gsGlobal, txt);
 	
 }
 
@@ -1313,6 +1397,8 @@ void setVideoMode(s16 mode, int width, int height, int psm, s16 interlace, s16 f
 		hires = false;
 	}
 
+	texture_manager_init(gsGlobal);
+
 	switchFlipScreenFunction();
 	
 	gsKit_set_display_offset(gsGlobal, -0.5f, -0.5f);
@@ -1324,38 +1410,54 @@ void setVideoMode(s16 mode, int width, int height, int psm, s16 interlace, s16 f
 
 void fntDrawQuad(rm_quad_t *q)
 {
-    gsKit_TexManager_bind(gsGlobal, q->txt);
+    int texture_id = texture_manager_bind(gsGlobal, q->txt, true);
 
-	owl_packet *packet = owl_open_packet(CHANNEL_VIF1, 12);
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, texture_id != -1? 16 : 12);
 
-	owl_add_cnt_tag_fill(packet, 11); // 4 quadwords for vif
-	owl_add_uint(packet, VIF_NOP);
-	owl_add_uint(packet, VIF_NOP);
-	owl_add_uint(packet, VIF_NOP);
-	owl_add_uint(packet, (VIF_DIRECT << 24) | 10); // 3 giftags
+	owl_add_cnt_tag(packet, texture_id != -1? 15 : 11, 0); // 4 quadwords for vif
+
+	if (texture_id != -1) {
+		owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0)); 
+		owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0)); 
+		owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSH, 0));
+		owl_add_uint(packet, VIF_CODE(2, 0, VIF_DIRECT, 0));
+
+		owl_add_tag(packet, GIF_AD, GIFTAG(1, 1, 0, 0, 0, 1));
+		owl_add_tag(packet, GIF_NOP, 0);
+
+		owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));
+		owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+		owl_add_uint(packet, VIF_CODE(texture_id, 0, VIF_MARK, 0));
+		owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 1));
+	}
+
+	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+	owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));
+	owl_add_uint(packet, VIF_CODE(10, 0, VIF_DIRECT, 0)); // 3 giftags
 	
 	owl_add_tag(packet, GIF_AD, GIFTAG(3, 1, 0, 0, 0, 1));
 
 	owl_add_tag(packet, GS_TEST_1, GS_SETREG_TEST_1(0, 0, 0, 0, 0, 0, 1, 1));
-	
-	owl_add_tag(packet, GS_TEX1_1, GS_SETREG_TEX1(1, 0, q->txt->Filter, q->txt->Filter, 0, 0, 0));
-	
+
 	int tw, th;
 	athena_set_tw_th(q->txt, &tw, &th);
 
 	owl_add_tag(packet, 
-					   GS_TEX0_1, 
-					   GS_SETREG_TEX0(q->txt->Vram/256, 
-									  q->txt->TBW, 
-									  q->txt->PSM,
-									  tw, th, 
-									  gsGlobal->PrimAlphaEnable, 
-									  COLOR_MODULATE,
-									  q->txt->VramClut/256, 
-									  q->txt->ClutPSM, 
-									  0, 0, 
-									  q->txt->VramClut? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD)
-						);
+		GS_TEX0_1, 
+		GS_SETREG_TEX0((q->txt->Vram & ~TRANSFER_REQUEST_MASK)/256, 
+					  q->txt->TBW, 
+					  q->txt->PSM,
+					  tw, th, 
+					  gsGlobal->PrimAlphaEnable, 
+					  COLOR_MODULATE,
+					  (q->txt->VramClut & ~TRANSFER_REQUEST_MASK)/256, 
+					  q->txt->ClutPSM, 
+					  0, 0, 
+					  q->txt->VramClut? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD)
+	);
+	
+	owl_add_tag(packet, GS_TEX1_1, GS_SETREG_TEX1(1, 0, q->txt->Filter, q->txt->Filter, 0, 0, 0));
 
 	owl_add_tag(packet, 
 					   ((uint64_t)(GS_RGBAQ)  << 0 | (uint64_t)(GS_UV) << 4 | (uint64_t)(GS_XYZ2) << 8 | (uint64_t)(GS_UV) << 12 | (uint64_t)(GS_XYZ2) << 16), 
@@ -1490,30 +1592,31 @@ inline void processFrameCounter()
 
 static void flipScreenSingleBuffering()
 {
-	owl_flush_packet();
-
-	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
-
 	//gsKit_set_finish(gsGlobal);
 	gsKit_sync(gsGlobal);
 	gsKit_queue_exec(gsGlobal);
 
-	gsKit_TexManager_nextFrame(gsGlobal);
+	dmaKit_wait(DMA_CHANNEL_GIF, 0);
+
+	owl_flush_packet();
+
+	texture_manager_nextFrame(gsGlobal);
 
 	
 }
 
 static void flipScreenSingleBufferingPerf()
 {
-	owl_flush_packet();
-
-	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
-
 	//gsKit_set_finish(gsGlobal);
 	gsKit_sync(gsGlobal);
+
 	gsKit_queue_exec(gsGlobal);
 
-	gsKit_TexManager_nextFrame(gsGlobal);
+	dmaKit_wait(DMA_CHANNEL_GIF, 0);
+
+	owl_flush_packet();
+
+	texture_manager_nextFrame(gsGlobal);
 
 	processFrameCounter();
 
@@ -1522,36 +1625,38 @@ static void flipScreenSingleBufferingPerf()
 
 static void flipScreenDoubleBuffering()
 {	
-	owl_flush_packet();
-
-	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
-
 	//gsKit_set_finish(gsGlobal);
 
 	gsKit_sync(gsGlobal);
 	gsKit_flip(gsGlobal);
 	gsKit_queue_exec(gsGlobal);
+
+	dmaKit_wait(DMA_CHANNEL_GIF, 0);
+
+	owl_flush_packet();
+
 	gsKit_finish();
 	
-	gsKit_TexManager_nextFrame(gsGlobal);
+	texture_manager_nextFrame(gsGlobal);
 
 	
 }
 
 static void flipScreenDoubleBufferingPerf()
 {	
-	owl_flush_packet();
-
-	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
-
 	//gsKit_set_finish(gsGlobal);
 
 	gsKit_sync(gsGlobal);
 	gsKit_flip(gsGlobal);
 	gsKit_queue_exec(gsGlobal);
+
+	dmaKit_wait(DMA_CHANNEL_GIF, 0);
+
+	owl_flush_packet();
+	
 	gsKit_finish();
 	
-	gsKit_TexManager_nextFrame(gsGlobal);
+	texture_manager_nextFrame(gsGlobal);
 
 	processFrameCounter();
 
@@ -1562,24 +1667,26 @@ static void flipScreenDoubleBufferingPerf()
 
 static void flipScreenSingleBufferingNoVSync()
 {
+	gsKit_queue_exec(gsGlobal);
+
+	dmaKit_wait(DMA_CHANNEL_GIF, 0);
+
 	owl_flush_packet();
 
-	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
-
-	gsKit_queue_exec(gsGlobal);
-	gsKit_TexManager_nextFrame(gsGlobal);
+	texture_manager_nextFrame(gsGlobal);
 
 	
 }
 
 static void flipScreenSingleBufferingPerfNoVSync()
 {
+	gsKit_queue_exec(gsGlobal);
+
+	dmaKit_wait(DMA_CHANNEL_GIF, 0);
+
 	owl_flush_packet();
 
-	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
-
-	gsKit_queue_exec(gsGlobal);
-	gsKit_TexManager_nextFrame(gsGlobal);
+	texture_manager_nextFrame(gsGlobal);
 
 	processFrameCounter();
 
@@ -1588,28 +1695,30 @@ static void flipScreenSingleBufferingPerfNoVSync()
 
 static void flipScreenDoubleBufferingNoVSync()
 {	
-	owl_flush_packet();
-
-	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
-
 	gsKit_flip(gsGlobal);
 	gsKit_queue_exec(gsGlobal);
+
+	dmaKit_wait(DMA_CHANNEL_GIF, 0);
+
+	owl_flush_packet();
+
 	gsKit_finish();
-	gsKit_TexManager_nextFrame(gsGlobal);
+	texture_manager_nextFrame(gsGlobal);
 
 	
 }
 
 static void flipScreenDoubleBufferingPerfNoVSync()
 {	
-	owl_flush_packet();
-
-	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
-
 	gsKit_flip(gsGlobal);
 	gsKit_queue_exec(gsGlobal);
+
+	dmaKit_wait(DMA_CHANNEL_GIF, 0);
+
+	owl_flush_packet();
+
 	gsKit_finish();
-	gsKit_TexManager_nextFrame(gsGlobal);
+	texture_manager_nextFrame(gsGlobal);
 
 	processFrameCounter();
 }
@@ -1624,7 +1733,7 @@ static void flipScreenHiRes()
 
 	gsKit_hires_sync(gsGlobal);
 	gsKit_hires_flip(gsGlobal);
-	gsKit_TexManager_nextFrame(gsGlobal);
+	texture_manager_nextFrame(gsGlobal);
 
 	
 
@@ -1638,7 +1747,7 @@ static void flipScreenHiResPerf()
 
 	gsKit_hires_sync(gsGlobal);
 	gsKit_hires_flip(gsGlobal);
-	gsKit_TexManager_nextFrame(gsGlobal);
+	texture_manager_nextFrame(gsGlobal);
 
 	processFrameCounter();
 
@@ -1735,7 +1844,7 @@ void init_graphics()
 
 	gsKit_init_screen(gsGlobal);
 
-	gsKit_TexManager_init(gsGlobal);
+	texture_manager_init(gsGlobal);
 
 	gsKit_add_vsync_handler(vsync_handler);
 

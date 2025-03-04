@@ -52,16 +52,29 @@ typedef struct {
 } unpack_list;
 
 typedef struct {
-    owl_qword *ptr;
+    // used only with a custom packet
+    owl_qword *base; 
+    owl_channel channel; 
+    size_t size;
 
+    // used for main packet stream too
+    owl_qword *ptr;
     bool unpack_opened; // true when under a unpack list
     unpack_list list;
-} owl_packet;
+} owl_packet __attribute__((aligned(128)));
 
 void owl_init(void *ptr, size_t size);
 
-owl_packet *owl_open_packet(owl_channel channel, size_t size);
+#define owl_packet_size(size) (sizeof(owl_packet) + size)
 
+owl_packet *owl_create_packet(owl_channel channel, size_t size, void* buf);
+
+void owl_send_packet(owl_packet *packet, bool free_packet);
+
+// do a packet request from main packet buffer
+owl_packet *owl_query_packet(owl_channel channel, size_t size);
+
+// flush a requested packet
 void owl_flush_packet();
 
 void vu1_upload_micro_program(uint32_t* start, uint32_t* end);
@@ -134,7 +147,10 @@ inline void owl_add_unpack_data(owl_packet *packet, uint32_t t_dest_address, voi
 #define owl_vif_code_double(a, b) ((b | (uint64_t)a << 32))
 
 #define owl_add_vif_codes(packet, a, b, c, d) \
-    owl_add_tag(packet, ((d | (uint64_t)c << 32)), ((b | (uint64_t)a << 32)))
+    packet->ptr->sword[3] = a; \
+    packet->ptr->sword[2] = b; \
+    packet->ptr->sword[1] = c; \
+    packet->ptr->sword[0] = d; \
 
 inline void unpack_list_open(owl_packet *packet, uint32_t vu_base, bool top) {
     packet->unpack_opened = true;
