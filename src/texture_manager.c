@@ -22,7 +22,7 @@
 
 #include <texture_manager.h>
 
-#define VIF1_INT_INVALID 65535
+#define VIF1_MARK_CLEAN 65535
 
 
 struct SVramBlock {
@@ -60,7 +60,7 @@ int upload_texture_handler(int cause) {
 		int has_transfer = 0;
 		uint32_t tex_id = *VIF1_MARK;
 
-		*VIF1_MARK = 0;
+		*VIF1_MARK = VIF1_MARK_CLEAN;
 
 		if (texture_upload_queue[tex_id]) {
 			GSTEXTURE *tex = texture_upload_queue[tex_id];
@@ -387,6 +387,8 @@ void texture_manager_init(GSGLOBAL *gsGlobal)
 
 	// Allocate the initial free block
 	__head = _blockCreate(gsGlobal->CurrentPointer, (4*1024*1024) - gsGlobal->CurrentPointer);
+
+	*VIF1_MARK = VIF1_MARK_CLEAN;
 
 	if (texture_upload_callback_id == -1) {
 		add_texture_upload_handler(upload_texture_handler);
