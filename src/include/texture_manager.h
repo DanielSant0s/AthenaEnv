@@ -22,13 +22,15 @@
 extern "C" {
 #endif
 
+#define TRANSFER_REQUEST_MASK 0x80000000
+
 void texture_upload(GSGLOBAL *gsGlobal, GSTEXTURE *Texture);
 
 /// Initialize the texture manager
 void texture_manager_init(GSGLOBAL *gsGlobal);
 
 /// Bind a texture to VRAM, will automatically transfer the texture.
-unsigned int texture_manager_bind(GSGLOBAL *gsGlobal, GSTEXTURE *tex, bool async);
+int texture_manager_bind(GSGLOBAL *gsGlobal, GSTEXTURE *tex, bool async);
 
 /// Invalidate a texture, will automatically transfer the texture on next bind call.
 void texture_manager_invalidate(GSGLOBAL *gsGlobal, GSTEXTURE *tex);

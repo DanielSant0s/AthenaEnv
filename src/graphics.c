@@ -900,30 +900,50 @@ void drawImage(GSTEXTURE* source, float x, float y, float width, float height, f
 {
     int texture_id = texture_manager_bind(gsGlobal, source, true);
 
-	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 15);
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, texture_id != -1? 16 : 12);
 
-	owl_add_cnt_tag(packet, 14, 0); // 4 quadwords for vif
-	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0)); 
-	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0)); 
-	owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSH, 0));
-	owl_add_uint(packet, VIF_CODE(2, 0, VIF_DIRECT, 0));
+	owl_add_cnt_tag(packet, texture_id != -1? 15 : 11, 0); // 4 quadwords for vif
 
-	owl_add_tag(packet, GIF_AD, GIFTAG(1, 1, 0, 0, 0, 1));
-	owl_add_tag(packet, GIF_NOP, 0);
+	if (texture_id != -1) {
+		owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0)); 
+		owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0)); 
+		owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSH, 0));
+		owl_add_uint(packet, VIF_CODE(2, 0, VIF_DIRECT, 0));
 
+		owl_add_tag(packet, GIF_AD, GIFTAG(1, 1, 0, 0, 0, 1));
+		owl_add_tag(packet, GIF_NOP, 0);
+
+		owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));
+		owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+		owl_add_uint(packet, VIF_CODE(texture_id, 0, VIF_MARK, 0));
+		owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 1));
+	}
+
+	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
 	owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));
-	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
-	owl_add_uint(packet, VIF_CODE(texture_id, 0, VIF_MARK, 0));
-	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 1));
-
-	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
-	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
-	owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));
-	owl_add_uint(packet, VIF_CODE(9, 0, VIF_DIRECT, 0)); // 3 giftags
+	owl_add_uint(packet, VIF_CODE(10, 0, VIF_DIRECT, 0)); // 3 giftags
 	
-	owl_add_tag(packet, GIF_AD, GIFTAG(2, 1, 0, 0, 0, 1));
+	owl_add_tag(packet, GIF_AD, GIFTAG(3, 1, 0, 0, 0, 1));
 
 	owl_add_tag(packet, GS_TEST_1, GS_SETREG_TEST_1(0, 0, 0, 0, 0, 0, 1, 1));
+
+	int tw, th;
+	athena_set_tw_th(source, &tw, &th);
+
+	owl_add_tag(packet, 
+		GS_TEX0_1, 
+		GS_SETREG_TEX0((source->Vram & ~TRANSFER_REQUEST_MASK)/256, 
+					  source->TBW, 
+					  source->PSM,
+					  tw, th, 
+					  gsGlobal->PrimAlphaEnable, 
+					  COLOR_MODULATE,
+					  (source->VramClut & ~TRANSFER_REQUEST_MASK)/256, 
+					  source->ClutPSM, 
+					  0, 0, 
+					  source->VramClut? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD)
+	);
 	
 	owl_add_tag(packet, GS_TEX1_1, GS_SETREG_TEX1(1, 0, source->Filter, source->Filter, 0, 0, 0));
 
@@ -1324,30 +1344,50 @@ void fntDrawQuad(rm_quad_t *q)
 {
     int texture_id = texture_manager_bind(gsGlobal, q->txt, true);
 
-	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 15);
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, texture_id != -1? 16 : 12);
 
-	owl_add_cnt_tag(packet, 14, 0); // 4 quadwords for vif
-	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0)); 
-	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0)); 
-	owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSH, 0));
-	owl_add_uint(packet, VIF_CODE(2, 0, VIF_DIRECT, 0));
+	owl_add_cnt_tag(packet, texture_id != -1? 15 : 11, 0); // 4 quadwords for vif
 
-	owl_add_tag(packet, GIF_AD, GIFTAG(1, 1, 0, 0, 0, 1));
-	owl_add_tag(packet, GIF_NOP, 0);
+	if (texture_id != -1) {
+		owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0)); 
+		owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0)); 
+		owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSH, 0));
+		owl_add_uint(packet, VIF_CODE(2, 0, VIF_DIRECT, 0));
 
+		owl_add_tag(packet, GIF_AD, GIFTAG(1, 1, 0, 0, 0, 1));
+		owl_add_tag(packet, GIF_NOP, 0);
+
+		owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));
+		owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+		owl_add_uint(packet, VIF_CODE(texture_id, 0, VIF_MARK, 0));
+		owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 1));
+	}
+
+	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
 	owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));
-	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
-	owl_add_uint(packet, VIF_CODE(texture_id, 0, VIF_MARK, 0));
-	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 1));
-
-	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
-	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
-	owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));
-	owl_add_uint(packet, VIF_CODE(9, 0, VIF_DIRECT, 0)); // 3 giftags
+	owl_add_uint(packet, VIF_CODE(10, 0, VIF_DIRECT, 0)); // 3 giftags
 	
-	owl_add_tag(packet, GIF_AD, GIFTAG(2, 1, 0, 0, 0, 1));
+	owl_add_tag(packet, GIF_AD, GIFTAG(3, 1, 0, 0, 0, 1));
 
 	owl_add_tag(packet, GS_TEST_1, GS_SETREG_TEST_1(0, 0, 0, 0, 0, 0, 1, 1));
+
+	int tw, th;
+	athena_set_tw_th(q->txt, &tw, &th);
+
+	owl_add_tag(packet, 
+		GS_TEX0_1, 
+		GS_SETREG_TEX0((q->txt->Vram & ~TRANSFER_REQUEST_MASK)/256, 
+					  q->txt->TBW, 
+					  q->txt->PSM,
+					  tw, th, 
+					  gsGlobal->PrimAlphaEnable, 
+					  COLOR_MODULATE,
+					  (q->txt->VramClut & ~TRANSFER_REQUEST_MASK)/256, 
+					  q->txt->ClutPSM, 
+					  0, 0, 
+					  q->txt->VramClut? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD)
+	);
 	
 	owl_add_tag(packet, GS_TEX1_1, GS_SETREG_TEX1(1, 0, q->txt->Filter, q->txt->Filter, 0, 0, 0));
 
