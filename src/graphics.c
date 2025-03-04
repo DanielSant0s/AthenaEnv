@@ -975,18 +975,86 @@ void drawImageRotate(GSTEXTURE* source, float x, float y, float width, float hei
 	float c = cosf(angle);
 	float s = sinf(angle);
 
-	if (source->Delayed == true) {
-		DIntr();
-		//texture_manager_bind(gsGlobal, source, false);
-		EIntr();
-	}
-	gsKit_prim_quad_texture(gsGlobal, source, 
-							(-width/2)*c - (-height/2)*s+x, (-height/2)*c + (-width/2)*s+y, startx, starty, 
-							(-width/2)*c - height/2*s+x, height/2*c + (-width/2)*s+y, startx, endy, 
-							width/2*c - (-height/2)*s+x, (-height/2)*c + width/2*s+y, endx, starty, 
-							width/2*c - height/2*s+x, height/2*c + width/2*s+y, endx, endy, 
-							1, color);
+	x += width/2;
+	y += height/2;
 
+    int texture_id = texture_manager_bind(gsGlobal, source, true);
+
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, texture_id != -1? 20 : 16);
+
+	owl_add_cnt_tag(packet, texture_id != -1? 19 : 15, 0); // 4 quadwords for vif
+
+	if (texture_id != -1) {
+		owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0)); 
+		owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0)); 
+		owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSH, 0));
+		owl_add_uint(packet, VIF_CODE(2, 0, VIF_DIRECT, 0));
+
+		owl_add_tag(packet, GIF_AD, GIFTAG(1, 1, 0, 0, 0, 1));
+		owl_add_tag(packet, GIF_NOP, 0);
+
+		owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));
+		owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+		owl_add_uint(packet, VIF_CODE(texture_id, 0, VIF_MARK, 0));
+		owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 1));
+	}
+
+	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+	owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));
+	owl_add_uint(packet, VIF_CODE(14, 0, VIF_DIRECT, 0)); // 3 giftags
+	
+	owl_add_tag(packet, GIF_AD, GIFTAG(4, 1, 0, 0, 0, 1));
+
+	owl_add_tag(packet, GS_TEST_1, GS_SETREG_TEST_1(0, 0, 0, 0, 0, 0, 1, 1));
+
+	int tw, th;
+	athena_set_tw_th(source, &tw, &th);
+
+	owl_add_tag(packet, 
+		GS_TEX0_1, 
+		GS_SETREG_TEX0((source->Vram & ~TRANSFER_REQUEST_MASK)/256, 
+					  source->TBW, 
+					  source->PSM,
+					  tw, th, 
+					  gsGlobal->PrimAlphaEnable, 
+					  COLOR_MODULATE,
+					  (source->VramClut & ~TRANSFER_REQUEST_MASK)/256, 
+					  source->ClutPSM, 
+					  0, 0, 
+					  source->VramClut? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD)
+	);
+	
+	owl_add_tag(packet, GS_TEX1_1, GS_SETREG_TEX1(1, 0, source->Filter, source->Filter, 0, 0, 0));
+
+	owl_add_tag(packet, GS_RGBAQ, color);
+
+	owl_add_tag(packet, 
+					   ((uint64_t)(GS_UV) << 0 | (uint64_t)(GS_XYZ2) << 4), 
+					   	VU_GS_GIFTAG(4, 
+							1, NO_CUSTOM_DATA, 1, 
+							VU_GS_PRIM(GS_PRIM_PRIM_TRISTRIP, 
+									   0, 1, 
+									   gsGlobal->PrimFogEnable, 
+									   gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 1, gsGlobal->PrimContext, 0),
+    						0, 2)
+						);
+
+	owl_add_tag(packet, 0, GS_SETREG_STQ( (int)(startx) << 4, (int)(starty) << 4 ));
+
+	owl_add_tag(packet, 1, (uint64_t)((int)gsGlobal->OffsetX+((int)((-width/2)*c - (-height/2)*s+x) << 4)) | ((uint64_t)((int)gsGlobal->OffsetY+((int)((-height/2)*c + (-width/2)*s+y) << 4)) << 32));
+
+	owl_add_tag(packet, 0, GS_SETREG_STQ( (int)(startx) << 4, (int)(endy) << 4 ));
+
+	owl_add_tag(packet, 1, (uint64_t)((int)gsGlobal->OffsetX+((int)((-width/2)*c - height/2*s+x) << 4)) | ((uint64_t)((int)gsGlobal->OffsetY+((int)(height/2*c + (-width/2)*s+y) << 4)) << 32));
+
+	owl_add_tag(packet, 0, GS_SETREG_STQ( (int)(endx) << 4, (int)(starty) << 4 ));
+
+	owl_add_tag(packet, 1, (uint64_t)((int)gsGlobal->OffsetX+((int)(width/2*c - (-height/2)*s+x) << 4)) | ((uint64_t)((int)gsGlobal->OffsetY+((int)((-height/2)*c + width/2*s+y) << 4)) << 32));
+
+	owl_add_tag(packet, 0, GS_SETREG_STQ( (int)(endx) << 4, (int)(endy) << 4 ));
+
+	owl_add_tag(packet, 1, (uint64_t)((int)gsGlobal->OffsetX+((int)(width/2*c - height/2*s+x) << 4)) | ((uint64_t)((int)gsGlobal->OffsetY+((int)(height/2*c + width/2*s+y) << 4)) << 32));
 }
 
 void drawPixel(float x, float y, Color color)
