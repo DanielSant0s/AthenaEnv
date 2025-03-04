@@ -24,8 +24,6 @@ extern "C" {
 
 void texture_upload(GSGLOBAL *gsGlobal, GSTEXTURE *Texture);
 
-int upload_texture_handler();
-
 /// Initialize the texture manager
 void texture_manager_init(GSGLOBAL *gsGlobal);
 

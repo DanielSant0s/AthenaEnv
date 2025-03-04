@@ -52,16 +52,29 @@ typedef struct {
 } unpack_list;
 
 typedef struct {
-    owl_qword *ptr;
+    // used only with a custom packet
+    owl_qword *base; 
+    owl_channel channel; 
+    size_t size;
 
+    // used for main packet stream too
+    owl_qword *ptr;
     bool unpack_opened; // true when under a unpack list
     unpack_list list;
-} owl_packet;
+} owl_packet __attribute__((aligned(128)));
 
 void owl_init(void *ptr, size_t size);
 
-owl_packet *owl_open_packet(owl_channel channel, size_t size);
+#define owl_packet_size(size) (sizeof(owl_packet) + size)
 
+owl_packet *owl_create_packet(owl_channel channel, size_t size, void* buf);
+
+void owl_send_packet(owl_packet *packet, bool free_packet);
+
+// do a packet request from main packet buffer
+owl_packet *owl_query_packet(owl_channel channel, size_t size);
+
+// flush a requested packet
 void owl_flush_packet();
 
 void vu1_upload_micro_program(uint32_t* start, uint32_t* end);
