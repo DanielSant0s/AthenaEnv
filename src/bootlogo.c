@@ -45,8 +45,6 @@ void bootlogoThread(void* data) {
 
     bootlogo.Delayed = true;
 
-    gsKit_setup_tbw(&bootlogo);
-
     while (boot_state != BOOT_FINISH) {
         clearScreen(GS_SETREG_RGBAQ(0x00, 0x00, 0x00, 0x80, 0x00));
 
@@ -92,7 +90,7 @@ void bootlogoThread(void* data) {
         flipScreen();
     }
 
-    gsKit_TexManager_free(gsGlobal, &bootlogo);
+    texture_manager_free(gsGlobal, &bootlogo);
 
     exitkill_task();
 }
