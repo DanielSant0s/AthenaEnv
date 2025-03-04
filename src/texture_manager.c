@@ -41,11 +41,19 @@ static int texture_upload_callback_id = -1;
 
 #define TEXTURE_UPLOAD_QUEUE_SIZE 4096
 
+#define MAX_TEXTURE_PACKET_SIZE 603
+
 static int texture_upload_queue_top = 0;
 
 GSTEXTURE *texture_upload_queue[TEXTURE_UPLOAD_QUEUE_SIZE] = { NULL };
 
+owl_packet* async_upload_packet = NULL;
+
+owl_qword async_upload_packet_buffer[owl_packet_size(MAX_TEXTURE_PACKET_SIZE)] __attribute__((aligned(128)));
+
 uint32_t *VIF1_MARK = (uint32_t *)(0x10003C30);
+
+void texture_send(u32 *mem, int width, int height, u32 tbp, u32 psm, u32 tbw, u8 clut, owl_packet* custom_packet);
 
 int upload_texture_handler(int cause) { 
 	if (cause == INTC_VIF1) {
@@ -63,10 +71,10 @@ int upload_texture_handler(int cause) {
 				tex->VramClut &= ~TRANSFER_REQUEST_MASK;
 
 				if (tex->PSM == GS_PSM_T8) {
-					texture_send(tex->Clut, 16, 16, tex->VramClut, tex->ClutPSM, 1, GS_CLUT_PALLETE);
+					texture_send(tex->Clut, 16, 16, tex->VramClut, tex->ClutPSM, 1, GS_CLUT_PALLETE, async_upload_packet);
 
 				} else if (tex->PSM == GS_PSM_T4) {
-					texture_send(tex->Clut, 8,  2, tex->VramClut, tex->ClutPSM, 1, GS_CLUT_PALLETE);
+					texture_send(tex->Clut, 8,  2, tex->VramClut, tex->ClutPSM, 1, GS_CLUT_PALLETE, async_upload_packet);
 				}
 			}
 
@@ -75,19 +83,17 @@ int upload_texture_handler(int cause) {
 				tex->Vram &= ~TRANSFER_REQUEST_MASK;
 
 				gsKit_setup_tbw(tex);
-				texture_send(tex->Mem, tex->Width, tex->Height, tex->Vram, tex->PSM, tex->TBW, ((tex->PSM == GS_PSM_T8 || tex->PSM == GS_PSM_T4) ? GS_CLUT_TEXTURE : GS_CLUT_NONE));
+				texture_send(tex->Mem, tex->Width, tex->Height, tex->Vram, tex->PSM, tex->TBW, (tex->Clut ? GS_CLUT_TEXTURE : GS_CLUT_NONE), async_upload_packet);
 			}
 
 			int tw, th;
 			athena_set_tw_th(tex, &tw, &th);
 
-			owl_packet *packet = owl_open_packet(CHANNEL_GIF, 3);
+			owl_add_cnt_tag_fill(async_upload_packet, 2);
 
-			owl_add_cnt_tag_fill(packet, 2);
+			owl_add_tag(async_upload_packet, GIF_AD, GIFTAG(1, 1, 0, 0, 0, 1));
 
-			owl_add_tag(packet, GIF_AD, GIFTAG(1, 1, 0, 0, 0, 1));
-
-			owl_add_tag(packet, 
+			owl_add_tag(async_upload_packet, 
 				GS_TEX0_1, 
 				GS_SETREG_TEX0(tex->Vram/256, 
 							  tex->TBW, 
@@ -101,7 +107,7 @@ int upload_texture_handler(int cause) {
 							  tex->VramClut? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD)
 			);
 
-			owl_flush_packet();
+			owl_send_packet(async_upload_packet, false);
 		}
 
 		VIF1_FBRST->STC = true;
@@ -139,7 +145,7 @@ void remove_texture_upload_handler()
 	EIntr();
 }
 
-void texture_send(u32 *mem, int width, int height, u32 tbp, u32 psm, u32 tbw, u8 clut)
+void texture_send(u32 *mem, int width, int height, u32 tbp, u32 psm, u32 tbw, u8 clut, owl_packet* custom_packet)
 {
 	u32* p_mem;
 	int packet_size;
@@ -165,7 +171,7 @@ void texture_send(u32 *mem, int width, int height, u32 tbp, u32 psm, u32 tbw, u8
 	if(remain > 0)
 		packet_size += 3;
 
-	owl_packet *packet = owl_open_packet(CHANNEL_GIF, packet_size);
+	owl_packet *packet = (custom_packet? custom_packet : owl_query_packet(CHANNEL_GIF, packet_size));
 
 	owl_add_cnt_tag_fill(packet, 5);
 
@@ -205,18 +211,18 @@ void texture_upload(GSGLOBAL *gsGlobal, GSTEXTURE *Texture)
 
 	if (Texture->PSM == GS_PSM_T8)
 	{
-		texture_send(Texture->Mem, Texture->Width, Texture->Height, Texture->Vram, Texture->PSM, Texture->TBW, GS_CLUT_TEXTURE);
-		texture_send(Texture->Clut, 16, 16, Texture->VramClut, Texture->ClutPSM, 1, GS_CLUT_PALLETE);
+		texture_send(Texture->Mem, Texture->Width, Texture->Height, Texture->Vram, Texture->PSM, Texture->TBW, GS_CLUT_TEXTURE, NULL);
+		texture_send(Texture->Clut, 16, 16, Texture->VramClut, Texture->ClutPSM, 1, GS_CLUT_PALLETE, NULL);
 
 	}
 	else if (Texture->PSM == GS_PSM_T4)
 	{
-		texture_send(Texture->Mem, Texture->Width, Texture->Height, Texture->Vram, Texture->PSM, Texture->TBW, GS_CLUT_TEXTURE);
-		texture_send(Texture->Clut, 8,  2, Texture->VramClut, Texture->ClutPSM, 1, GS_CLUT_PALLETE);
+		texture_send(Texture->Mem, Texture->Width, Texture->Height, Texture->Vram, Texture->PSM, Texture->TBW, GS_CLUT_TEXTURE, NULL);
+		texture_send(Texture->Clut, 8,  2, Texture->VramClut, Texture->ClutPSM, 1, GS_CLUT_PALLETE, NULL);
 	}
 	else
 	{
-		texture_send(Texture->Mem, Texture->Width, Texture->Height, Texture->Vram, Texture->PSM, Texture->TBW, GS_CLUT_NONE);
+		texture_send(Texture->Mem, Texture->Width, Texture->Height, Texture->Vram, Texture->PSM, Texture->TBW, GS_CLUT_NONE, NULL);
 	}
 }
 
@@ -397,6 +403,8 @@ void texture_manager_init(GSGLOBAL *gsGlobal)
 	if (texture_upload_callback_id == -1) {
 		add_texture_upload_handler(upload_texture_handler);
 	}
+
+	async_upload_packet = owl_create_packet(CHANNEL_GIF, owl_packet_size(MAX_TEXTURE_PACKET_SIZE), async_upload_packet_buffer);
 }
 
 //---------------------------------------------------------------------------
@@ -462,7 +470,7 @@ unsigned int texture_manager_bind(GSGLOBAL *gsGlobal, GSTEXTURE *tex, bool async
 		if (async) {
 			tex->Vram |= TRANSFER_REQUEST_MASK;
 		} else {
-			texture_send(tex->Mem, tex->Width, tex->Height, tex->Vram, tex->PSM, tex->TBW, tex->Clut ? GS_CLUT_TEXTURE : GS_CLUT_NONE);
+			texture_send(tex->Mem, tex->Width, tex->Height, tex->Vram, tex->PSM, tex->TBW, tex->Clut ? GS_CLUT_TEXTURE : GS_CLUT_NONE, NULL);
 		}
 
 	}
@@ -474,7 +482,7 @@ unsigned int texture_manager_bind(GSGLOBAL *gsGlobal, GSTEXTURE *tex, bool async
 		if (async) {
 			tex->VramClut |= TRANSFER_REQUEST_MASK;
 		} else {
-			texture_send(tex->Clut, cwidth, cheight, tex->VramClut, tex->ClutPSM, 1, GS_CLUT_PALLETE);
+			texture_send(tex->Clut, cwidth, cheight, tex->VramClut, tex->ClutPSM, 1, GS_CLUT_PALLETE, NULL);
 		}
 		
 

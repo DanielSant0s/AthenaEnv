@@ -900,7 +900,7 @@ void drawImage(GSTEXTURE* source, float x, float y, float width, float height, f
 {
     int texture_id = texture_manager_bind(gsGlobal, source, true);
 
-	owl_packet *packet = owl_open_packet(CHANNEL_VIF1, 15);
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 15);
 
 	owl_add_cnt_tag(packet, 14, 0); // 4 quadwords for vif
 	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0)); 
@@ -971,7 +971,7 @@ void drawImageRotate(GSTEXTURE* source, float x, float y, float width, float hei
 
 void drawPixel(float x, float y, Color color)
 {
-	owl_packet *packet = owl_open_packet(CHANNEL_VIF1, 7);
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 7);
 
 	owl_add_cnt_tag_fill(packet, 6); // 4 quadwords for vif
 	owl_add_uint(packet, VIF_NOP);
@@ -1001,7 +1001,7 @@ void drawPixel(float x, float y, Color color)
 
 void drawLine(float x, float y, float x2, float y2, Color color)
 {
-	owl_packet *packet = owl_open_packet(CHANNEL_VIF1, 8);
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 8);
 
 	owl_add_cnt_tag_fill(packet, 7); // 4 quadwords for vif
 	owl_add_uint(packet, VIF_NOP);
@@ -1034,7 +1034,7 @@ void drawLine(float x, float y, float x2, float y2, Color color)
 
 void drawRect(float x, float y, int width, int height, Color color)
 {
-	owl_packet *packet = owl_open_packet(CHANNEL_VIF1, 8);
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 8);
 
 	owl_add_cnt_tag_fill(packet, 7); // 4 quadwords for vif
 	owl_add_uint(packet, VIF_NOP);
@@ -1066,7 +1066,7 @@ void drawRect(float x, float y, int width, int height, Color color)
 
 void drawTriangle(float x, float y, float x2, float y2, float x3, float y3, Color color)
 {
-	owl_packet *packet = owl_open_packet(CHANNEL_VIF1, 9);
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 9);
 
 	owl_add_cnt_tag_fill(packet, 8); // 4 quadwords for vif
 	owl_add_uint(packet, VIF_NOP);
@@ -1100,7 +1100,7 @@ void drawTriangle(float x, float y, float x2, float y2, float x3, float y3, Colo
 
 void drawTriangle_gouraud(float x, float y, float x2, float y2, float x3, float y3, Color color, Color color2, Color color3)
 {
-	owl_packet *packet = owl_open_packet(CHANNEL_VIF1, 11);
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 11);
 
 	owl_add_cnt_tag_fill(packet, 10); // 4 quadwords for vif
 	owl_add_uint(packet, VIF_NOP);
@@ -1138,7 +1138,7 @@ void drawTriangle_gouraud(float x, float y, float x2, float y2, float x3, float 
 
 void drawQuad(float x, float y, float x2, float y2, float x3, float y3, float x4, float y4, Color color)
 {
-	owl_packet *packet = owl_open_packet(CHANNEL_VIF1, 10);
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 10);
 
 	owl_add_cnt_tag_fill(packet, 9); // 4 quadwords for vif
 	owl_add_uint(packet, VIF_NOP);
@@ -1174,7 +1174,7 @@ void drawQuad(float x, float y, float x2, float y2, float x3, float y3, float x4
 
 void drawQuad_gouraud(float x, float y, float x2, float y2, float x3, float y3, float x4, float y4, Color color, Color color2, Color color3, Color color4)
 {
-	owl_packet *packet = owl_open_packet(CHANNEL_VIF1, 13);
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 13);
 
 	owl_add_cnt_tag_fill(packet, 12); // 4 quadwords for vif
 	owl_add_uint(packet, VIF_NOP);
@@ -1216,7 +1216,7 @@ void drawQuad_gouraud(float x, float y, float x2, float y2, float x3, float y3, 
 
 void drawCircle(float x, float y, float radius, u64 color, u8 filled)
 {
-	owl_packet *packet = owl_open_packet(CHANNEL_VIF1, (42 + (int)(!filled)));
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, (42 + (int)(!filled)));
 
 	owl_add_cnt_tag_fill(packet, (41 + (int)(!filled))); // 4 quadwords for vif
 	owl_add_uint(packet, VIF_NOP);
@@ -1324,7 +1324,7 @@ void fntDrawQuad(rm_quad_t *q)
 {
     int texture_id = texture_manager_bind(gsGlobal, q->txt, true);
 
-	owl_packet *packet = owl_open_packet(CHANNEL_VIF1, 15);
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 15);
 
 	owl_add_cnt_tag(packet, 14, 0); // 4 quadwords for vif
 	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0)); 

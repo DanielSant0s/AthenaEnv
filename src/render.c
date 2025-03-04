@@ -422,7 +422,7 @@ void draw_vu1_with_colors(model* m, float pos_x, float pos_y, float pos_z, float
 	create_local_world(local_world, object_position, object_rotation);
 	create_local_screen(m->local_screen, local_world, world_view, view_screen);
 
-	owl_packet *packet = owl_open_packet(CHANNEL_VIF1, 4);
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 4);
 
 	unpack_list_open(packet, 0, false);
 	{
@@ -456,7 +456,7 @@ void draw_vu1_with_colors(model* m, float pos_x, float pos_y, float pos_z, float
 		int idxs_drawn = 0;
 
 		while (idxs_to_draw > 0) {
-			owl_open_packet(CHANNEL_VIF1, texture_mapping? 17 : 8);
+			owl_query_packet(CHANNEL_VIF1, texture_mapping? 17 : 8);
 
 			int count = BATCH_SIZE;
 			if (idxs_to_draw < BATCH_SIZE)
@@ -551,7 +551,7 @@ void draw_vu1_with_lights(model* m, float pos_x, float pos_y, float pos_z, float
   	matrix_multiply(m->local_screen, m->local_screen, world_view);
   	matrix_multiply(m->local_screen, m->local_screen, view_screen);
 
-	owl_packet *packet = owl_open_packet(CHANNEL_VIF1, 7); // 5 for unpack static data + 2 for flush with end
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 7); // 5 for unpack static data + 2 for flush with end
 
 	unpack_list_open(packet, 0, false);
 	{
@@ -595,7 +595,7 @@ void draw_vu1_with_lights(model* m, float pos_x, float pos_y, float pos_z, float
 		int idxs_drawn = 0;
 
 		while (idxs_to_draw > 0) {
-			owl_open_packet(CHANNEL_VIF1, texture_mapping? 17 : 8);
+			owl_query_packet(CHANNEL_VIF1, texture_mapping? 17 : 8);
 
 			int count = BATCH_SIZE;
 			if (idxs_to_draw < BATCH_SIZE)
@@ -694,7 +694,7 @@ void draw_vu1_with_spec_lights(model* m, float pos_x, float pos_y, float pos_z, 
   	matrix_multiply(m->local_screen, m->local_screen, world_view);
   	matrix_multiply(m->local_screen, m->local_screen, view_screen);
 
-	owl_packet *packet = owl_open_packet(CHANNEL_VIF1, 7);
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 7);
 
 	screen_scale.w = *((uint32_t*)&m->attributes);
 
@@ -740,7 +740,7 @@ void draw_vu1_with_spec_lights(model* m, float pos_x, float pos_y, float pos_z, 
 		int idxs_drawn = 0;
 
 		while (idxs_to_draw > 0) {
-			owl_open_packet(CHANNEL_VIF1, texture_mapping? 17 : 8);
+			owl_query_packet(CHANNEL_VIF1, texture_mapping? 17 : 8);
 
 			int count = BATCH_SIZE;
 			if (idxs_to_draw < BATCH_SIZE)
