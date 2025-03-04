@@ -23,7 +23,7 @@
 #include <texture_manager.h>
 
 #define VIF1_INT_INVALID 65535
-#define TRANSFER_REQUEST_MASK 0x80000000
+
 
 struct SVramBlock {
 	unsigned int iStart;
@@ -93,19 +93,7 @@ int upload_texture_handler(int cause) {
 
 			owl_add_tag(async_upload_packet, GIF_AD, GIFTAG(1, 1, 0, 0, 0, 1));
 
-			owl_add_tag(async_upload_packet, 
-				GS_TEX0_1, 
-				GS_SETREG_TEX0(tex->Vram/256, 
-							  tex->TBW, 
-							  tex->PSM,
-							  tw, th, 
-							  true, //gsGlobal->PrimAlphaEnable, 
-							  COLOR_MODULATE,
-							  tex->VramClut/256, 
-							  tex->ClutPSM, 
-							  0, 0, 
-							  tex->VramClut? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD)
-			);
+			owl_add_tag(async_upload_packet, GIF_NOP, 0);
 
 			owl_send_packet(async_upload_packet, false);
 		}
@@ -419,7 +407,7 @@ int texture_manager_push(GSTEXTURE *tex) {
 }
 
 
-unsigned int texture_manager_bind(GSGLOBAL *gsGlobal, GSTEXTURE *tex, bool async)
+int texture_manager_bind(GSGLOBAL *gsGlobal, GSTEXTURE *tex, bool async)
 {
 
 	struct SVramBlock * block;
@@ -491,7 +479,7 @@ unsigned int texture_manager_bind(GSGLOBAL *gsGlobal, GSTEXTURE *tex, bool async
 	block->iUseCount++;
 
 	if (async)
-		return texture_manager_push(tex);
+		return (ttransfer|ctransfer)? texture_manager_push(tex) : -1;
 
 	return (ttransfer|ctransfer);
 }
