@@ -1592,13 +1592,13 @@ inline void processFrameCounter()
 
 static void flipScreenSingleBuffering()
 {
-	owl_flush_packet();
-
-	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
-
 	//gsKit_set_finish(gsGlobal);
 	gsKit_sync(gsGlobal);
 	gsKit_queue_exec(gsGlobal);
+
+	dmaKit_wait(DMA_CHANNEL_GIF, 0);
+
+	owl_flush_packet();
 
 	texture_manager_nextFrame(gsGlobal);
 
@@ -1607,13 +1607,14 @@ static void flipScreenSingleBuffering()
 
 static void flipScreenSingleBufferingPerf()
 {
-	owl_flush_packet();
-
-	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
-
 	//gsKit_set_finish(gsGlobal);
 	gsKit_sync(gsGlobal);
+
 	gsKit_queue_exec(gsGlobal);
+
+	dmaKit_wait(DMA_CHANNEL_GIF, 0);
+
+	owl_flush_packet();
 
 	texture_manager_nextFrame(gsGlobal);
 
@@ -1624,15 +1625,16 @@ static void flipScreenSingleBufferingPerf()
 
 static void flipScreenDoubleBuffering()
 {	
-	owl_flush_packet();
-
-	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
-
 	//gsKit_set_finish(gsGlobal);
 
 	gsKit_sync(gsGlobal);
 	gsKit_flip(gsGlobal);
 	gsKit_queue_exec(gsGlobal);
+
+	dmaKit_wait(DMA_CHANNEL_GIF, 0);
+
+	owl_flush_packet();
+
 	gsKit_finish();
 	
 	texture_manager_nextFrame(gsGlobal);
@@ -1642,15 +1644,16 @@ static void flipScreenDoubleBuffering()
 
 static void flipScreenDoubleBufferingPerf()
 {	
-	owl_flush_packet();
-
-	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
-
 	//gsKit_set_finish(gsGlobal);
 
 	gsKit_sync(gsGlobal);
 	gsKit_flip(gsGlobal);
 	gsKit_queue_exec(gsGlobal);
+
+	dmaKit_wait(DMA_CHANNEL_GIF, 0);
+
+	owl_flush_packet();
+	
 	gsKit_finish();
 	
 	texture_manager_nextFrame(gsGlobal);
@@ -1664,11 +1667,12 @@ static void flipScreenDoubleBufferingPerf()
 
 static void flipScreenSingleBufferingNoVSync()
 {
+	gsKit_queue_exec(gsGlobal);
+
+	dmaKit_wait(DMA_CHANNEL_GIF, 0);
+
 	owl_flush_packet();
 
-	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
-
-	gsKit_queue_exec(gsGlobal);
 	texture_manager_nextFrame(gsGlobal);
 
 	
@@ -1676,11 +1680,12 @@ static void flipScreenSingleBufferingNoVSync()
 
 static void flipScreenSingleBufferingPerfNoVSync()
 {
+	gsKit_queue_exec(gsGlobal);
+
+	dmaKit_wait(DMA_CHANNEL_GIF, 0);
+
 	owl_flush_packet();
 
-	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
-
-	gsKit_queue_exec(gsGlobal);
 	texture_manager_nextFrame(gsGlobal);
 
 	processFrameCounter();
@@ -1690,12 +1695,13 @@ static void flipScreenSingleBufferingPerfNoVSync()
 
 static void flipScreenDoubleBufferingNoVSync()
 {	
-	owl_flush_packet();
-
-	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
-
 	gsKit_flip(gsGlobal);
 	gsKit_queue_exec(gsGlobal);
+
+	dmaKit_wait(DMA_CHANNEL_GIF, 0);
+
+	owl_flush_packet();
+
 	gsKit_finish();
 	texture_manager_nextFrame(gsGlobal);
 
@@ -1704,12 +1710,13 @@ static void flipScreenDoubleBufferingNoVSync()
 
 static void flipScreenDoubleBufferingPerfNoVSync()
 {	
-	owl_flush_packet();
-
-	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
-
 	gsKit_flip(gsGlobal);
 	gsKit_queue_exec(gsGlobal);
+
+	dmaKit_wait(DMA_CHANNEL_GIF, 0);
+
+	owl_flush_packet();
+
 	gsKit_finish();
 	texture_manager_nextFrame(gsGlobal);
 
