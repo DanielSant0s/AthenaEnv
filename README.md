@@ -401,7 +401,7 @@ Screen.setMode(canvas);
   • disolve - Float32  
   • texture_id - Texture index, -1 for an untextured mesh.  
   
-* Render.vertexList(positions, normals, texcoords, colors, materials, material_indices) - Returns an object used to build a RenderObject. P.S.: All vertex arrays are Vector4 (x, y, z, w for i+0, i+1, i+2, i+3, in steps of 4).  
+* Render.vertexList(positions, normals, texcoords, colors, materials, material_indices) - Returns an object used to build a RenderData. P.S.: All vertex arrays are Vector4 (x, y, z, w for i+0, i+1, i+2, i+3, in steps of 4).  
   • positions - Float32Array that stores all vertex positions (x, y, z, w/adc).  
   • normals - Float32Array that stores all vertex normals (n1, n2, n3, w/adc).  
   • texcoords - Float32Array that stores all vertex texture coordinates (s, t, q, w/adc).  
@@ -409,12 +409,12 @@ Screen.setMode(canvas);
   • materials - A Render.material array.  
   • material_indices - A Render.materialIndex array.  
   
-### RenderObject module
+### RenderData module
 
 Construction:
 
 ```js
-let model = new RenderObject(mesh, *texture*)
+let data = new RenderData(mesh, *texture*)
 /* Load simple WaveFront OBJ files or vertex arrays.
 MTL is supported on OBJs (including per-vertex colors and multi-texturing).
 If you don't have a MTL file but you want to bind a texture on it,
@@ -422,15 +422,8 @@ just pass the image as a second argument if you want to use it. */
 ```
 Methods:  
 
-* draw(pos_x, pos_y, pos_z, rot_x, rot_y, rot_z) - Draws the object on screen.
-* drawBounds(pos_x, pos_y, pos_z, rot_x, rot_y, rot_z) - Draws object bounding box.
 * getTexture(id) - Gets the nth texture object from the model.
 * setTexture(id, texture) - Changes or sets the nth texture on models.
-* getPipeline() - Returns the current rendering pipeline loaded for the model.
-* setPipeline(pipeline) - Sets the current pipeline for the model. Available pipelines:  
-  • Render.PL_NO_LIGHTS - Lights disabled, colors still working.  
-  • Render.PL_SPECULAR - Diffuse and specular lights and colors enabled.  
-  • Render.PL_DEFAULT - Default for textured models. Lights and colors enabled.  
   
 Properties:
 
@@ -438,6 +431,10 @@ Properties:
 * normals - Float32Array with n1, n2, n3, adc for each vertex.
 * texcoords - Float32Array with s, t, q, w for each vertex.
 * colors - Float32Array with r, g, b, a for each vertex.
+* pipeline - Rendering pipeline. Avaliable pipelines below:
+  • Render.PL_NO_LIGHTS - Lights disabled, colors still working.  
+  • Render.PL_SPECULAR - Diffuse and specular lights and colors enabled.  
+  • Render.PL_DEFAULT - Default for textured models. Lights and colors enabled.  
 
 * materials - Render.material array.
 * material_indices - Render.materialIndex array.
@@ -448,6 +445,26 @@ Properties:
 * backface_culling - Toggle backface culling. (Not implemented yet)
 * texture_mapping - Toggle texture mapping. (it can be used to disable texturing on a whole textured model)
 * shade_model - Flat = 0, Gouraud = 1.
+
+### RenderObject module
+
+Construction:
+
+```js
+let model = new RenderObject(render_data)
+/* You need to build a RenderData first, RenderObject keeps with position, rotation   
+and the individual object matrices */
+```
+Methods:  
+
+* render() - Draws the object on screen.
+* renderBounds() - Draws object bounding box.
+  
+Properties:
+
+* position - Object with x, y and z keys that stores the object position. Default is {x:0, y:0, z:0}.
+* rotation - Object with x, y and z keys that stores the object rotation. Default is {x:0, y:0, z:0}.
+  
   
 **Camera**   
 * Camera.type(type) - Change camera function types.  
@@ -470,7 +487,7 @@ Properties:
 You have 4 lights to use in 3D scenes, use set to configure them.
 
 * Lights.set(id, attribute, x, y, z)  
-  • Avaiable light attributes: Lights.DIRECTION, Lights.AMBIENT, Lights.DIFFUSE    
+  • Avaliable light attributes: Lights.DIRECTION, Lights.AMBIENT, Lights.DIFFUSE    
   
 ### Screen module
 * Screen.display(func) - Makes the specified function behave like a main loop, when you don't need to clear or flip the screen because it's done automatically.  

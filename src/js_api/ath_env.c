@@ -158,6 +158,7 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"import * as Image from 'Image';\n"
 				"import * as ImageList from 'ImageList';\n"
 				"import * as Render from 'Render';\n"
+				"import * as RenderData from 'RenderData';\n"
 				"import * as RenderObject from 'RenderObject';\n"
 				"import * as Lights from 'Lights';\n"
 				"import * as Camera from 'Camera';\n"
@@ -192,6 +193,7 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"globalThis.ImageList = ImageList.ImageList;\n"
 
 				"globalThis.Render = Render;\n"
+				"globalThis.RenderData = RenderData.RenderData;\n"
 				"globalThis.RenderObject = RenderObject.RenderObject;\n"
 
 				"globalThis.Lights = Lights;\n"

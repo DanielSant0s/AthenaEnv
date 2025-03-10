@@ -7,6 +7,10 @@ canvas.psmz = Z16S;
 
 Screen.setMode(canvas);
 
+//Screen.setFrameCounter(true);
+//Screen.setVSync(false);
+
+
 const unsel_color = Color.new(255, 255, 255, 64);
 const sel_color = Color.new(255, 255, 255);
 
@@ -161,6 +165,8 @@ const pad = Pads.get();
 pad.setEventHandler();
 
 const dashboard = new Interface(pad, [background, menus, stats]);
+
+Screen.clearColor(Color.new(0, 0, 255, 128));
 
 Screen.display(() => {
     dashboard.run();
