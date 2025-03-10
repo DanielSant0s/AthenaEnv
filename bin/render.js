@@ -4,9 +4,7 @@
 const pipelines = [
     "NO_LIGHTS",
     "DEFAULT",
-    "SPECULAR",
-
-    "PVC",
+    "SPECULAR"
 ];
 
 const font = new Font("default");
@@ -60,7 +58,7 @@ const vertList = Render.vertexList(triPositions,
                                    triTexCoords, 
                                    triColors);
 
-const listtest = new RenderObject(vertList);
+const listtest = new RenderData(vertList);
 
 const trilist_materials = listtest.materials;
 
@@ -72,14 +70,14 @@ trilist_materials[0].diffuse.b = 0.0;
 listtest.materials = trilist_materials;
 
 let dragontex = new Image("dragon.png");
-const dragonmesh = new RenderObject("dragon.obj", dragontex);
+const dragonmesh = new RenderData("dragon.obj", dragontex);
 
 let monkeytex = new Image("monkey.png");
-const monkeymesh = new RenderObject("monkey.obj", monkeytex);
+const monkeymesh = new RenderData("monkey.obj", monkeytex);
 
 let moontex = new Image("moon.png");
 
-const car = new RenderObject("Car.obj");
+const car = new RenderData("Car.obj");
 
 const car_materials = car.materials;
 
@@ -98,13 +96,27 @@ car.materials = new_materials;
 
 //car_vertices.forEach((item, i, positions) => positions[i] = item + (Math.random() * 0.1f));
 
-const mill = new RenderObject("cubes.obj");
+const mill = new RenderData("cubes.obj");
 mill.setTexture(1, moontex);
 
-const boombox = new RenderObject("Boombox.obj");
+const boombox = new RenderData("Boombox.obj");
 boombox.getTexture(0).filter = LINEAR;
 
-const model = [dragonmesh, monkeymesh, car, listtest, boombox, mill];
+const render_data = [dragonmesh, monkeymesh, car, listtest, boombox, mill];
+
+const dragon_object = new RenderObject(dragonmesh);
+dragon_object.position = {x:0.0f, y:4.0f, z:0.0f};
+
+const monkey_object = new RenderObject(dragonmesh);
+monkey_object.position = {x:4.0f, y:4.0f, z:0.0f};
+
+const render_object = [ new RenderObject(dragonmesh), 
+                        new RenderObject(monkeymesh), 
+                        new RenderObject(car), 
+                        new RenderObject(listtest), 
+                        new RenderObject(boombox), 
+                        new RenderObject(mill)
+                    ];
 
 Camera.type(Camera.LOOKAT)
 Camera.position(0.0f, 0.0f, 35.0f);
@@ -170,16 +182,16 @@ while(true) {
         modeltodisplay -= 1;
     }
 
-    if(pad.justPressed(Pads.RIGHT) && modeltodisplay < model.length-1){
+    if(pad.justPressed(Pads.RIGHT) && modeltodisplay < render_data.length-1){
         modeltodisplay += 1;
     }
 
-    if(pad.justPressed(Pads.UP) && model[modeltodisplay].getPipeline() > 0){
-        model[modeltodisplay].setPipeline(model[modeltodisplay].getPipeline()-1);
+    if(pad.justPressed(Pads.UP) && render_data[modeltodisplay].pipeline > 0){
+        render_data[modeltodisplay].pipeline = render_data[modeltodisplay].pipeline-1;
     }
 
-    if(pad.justPressed(Pads.DOWN) && model[modeltodisplay].getPipeline() < pipelines.length){
-        model[modeltodisplay].setPipeline(model[modeltodisplay].getPipeline()+1);
+    if(pad.justPressed(Pads.DOWN) && render_data[modeltodisplay].pipeline < pipelines.length-1){
+        render_data[modeltodisplay].pipeline = render_data[modeltodisplay].pipeline+1;
     }
     
     if(pad.justPressed(Pads.TRIANGLE)) {
@@ -192,25 +204,25 @@ while(true) {
     }
 
     if(pad.justPressed(Pads.SQUARE)) {
-        model[modeltodisplay].shade_model ^= 1;
+        render_data[modeltodisplay].shade_model ^= 1;
     }
 
     if(pad.justPressed(Pads.CIRCLE)) {
-        model[modeltodisplay].texture_mapping ^= 1;
+        render_data[modeltodisplay].texture_mapping ^= 1;
     }
 
     if(pad.justPressed(Pads.CROSS)) {
-        model[modeltodisplay].accurate_clipping ^= 1;
+        render_data[modeltodisplay].accurate_clipping ^= 1;
     }
 
-    model[modeltodisplay].draw(0.0f, 0.0f, 0.0f, savedly, savedlx, 0.0f);
+    dragon_object.render();
+    monkey_object.render();
 
-    if(bbox) {
-        model[modeltodisplay].drawBounds(0.0f, 0.0f, 30.0f, savedly, savedlx, 0.0f, Color.new(128, 0, 255));
-    }
+    render_object[modeltodisplay].rotation = {x:savedly, y:savedlx, z:0.0f};
+    render_object[modeltodisplay].render();
 
     font.print(10, 10, Screen.getFPS(360) + " FPS | " + free_mem + " | Free VRAM: " + free_vram + "KB");
-    font.print(10, 25, model[modeltodisplay].size + " Vertices | " + "Pipeline: " + pipelines[model[modeltodisplay].getPipeline()]);
+    font.print(10, 25, render_data[modeltodisplay].size + " Vertices | " + "Pipeline: " + pipelines[render_data[modeltodisplay].pipeline]);
 
     Screen.flip();
 }

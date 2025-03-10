@@ -813,15 +813,54 @@ void gsKit_clear_screens()
 	for (i=0; i<2; i++)
 	{
 		gsKit_clear(gsGlobal, BLACK_RGBAQ);
-		gsKit_queue_exec(gsGlobal);
+		//gsKit_queue_exec(gsGlobal);
 		gsKit_sync_flip(gsGlobal);
 	}
 }
 
+void page_clear(Color color) {
+	const uint32_t page_count = gsGlobal->Width * (gsGlobal->Height) / 2048;
+
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 11+(page_count*2));
+
+	owl_add_cnt_tag(packet, 10+(page_count*2), 0);
+
+	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+	owl_add_uint(packet, VIF_CODE(9+(page_count*2), 0, VIF_DIRECT, 0)); // 3 giftags
+
+	owl_add_tag(packet, GIF_AD, VU_GS_GIFTAG(2, 1, NULL, 1, 0, 0, 1));
+
+	owl_add_tag(packet, GS_TEST_1, GS_SETREG_TEST(0, 0, 0, 0, 0, 0, 1, 1));
+	//owl_add_tag(packet, GS_SCISSOR_1, GS_SETREG_SCISSOR(0, 64 - 1, 0, 2048 - 1));
+	owl_add_tag(packet, GS_XYOFFSET_1, GS_SETREG_XYOFFSET(0, 0));
+
+	// Clear
+
+	owl_add_tag(packet, GIF_AD | (GIF_AD << 4), VU_GS_GIFTAG(page_count + 1, 1, NULL, 1, VU_GS_PRIM(GS_PRIM_PRIM_SPRITE, 0, 0, 0, 0, 0, 0, gsGlobal->PrimContext, 0), 0, 2));
+	owl_add_tag(packet, GS_RGBAQ, color);
+	owl_add_tag(packet, GIF_NOP, 0);
+
+	int b = 0;
+	for (int i = 0; i < gsGlobal->Width; i += 64)
+	{
+		for (int j = 0; j < gsGlobal->Height; j += 32)
+		{
+			owl_add_tag(packet, GS_XYZ2, GS_SETREG_XYZ(i << 4, j << 4, 0));
+			owl_add_tag(packet, GS_XYZ2, GS_SETREG_XYZ((i + 64) << 4, (j + 32) << 4, 0));
+		}
+	}
+
+	owl_add_tag(packet, GIF_AD, VU_GS_GIFTAG(2, 1, NULL, 0, 0, 0, 1));
+	
+	owl_add_tag(packet, GS_TEST_1, GS_SETREG_TEST(0, 1, 0x80, 0, 0, 0, 1, 2));
+	owl_add_tag(packet, GS_XYOFFSET_1, GS_SETREG_XYOFFSET(gsGlobal->OffsetX, gsGlobal->OffsetY));
+}
+
 void clearScreen(Color color)
 {
-	gsKit_clear(gsGlobal, color);
-	
+	page_clear(color);
 }
 
 void loadFontM()
@@ -1316,7 +1355,7 @@ void drawCircle(float x, float y, float radius, u64 color, u8 filled)
 
 	owl_add_tag(packet, GS_TEST_1, GS_SETREG_TEST_1(0, 0, 0, 0, 0, 0, 1, 1));
 
-	owl_add_tag(packet, GS_REG_RGBAQ, color);
+	owl_add_tag(packet, GS_RGBAQ, color);
 
 	owl_add_tag(packet, 
 					   ((uint64_t)(GS_XYZ2) << 0), 
@@ -1361,52 +1400,6 @@ int GetInterlacedFrameMode()
 GSGLOBAL *getGSGLOBAL(){ return gsGlobal; }
 
 static void switchFlipScreenFunction();
-
-void setVideoMode(s16 mode, int width, int height, int psm, s16 interlace, s16 field, bool zbuffering, int psmz, bool double_buffering, uint8_t pass_count) {
-	gsGlobal->Mode = mode;
-	gsGlobal->Width = width;
-	if ((interlace == GS_INTERLACED) && (field == GS_FRAME))
-		gsGlobal->Height = height / 2;
-	else
-		gsGlobal->Height = height;
-
-	gsGlobal->PSM = psm;
-	gsGlobal->PSMZ = psmz;
-
-	gsGlobal->ZBuffering = zbuffering;
-	gsGlobal->DoubleBuffering = double_buffering;
-	gsGlobal->PrimAlphaEnable = GS_SETTING_ON;
-	gsGlobal->Dithering = GS_SETTING_OFF;
-
-	gsGlobal->Interlace = interlace;
-	gsGlobal->Field = field;
-
-	gsKit_set_primalpha(gsGlobal, GS_SETREG_ALPHA(0, 1, 0, 1, 0), 0);
-
-	dbgprintf("\nGraphics: created video surface of (%d, %d)\n",
-		gsGlobal->Width, gsGlobal->Height);
-
-	gsKit_set_clamp(gsGlobal, GS_CMODE_REPEAT);
-	gsKit_vram_clear(gsGlobal);
-
-	if (pass_count > 1) {
-		gsKit_hires_init_screen(gsGlobal, pass_count);
-		hires = true;
-	} else {
-		gsKit_init_screen(gsGlobal);
-		hires = false;
-	}
-
-	texture_manager_init(gsGlobal);
-
-	switchFlipScreenFunction();
-	
-	gsKit_set_display_offset(gsGlobal, -0.5f, -0.5f);
-	gsKit_sync_flip(gsGlobal);
-
-	gsKit_mode_switch(gsGlobal, GS_ONESHOT);
-    gsKit_clear(gsGlobal, BLACK_RGBAQ);	
-}
 
 void fntDrawQuad(rm_quad_t *q)
 {
@@ -1592,13 +1585,14 @@ inline void processFrameCounter()
 
 static void flipScreenSingleBuffering()
 {
+	owl_flush_packet();
 	//gsKit_set_finish(gsGlobal);
 	gsKit_sync(gsGlobal);
-	gsKit_queue_exec(gsGlobal);
+	//gsKit_queue_exec(gsGlobal);
+
+	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
 
 	dmaKit_wait(DMA_CHANNEL_GIF, 0);
-
-	owl_flush_packet();
 
 	texture_manager_nextFrame(gsGlobal);
 
@@ -1607,14 +1601,16 @@ static void flipScreenSingleBuffering()
 
 static void flipScreenSingleBufferingPerf()
 {
+	owl_flush_packet();
+
 	//gsKit_set_finish(gsGlobal);
 	gsKit_sync(gsGlobal);
 
-	gsKit_queue_exec(gsGlobal);
+	//gsKit_queue_exec(gsGlobal);
+
+	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
 
 	dmaKit_wait(DMA_CHANNEL_GIF, 0);
-
-	owl_flush_packet();
 
 	texture_manager_nextFrame(gsGlobal);
 
@@ -1627,13 +1623,16 @@ static void flipScreenDoubleBuffering()
 {	
 	//gsKit_set_finish(gsGlobal);
 
+	owl_flush_packet();
+
 	gsKit_sync(gsGlobal);
-	gsKit_flip(gsGlobal);
-	gsKit_queue_exec(gsGlobal);
+
+	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
 
 	dmaKit_wait(DMA_CHANNEL_GIF, 0);
 
-	owl_flush_packet();
+	gsKit_flip(gsGlobal);
+	//gsKit_queue_exec(gsGlobal);
 
 	gsKit_finish();
 	
@@ -1644,17 +1643,20 @@ static void flipScreenDoubleBuffering()
 
 static void flipScreenDoubleBufferingPerf()
 {	
+	owl_flush_packet();
+
 	//gsKit_set_finish(gsGlobal);
 
 	gsKit_sync(gsGlobal);
-	gsKit_flip(gsGlobal);
-	gsKit_queue_exec(gsGlobal);
+
+	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
 
 	dmaKit_wait(DMA_CHANNEL_GIF, 0);
 
-	owl_flush_packet();
-	
 	gsKit_finish();
+
+	gsKit_flip(gsGlobal);
+	//gsKit_queue_exec(gsGlobal);
 	
 	texture_manager_nextFrame(gsGlobal);
 
@@ -1667,11 +1669,13 @@ static void flipScreenDoubleBufferingPerf()
 
 static void flipScreenSingleBufferingNoVSync()
 {
-	gsKit_queue_exec(gsGlobal);
-
-	dmaKit_wait(DMA_CHANNEL_GIF, 0);
+	//gsKit_queue_exec(gsGlobal);
 
 	owl_flush_packet();
+
+	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
+
+	dmaKit_wait(DMA_CHANNEL_GIF, 0);
 
 	texture_manager_nextFrame(gsGlobal);
 
@@ -1680,11 +1684,12 @@ static void flipScreenSingleBufferingNoVSync()
 
 static void flipScreenSingleBufferingPerfNoVSync()
 {
-	gsKit_queue_exec(gsGlobal);
+	//gsKit_queue_exec(gsGlobal);
+	owl_flush_packet();
+
+	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
 
 	dmaKit_wait(DMA_CHANNEL_GIF, 0);
-
-	owl_flush_packet();
 
 	texture_manager_nextFrame(gsGlobal);
 
@@ -1695,14 +1700,17 @@ static void flipScreenSingleBufferingPerfNoVSync()
 
 static void flipScreenDoubleBufferingNoVSync()
 {	
-	gsKit_flip(gsGlobal);
-	gsKit_queue_exec(gsGlobal);
+	owl_flush_packet();
+
+	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
 
 	dmaKit_wait(DMA_CHANNEL_GIF, 0);
 
-	owl_flush_packet();
-
 	gsKit_finish();
+
+	gsKit_flip(gsGlobal);
+	//gsKit_queue_exec(gsGlobal);	
+
 	texture_manager_nextFrame(gsGlobal);
 
 	
@@ -1710,14 +1718,17 @@ static void flipScreenDoubleBufferingNoVSync()
 
 static void flipScreenDoubleBufferingPerfNoVSync()
 {	
-	gsKit_flip(gsGlobal);
-	gsKit_queue_exec(gsGlobal);
+	owl_flush_packet();
+
+	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
 
 	dmaKit_wait(DMA_CHANNEL_GIF, 0);
 
-	owl_flush_packet();
-
 	gsKit_finish();
+
+	gsKit_flip(gsGlobal);
+	//gsKit_queue_exec(gsGlobal);
+
 	texture_manager_nextFrame(gsGlobal);
 
 	processFrameCounter();
@@ -1795,6 +1806,52 @@ static void switchFlipScreenFunction()
 
 		}
 	}
+}
+
+void setVideoMode(s16 mode, int width, int height, int psm, s16 interlace, s16 field, bool zbuffering, int psmz, bool double_buffering, uint8_t pass_count) {
+	gsGlobal->Mode = mode;
+	gsGlobal->Width = width;
+	if ((interlace == GS_INTERLACED) && (field == GS_FRAME))
+		gsGlobal->Height = height / 2;
+	else
+		gsGlobal->Height = height;
+
+	gsGlobal->PSM = psm;
+	gsGlobal->PSMZ = psmz;
+
+	gsGlobal->ZBuffering = zbuffering;
+	gsGlobal->DoubleBuffering = double_buffering;
+	gsGlobal->PrimAlphaEnable = GS_SETTING_ON;
+	gsGlobal->Dithering = GS_SETTING_OFF;
+
+	gsGlobal->Interlace = interlace;
+	gsGlobal->Field = field;
+
+	gsKit_set_primalpha(gsGlobal, GS_SETREG_ALPHA(0, 1, 0, 1, 0), 0);
+
+	dbgprintf("\nGraphics: created video surface of (%d, %d)\n",
+		gsGlobal->Width, gsGlobal->Height);
+
+	gsKit_set_clamp(gsGlobal, GS_CMODE_REPEAT);
+	gsKit_vram_clear(gsGlobal);
+
+	if (pass_count > 1) {
+		gsKit_hires_init_screen(gsGlobal, pass_count);
+		hires = true;
+	} else {
+		gsKit_init_screen(gsGlobal);
+		hires = false;
+	}
+
+	texture_manager_init(gsGlobal);
+
+	switchFlipScreenFunction();
+	
+	gsKit_set_display_offset(gsGlobal, -0.5f, -0.5f);
+
+
+	gsKit_sync(gsGlobal);
+	gsKit_flip(gsGlobal);
 }
 
 void init_graphics()

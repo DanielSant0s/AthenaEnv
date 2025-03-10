@@ -70,10 +70,7 @@ typedef struct {
 	uint32_t end;
 } material_index;
 
-typedef struct ath_model {
-	MATRIX local_light;
-	MATRIX local_screen;
-
+typedef struct athena_render_data {
     uint32_t index_count;
 
     VECTOR* positions;
@@ -83,7 +80,6 @@ typedef struct ath_model {
 
     VECTOR bounding_box[8];
 
-    void (*render)(struct ath_model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z);
     eRenderPipelines pipeline;
 
     GSTEXTURE** textures;
@@ -98,9 +94,17 @@ typedef struct ath_model {
 	RenderAttributes attributes;
 
 	bool tristrip;
-} model;
+} athena_render_data;
 
-int athena_render_set_pipeline(model* m, int pl_id);
+typedef struct athena_object_data {
+	athena_render_data *data;
+
+	VECTOR position;
+	VECTOR rotation;
+
+	MATRIX local_light;
+	MATRIX local_screen;
+} athena_object_data;
 
 typedef enum {
 	CAMERA_DEFAULT,
@@ -151,8 +155,10 @@ void panCamera(float x, float y);
 int NewLight();
 void SetLightAttribute(int id, float x, float y, float z, int attr);
 
-void loadOBJ(model* res_m, const char* path, GSTEXTURE* text);
-void draw_bbox(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z, Color color);
+void loadOBJ(athena_render_data* res_m, const char* path, GSTEXTURE* text);
+void draw_bbox(athena_object_data *obj, Color color);
+
+void render_object(athena_object_data *obj);
 
 void SubVector(VECTOR v0, VECTOR v1, VECTOR v2);
 void AddVector(VECTOR res, VECTOR v1, VECTOR v2);

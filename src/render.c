@@ -28,6 +28,20 @@ MATRIX world_view;
 
 FIVECTOR screen_scale;
 
+void draw_vu1_with_colors(athena_object_data *obj);
+void draw_vu1_with_lights(athena_object_data *obj);
+void draw_vu1_with_spec_lights(athena_object_data *obj);
+
+void (*render_funcs[3])(athena_object_data *obj) = {
+	draw_vu1_with_colors,
+	draw_vu1_with_lights,
+	draw_vu1_with_spec_lights
+};
+
+void render_object(athena_object_data *obj) {
+	render_funcs[obj->data->pipeline](obj);
+}
+
 void init3D(float fov, float near, float far)
 {
 	GSGLOBAL* gsGlobal = getGSGLOBAL();
@@ -40,7 +54,7 @@ void init3D(float fov, float near, float far)
 	screen_scale.x = gsGlobal->Width/2;
 	screen_scale.y = gsGlobal->Height/2;
 	screen_scale.z = ((float)get_max_z(gsGlobal));
-	screen_scale.w = 0; // model attributes
+	screen_scale.w = 0; // athena_render_data attributes
 
 }
 
@@ -90,31 +104,7 @@ void SetLightAttribute(int id, float x, float y, float z, int attr) {
 	}
 }
 
-void draw_vu1_with_colors(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z);
-
-void draw_vu1_with_lights(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z);
-
-void draw_vu1_with_spec_lights(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z);
-
-int athena_render_set_pipeline(model* m, int pl_id) {
-	switch (pl_id) {
-		case PL_NO_LIGHTS:
-			m->render = draw_vu1_with_colors;
-			m->pipeline = PL_NO_LIGHTS;
-			break;
-		case PL_DEFAULT:
-			m->render = draw_vu1_with_lights;
-			m->pipeline = PL_DEFAULT;
-			break;
-		case PL_SPECULAR:
-			m->render = draw_vu1_with_spec_lights;
-			m->pipeline = PL_SPECULAR;
-			break;
-	}
-	return m->pipeline;
-}
-
-void calculate_bbox(model* res_m) {
+void calculate_bbox(athena_render_data* res_m) {
 	float lowX, lowY, lowZ, hiX, hiY, hiZ;
 
     lowX = hiX = res_m->positions[0][0];
@@ -139,7 +129,7 @@ void calculate_bbox(model* res_m) {
     memcpy(res_m->bounding_box, bbox, sizeof(bbox));
 }
 
-void obj_transfer_vertex(model* m, uint32_t dst_idx, fastObjMesh* obj, uint32_t src_idx) {
+void obj_transfer_vertex(athena_render_data* m, uint32_t dst_idx, fastObjMesh* obj, uint32_t src_idx) {
 	copy_vector(&m->positions[dst_idx], obj->positions + (3 * obj->indices[src_idx].p));
 	m->positions[dst_idx][3] = 1.0f;
 
@@ -152,7 +142,7 @@ void obj_transfer_vertex(model* m, uint32_t dst_idx, fastObjMesh* obj, uint32_t 
 	m->normals[dst_idx][3] = 1.0f;
 }
 
-void loadOBJ(model* res_m, const char* path, GSTEXTURE* text) {
+void loadOBJ(athena_render_data* res_m, const char* path, GSTEXTURE* text) {
     fastObjMesh* m = fast_obj_read(path);
 
 	res_m->texture_count = 0;
@@ -332,22 +322,22 @@ void loadOBJ(model* res_m, const char* path, GSTEXTURE* text) {
 
     calculate_bbox(res_m);
 
-	athena_render_set_pipeline(res_m, PL_DEFAULT);
+	res_m->pipeline = PL_DEFAULT;
 
 	fast_obj_destroy(m);
 }
 
-void draw_bbox(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z, Color color) {
+void draw_bbox(athena_object_data* obj, Color color) {
 	
 
-	VECTOR object_position = { pos_x, pos_y, pos_z, 1.00f };
+	/*VECTOR object_position = { pos_x, pos_y, pos_z, 1.00f };
 	VECTOR object_rotation = { rot_x, rot_y, rot_z, 1.00f };
 
 	// Matrices to setup the 3D environment and camera
 	MATRIX local_world;
 	MATRIX local_screen;
 
-	create_local_world(local_world, object_position, object_rotation);
+	create_local_world(local_world, obj->position ,obj->rotation);
 	create_local_screen(local_screen, local_world, world_view, view_screen);
 	if(clip_bounding_box(local_screen, m->bounding_box)) return;
 
@@ -367,7 +357,7 @@ void draw_bbox(model* m, float pos_x, float pos_y, float pos_z, float rot_x, flo
 	athena_line_goraud_3d(gsGlobal, xyz[2].x, xyz[2].y, xyz[2].z, xyz[6].x, xyz[6].y, xyz[6].z, color, color);
 	athena_line_goraud_3d(gsGlobal, xyz[3].x, xyz[3].y, xyz[3].z, xyz[7].x, xyz[7].y, xyz[7].z, color, color);
 
-	free(xyz);
+	free(xyz);*/
 }
 
 static uint32_t* last_mpg = NULL;
@@ -427,22 +417,19 @@ void append_texture_tags(owl_packet* packet, GSTEXTURE *texture, int texture_id,
 	owl_add_tag(packet, GS_TEX1_1, GS_SETREG_TEX1(1, 0, texture->Filter, texture->Filter, 0, 0, 0));
 }
 
-void draw_vu1_with_colors(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z) {
-	VECTOR object_position = { pos_x, pos_y, pos_z, 1.00f };
-	VECTOR object_rotation = { rot_x, rot_y, rot_z, 1.00f };
-
+void draw_vu1_with_colors(athena_object_data *obj) {
 	MATRIX local_world;
 
-	if (m->attributes.accurate_clipping)
+	if (obj->data->attributes.accurate_clipping)
 		update_vu_program(VU1Draw3DCS);
 	else
 		update_vu_program(VU1Draw3DColors);
 
 	gsGlobal->PrimAAEnable = GS_SETTING_ON;
-	gsKit_set_test(gsGlobal, GS_ZTEST_ON);
 
-	create_local_world(local_world, object_position, object_rotation);
-	create_local_screen(m->local_screen, local_world, world_view, view_screen);
+
+	create_local_world(local_world, obj->position, obj->rotation);
+	create_local_screen(obj->local_screen, local_world, world_view, view_screen);
 
 	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 4);
 
@@ -450,7 +437,7 @@ void draw_vu1_with_colors(model* m, float pos_x, float pos_y, float pos_z, float
 	{
 		unpack_list_append(packet, &screen_scale,       1);
 
-		unpack_list_append(packet, m->local_screen,       4);
+		unpack_list_append(packet, obj->local_screen,       4);
 	}
 	unpack_list_close(packet);
 
@@ -459,22 +446,22 @@ void draw_vu1_with_colors(model* m, float pos_x, float pos_y, float pos_z, float
 	int last_index = -1;
 	GSTEXTURE* tex = NULL;
 	int texture_id;
-	for(int i = 0; i < m->material_index_count; i++) {
-		bool texture_mapping = ((m->materials[m->material_indices[i].index].texture_id != -1) && m->attributes.texture_mapping);
+	for(int i = 0; i < obj->data->material_index_count; i++) {
+		bool texture_mapping = ((obj->data->materials[obj->data->material_indices[i].index].texture_id != -1) && obj->data->attributes.texture_mapping);
 
 		if (texture_mapping) {
-			GSTEXTURE *cur_tex = m->textures[m->materials[m->material_indices[i].index].texture_id];
+			GSTEXTURE *cur_tex = obj->data->textures[obj->data->materials[obj->data->material_indices[i].index].texture_id];
 			if (cur_tex != tex) {
 				texture_id = texture_manager_bind(gsGlobal, cur_tex, true);
 				tex = cur_tex;
 			}
 		}
 
-		VECTOR* positions = &m->positions[last_index+1];
-		VECTOR* colours = &m->colours[last_index+1];
-		VECTOR* texcoords = texture_mapping? &m->texcoords[last_index+1] : NULL;
+		VECTOR* positions = &obj->data->positions[last_index+1];
+		VECTOR* colours = &obj->data->colours[last_index+1];
+		VECTOR* texcoords = texture_mapping? &obj->data->texcoords[last_index+1] : NULL;
 
-		int idxs_to_draw = (m->material_indices[i].end-last_index);
+		int idxs_to_draw = (obj->data->material_indices[i].end-last_index);
 		int idxs_drawn = 0;
 
 		while (idxs_to_draw > 0) {
@@ -486,22 +473,22 @@ void draw_vu1_with_colors(model* m, float pos_x, float pos_y, float pos_z, float
 				count = idxs_to_draw;
 			}
 
-			m->materials[m->material_indices[i].index].clip_prim_tag.dword[1] = DRAW_STQ2_REGLIST;
-			m->materials[m->material_indices[i].index].clip_prim_tag.dword[0] = VU_GS_GIFTAG(m->tristrip? 5 : 11, 
+			obj->data->materials[obj->data->material_indices[i].index].clip_prim_tag.dword[1] = DRAW_STQ2_REGLIST;
+			obj->data->materials[obj->data->material_indices[i].index].clip_prim_tag.dword[0] = VU_GS_GIFTAG(obj->data->tristrip? 5 : 11, 
 							                							1, NO_CUSTOM_DATA, 1, 
 																		VU_GS_PRIM(GS_PRIM_PRIM_TRIFAN, 
-																				   m->attributes.shade_model, texture_mapping, 
+																				   obj->data->attributes.shade_model, texture_mapping, 
 																				   gsGlobal->PrimFogEnable, 
 																				   gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 0, 0, 0),
     		    														0, 3);
 
-			owl_add_unpack_data(packet, 26, (void*)&m->materials[m->material_indices[i].index].clip_prim_tag, 1, 0);
+			owl_add_unpack_data(packet, 26, (void*)&obj->data->materials[obj->data->material_indices[i].index].clip_prim_tag, 1, 0);
 
-			m->materials[m->material_indices[i].index].prim_tag.dword[1] = DRAW_STQ2_REGLIST;
-			m->materials[m->material_indices[i].index].prim_tag.dword[0] = VU_GS_GIFTAG(0, 
+			obj->data->materials[obj->data->material_indices[i].index].prim_tag.dword[1] = DRAW_STQ2_REGLIST;
+			obj->data->materials[obj->data->material_indices[i].index].prim_tag.dword[0] = VU_GS_GIFTAG(0, 
 							                							1, NO_CUSTOM_DATA, 1, 
-																		VU_GS_PRIM(m->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE, 
-																				   m->attributes.shade_model, texture_mapping, 
+																		VU_GS_PRIM(obj->data->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE, 
+																				   obj->data->attributes.shade_model, texture_mapping, 
 																				   gsGlobal->PrimFogEnable, 
 																				   gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 0, 0, 0),
     		    														0, 3);
@@ -512,8 +499,8 @@ void draw_vu1_with_colors(model* m, float pos_x, float pos_y, float pos_z, float
 
 			unpack_list_open(packet, 0, true);
 			{
-				unpack_list_append(packet, (void*)&m->materials[m->material_indices[i].index].prim_tag, 1);
-				unpack_list_append(packet, (void*)&m->materials[m->material_indices[i].index].diffuse, 1);
+				unpack_list_append(packet, (void*)&obj->data->materials[obj->data->material_indices[i].index].prim_tag, 1);
+				unpack_list_append(packet, (void*)&obj->data->materials[obj->data->material_indices[i].index].diffuse, 1);
 				unpack_list_append(packet, &positions[idxs_drawn], count);
 				unpack_list_append(packet, &colours[idxs_drawn], count);
 				if (texcoords) 
@@ -532,7 +519,7 @@ void draw_vu1_with_colors(model* m, float pos_x, float pos_y, float pos_z, float
 			idxs_drawn += count;
 		}
 
-		last_index = m->material_indices[i].end;
+		last_index = obj->data->material_indices[i].end;
 	}
 
 	owl_add_vif_codes(packet,
@@ -543,35 +530,32 @@ void draw_vu1_with_colors(model* m, float pos_x, float pos_y, float pos_z, float
 	);
 }
 
-void draw_vu1_with_lights(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z) {
-	if (m->attributes.accurate_clipping)
+void draw_vu1_with_lights(athena_object_data *obj) {
+	if (obj->data->attributes.accurate_clipping)
 		update_vu_program(VU1Draw3DLCS);
 	else
 		update_vu_program(VU1Draw3DLightsColors);
 		
 	gsGlobal->PrimAAEnable = GS_SETTING_ON;
-	gsKit_set_test(gsGlobal, GS_ZTEST_ON);
 
-	VECTOR object_position = { pos_x, pos_y, pos_z, 1.00f };
-	VECTOR object_rotation = { rot_x, rot_y, rot_z, 1.00f };
 
 	MATRIX local_world;
 
   	// Create the local_world matrix.
   	matrix_unit(local_world);
-  	matrix_rotate(local_world, local_world, object_rotation);
-  	matrix_translate(local_world, local_world, object_position);
+  	matrix_rotate(local_world, local_world, obj->rotation);
+  	matrix_translate(local_world, local_world, obj->position);
 
   	// Create the local_light matrix.
-  	matrix_unit(m->local_light);
-  	matrix_rotate(m->local_light, m->local_light, object_rotation);
+  	matrix_unit(obj->local_light);
+  	matrix_rotate(obj->local_light, obj->local_light, obj->rotation);
 
   	// Create the local_screen matrix.
-  	matrix_unit(m->local_screen);
+  	matrix_unit(obj->local_screen);
 
-  	matrix_multiply(m->local_screen, m->local_screen, local_world);
-  	matrix_multiply(m->local_screen, m->local_screen, world_view);
-  	matrix_multiply(m->local_screen, m->local_screen, view_screen);
+  	matrix_multiply(obj->local_screen, obj->local_screen, local_world);
+  	matrix_multiply(obj->local_screen, obj->local_screen, world_view);
+  	matrix_multiply(obj->local_screen, obj->local_screen, view_screen);
 
 	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 7); // 5 for unpack static data + 2 for flush with end
 
@@ -579,8 +563,8 @@ void draw_vu1_with_lights(model* m, float pos_x, float pos_y, float pos_z, float
 	{
 		unpack_list_append(packet, &screen_scale,       1); 
 
-		unpack_list_append(packet, m->local_screen,       4);
-		unpack_list_append(packet, m->local_light,        4);
+		unpack_list_append(packet, obj->local_screen,       4);
+		unpack_list_append(packet, obj->local_light,        4);
 
 		static FIVECTOR camera_pos_light_qt; // xyz for camera position and w for directional light quantity
 
@@ -597,23 +581,23 @@ void draw_vu1_with_lights(model* m, float pos_x, float pos_y, float pos_z, float
 	int last_index = -1;
 	GSTEXTURE* tex = NULL;
 	int texture_id;
-	for(int i = 0; i < m->material_index_count; i++) {
-		bool texture_mapping = ((m->materials[m->material_indices[i].index].texture_id != -1) && m->attributes.texture_mapping);
+	for(int i = 0; i < obj->data->material_index_count; i++) {
+		bool texture_mapping = ((obj->data->materials[obj->data->material_indices[i].index].texture_id != -1) && obj->data->attributes.texture_mapping);
 
 		if (texture_mapping) {
-			GSTEXTURE *cur_tex = m->textures[m->materials[m->material_indices[i].index].texture_id];
+			GSTEXTURE *cur_tex = obj->data->textures[obj->data->materials[obj->data->material_indices[i].index].texture_id];
 			if (cur_tex != tex) {
 				texture_id = texture_manager_bind(gsGlobal, cur_tex, true);
 				tex = cur_tex;
 			}
 		}
 
-		VECTOR* positions = &m->positions[last_index+1];
-		VECTOR* texcoords = texture_mapping? &m->texcoords[last_index+1] : NULL;
-		VECTOR* normals = &m->normals[last_index+1];
-		VECTOR* colours = &m->colours[last_index+1];
+		VECTOR* positions = &obj->data->positions[last_index+1];
+		VECTOR* texcoords = texture_mapping? &obj->data->texcoords[last_index+1] : NULL;
+		VECTOR* normals = &obj->data->normals[last_index+1];
+		VECTOR* colours = &obj->data->colours[last_index+1];
 
-		int idxs_to_draw = (m->material_indices[i].end-last_index);
+		int idxs_to_draw = (obj->data->material_indices[i].end-last_index);
 		int idxs_drawn = 0;
 
 		while (idxs_to_draw > 0) {
@@ -629,30 +613,30 @@ void draw_vu1_with_lights(model* m, float pos_x, float pos_y, float pos_z, float
 				append_texture_tags(packet, tex, texture_id, COLOR_MODULATE);
 			}
 
-			m->materials[m->material_indices[i].index].clip_prim_tag.dword[1] = DRAW_STQ2_REGLIST;
-			m->materials[m->material_indices[i].index].clip_prim_tag.dword[0] = VU_GS_GIFTAG(m->tristrip? 5 : 11, 
+			obj->data->materials[obj->data->material_indices[i].index].clip_prim_tag.dword[1] = DRAW_STQ2_REGLIST;
+			obj->data->materials[obj->data->material_indices[i].index].clip_prim_tag.dword[0] = VU_GS_GIFTAG(obj->data->tristrip? 5 : 11, 
 							                							1, NO_CUSTOM_DATA, 1, 
 																		VU_GS_PRIM(GS_PRIM_PRIM_TRIFAN, 
-																				   m->attributes.shade_model, texture_mapping, 
+																				   obj->data->attributes.shade_model, texture_mapping, 
 																				   gsGlobal->PrimFogEnable, 
 																				   gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 0, 0, 0),
     		    														0, 3);
 
-			owl_add_unpack_data(packet, 26, (void*)&m->materials[m->material_indices[i].index].clip_prim_tag, 1, 0);
+			owl_add_unpack_data(packet, 26, (void*)&obj->data->materials[obj->data->material_indices[i].index].clip_prim_tag, 1, 0);
 
-			m->materials[m->material_indices[i].index].prim_tag.dword[1] = DRAW_STQ2_REGLIST;
-			m->materials[m->material_indices[i].index].prim_tag.dword[0] = VU_GS_GIFTAG(0, 
+			obj->data->materials[obj->data->material_indices[i].index].prim_tag.dword[1] = DRAW_STQ2_REGLIST;
+			obj->data->materials[obj->data->material_indices[i].index].prim_tag.dword[0] = VU_GS_GIFTAG(0, 
 							                							1, NO_CUSTOM_DATA, 1, 
-																		VU_GS_PRIM(m->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE, 
-																				   m->attributes.shade_model, texture_mapping, 
+																		VU_GS_PRIM(obj->data->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE, 
+																				   obj->data->attributes.shade_model, texture_mapping, 
 																				   gsGlobal->PrimFogEnable, 
 																				   gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 0, 0, 0),
     		    														0, 3);
 
 			unpack_list_open(packet, 0, true);
 			{
-				unpack_list_append(packet, (void*)&m->materials[m->material_indices[i].index].prim_tag, 1);
-				unpack_list_append(packet, (void*)&m->materials[m->material_indices[i].index].diffuse, 1);
+				unpack_list_append(packet, (void*)&obj->data->materials[obj->data->material_indices[i].index].prim_tag, 1);
+				unpack_list_append(packet, (void*)&obj->data->materials[obj->data->material_indices[i].index].diffuse, 1);
 				unpack_list_append(packet, &positions[idxs_drawn], count);
 				unpack_list_append(packet, &normals[idxs_drawn], count);
 				unpack_list_append(packet, &colours[idxs_drawn], count);
@@ -673,7 +657,7 @@ void draw_vu1_with_lights(model* m, float pos_x, float pos_y, float pos_z, float
 			
 		}
 
-		last_index = m->material_indices[i].end;
+		last_index = obj->data->material_indices[i].end;
 	}
 
 	owl_add_vif_codes(packet,
@@ -686,46 +670,43 @@ void draw_vu1_with_lights(model* m, float pos_x, float pos_y, float pos_z, float
 	
 }
 
-void draw_vu1_with_spec_lights(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z) {
-	if (m->attributes.accurate_clipping)
+void draw_vu1_with_spec_lights(athena_object_data *obj) {
+	if (obj->data->attributes.accurate_clipping)
 		update_vu_program(VU1Draw3DLCSS);
 	else
 		update_vu_program(VU1Draw3DSpec);
 
 	gsGlobal->PrimAAEnable = GS_SETTING_ON;
-	gsKit_set_test(gsGlobal, GS_ZTEST_ON);
 
-	VECTOR object_position = { pos_x, pos_y, pos_z, 1.00f };
-	VECTOR object_rotation = { rot_x, rot_y, rot_z, 1.00f };
 
 	MATRIX local_world;
 
   	// Create the local_world matrix.
   	matrix_unit(local_world);
-  	matrix_rotate(local_world, local_world, object_rotation);
-  	matrix_translate(local_world, local_world, object_position);
+  	matrix_rotate(local_world, local_world, obj->rotation);
+  	matrix_translate(local_world, local_world, obj->position);
 
   	// Create the local_light matrix.
-  	matrix_unit(m->local_light);
-  	matrix_rotate(m->local_light, m->local_light, object_rotation);
+  	matrix_unit(obj->local_light);
+  	matrix_rotate(obj->local_light, obj->local_light, obj->rotation);
 
   	// Create the local_screen matrix.
-  	matrix_unit(m->local_screen);
+  	matrix_unit(obj->local_screen);
 
-  	matrix_multiply(m->local_screen, m->local_screen, local_world);
-  	matrix_multiply(m->local_screen, m->local_screen, world_view);
-  	matrix_multiply(m->local_screen, m->local_screen, view_screen);
+  	matrix_multiply(obj->local_screen, obj->local_screen, local_world);
+  	matrix_multiply(obj->local_screen, obj->local_screen, world_view);
+  	matrix_multiply(obj->local_screen, obj->local_screen, view_screen);
 
 	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 7);
 
-	screen_scale.w = *((uint32_t*)&m->attributes);
+	screen_scale.w = *((uint32_t*)&obj->data->attributes);
 
 	unpack_list_open(packet, 0, false);
 	{
 		unpack_list_append(packet, &screen_scale,       1);
 
-		unpack_list_append(packet, m->local_screen,       4);
-		unpack_list_append(packet, m->local_light,        4);
+		unpack_list_append(packet, obj->local_screen,       4);
+		unpack_list_append(packet, obj->local_light,        4);
 
 		static FIVECTOR camera_pos_light_qt; // xyz for camera position and w for directional light quantity
 
@@ -742,23 +723,23 @@ void draw_vu1_with_spec_lights(model* m, float pos_x, float pos_y, float pos_z, 
 	int last_index = -1;
 	GSTEXTURE* tex = NULL;
 	int texture_id;
-	for(int i = 0; i < m->material_index_count; i++) {
-		bool texture_mapping = ((m->materials[m->material_indices[i].index].texture_id != -1) && m->attributes.texture_mapping);
+	for(int i = 0; i < obj->data->material_index_count; i++) {
+		bool texture_mapping = ((obj->data->materials[obj->data->material_indices[i].index].texture_id != -1) && obj->data->attributes.texture_mapping);
 
 		if (texture_mapping) {
-			GSTEXTURE *cur_tex = m->textures[m->materials[m->material_indices[i].index].texture_id];
+			GSTEXTURE *cur_tex = obj->data->textures[obj->data->materials[obj->data->material_indices[i].index].texture_id];
 			if (cur_tex != tex) {
 				texture_id = texture_manager_bind(gsGlobal, cur_tex, true);
 				tex = cur_tex;
 			}
 		}
 
-		VECTOR* positions = &m->positions[last_index+1];
-		VECTOR* texcoords = texture_mapping? &m->texcoords[last_index+1] : NULL;
-		VECTOR* normals = &m->normals[last_index+1];
-		VECTOR* colours = &m->colours[last_index+1];
+		VECTOR* positions = &obj->data->positions[last_index+1];
+		VECTOR* texcoords = texture_mapping? &obj->data->texcoords[last_index+1] : NULL;
+		VECTOR* normals = &obj->data->normals[last_index+1];
+		VECTOR* colours = &obj->data->colours[last_index+1];
 
-		int idxs_to_draw = (m->material_indices[i].end-last_index);
+		int idxs_to_draw = (obj->data->material_indices[i].end-last_index);
 		int idxs_drawn = 0;
 
 		while (idxs_to_draw > 0) {
@@ -773,30 +754,30 @@ void draw_vu1_with_spec_lights(model* m, float pos_x, float pos_y, float pos_z, 
 				append_texture_tags(packet, tex, texture_id, COLOR_MODULATE);
 			}
 
-			m->materials[m->material_indices[i].index].clip_prim_tag.dword[1] = DRAW_STQ2_REGLIST;
-			m->materials[m->material_indices[i].index].clip_prim_tag.dword[0] = VU_GS_GIFTAG(m->tristrip? 5 : 11, 
+			obj->data->materials[obj->data->material_indices[i].index].clip_prim_tag.dword[1] = DRAW_STQ2_REGLIST;
+			obj->data->materials[obj->data->material_indices[i].index].clip_prim_tag.dword[0] = VU_GS_GIFTAG(obj->data->tristrip? 5 : 11, 
 							                							1, NO_CUSTOM_DATA, 1, 
 																		VU_GS_PRIM(GS_PRIM_PRIM_TRIFAN, 
-																				   m->attributes.shade_model, texture_mapping, 
+																				   obj->data->attributes.shade_model, texture_mapping, 
 																				   gsGlobal->PrimFogEnable, 
 																				   gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 0, 0, 0),
     		    														0, 3);
 
-			owl_add_unpack_data(packet, 26, (void*)&m->materials[m->material_indices[i].index].clip_prim_tag, 1, 0);
+			owl_add_unpack_data(packet, 26, (void*)&obj->data->materials[obj->data->material_indices[i].index].clip_prim_tag, 1, 0);
 
-			m->materials[m->material_indices[i].index].prim_tag.dword[1] = DRAW_STQ2_REGLIST;
-			m->materials[m->material_indices[i].index].prim_tag.dword[0] = VU_GS_GIFTAG(0, 
+			obj->data->materials[obj->data->material_indices[i].index].prim_tag.dword[1] = DRAW_STQ2_REGLIST;
+			obj->data->materials[obj->data->material_indices[i].index].prim_tag.dword[0] = VU_GS_GIFTAG(0, 
 							                							1, NO_CUSTOM_DATA, 1, 
-																		VU_GS_PRIM(m->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE, 
-																				   m->attributes.shade_model, texture_mapping, 
+																		VU_GS_PRIM(obj->data->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE, 
+																				   obj->data->attributes.shade_model, texture_mapping, 
 																				   gsGlobal->PrimFogEnable, 
 																				   gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 0, 0, 0),
     		    														0, 3);
 
 			unpack_list_open(packet, 0, true);
 			{
-				unpack_list_append(packet, (void*)&m->materials[m->material_indices[i].index].prim_tag, 1);
-				unpack_list_append(packet, (void*)&m->materials[m->material_indices[i].index].diffuse, 1);
+				unpack_list_append(packet, (void*)&obj->data->materials[obj->data->material_indices[i].index].prim_tag, 1);
+				unpack_list_append(packet, (void*)&obj->data->materials[obj->data->material_indices[i].index].diffuse, 1);
 				unpack_list_append(packet, &positions[idxs_drawn], count);
 				unpack_list_append(packet, &normals[idxs_drawn], count);
 				unpack_list_append(packet, &colours[idxs_drawn], count);
@@ -816,7 +797,7 @@ void draw_vu1_with_spec_lights(model* m, float pos_x, float pos_y, float pos_z, 
 			idxs_drawn += count;
 		}
 
-		last_index = m->material_indices[i].end;
+		last_index = obj->data->material_indices[i].end;
 	}
 
 	owl_add_vif_codes(packet,

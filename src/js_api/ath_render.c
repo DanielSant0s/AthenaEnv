@@ -7,17 +7,18 @@
 #include <render.h>
 #include <ath_env.h>
 
-static JSClassID js_object_class_id;
+
+static JSClassID js_render_data_class_id;
 
 typedef struct {
-	model m;
+	athena_render_data m;
 	JSValue *textures;
-} JSRenderObject;
+} JSRenderData;
 
-static void athena_object_dtor(JSRuntime *rt, JSValue val){
-	JSRenderObject* ro = JS_GetOpaque(val, js_object_class_id);
+static void athena_render_data_dtor(JSRuntime *rt, JSValue val){
+	JSRenderData* ro = JS_GetOpaque(val, js_render_data_class_id);
 
-	dbgprintf("Freeing RenderObject\n");
+	dbgprintf("Freeing RenderData\n");
 
 	if (ro->m.positions)
 		free(ro->m.positions); 
@@ -62,18 +63,18 @@ static const char* vert_attributes[] = {
 	"colors",
 };
 
-static JSValue athena_object_ctor(JSContext *ctx, JSValueConst new_target, int argc, JSValueConst *argv) {
+static JSValue athena_render_data_ctor(JSContext *ctx, JSValueConst new_target, int argc, JSValueConst *argv) {
 	JSImageData *image;
 	JSValue obj = JS_UNDEFINED;
     JSValue proto;
 
-    JSRenderObject* ro = js_mallocz(ctx, sizeof(JSRenderObject));
+    JSRenderData* ro = js_mallocz(ctx, sizeof(JSRenderData));
 	
     if (!ro)
         return JS_EXCEPTION;
 
 	if (JS_IsObject(argv[0])) {
-		memset(ro, 0, sizeof(JSRenderObject));
+		memset(ro, 0, sizeof(JSRenderData));
 
 		uint32_t size = 0;
 		JSValue vert_arr, ta_buf;
@@ -147,12 +148,12 @@ static JSValue athena_object_ctor(JSContext *ctx, JSValueConst new_target, int a
 		if (argc > 2) 
 			ro->m.tristrip = JS_ToBool(ctx, argv[2]);
 	
-		ro->m.pipeline = athena_render_set_pipeline(&ro->m, PL_DEFAULT);
+		ro->m.pipeline = PL_DEFAULT;
 
-		goto register_3d_object;
+		goto register_3d_render_data;
 	}
 
-	const char *file_tbo = JS_ToCString(ctx, argv[0]); // Model filename
+	const char *file_tbo = JS_ToCString(ctx, argv[0]); // athena_render_data filename
 
 	// Loading texture
 	if(argc > 1) {
@@ -202,9 +203,9 @@ static JSValue athena_object_ctor(JSContext *ctx, JSValueConst new_target, int a
 		}
 	} 
 
-register_3d_object:
+register_3d_render_data:
     proto = JS_GetPropertyStr(ctx, new_target, "prototype");
-    obj = JS_NewObjectProtoClass(ctx, proto, js_object_class_id);
+    obj = JS_NewObjectProtoClass(ctx, proto, js_render_data_class_id);
 
 	ro->m.attributes.accurate_clipping = 1;
 	ro->m.attributes.backface_culling = 0;
@@ -227,66 +228,37 @@ register_3d_object:
     return obj;
 }
 
-static JSClassDef js_object_class = {
-    "RenderObject",
-    .finalizer = athena_object_dtor,
+static JSClassDef js_render_data_class = {
+    "RenderData",
+    .finalizer = athena_render_data_dtor,
 }; 
 
-static JSValue athena_drawobject(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-	float pos_x, pos_y, pos_z, rot_x, rot_y, rot_z;
-
-	JSRenderObject* ro = JS_GetOpaque2(ctx, this_val, js_object_class_id);
-
-	JS_ToFloat32(ctx, &pos_x, argv[0]);
-	JS_ToFloat32(ctx, &pos_y, argv[1]);
-	JS_ToFloat32(ctx, &pos_z, argv[2]);
-	JS_ToFloat32(ctx, &rot_x, argv[3]);
-	JS_ToFloat32(ctx, &rot_y, argv[4]);
-	JS_ToFloat32(ctx, &rot_z, argv[5]);
-	
-	ro->m.render(&ro->m, pos_x, pos_y, pos_z, rot_x, rot_y, rot_z);
-
-	return JS_UNDEFINED;
-}
-
-static JSValue athena_drawbbox(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-	float pos_x, pos_y, pos_z, rot_x, rot_y, rot_z;
-	Color color;
-
-	JSRenderObject* ro = JS_GetOpaque2(ctx, this_val, js_object_class_id);
-
-	JS_ToFloat32(ctx, &pos_x, argv[0]);
-	JS_ToFloat32(ctx, &pos_y, argv[1]);
-	JS_ToFloat32(ctx, &pos_z, argv[2]);
-	JS_ToFloat32(ctx, &rot_x, argv[3]);
-	JS_ToFloat32(ctx, &rot_y, argv[4]);
-	JS_ToFloat32(ctx, &rot_z, argv[5]);
-	JS_ToUint32(ctx, &color,  argv[6]);
-	
-	draw_bbox(&ro->m, pos_x, pos_y, pos_z, rot_x, rot_y, rot_z, color);
-
-	return JS_UNDEFINED;
-}
-
-static JSValue athena_setpipeline(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-	int pipeline;
-	JSRenderObject* ro = JS_GetOpaque2(ctx, this_val, js_object_class_id);
-
-	JS_ToUint32(ctx, &pipeline, argv[0]);
-
-	return JS_NewUint32(ctx, athena_render_set_pipeline(&ro->m, pipeline));
-}
-
-static JSValue athena_getpipeline(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-	int pipeline;
-	JSRenderObject* ro = JS_GetOpaque2(ctx, this_val, js_object_class_id);
+static JSValue athena_getpipeline(JSContext *ctx, JSValueConst this_val, int magic)
+{
+    JSRenderData* ro = JS_GetOpaque2(ctx, this_val, js_render_data_class_id);
+    if (!ro)
+        return JS_EXCEPTION;
 
 	return JS_NewUint32(ctx, ro->m.pipeline);
 }
 
+static JSValue athena_setpipeline(JSContext *ctx, JSValueConst this_val, JSValue val, int magic) {
+	eRenderPipelines pipeline;
+
+    JSRenderData* ro = JS_GetOpaque2(ctx, this_val, js_render_data_class_id);
+    if (!ro)
+        return JS_EXCEPTION;
+
+	JS_ToUint32(ctx, &pipeline, val);
+
+	ro->m.pipeline = pipeline;
+
+	return JS_UNDEFINED;
+}
+
 static JSValue athena_settexture(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	uint32_t tex_idx;
-	JSRenderObject* ro = JS_GetOpaque2(ctx, this_val, js_object_class_id);
+	JSRenderData* ro = JS_GetOpaque2(ctx, this_val, js_render_data_class_id);
 
 	JS_ToUint32(ctx, &tex_idx, argv[0]);
 
@@ -317,7 +289,7 @@ static JSValue athena_settexture(JSContext *ctx, JSValue this_val, int argc, JSV
 
 static JSValue athena_gettexture(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	int tex_idx;
-	JSRenderObject* ro = JS_GetOpaque2(ctx, this_val, js_object_class_id);
+	JSRenderData* ro = JS_GetOpaque2(ctx, this_val, js_render_data_class_id);
 
 	JS_ToUint32(ctx, &tex_idx, argv[0]);
 
@@ -365,9 +337,9 @@ inline void JS_ToMaterial(JSContext *ctx, VECTOR v, JSValue vec) {
 	JS_FreeValue(ctx, vec);
 }
 
-static JSValue js_object_get(JSContext *ctx, JSValueConst this_val, int magic)
+static JSValue js_render_data_get(JSContext *ctx, JSValueConst this_val, int magic)
 {
-    JSRenderObject* ro = JS_GetOpaque2(ctx, this_val, js_object_class_id);
+    JSRenderData* ro = JS_GetOpaque2(ctx, this_val, js_render_data_class_id);
     if (!ro)
         return JS_EXCEPTION;
 
@@ -460,9 +432,9 @@ static JSValue js_object_get(JSContext *ctx, JSValueConst this_val, int magic)
 	return JS_UNDEFINED;
 }
 
-static JSValue js_object_set(JSContext *ctx, JSValueConst this_val, JSValue val, int magic)
+static JSValue js_render_data_set(JSContext *ctx, JSValueConst this_val, JSValue val, int magic)
 {
-    JSRenderObject* ro = JS_GetOpaque2(ctx, this_val, js_object_class_id);
+    JSRenderData* ro = JS_GetOpaque2(ctx, this_val, js_render_data_class_id);
     if (!ro)
         return JS_EXCEPTION;
 
@@ -589,23 +561,157 @@ static JSValue js_object_set(JSContext *ctx, JSValueConst this_val, JSValue val,
     return JS_UNDEFINED;
 }
 
-static const JSCFunctionListEntry js_object_proto_funcs[] = {
-    JS_CFUNC_DEF("draw",        6,  athena_drawobject),
-	JS_CFUNC_DEF("drawBounds",  7,    athena_drawbbox),
-	JS_CFUNC_DEF("setPipeline", 1, athena_setpipeline),
-	JS_CFUNC_DEF("getPipeline", 0, athena_getpipeline),
+static const JSCFunctionListEntry js_render_data_proto_funcs[] = {
 	JS_CFUNC_DEF("setTexture",  3,  athena_settexture),
 	JS_CFUNC_DEF("getTexture",  1,  athena_gettexture),
 
-	JS_CGETSET_MAGIC_DEF("vertices",          js_object_get, js_object_set, 0),
-	JS_CGETSET_MAGIC_DEF("materials",         js_object_get, js_object_set, 1),
-	JS_CGETSET_MAGIC_DEF("material_indices",  js_object_get, js_object_set, 2),
-	JS_CGETSET_MAGIC_DEF("accurate_clipping", js_object_get, js_object_set, 3),
-	JS_CGETSET_MAGIC_DEF("backface_culling",  js_object_get, js_object_set, 4),
-	JS_CGETSET_MAGIC_DEF("texture_mapping",   js_object_get, js_object_set, 5),
-	JS_CGETSET_MAGIC_DEF("shade_model",       js_object_get, js_object_set, 6),
-	JS_CGETSET_MAGIC_DEF("size",              js_object_get, js_object_set, 7),
-	JS_CGETSET_MAGIC_DEF("bounds",            js_object_get, js_object_set, 8),
+	JS_CGETSET_MAGIC_DEF("vertices",          js_render_data_get, js_render_data_set, 0),
+	JS_CGETSET_MAGIC_DEF("materials",         js_render_data_get, js_render_data_set, 1),
+	JS_CGETSET_MAGIC_DEF("material_indices",  js_render_data_get, js_render_data_set, 2),
+	JS_CGETSET_MAGIC_DEF("accurate_clipping", js_render_data_get, js_render_data_set, 3),
+	JS_CGETSET_MAGIC_DEF("backface_culling",  js_render_data_get, js_render_data_set, 4),
+	JS_CGETSET_MAGIC_DEF("texture_mapping",   js_render_data_get, js_render_data_set, 5),
+	JS_CGETSET_MAGIC_DEF("shade_model",       js_render_data_get, js_render_data_set, 6),
+	JS_CGETSET_MAGIC_DEF("size",              js_render_data_get, js_render_data_set, 7),
+	JS_CGETSET_MAGIC_DEF("bounds",            js_render_data_get, js_render_data_set, 8),
+	JS_CGETSET_MAGIC_DEF("pipeline",          athena_getpipeline, athena_setpipeline, 0),
+
+};
+
+
+static JSClassID js_render_object_class_id;
+
+typedef struct {
+	athena_object_data obj;
+} JSRenderObject;
+
+static void athena_render_object_dtor(JSRuntime *rt, JSValue val){
+	JSRenderObject* ro = JS_GetOpaque(val, js_render_object_class_id);
+
+	js_free_rt(rt, ro);
+}
+
+static JSValue athena_render_object_ctor(JSContext *ctx, JSValueConst new_target, int argc, JSValueConst *argv) {
+	JSValue obj = JS_UNDEFINED;
+    JSValue proto;
+
+    JSRenderObject* ro = js_mallocz(ctx, sizeof(JSRenderObject));
+	
+    if (!ro)
+        return JS_EXCEPTION;
+
+    JSRenderData* rd = JS_GetOpaque2(ctx, argv[0], js_render_data_class_id);
+    if (!rd)
+        return JS_EXCEPTION;
+
+	ro->obj.data = &rd->m;
+
+	ro->obj.position[0] = 0.0f;
+	ro->obj.position[1] = 0.0f;
+	ro->obj.position[2] = 0.0f;
+	ro->obj.position[3] = 1.0f;
+
+	ro->obj.rotation[0] = 0.0f;
+	ro->obj.rotation[1] = 0.0f;
+	ro->obj.rotation[2] = 0.0f;
+	ro->obj.rotation[3] = 1.0f;
+
+register_3d_object_data:
+    proto = JS_GetPropertyStr(ctx, new_target, "prototype");
+    obj = JS_NewObjectProtoClass(ctx, proto, js_render_object_class_id);
+
+    JS_FreeValue(ctx, proto);
+    JS_SetOpaque(obj, ro);
+
+    return obj;
+}
+
+static JSClassDef js_render_object_class = {
+    "RenderObject",
+    .finalizer = athena_render_object_dtor,
+}; 
+
+static JSValue athena_drawobject(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	JSRenderObject* ro = JS_GetOpaque2(ctx, this_val, js_render_object_class_id);
+
+	render_object(&ro->obj);
+
+	return JS_UNDEFINED;
+}
+
+static JSValue athena_drawbbox(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	Color color;
+
+	JSRenderObject* ro = JS_GetOpaque2(ctx, this_val, js_render_object_class_id);
+
+	JS_ToUint32(ctx, &color,  argv[0]);
+	
+	draw_bbox(&ro->obj, color);
+
+	return JS_UNDEFINED;
+}
+
+
+static JSValue js_render_object_get(JSContext *ctx, JSValueConst this_val, int magic)
+{
+    JSRenderObject* ro = JS_GetOpaque2(ctx, this_val, js_render_object_class_id);
+    if (!ro)
+        return JS_EXCEPTION;
+
+	switch (magic) {
+		case 0:
+			{
+				JSValue obj = JS_NewObject(ctx);
+
+				JS_DefinePropertyValueStr(ctx, obj, "x", JS_NewFloat32(ctx, ro->obj.position[0]), JS_PROP_C_W_E);
+				JS_DefinePropertyValueStr(ctx, obj, "y", JS_NewFloat32(ctx, ro->obj.position[1]), JS_PROP_C_W_E);
+				JS_DefinePropertyValueStr(ctx, obj, "z", JS_NewFloat32(ctx, ro->obj.position[2]), JS_PROP_C_W_E);
+				
+				return obj;
+			}
+		case 1:
+			{
+				JSValue obj = JS_NewObject(ctx);
+
+				JS_DefinePropertyValueStr(ctx, obj, "x", JS_NewFloat32(ctx, ro->obj.rotation[0]), JS_PROP_C_W_E);
+				JS_DefinePropertyValueStr(ctx, obj, "y", JS_NewFloat32(ctx, ro->obj.rotation[1]), JS_PROP_C_W_E);
+				JS_DefinePropertyValueStr(ctx, obj, "z", JS_NewFloat32(ctx, ro->obj.rotation[2]), JS_PROP_C_W_E);
+				
+				return obj;
+			}
+	}
+
+	return JS_UNDEFINED;
+}
+
+static JSValue js_render_object_set(JSContext *ctx, JSValueConst this_val, JSValue val, int magic)
+{
+    JSRenderObject* ro = JS_GetOpaque2(ctx, this_val, js_render_object_class_id);
+    if (!ro)
+        return JS_EXCEPTION;
+
+	switch (magic) {
+		case 0:
+			JS_ToFloat32(ctx, &ro->obj.position[0], JS_GetPropertyStr(ctx, val, "x"));
+			JS_ToFloat32(ctx, &ro->obj.position[1], JS_GetPropertyStr(ctx, val, "y"));
+			JS_ToFloat32(ctx, &ro->obj.position[2], JS_GetPropertyStr(ctx, val, "z"));
+			break;
+		case 1:
+			JS_ToFloat32(ctx, &ro->obj.rotation[0], JS_GetPropertyStr(ctx, val, "x"));
+			JS_ToFloat32(ctx, &ro->obj.rotation[1], JS_GetPropertyStr(ctx, val, "y"));
+			JS_ToFloat32(ctx, &ro->obj.rotation[2], JS_GetPropertyStr(ctx, val, "z"));
+			break;
+	}
+
+    return JS_UNDEFINED;
+}
+
+static const JSCFunctionListEntry js_render_object_proto_funcs[] = {
+    JS_CFUNC_DEF("render",        0,  athena_drawobject),
+	JS_CFUNC_DEF("renderBounds",  0,    athena_drawbbox),
+
+	JS_CGETSET_MAGIC_DEF("position",          js_render_object_get, js_render_object_set, 0),
+	JS_CGETSET_MAGIC_DEF("rotation",          js_render_object_get, js_render_object_set, 1),
 };
 
 static JSValue athena_initrender(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
@@ -688,29 +794,55 @@ static int render_init(JSContext *ctx, JSModuleDef *m)
     return JS_SetModuleExportList(ctx, m, render_funcs, countof(render_funcs));
 }
 
-static int js_object_init(JSContext *ctx, JSModuleDef *m)
+static int js_render_data_init(JSContext *ctx, JSModuleDef *m)
 {
-    JSValue object_proto, object_class;
+    JSValue render_data_proto, render_data_class;
     
     /* create the Point class */
-    JS_NewClassID(&js_object_class_id);
-    JS_NewClass(JS_GetRuntime(ctx), js_object_class_id, &js_object_class);
+    JS_NewClassID(&js_render_data_class_id);
+    JS_NewClass(JS_GetRuntime(ctx), js_render_data_class_id, &js_render_data_class);
 
-    object_proto = JS_NewObject(ctx);
-    JS_SetPropertyFunctionList(ctx, object_proto, js_object_proto_funcs, countof(js_object_proto_funcs));
+    render_data_proto = JS_NewObject(ctx);
+    JS_SetPropertyFunctionList(ctx, render_data_proto, js_render_data_proto_funcs, countof(js_render_data_proto_funcs));
     
-    object_class = JS_NewCFunction2(ctx, athena_object_ctor, "RenderObject", 2, JS_CFUNC_constructor, 0);
+    render_data_class = JS_NewCFunction2(ctx, athena_render_data_ctor, "RenderData", 2, JS_CFUNC_constructor, 0);
     /* set proto.constructor and ctor.prototype */
-    JS_SetConstructor(ctx, object_class, object_proto);
-    JS_SetClassProto(ctx, js_object_class_id, object_proto);
+    JS_SetConstructor(ctx, render_data_class, render_data_proto);
+    JS_SetClassProto(ctx, js_render_data_class_id, render_data_proto);
                       
-    JS_SetModuleExport(ctx, m, "RenderObject", object_class);
+    JS_SetModuleExport(ctx, m, "RenderData", render_data_class);
     return 0;
 }
 
+static int js_render_object_init(JSContext *ctx, JSModuleDef *m)
+{
+    JSValue render_object_proto, render_object_class;
+    
+    /* create the Point class */
+    JS_NewClassID(&js_render_object_class_id);
+    JS_NewClass(JS_GetRuntime(ctx), js_render_object_class_id, &js_render_object_class);
+
+    render_object_proto = JS_NewObject(ctx);
+    JS_SetPropertyFunctionList(ctx, render_object_proto, js_render_object_proto_funcs, countof(js_render_object_proto_funcs));
+    
+    render_object_class = JS_NewCFunction2(ctx, athena_render_object_ctor, "RenderObject", 1, JS_CFUNC_constructor, 0);
+    /* set proto.constructor and ctor.prototype */
+    JS_SetConstructor(ctx, render_object_class, render_object_proto);
+    JS_SetClassProto(ctx, js_render_object_class_id, render_object_proto);
+                      
+    JS_SetModuleExport(ctx, m, "RenderObject", render_object_class);
+    return 0;
+}
+
+
 JSModuleDef *athena_render_init(JSContext* ctx){
     JSModuleDef *m;
-    m = JS_NewCModule(ctx, "RenderObject", js_object_init);
+    m = JS_NewCModule(ctx, "RenderData", js_render_data_init);
+    if (!m)
+        return NULL;
+    JS_AddModuleExport(ctx, m, "RenderData");
+
+    m = JS_NewCModule(ctx, "RenderObject", js_render_object_init);
     if (!m)
         return NULL;
     JS_AddModuleExport(ctx, m, "RenderObject");
