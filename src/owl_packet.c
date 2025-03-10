@@ -84,6 +84,10 @@ void owl_send_packet(owl_packet *packet, bool free_packet) {
 
 }
 
+owl_controller *owl_get_controller() {
+    return &controller;
+}
+
 static inline uint32_t get_packet_size_for_program(uint32_t *start, uint32_t *end)
 {
     // Count instructions

@@ -77,6 +77,8 @@ owl_packet *owl_query_packet(owl_channel channel, size_t size);
 // flush a requested packet
 void owl_flush_packet();
 
+owl_controller *owl_get_controller();
+
 void vu1_upload_micro_program(uint32_t* start, uint32_t* end);
 
 void vu1_set_double_buffer_settings(uint32_t base, uint32_t offset);
