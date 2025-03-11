@@ -20,9 +20,9 @@
 
 static const u64 BLACK_RGBAQ   = GS_SETREG_RGBAQ(0x00,0x00,0x00,0x80,0x00);
 
-#define RENDER_QUEUE_PER_POOLSIZE 1024 * 256 // 256K of persistent renderqueue
+#define RENDER_QUEUE_PER_POOLSIZE 1024 * 32 // 256K of persistent renderqueue
 /* Size of Oneshot drawbuffer (Double Buffered, so it uses this size * 2) */
-#define RENDER_QUEUE_OS_POOLSIZE 1024 * 1024 * 2 // 2048K of oneshot renderqueue
+#define RENDER_QUEUE_OS_POOLSIZE 1024 * 32 // 2048K of oneshot renderqueue
 
 GSGLOBAL *gsGlobal = NULL;
 static GSFONTM *gsFontM = NULL;
@@ -39,7 +39,9 @@ static float fps = 0.0f;
 static int frames = 0;
 static int frame_interval = -1;
 
-static uint8_t owl_packet_buffer[RENDER_QUEUE_PER_POOLSIZE] __attribute__((aligned(128)));
+#define OWL_PACKET_BUFFER_SIZE 1024 * 256
+
+static uint8_t owl_packet_buffer[OWL_PACKET_BUFFER_SIZE] __attribute__((aligned(128)));
 
 //2D drawing functions
 int athena_load_png(GSTEXTURE* tex, FILE* File, bool delayed)
@@ -1914,7 +1916,7 @@ void init_graphics()
 	gsKit_vsync_wait();
 	flipScreen();
 
-	owl_init(owl_packet_buffer, RENDER_QUEUE_PER_POOLSIZE/sizeof(owl_qword));
+	owl_init(owl_packet_buffer, OWL_PACKET_BUFFER_SIZE/sizeof(owl_qword));
 }
 
 void graphicWaitVblankStart(){
