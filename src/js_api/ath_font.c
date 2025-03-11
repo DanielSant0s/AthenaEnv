@@ -138,7 +138,7 @@ static JSValue athena_font_print(JSContext *ctx, JSValue this_val, int argc, JSV
     } else if (font->type == 0){
         printFontMText(text, x, y, font->scale, font->color);
     } else {
-        fntRenderString(font->id, x, y, 0, 0, 0, text, font->color);
+        fntRenderString(font->id, x, y, 0, 0, 0, text, font->scale, font->color);
     }
 
     JS_FreeCString(ctx, text);
@@ -174,7 +174,7 @@ static JSValue athena_font_get_scale(JSContext *ctx, JSValueConst this_val)
     JSFontData *s = JS_GetOpaque2(ctx, this_val, js_font_class_id);
     if (!s)
         return JS_EXCEPTION;
-    return JS_NewFloat32(ctx, s->scale);
+    return JS_NewFloat32(ctx, s->scale); 
 }
 
 static JSValue athena_font_set_scale(JSContext *ctx, JSValueConst this_val, JSValue val)
@@ -187,7 +187,7 @@ static JSValue athena_font_set_scale(JSContext *ctx, JSValueConst this_val, JSVa
         return JS_EXCEPTION;
     s->scale = scale;
     if (s->type == truetype_font){
-        fntSetCharSize(s->id, FNTSYS_CHAR_SIZE*64*scale, FNTSYS_CHAR_SIZE*64*scale);
+        //fntSetCharSize(s->id, FNTSYS_CHAR_SIZE*64*scale, FNTSYS_CHAR_SIZE*64*scale);
     }
 
     return JS_UNDEFINED;
@@ -259,7 +259,7 @@ static JSValue athena_fontrender_print(JSContext *ctx, JSValue this_val, int arg
     } else if (render_data->font_data->type == 0){
         printFontMText(render_data->text, x, y, render_data->font_data->scale, render_data->font_data->color);
     } else {
-        fntRenderString(render_data->font_data->id, x, y, 0, 0, 0, render_data->text, render_data->font_data->color);
+        fntRenderString(render_data->font_data->id, x, y, 0, 0, 0, render_data->text, render_data->font_data->scale, render_data->font_data->color);
     }
 
 	return JS_UNDEFINED;

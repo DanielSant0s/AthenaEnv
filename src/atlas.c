@@ -90,7 +90,7 @@ atlas_t *atlasNew(size_t width, size_t height, u8 psm)
     atlas->surface.Width = width;
     atlas->surface.Height = height;
 
-    atlas->surface.Filter = GS_FILTER_NEAREST;
+    atlas->surface.Filter = GS_FILTER_LINEAR;
 
     size_t txtsize = gsKit_texture_size(width, height, psm);
     atlas->surface.PSM = psm;

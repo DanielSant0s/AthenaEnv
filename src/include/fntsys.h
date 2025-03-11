@@ -10,7 +10,7 @@
 /// Atlas height in pixels
 #define ATLAS_HEIGHT 256
 
-#define FNTSYS_CHAR_SIZE 26
+#define FNTSYS_CHAR_SIZE 26 
 
 
 /// default (built-in) font id
@@ -39,8 +39,10 @@ void fntRelease(int id);
  * @note Invalidates the whole glyph cache for all fonts! */
 void fntUpdateAspectRatio();
 
+int fntRenderStringPlus(int id, int x, int y, short aligned, size_t width, size_t height, const char *string, float scale, u64 colour, u64 outline_colour, u64 dropshadow_colour);
+
 /** Renders a text with specified window dimensions */
-int fntRenderString(int id, int x, int y, short aligned, size_t width, size_t height, const char *string, u64 colour);
+int fntRenderString(int id, int x, int y, short aligned, size_t width, size_t height, const char *string, float scale, u64 colour);
 
 /** replaces spaces with newlines so that the text fits into the specified width.
  * @note A destrutive operation - modifies the given string!

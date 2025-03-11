@@ -525,7 +525,7 @@ void fntSetCharSize(int fontid, int width, int height)
     FT_Set_Char_Size(fonts[fontid].face, width, height, fDPI, fDPI);
 }
 
-static void fntRenderGlyph(fnt_glyph_cache_entry_t *glyph, int pen_x, int pen_y)
+static void fntRenderGlyph(fnt_glyph_cache_entry_t *glyph, int pen_x, int pen_y, float scale)
 {
     // only if glyph has atlas placement
     if (glyph->allocation) {
@@ -538,21 +538,21 @@ static void fntRenderGlyph(fnt_glyph_cache_entry_t *glyph, int pen_x, int pen_y)
          *    - this method would handle the preparation of the quads and GS upload itself,
          *    without the use of prim_quad_texture and rmSetupQuad...
          */
-        quad.ul.x = pen_x + glyph->ox;
+        quad.ul.x = pen_x + glyph->ox*scale;
         if (GetInterlacedFrameMode() == 0)
-            quad.ul.y = pen_y + glyph->oy;
+            quad.ul.y = (pen_y + (glyph->oy)*scale); 
         else
-            quad.ul.y = (float)pen_y + ((float)glyph->oy / 2.0f);
+            quad.ul.y = ((float)pen_y + ((float)glyph->oy / 2.0f)*scale)-1.0f;
         quad.ul.u = glyph->allocation->x;
         quad.ul.v = glyph->allocation->y;
 
-        quad.br.x = quad.ul.x + glyph->width;
+        quad.br.x = quad.ul.x + (glyph->width*scale);
         if (GetInterlacedFrameMode() == 0)
-            quad.br.y = quad.ul.y + glyph->height;
+            quad.br.y = (quad.ul.y + (glyph->height*scale));
         else
-            quad.br.y = quad.ul.y + ((float)glyph->height / 2.0f);
-        quad.br.u = quad.ul.u + glyph->width;
-        quad.br.v = quad.ul.v + glyph->height;
+            quad.br.y = (quad.ul.y + (((float)glyph->height / 2.0f)*scale));
+        quad.br.u = quad.ul.u + glyph->width + 1.0f;
+        quad.br.v = quad.ul.v + glyph->height + 1.0f;
 
         quad.txt = &glyph->atlas->surface;
 
@@ -561,9 +561,19 @@ static void fntRenderGlyph(fnt_glyph_cache_entry_t *glyph, int pen_x, int pen_y)
     }
 }
 
+int fntRenderStringPlus(int id, int x, int y, short aligned, size_t width, size_t height, const char *string, float scale, u64 colour, u64 outline_colour, u64 dropshadow_colour) {
+    if (outline_colour) {
+
+    } else if (dropshadow_colour) {
+
+    }
+
+    fntRenderString(id, x, y, aligned, width, height, string, scale, colour);
+}
+
 
 #ifndef __RTL
-int fntRenderString(int id, int x, int y, short aligned, size_t width, size_t height, const char *string, u64 colour)
+int fntRenderString(int id, int x, int y, short aligned, size_t width, size_t height, const char *string, float scale, u64 colour)
 {
     // wait for font lock to unlock
     WaitSema(gFontSemaId);
@@ -579,9 +589,9 @@ int fntRenderString(int id, int x, int y, short aligned, size_t width, size_t he
     }
 
     if (aligned & ALIGN_VCENTER) {
-        y += (FNTSYS_CHAR_SIZE - 4) >> 1;
+        y += ((int)(FNTSYS_CHAR_SIZE) - 4) >> 1;
     } else {
-        y += (FNTSYS_CHAR_SIZE - 2);
+        y += ((int)(FNTSYS_CHAR_SIZE) - 2);
     }
 
     quad.color = colour;
@@ -615,7 +625,7 @@ int fntRenderString(int id, int x, int y, short aligned, size_t width, size_t he
             glyph_index = FT_Get_Char_Index(font->face, codepoint);
             if (glyph_index) {
                 FT_Get_Kerning(font->face, previous, glyph_index, FT_KERNING_DEFAULT, &delta);
-                pen_x += delta.x >> 6;
+                pen_x += (delta.x >> 6)*scale;
             }
             previous = glyph_index;
         }
@@ -636,8 +646,8 @@ int fntRenderString(int id, int x, int y, short aligned, size_t width, size_t he
             }
         }
 
-        fntRenderGlyph(glyph, pen_x, y);
-        pen_x += glyph->shx >> 6;
+        fntRenderGlyph(glyph, pen_x, y, scale);
+        pen_x += ((int)(glyph->shx*scale) >> 6);
     }
 
     return pen_x;
@@ -660,7 +670,7 @@ Coords fntGetTextSize(int id, const char* text) {
 		error = FT_Render_Glyph(font->face->glyph, ft_render_mode_normal );
 		if (error) continue;
 		if (slot->bitmap.rows > maxHeight) maxHeight = slot->bitmap.rows;
-		width += slot->advance.x >> 6;
+		width += slot->advance.x >> 6; 
 	}
 
     Coords size;

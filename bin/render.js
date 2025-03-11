@@ -8,7 +8,7 @@ const pipelines = [
 ];
 
 const font = new Font("default");
-font.scale = 0.4f;
+font.scale = 0.6f;
 
 Screen.setFrameCounter(true);
 Screen.setVSync(false);

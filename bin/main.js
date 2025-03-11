@@ -20,7 +20,7 @@ const font_bold = new Font("fonts/LEMONMILK-Bold.otf");
 font.color = unsel_color;
 font_bold.scale = 0.7f
 font_medium.scale = 1.0f;
-font.scale = 0.44f;
+font.scale = 0.5f;
 
 let exit_to = null;
 

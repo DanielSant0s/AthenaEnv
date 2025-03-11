@@ -159,10 +159,10 @@ static JSValue athena_scrlog(JSContext *ctx, JSValue this_val, int argc, JSValue
 
 	clearScreen(GS_SETREG_RGBAQ(0x00, 0x00, 0x00, 0x80, 0x00));
 
-	fntSetCharSize(0, FNTSYS_CHAR_SIZE*64*0.8f, FNTSYS_CHAR_SIZE*64*0.8f);
+	fntSetCharSize(0, FNTSYS_CHAR_SIZE*64, FNTSYS_CHAR_SIZE*64);
 
 	if (str_len > 0) {
-		fntRenderString(0, 0, 0, 0, 640, 448, str_buf, 0x80808080);
+		fntRenderString(0, 0, 0, 0, 640, 448, str_buf, 0.8f, 0x80808080);
 	}
 
 	flipScreen();
