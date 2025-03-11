@@ -30,6 +30,11 @@ typedef struct {
     int id;
     Color color;
     float scale;
+
+    float outline;
+    Color outline_color;
+    float dropshadow;
+    Color dropshadow_color;
 } JSFontData;
 
 typedef struct {
@@ -138,7 +143,7 @@ static JSValue athena_font_print(JSContext *ctx, JSValue this_val, int argc, JSV
     } else if (font->type == 0){
         printFontMText(text, x, y, font->scale, font->color);
     } else {
-        fntRenderString(font->id, x, y, 0, 0, 0, text, font->scale, font->color);
+        fntRenderStringPlus(font->id, x, y, 0, 0, 0, text, font->scale, font->color, font->outline, font->outline_color, font->dropshadow, font->dropshadow_color);
     }
 
     JS_FreeCString(ctx, text);
@@ -169,39 +174,71 @@ static JSValue athena_font_gettextsize(JSContext *ctx, JSValue this_val, int arg
 	return obj;
 }
 
-static JSValue athena_font_get_scale(JSContext *ctx, JSValueConst this_val)
+static JSValue athena_font_get_scale(JSContext *ctx, JSValueConst this_val, int magic)
 {
     JSFontData *s = JS_GetOpaque2(ctx, this_val, js_font_class_id);
     if (!s)
         return JS_EXCEPTION;
-    return JS_NewFloat32(ctx, s->scale); 
-}
+    
 
-static JSValue athena_font_set_scale(JSContext *ctx, JSValueConst this_val, JSValue val)
-{
-    JSFontData *s = JS_GetOpaque2(ctx, this_val, js_font_class_id);
-    float scale;
-    if (!s)
-        return JS_EXCEPTION;
-    if (JS_ToFloat32(ctx, &scale, val))
-        return JS_EXCEPTION;
-    s->scale = scale;
-    if (s->type == truetype_font){
-        //fntSetCharSize(s->id, FNTSYS_CHAR_SIZE*64*scale, FNTSYS_CHAR_SIZE*64*scale);
+    switch (magic) {
+        case 0:
+            return JS_NewFloat32(ctx, s->scale); 
+        case 1:
+            return JS_NewFloat32(ctx, s->outline); 
+        case 2:
+            return JS_NewFloat32(ctx, s->dropshadow); 
     }
 
     return JS_UNDEFINED;
 }
 
-static JSValue athena_font_get_color(JSContext *ctx, JSValueConst this_val)
+static JSValue athena_font_set_scale(JSContext *ctx, JSValueConst this_val, JSValue val, int magic)
+{
+    JSFontData *s = JS_GetOpaque2(ctx, this_val, js_font_class_id);
+    float scale;
+
+    if (!s)
+        return JS_EXCEPTION;
+    if (JS_ToFloat32(ctx, &scale, val))
+        return JS_EXCEPTION;
+
+    
+
+    switch (magic) {
+        case 0:
+            s->scale = scale;
+            break;
+        case 1:
+            s->outline = scale;
+            break;
+        case 2:
+            s->dropshadow = scale;
+            break;
+    }
+
+    return JS_UNDEFINED;
+}
+
+static JSValue athena_font_get_color(JSContext *ctx, JSValueConst this_val, int magic)
 {
     JSFontData *s = JS_GetOpaque2(ctx, this_val, js_font_class_id);
     if (!s)
         return JS_EXCEPTION;
-    return JS_NewUint32(ctx, s->color);
+
+    switch (magic) {
+        case 0:
+            return JS_NewUint32(ctx, s->color);
+        case 1:
+            return JS_NewUint32(ctx, s->outline_color);
+        case 2:
+            return JS_NewUint32(ctx, s->dropshadow_color);
+    }
+    
+    return JS_UNDEFINED;
 }
 
-static JSValue athena_font_set_color(JSContext *ctx, JSValueConst this_val, JSValue val)
+static JSValue athena_font_set_color(JSContext *ctx, JSValueConst this_val, JSValue val, int magic)
 {
     JSFontData *s = JS_GetOpaque2(ctx, this_val, js_font_class_id);
     Color color;
@@ -209,7 +246,20 @@ static JSValue athena_font_set_color(JSContext *ctx, JSValueConst this_val, JSVa
         return JS_EXCEPTION;
     if (JS_ToUint32(ctx, &color, val))
         return JS_EXCEPTION;
-    s->color = color;
+
+    switch (magic) {
+        case 0:
+            s->color = color;
+            break;
+        case 1:
+            s->outline_color = color;
+            break;
+        case 2:
+            s->dropshadow_color = color;
+            break;
+    }
+
+    
     return JS_UNDEFINED;
 }
 
@@ -280,8 +330,14 @@ static JSClassDef js_font_class = {
 }; 
 
 static const JSCFunctionListEntry js_font_proto_funcs[] = {
-    JS_CGETSET_DEF("scale", athena_font_get_scale, athena_font_set_scale),
-    JS_CGETSET_DEF("color", athena_font_get_color, athena_font_set_color),
+    JS_CGETSET_MAGIC_DEF("scale", athena_font_get_scale, athena_font_set_scale, 0),
+    JS_CGETSET_MAGIC_DEF("outline", athena_font_get_scale, athena_font_set_scale, 1),
+    JS_CGETSET_MAGIC_DEF("dropshadow", athena_font_get_scale, athena_font_set_scale, 2),
+
+    JS_CGETSET_MAGIC_DEF("color", athena_font_get_color, athena_font_set_color, 0),
+    JS_CGETSET_MAGIC_DEF("outline_color", athena_font_get_color, athena_font_set_color, 1),
+    JS_CGETSET_MAGIC_DEF("dropshadow_color", athena_font_get_color, athena_font_set_color, 2),
+
     JS_CFUNC_DEF("print", 3, athena_font_print),
     JS_CFUNC_DEF("render", 3, athena_render_font),
     JS_CFUNC_DEF("getTextSize", 1, athena_font_gettextsize),

@@ -561,11 +561,15 @@ static void fntRenderGlyph(fnt_glyph_cache_entry_t *glyph, int pen_x, int pen_y,
     }
 }
 
-int fntRenderStringPlus(int id, int x, int y, short aligned, size_t width, size_t height, const char *string, float scale, u64 colour, u64 outline_colour, u64 dropshadow_colour) {
-    if (outline_colour) {
+int fntRenderStringPlus(int id, int x, int y, short aligned, size_t width, size_t height, const char *string, float scale, u64 colour, float outline, u64 outline_colour, float dropshadow, u64 dropshadow_colour) {
+    if (outline) {
+        float offsets[][2] = { {outline, outline}, {outline, -outline}, {-outline, outline}, {-outline, -outline} };
 
-    } else if (dropshadow_colour) {
-
+	    for(int i = 0; i < 4; i++){
+            fntRenderString(id, x+offsets[i][0], y+offsets[i][1], aligned, width, height, string, scale, outline_colour);
+	    }
+    } else if (dropshadow) {
+        fntRenderString(id, x+dropshadow, y+dropshadow, aligned, width, height, string, scale, dropshadow_colour);
     }
 
     fntRenderString(id, x, y, aligned, width, height, string, scale, colour);

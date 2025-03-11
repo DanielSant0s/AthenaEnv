@@ -17,9 +17,13 @@ const sel_color = Color.new(255, 255, 255);
 const font = new Font("fonts/LEMONMILK-Light.otf");
 const font_medium = new Font("fonts/LEMONMILK-Medium.otf");
 const font_bold = new Font("fonts/LEMONMILK-Bold.otf");
+
 font.color = unsel_color;
+
 font_bold.scale = 0.7f
+
 font_medium.scale = 1.0f;
+
 font.scale = 0.5f;
 
 let exit_to = null;

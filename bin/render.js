@@ -10,6 +10,9 @@ const pipelines = [
 const font = new Font("default");
 font.scale = 0.6f;
 
+font.outline = 1.0f;
+font.outline_color = Color.new(0, 0, 0);
+
 Screen.setFrameCounter(true);
 Screen.setVSync(false);
 
