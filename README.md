@@ -520,7 +520,6 @@ let font = new Font(path);  // It supports png, bmp, jpg, otf, ttf.
 ```
   path - Path to a font file, E.g.: "images/atlas.png", "fonts/font.png".  
 ```js
-let osdfnt = new Font();  //Load BIOS font, not available for all console models  
 let font = new Font("Segoe UI.ttf"); //Load trueType font 
 ``` 
 

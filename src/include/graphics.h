@@ -101,10 +101,6 @@ GSFONT* loadFont(const char* path);
 void printFontText(GSFONT* font, const char* text, float x, float y, float scale, Color color);
 void unloadFont(GSFONT* font);
 
-void loadFontM();
-void printFontMText(const char* text, float x, float y, float scale, Color color);
-void unloadFontM();
-
 void athena_error_screen(const char* errMsg, bool dark_mode);
 
 #endif

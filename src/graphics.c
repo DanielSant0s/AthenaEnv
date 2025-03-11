@@ -25,7 +25,6 @@ static const u64 BLACK_RGBAQ   = GS_SETREG_RGBAQ(0x00,0x00,0x00,0x80,0x00);
 #define RENDER_QUEUE_OS_POOLSIZE 1024 * 32 // 2048K of oneshot renderqueue
 
 GSGLOBAL *gsGlobal = NULL;
-static GSFONTM *gsFontM = NULL;
 
 void (*flipScreen)();
 
@@ -807,19 +806,6 @@ int load_image(GSTEXTURE* image, const char* path, bool delayed){
 	return 0;
 }
 
-
-void gsKit_clear_screens()
-{
-	int i;
-
-	for (i=0; i<2; i++)
-	{
-		gsKit_clear(gsGlobal, BLACK_RGBAQ);
-		//gsKit_queue_exec(gsGlobal);
-		gsKit_sync_flip(gsGlobal);
-	}
-}
-
 void page_clear(Color color) {
 	const uint32_t page_count = gsGlobal->Width * (gsGlobal->Height) / 2048;
 
@@ -863,24 +849,6 @@ void page_clear(Color color) {
 void clearScreen(Color color)
 {
 	page_clear(color);
-}
-
-void loadFontM()
-{
-	gsFontM = gsKit_init_fontm();
-	gsKit_fontm_upload(gsGlobal, gsFontM);
-	gsFontM->Spacing = 0.68f;
-}
-
-void printFontMText(const char* text, float x, float y, float scale, Color color)
-{
-	gsKit_set_test(gsGlobal, GS_ATEST_ON);
-	gsKit_fontm_print_scaled(gsGlobal, gsFontM, x-0.5f, y-0.5f, 1, scale, color, text);
-}
-
-void unloadFontM()
-{
-	gsKit_free_fontm(gsGlobal, gsFontM);
 }
 
 float FPSCounter(int interval)
@@ -1523,8 +1491,6 @@ static void gsKit_flip(GSGLOBAL *gsGlobal)
 }
 
 void athena_error_screen(const char* errMsg, bool dark_mode) {
-    gsKit_clear_screens();
-
     uint64_t color = GS_SETREG_RGBAQ(0x20,0x20,0x20,0x80,0x00);
     uint64_t color2 = GS_SETREG_RGBAQ(0x80,0x80,0x80,0x80,0x00);
 

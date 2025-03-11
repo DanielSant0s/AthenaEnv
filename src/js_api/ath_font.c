@@ -10,12 +10,10 @@
 #include <ath_env.h>
 
 enum {
-    osdsys_font,
     image_font,
     truetype_font
 } FontTypes;
 
-bool osdsysfnt_loaded = false;
 bool truetypefnt_loaded = false;
 
 enum {
@@ -52,13 +50,8 @@ static void athena_font_dtor(JSRuntime *rt, JSValue val){
 
     if (font->type == image_font) {
 	    unloadFont(font->data);
-    } else if (font->type == truetype_font) {
-        fntRelease(font->id);
     } else {
-        if (osdsysfnt_loaded) {
-            unloadFontM();
-            osdsysfnt_loaded = false;
-        }
+        fntRelease(font->id);
     }
 
     js_free_rt(rt, font);
@@ -101,12 +94,6 @@ static JSValue athena_font_ctor(JSContext *ctx, JSValueConst new_target, int arg
         }
         
         JS_FreeCString(ctx, path);
-    } else {
-        if (!osdsysfnt_loaded) {
-            loadFontM();
-            osdsysfnt_loaded = true;
-        }
-        font->type = osdsys_font;
     }
 
     font->color = 0x80808080;
@@ -138,10 +125,8 @@ static JSValue athena_font_print(JSContext *ctx, JSValue this_val, int argc, JSV
     
     const char* text = JS_ToCString(ctx, argv[2]);
 
-    if (font->type == 1){
+    if (font->type == image_font){
 	    printFontText(font->data, text, x, y, font->scale, font->color);
-    } else if (font->type == 0){
-        printFontMText(text, x, y, font->scale, font->color);
     } else {
         fntRenderStringPlus(font->id, x, y, 0, 0, 0, text, font->scale, font->color, font->outline, font->outline_color, font->dropshadow, font->dropshadow_color);
     }
@@ -158,9 +143,9 @@ static JSValue athena_font_gettextsize(JSContext *ctx, JSValue this_val, int arg
     JSFontData *font = JS_GetOpaque2(ctx, this_val, js_font_class_id);
     const char* str = JS_ToCString(ctx, argv[0]);
 
-    if (font->type == 2) {
+    if (font->type == truetype_font) {
         size = fntGetTextSize(font->id, str);
-    } else if (font->type == 0) {
+    } else {
         size.width = strlen(str) * font->scale * 0.68f * 26.0f;
         size.height = 26.0f * font->scale;
     }
@@ -281,9 +266,9 @@ static JSValue athena_render_font(JSContext *ctx, JSValueConst this_val, int arg
             JS_ToUint32(ctx, &render_data->align, argv[1]);
         }
 
-        if (render_data->font_data->type == 2) {
+        if (render_data->font_data->type == truetype_font) {
             render_data->size = fntGetTextSize(render_data->font_data->id, render_data->text);
-        } else if (render_data->font_data->type == 0) {
+        } else if {
             render_data->size.width = strlen(render_data->text) * render_data->font_data->scale * 0.68f * 26.0f;
             render_data->size.height = 26.0f * render_data->font_data->scale;
         }
@@ -304,10 +289,8 @@ static JSValue athena_fontrender_print(JSContext *ctx, JSValue this_val, int arg
     JS_ToFloat32(ctx, &x, argv[0]);
 	JS_ToFloat32(ctx, &y, argv[1]);
 
-    if (render_data->font_data->type == 1){
+    if (render_data->font_data->type == image_font){
 	    printFontText(render_data->font_data->data, render_data->text, x, y, render_data->font_data->scale, render_data->font_data->color);
-    } else if (render_data->font_data->type == 0){
-        printFontMText(render_data->text, x, y, render_data->font_data->scale, render_data->font_data->color);
     } else {
         fntRenderString(render_data->font_data->id, x, y, 0, 0, 0, render_data->text, render_data->font_data->scale, render_data->font_data->color);
     }
