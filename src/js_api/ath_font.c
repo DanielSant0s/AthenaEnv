@@ -268,7 +268,7 @@ static JSValue athena_render_font(JSContext *ctx, JSValueConst this_val, int arg
 
         if (render_data->font_data->type == truetype_font) {
             render_data->size = fntGetTextSize(render_data->font_data->id, render_data->text);
-        } else if {
+        } else {
             render_data->size.width = strlen(render_data->text) * render_data->font_data->scale * 0.68f * 26.0f;
             render_data->size.height = 26.0f * render_data->font_data->scale;
         }
