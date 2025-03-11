@@ -1835,7 +1835,6 @@ void setVideoMode(s16 mode, int width, int height, int psm, s16 interlace, s16 f
 		gsGlobal->Width, gsGlobal->Height);
 
 	gsKit_set_clamp(gsGlobal, GS_CMODE_REPEAT);
-	gsKit_vram_clear(gsGlobal);
 
 	if (pass_count > 1) {
 		gsKit_hires_init_screen(gsGlobal, pass_count);
@@ -1891,15 +1890,12 @@ void init_graphics()
 	dmaKit_wait(DMA_CHANNEL_GIF, 0);
 	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
 
-
 	flipScreen = flipScreenDoubleBuffering;
 
 	dbgprintf("\nGraphics: created %ix%i video surface\n",
 		gsGlobal->Width, gsGlobal->Height);
 
 	gsKit_set_clamp(gsGlobal, GS_CMODE_REPEAT);
-
-	gsKit_vram_clear(gsGlobal);
 
 	gsKit_init_screen(gsGlobal);
 
