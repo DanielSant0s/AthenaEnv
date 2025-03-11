@@ -129,3 +129,15 @@ quit:
         free(duplicate);
     return 0;
 }
+
+int count_spaces(const char *str) {
+    int count = 0;
+    while (*str) {
+        if (*str == ' ') {
+            count++;
+        }
+        str++;
+    }
+    return count;
+}
+

@@ -13,10 +13,13 @@
 #include <utf8.h>
 #include <atlas.h>
 #include <graphics.h>
+#include <owl_packet.h>
 #include <dbgprintf.h>
 
 #include <sys/types.h>
 #include <ft2build.h>
+
+#include <strUtils.h>
 
 #include FT_FREETYPE_H
 
@@ -525,56 +528,34 @@ void fntSetCharSize(int fontid, int width, int height)
     FT_Set_Char_Size(fonts[fontid].face, width, height, fDPI, fDPI);
 }
 
-static void fntRenderGlyph(fnt_glyph_cache_entry_t *glyph, int pen_x, int pen_y, float scale)
+static void fntRenderGlyph(fnt_glyph_cache_entry_t *glyph, owl_packet *packet, int pen_x, int pen_y, float scale)
 {
-    // only if glyph has atlas placement
-    if (glyph->allocation) {
-        /* TODO: Ineffective on many parts:
-         * 1. Usage of floats for UV - fixed point should suffice (and is used internally by GS for UV)
-         *
-         * 2. GS_SETREG_TEX0 for every quad - why? gsKit should only set texture if demanded
-         *    We should prepare a special fnt render method that would step over most of the
-         *    performance problems under - beginning with rmSetupQuad and continuing into gsKit
-         *    - this method would handle the preparation of the quads and GS upload itself,
-         *    without the use of prim_quad_texture and rmSetupQuad...
-         */
-        quad.ul.x = pen_x + glyph->ox*scale;
-        if (GetInterlacedFrameMode() == 0)
-            quad.ul.y = (pen_y + (glyph->oy)*scale); 
-        else
-            quad.ul.y = ((float)pen_y + ((float)glyph->oy / 2.0f)*scale)-1.0f;
-        quad.ul.u = glyph->allocation->x;
-        quad.ul.v = glyph->allocation->y;
+    quad.ul.x = pen_x + glyph->ox*scale;
+    if (GetInterlacedFrameMode() == 0)
+        quad.ul.y = (pen_y + (glyph->oy)*scale); 
+    else
+        quad.ul.y = ((float)pen_y + ((float)glyph->oy / 2.0f)*scale)-1.0f;
+    quad.ul.u = glyph->allocation->x;
+    quad.ul.v = glyph->allocation->y;
 
-        quad.br.x = quad.ul.x + (glyph->width*scale);
-        if (GetInterlacedFrameMode() == 0)
-            quad.br.y = (quad.ul.y + (glyph->height*scale));
-        else
-            quad.br.y = (quad.ul.y + (((float)glyph->height / 2.0f)*scale));
-        quad.br.u = quad.ul.u + glyph->width + 1.0f;
-        quad.br.v = quad.ul.v + glyph->height + 1.0f;
+    quad.br.x = quad.ul.x + (glyph->width*scale);
+    if (GetInterlacedFrameMode() == 0)
+        quad.br.y = (quad.ul.y + (glyph->height*scale));
+    else
+        quad.br.y = (quad.ul.y + (((float)glyph->height / 2.0f)*scale));
+    quad.br.u = quad.ul.u + glyph->width + 1.0f;
+    quad.br.v = quad.ul.v + glyph->height + 1.0f;
 
-        quad.txt = &glyph->atlas->surface;
+    quad.txt = &glyph->atlas->surface;
 
-        fntDrawQuad(&quad);
+	owl_add_tag(packet, 0, GS_SETREG_STQ( (int)(quad.ul.u) << 4, (int)(quad.ul.v) << 4 ));
 
-    }
+	owl_add_tag(packet, 1, (uint64_t)((int)gsGlobal->OffsetX+((int)(quad.ul.x) << 4)) | ((uint64_t)((int)gsGlobal->OffsetY+((int)(quad.ul.y) << 4)) << 32));
+	
+	owl_add_tag(packet, 0, GS_SETREG_STQ( (int)(quad.br.u) << 4, (int)(quad.br.v) << 4 ));
+
+	owl_add_tag(packet, 1, (uint64_t)((int)gsGlobal->OffsetX+((int)(quad.br.x) << 4)) | ((uint64_t)((int)gsGlobal->OffsetY+((int)(quad.br.y) << 4)) << 32));
 }
-
-int fntRenderStringPlus(int id, int x, int y, short aligned, size_t width, size_t height, const char *string, float scale, u64 colour, float outline, u64 outline_colour, float dropshadow, u64 dropshadow_colour) {
-    if (outline) {
-        float offsets[][2] = { {outline, outline}, {outline, -outline}, {-outline, outline}, {-outline, -outline} };
-
-	    for(int i = 0; i < 4; i++){
-            fntRenderString(id, x+offsets[i][0], y+offsets[i][1], aligned, width, height, string, scale, outline_colour);
-	    }
-    } else if (dropshadow) {
-        fntRenderString(id, x+dropshadow, y+dropshadow, aligned, width, height, string, scale, dropshadow_colour);
-    }
-
-    fntRenderString(id, x, y, aligned, width, height, string, scale, colour);
-}
-
 
 #ifndef __RTL
 int fntRenderString(int id, int x, int y, short aligned, size_t width, size_t height, const char *string, float scale, u64 colour)
@@ -616,8 +597,17 @@ int fntRenderString(int id, int x, int y, short aligned, size_t width, size_t he
     // because that'll make the code run only once per N frames, not every frame
 
     // cache glyphs and render as we go
-    for (; *string; ++string) {
-        if (utf8Decode(&state, &codepoint, *string)) // accumulate the codepoint value
+
+    owl_packet *packet = NULL;
+
+    GSTEXTURE *tex = NULL;
+
+    const char *text_to_render = string;
+
+    int text_size = 0;
+
+    for (; *text_to_render; ++text_to_render) {
+        if (utf8Decode(&state, &codepoint, *text_to_render)) // accumulate the codepoint value
             continue;
 
         glyph = fntCacheGlyph(font, codepoint);
@@ -650,11 +640,97 @@ int fntRenderString(int id, int x, int y, short aligned, size_t width, size_t he
             }
         }
 
-        fntRenderGlyph(glyph, pen_x, y, scale);
+        if (glyph->allocation) {
+            if (tex != &glyph->atlas->surface) {
+                tex = &glyph->atlas->surface;
+
+                text_size = strlen(text_to_render)-count_spaces(text_to_render);
+
+                int texture_id = texture_manager_bind(gsGlobal, tex, true);
+
+	            packet = owl_query_packet(CHANNEL_VIF1, (texture_id != -1? 12 : 8)+(text_size*4));
+
+	            owl_add_cnt_tag(packet, (texture_id != -1? 11 : 7)+(text_size*4), 0); // 4 quadwords for vif
+
+	            if (texture_id != -1) {
+	            	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0)); 
+	            	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0)); 
+	            	owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSH, 0));
+	            	owl_add_uint(packet, VIF_CODE(2, 0, VIF_DIRECT, 0));
+
+	            	owl_add_tag(packet, GIF_AD, GIFTAG(1, 1, 0, 0, 0, 1));
+	            	owl_add_tag(packet, GIF_NOP, 0);
+
+	            	owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));
+	            	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+	            	owl_add_uint(packet, VIF_CODE(texture_id, 0, VIF_MARK, 0));
+	            	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 1));
+	            }
+
+	            owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+	            owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+	            owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));
+	            owl_add_uint(packet, VIF_CODE(6+(text_size*4), 0, VIF_DIRECT, 0)); // 3 giftags
+
+	            owl_add_tag(packet, GIF_AD, GIFTAG(4, 1, 0, 0, 0, 1));
+
+	            owl_add_tag(packet, GS_TEST_1, GS_SETREG_TEST_1(0, 0, 0, 0, 0, 0, 1, 1));
+
+	            int tw, th;
+	            athena_set_tw_th(tex, &tw, &th);
+
+	            owl_add_tag(packet, 
+	            	GS_TEX0_1, 
+	            	GS_SETREG_TEX0((tex->Vram & ~TRANSFER_REQUEST_MASK)/256, 
+	            				  tex->TBW, 
+	            				  tex->PSM,
+	            				  tw, th, 
+	            				  gsGlobal->PrimAlphaEnable, 
+	            				  COLOR_MODULATE,
+	            				  (tex->VramClut & ~TRANSFER_REQUEST_MASK)/256, 
+	            				  tex->ClutPSM, 
+	            				  0, 0, 
+	            				  tex->VramClut? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD)
+	            );
+
+	            owl_add_tag(packet, GS_TEX1_1, GS_SETREG_TEX1(1, 0, tex->Filter, tex->Filter, 0, 0, 0));
+
+                owl_add_tag(packet, GS_RGBAQ, colour);
+
+	            owl_add_tag(packet, 
+					   ((uint64_t)(GS_UV) << 0 | (uint64_t)(GS_XYZ2) << 4 | (uint64_t)(GS_UV) << 8 | (uint64_t)(GS_XYZ2) << 12), 
+					   	VU_GS_GIFTAG(text_size, 
+							1, NO_CUSTOM_DATA, 1, 
+							VU_GS_PRIM(GS_PRIM_PRIM_SPRITE, 
+									   0, 1, 
+									   gsGlobal->PrimFogEnable, 
+									   gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 1, gsGlobal->PrimContext, 0),
+    						0, 4)
+						);
+            }
+
+            fntRenderGlyph(glyph, packet, pen_x, y, scale);
+        }
+
         pen_x += ((int)(glyph->shx*scale) >> 6);
     }
 
     return pen_x;
+}
+
+
+int fntRenderStringPlus(int id, int x, int y, short aligned, size_t width, size_t height, const char *string, float scale, u64 colour, float outline, u64 outline_colour, float dropshadow, u64 dropshadow_colour) {
+    if (outline) {
+        float offsets[][2] = { {outline, outline}, {outline, -outline}, {-outline, outline}, {-outline, -outline} };
+
+	    for(int i = 0; i < 4; i++){
+            fntRenderString(id, x+offsets[i][0], y+offsets[i][1], aligned, width, height, string, scale, outline_colour);
+	    }
+    } else if (dropshadow) {
+        fntRenderString(id, x+dropshadow, y+dropshadow, aligned, width, height, string, scale, dropshadow_colour);
+    }
+
+    fntRenderString(id, x, y, aligned, width, height, string, scale, colour);
 }
 
 Coords fntGetTextSize(int id, const char* text) {

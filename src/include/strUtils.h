@@ -21,6 +21,8 @@ char* s_sprintf(const char* format, ...);
 
 char* strpre(const char *pre, const char *str);
 
+int count_spaces(const char *str);
+
 #ifdef __cplusplus
 }
 #endif
