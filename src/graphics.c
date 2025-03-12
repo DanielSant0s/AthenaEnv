@@ -69,8 +69,23 @@ void page_clear(Color color) {
 	{
 		for (int j = 0; j < gsGlobal->Height; j += 32)
 		{
-			owl_add_tag(packet, GS_XYZ2, GS_SETREG_XYZ(i << 4, j << 4, 0));
-			owl_add_tag(packet, GS_XYZ2, GS_SETREG_XYZ((i + 64) << 4, (j + 32) << 4, 0));
+			asm volatile ( 	
+				"psllh  $7, %2,  4    \n"
+    		    "pcpyld $7, %1, $7    \n"
+				"sq    $7,0x00(%0)    \n"
+
+				"li     $8, 0x200000  \n" // page height (32)
+				"ori    $8,$8,0x40    \n" // page width  (64)
+				"psllh  $8, $8,  4    \n"
+
+				"paddw  $7, $7, $8    \n"
+				"sq     $7,0x10(%0)    \n"
+				 : : "r" (packet->ptr), "r" (GS_XYZ2), "r" (GS_SETREG_XYZ(i, j, 0)):"$7", "$8", "memory");
+
+				packet->ptr += 2;
+
+			//owl_add_tag(packet, GS_XYZ2, GS_SETREG_XYZ(i << 4, j << 4, 0));
+			//owl_add_tag(packet, GS_XYZ2, GS_SETREG_XYZ((i + 64) << 4, (j + 32) << 4, 0));
 		}
 	}
 
@@ -112,7 +127,7 @@ GSFONT* loadFont(const char* path){
 }
 
 void printFontText(GSFONT* font, const char* text, float x, float y, float scale, Color color)
-{
+{ 
 	gsKit_set_test(gsGlobal, GS_ATEST_ON);
 	gsKit_font_print_scaled(gsGlobal, font, x-0.5f, y-0.5f, 1, scale, color, text);
 }
@@ -203,13 +218,14 @@ void drawImage(GSTEXTURE* source, float x, float y, float width, float height, f
 
 	owl_add_tag(packet, (uint64_t)((B(color)) | ((uint64_t)(A(color)) << 32)), (uint64_t)((R(color)) | ((uint64_t)G(color) << 32)));
 
-	owl_add_tag(packet, 0, GS_SETREG_STQ( (int)(startx) << 4, (int)(starty) << 4 ));
-
-	owl_add_tag(packet, 1, (uint64_t)((int)gsGlobal->OffsetX+((int)(x) << 4)) | ((uint64_t)((int)gsGlobal->OffsetY+((int)(y) << 4)) << 32));
-	
-	owl_add_tag(packet, 0, GS_SETREG_STQ( (int)(endx) << 4, (int)(endy) << 4 ));
-
-	owl_add_tag(packet, 1, (uint64_t)((int)gsGlobal->OffsetX+((int)(width+x) << 4)) | ((uint64_t)((int)gsGlobal->OffsetY+((int)(height+y) << 4)) << 32));
+    owl_add_xy_uv_2x(packet, x, 
+                             y, 
+                             startx, 
+                             starty, 
+                             width+x, 
+                             height+y, 
+                             endx, 
+                             endy);
 }
 
 
@@ -326,9 +342,9 @@ void drawPixel(float x, float y, Color color)
 						);
 
 	owl_add_tag(packet, (uint64_t)((B(color)) | ((uint64_t)(A(color)) << 32)), (uint64_t)((R(color)) | ((uint64_t)G(color) << 32)));
-
+ 
 	owl_add_tag(packet, 1, (uint64_t)((int)gsGlobal->OffsetX+((int)(x) << 4)) | ((uint64_t)((int)gsGlobal->OffsetY+((int)(y) << 4)) << 32));
-}
+} 
 
 void drawLine(float x, float y, float x2, float y2, Color color)
 {
@@ -573,8 +589,8 @@ void drawCircle(float x, float y, float radius, u64 color, u8 filled)
 						);
 
 	for (int a = 0; a < 36; a++) {
-		owl_add_tag(packet, 1, (uint64_t)((int)gsGlobal->OffsetX+((int)((cosf(a * (M_PI*2)/36) * radius) + x) << 4)) | 
-							  ((uint64_t)((int)gsGlobal->OffsetY+((int)((sinf(a * (M_PI*2)/36) * radius) + y) << 4)) << 32));
+		owl_add_tag(packet, 1, (uint64_t)((int)gsGlobal->OffsetX+((int)((athena_cosf(a * (M_PI*2)/36) * radius) + x) << 4)) | 
+							  ((uint64_t)((int)gsGlobal->OffsetY+((int)((athena_sinf(a * (M_PI*2)/36) * radius) + y) << 4)) << 32));
 	}
 
 	if (!filled) {

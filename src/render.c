@@ -420,11 +420,15 @@ void append_texture_tags(owl_packet* packet, GSTEXTURE *texture, int texture_id,
 void draw_vu1_with_colors(athena_object_data *obj) {
 	MATRIX local_world;
 
-	if (obj->data->attributes.accurate_clipping)
-		update_vu_program(VU1Draw3DCS);
-	else
-		update_vu_program(VU1Draw3DColors);
+	int batch_size = BATCH_SIZE;
 
+	if (obj->data->attributes.accurate_clipping) {
+		update_vu_program(VU1Draw3DCS);
+	} else {
+		update_vu_program(VU1Draw3DColors);
+		batch_size = BATCH_SIZE_NO_CLIPPING;
+	}
+		
 	gsGlobal->PrimAAEnable = GS_SETTING_ON;
 
 
@@ -465,10 +469,10 @@ void draw_vu1_with_colors(athena_object_data *obj) {
 		int idxs_drawn = 0;
 
 		while (idxs_to_draw > 0) {
-			owl_query_packet(CHANNEL_VIF1, texture_mapping? 18 : 8);
+			owl_query_packet(CHANNEL_VIF1, texture_mapping? 18 : 8);    
 
-			int count = BATCH_SIZE;
-			if (idxs_to_draw < BATCH_SIZE)
+			int count = batch_size;
+			if (idxs_to_draw < batch_size)
 			{
 				count = idxs_to_draw;
 			}
@@ -531,10 +535,14 @@ void draw_vu1_with_colors(athena_object_data *obj) {
 }
 
 void draw_vu1_with_lights(athena_object_data *obj) {
-	if (obj->data->attributes.accurate_clipping)
+	int batch_size = BATCH_SIZE;
+
+	if (obj->data->attributes.accurate_clipping) {
 		update_vu_program(VU1Draw3DLCS);
-	else
+	} else {
 		update_vu_program(VU1Draw3DLightsColors);
+		batch_size = BATCH_SIZE_NO_CLIPPING;
+	}
 		
 	gsGlobal->PrimAAEnable = GS_SETTING_ON;
 
@@ -603,8 +611,8 @@ void draw_vu1_with_lights(athena_object_data *obj) {
 		while (idxs_to_draw > 0) {
 			owl_query_packet(CHANNEL_VIF1, texture_mapping? 18 : 8);
 
-			int count = BATCH_SIZE;
-			if (idxs_to_draw < BATCH_SIZE)
+			int count = batch_size;
+			if (idxs_to_draw < batch_size)
 			{
 				count = idxs_to_draw;
 			}
@@ -671,10 +679,14 @@ void draw_vu1_with_lights(athena_object_data *obj) {
 }
 
 void draw_vu1_with_spec_lights(athena_object_data *obj) {
-	if (obj->data->attributes.accurate_clipping)
+	int batch_size = BATCH_SIZE;
+
+	if (obj->data->attributes.accurate_clipping) {
 		update_vu_program(VU1Draw3DLCSS);
-	else
+	} else {
 		update_vu_program(VU1Draw3DSpec);
+		batch_size = BATCH_SIZE_NO_CLIPPING;
+	}
 
 	gsGlobal->PrimAAEnable = GS_SETTING_ON;
 
@@ -745,8 +757,8 @@ void draw_vu1_with_spec_lights(athena_object_data *obj) {
 		while (idxs_to_draw > 0) {
 			owl_query_packet(CHANNEL_VIF1, texture_mapping? 18 : 8);
 
-			int count = BATCH_SIZE;
-			if (idxs_to_draw < BATCH_SIZE)
+			int count = batch_size;
+			if (idxs_to_draw < batch_size)
 			{
 				count = idxs_to_draw;
 			}

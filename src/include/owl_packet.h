@@ -175,4 +175,32 @@ inline void unpack_list_close(owl_packet *packet) {
     packet->list.top = false;
 }
 
+// Too much specific stuff
+
+inline void owl_add_xy_uv_2x(owl_packet *packet, int x1, int y1, int u1, int v1, int x2, int y2, int u2, int v2) {
+	asm volatile ( 	
+        "psllw $7, %1, 4   \n"
+		"sq    $7,0x0(%0) \n"
+		 : : "r" (packet->ptr), "r" (GS_SETREG_STQ( u1, v1 )):"$7","memory");
+
+	asm volatile ( 	
+        "psllw $7, %1, 4      \n"
+        "paddw $7, $7, %2     \n"
+		"sq    $7,0x10(%0)     \n"
+		 : : "r" (packet->ptr), "r" ((uint64_t)(x1) | ((uint64_t)(y1) << 32)), "r" ((uint64_t)(0x8000) | ((uint64_t)(0x8000) << 32)):"$7", "$8", "memory");
+	
+	asm volatile ( 	
+        "psllw $7, %1, 4   \n"
+		"sq    $7,0x20(%0) \n"
+		 : : "r" (packet->ptr), "r" (GS_SETREG_STQ( u2, v2 )):"$7","memory");
+
+	asm volatile ( 	
+        "psllw $7, %1, 4      \n"
+        "paddw $7, $7, %2     \n"
+		"sq    $7,0x30(%0)     \n"
+		 : : "r" (packet->ptr), "r" ((uint64_t)(x2) | ((uint64_t)(y2) << 32)), "r" ((uint64_t)(0x8000) | ((uint64_t)(0x8000) << 32)):"$7", "$8", "memory");
+
+	packet->ptr += 4;
+}
+
 #endif

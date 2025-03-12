@@ -85,7 +85,6 @@ typedef struct
 /// Array of font definitions
 static font_t fonts[FNT_MAX_COUNT];
 
-static rm_quad_t quad;
 static uint32_t codepoint, state;
 static fnt_glyph_cache_entry_t *glyph;
 static FT_Bool use_kerning;
@@ -528,33 +527,22 @@ void fntSetCharSize(int fontid, int width, int height)
     FT_Set_Char_Size(fonts[fontid].face, width, height, fDPI, fDPI);
 }
 
-static void fntRenderGlyph(fnt_glyph_cache_entry_t *glyph, owl_packet *packet, int pen_x, int pen_y, float scale)
+inline void fntRenderGlyph(fnt_glyph_cache_entry_t *glyph, owl_packet *packet, int pen_x, int pen_y, float scale)
 {
-    quad.ul.x = pen_x + glyph->ox*scale;
-    if (GetInterlacedFrameMode() == 0)
-        quad.ul.y = (pen_y + (glyph->oy)*scale); 
-    else
-        quad.ul.y = ((float)pen_y + ((float)glyph->oy / 2.0f)*scale)-1.0f;
-    quad.ul.u = glyph->allocation->x;
-    quad.ul.v = glyph->allocation->y;
+    int y1, y2;
 
-    quad.br.x = quad.ul.x + (glyph->width*scale);
-    if (GetInterlacedFrameMode() == 0)
-        quad.br.y = (quad.ul.y + (glyph->height*scale));
-    else
-        quad.br.y = (quad.ul.y + (((float)glyph->height / 2.0f)*scale));
-    quad.br.u = quad.ul.u + glyph->width + 1.0f;
-    quad.br.v = quad.ul.v + glyph->height + 1.0f;
+    y1 = GetInterlacedFrameMode() ? ((float)pen_y + ((float)glyph->oy / 2.0f)*scale) : (pen_y + (glyph->oy)*scale);
 
-    quad.txt = &glyph->atlas->surface;
+    y2 = GetInterlacedFrameMode() ? (y1 + (((float)glyph->height / 2.0f)*scale)) : (y1 + (glyph->height*scale));
 
-	owl_add_tag(packet, 0, GS_SETREG_STQ( (int)(quad.ul.u) << 4, (int)(quad.ul.v) << 4 ));
-
-	owl_add_tag(packet, 1, (uint64_t)((int)gsGlobal->OffsetX+((int)(quad.ul.x) << 4)) | ((uint64_t)((int)gsGlobal->OffsetY+((int)(quad.ul.y) << 4)) << 32));
-	
-	owl_add_tag(packet, 0, GS_SETREG_STQ( (int)(quad.br.u) << 4, (int)(quad.br.v) << 4 ));
-
-	owl_add_tag(packet, 1, (uint64_t)((int)gsGlobal->OffsetX+((int)(quad.br.x) << 4)) | ((uint64_t)((int)gsGlobal->OffsetY+((int)(quad.br.y) << 4)) << 32));
+    owl_add_xy_uv_2x(packet, (pen_x + glyph->ox*scale), 
+                             y1, 
+                             glyph->allocation->x, 
+                             glyph->allocation->y, 
+                             (pen_x + glyph->ox*scale) + (glyph->width*scale), 
+                             y2, 
+                             (glyph->allocation->x + glyph->width + 1.0f), 
+                             (glyph->allocation->y + glyph->height + 1.0f));
 }
 
 #ifndef __RTL
@@ -578,8 +566,6 @@ int fntRenderString(int id, int x, int y, short aligned, size_t width, size_t he
     } else {
         y += ((int)(FNTSYS_CHAR_SIZE) - 2);
     }
-
-    quad.color = colour;
 
     int pen_x = x;
     int xmax = x + width;
@@ -717,7 +703,7 @@ int fntRenderString(int id, int x, int y, short aligned, size_t width, size_t he
 
     return pen_x;
 }
-
+ 
 
 int fntRenderStringPlus(int id, int x, int y, short aligned, size_t width, size_t height, const char *string, float scale, u64 colour, float outline, u64 outline_colour, float dropshadow, u64 dropshadow_colour) {
     if (outline) {
@@ -738,7 +724,7 @@ Coords fntGetTextSize(int id, const char* text) {
     font_t *font = &fonts[id];
     SignalSema(gFontSemaId);
 
-	int num_chars = strlen(text);
+	int num_chars = strlen(text);  
 	FT_GlyphSlot slot = font->face->glyph;
     int width = 0;
     int height = num_chars > 0? FNTSYS_CHAR_SIZE : 0;
