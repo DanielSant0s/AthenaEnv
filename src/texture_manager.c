@@ -39,7 +39,7 @@ struct SVramBlock {
 static struct SVramBlock * __head = NULL;
 static int texture_upload_callback_id = -1;
 
-#define TEXTURE_UPLOAD_QUEUE_SIZE 4096
+#define TEXTURE_UPLOAD_QUEUE_SIZE 2048
 
 #define MAX_TEXTURE_PACKET_SIZE 640
 

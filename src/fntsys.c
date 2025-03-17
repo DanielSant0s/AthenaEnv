@@ -752,29 +752,37 @@ int fntRenderStringPlus(int id, int x, int y, short aligned, size_t width, size_
     fntRenderString(id, x, y, aligned, width, height, string, scale, colour);
 }
 
-Coords fntGetTextSize(int id, const char* text) {
+Coords fntGetTextSize(int id, const char* text, float scale) {
     WaitSema(gFontSemaId);
     font_t *font = &fonts[id];
     SignalSema(gFontSemaId);
 
-	int num_chars = strlen(text);  
-	FT_GlyphSlot slot = font->face->glyph;
     int width = 0;
-    int height = num_chars > 0? FNTSYS_CHAR_SIZE : 0;
-    int maxHeight = 0;
-	for (int n = 0; n < num_chars; n++) {
-		FT_UInt glyph_index = FT_Get_Char_Index(font->face, text[n]);
-		int error = FT_Load_Glyph(font->face, glyph_index, FT_LOAD_DEFAULT );
-		if (error) continue;
-		error = FT_Render_Glyph(font->face->glyph, ft_render_mode_normal );
-		if (error) continue;
-		if (slot->bitmap.rows > maxHeight) maxHeight = slot->bitmap.rows;
-		width += slot->advance.x >> 6; 
-	}
+
+    for (; *text; ++text) {
+        if (utf8Decode(&state, &codepoint, *text)) // accumulate the codepoint value
+            continue;
+
+        fnt_glyph_cache_entry_t *glyph = fntCacheGlyph(font, codepoint);
+        if (!glyph)
+            continue;
+
+        // kerning
+        if (use_kerning && previous) {
+            glyph_index = FT_Get_Char_Index(font->face, codepoint);
+            if (glyph_index) {
+                FT_Get_Kerning(font->face, previous, glyph_index, FT_KERNING_DEFAULT, &delta);
+                width += delta.x >> 6;
+            }
+            previous = glyph_index;
+        }
+
+        width += ((int)(glyph->shx*scale) >> 6); 
+    }
 
     Coords size;
     size.width = width;
-    size.height = FNTSYS_CHAR_SIZE;
+    size.height = FNTSYS_CHAR_SIZE*scale;
 	
 	return size;
 }
