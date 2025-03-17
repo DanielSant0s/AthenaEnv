@@ -61,7 +61,7 @@ typedef struct {
     owl_qword *ptr;
     bool unpack_opened; // true when under a unpack list
     unpack_list list;
-} owl_packet __attribute__((aligned(128)));
+} owl_packet __attribute__((aligned(16)));
 
 void owl_init(void *ptr, size_t size);
 
@@ -69,7 +69,7 @@ void owl_init(void *ptr, size_t size);
 
 owl_packet *owl_create_packet(owl_channel channel, size_t size, void* buf);
 
-void owl_send_packet(owl_packet *packet, bool free_packet);
+void owl_send_packet(owl_packet *packet);
 
 // do a packet request from main packet buffer
 owl_packet *owl_query_packet(owl_channel channel, size_t size);
@@ -140,8 +140,8 @@ inline void owl_add_unpack_data(owl_packet *packet, uint32_t t_dest_address, voi
 #define owl_add_cnt_tag(packet, count, upper) \
     owl_add_tag(packet, upper, DMA_TAG(count, 0, DMA_CNT, 0, 0, 0))
 
-#define owl_add_end_tag(packet) \
-    owl_add_tag(packet, (VIF_CODE(0, 0, VIF_NOP, 0) | (uint64_t)VIF_CODE(0, 0, VIF_NOP, 0) << 32), DMA_TAG(0, 0, DMA_END, 0, 0 , 0))
+#define owl_add_end_tag(packet, count) \
+    owl_add_tag(packet, 0, DMA_TAG(count, 0, DMA_END, 0, 0 , 0))
 
 #define owl_add_start_program(packet, init) \
     owl_add_tag(packet, ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (uint64_t)VIF_CODE(0, 0, (init? VIF_MSCALF : VIF_MSCNT), 0) << 32)), DMA_TAG(0, 0, DMA_CNT, 0, 0, 0))
@@ -181,26 +181,36 @@ inline void owl_add_xy_uv_2x(owl_packet *packet, int x1, int y1, int u1, int v1,
 	asm volatile ( 	
         "psllw $7, %1, 4   \n"
 		"sq    $7,0x0(%0) \n"
-		 : : "r" (packet->ptr), "r" (GS_SETREG_STQ( u1, v1 )):"$7","memory");
+		 : : "r" (packet->ptr), "r" ((uint64_t)(u1) | ((uint64_t)(v1) << 32)):"$7","memory");
 
 	asm volatile ( 	
         "psllw $7, %1, 4      \n"
         "paddw $7, $7, %2     \n"
 		"sq    $7,0x10(%0)     \n"
-		 : : "r" (packet->ptr), "r" ((uint64_t)(x1) | ((uint64_t)(y1) << 32)), "r" ((uint64_t)(0x8000) | ((uint64_t)(0x8000) << 32)):"$7", "$8", "memory");
+		 : : "r" (packet->ptr), "r" ((uint64_t)(x1) | ((uint64_t)(y1) << 32)), "r" ((uint64_t)(0x8000) | ((uint64_t)(0x8000) << 32)):"$7", "memory");
 	
 	asm volatile ( 	
         "psllw $7, %1, 4   \n"
 		"sq    $7,0x20(%0) \n"
-		 : : "r" (packet->ptr), "r" (GS_SETREG_STQ( u2, v2 )):"$7","memory");
+		 : : "r" (packet->ptr), "r" ((uint64_t)(u2) | ((uint64_t)(v2) << 32)):"$7","memory");
 
 	asm volatile ( 	
         "psllw $7, %1, 4      \n"
         "paddw $7, $7, %2     \n"
 		"sq    $7,0x30(%0)     \n"
-		 : : "r" (packet->ptr), "r" ((uint64_t)(x2) | ((uint64_t)(y2) << 32)), "r" ((uint64_t)(0x8000) | ((uint64_t)(0x8000) << 32)):"$7", "$8", "memory");
+		 : : "r" (packet->ptr), "r" ((uint64_t)(x2) | ((uint64_t)(y2) << 32)), "r" ((uint64_t)(0x8000) | ((uint64_t)(0x8000) << 32)):"$7", "memory");
 
 	packet->ptr += 4;
+}
+
+inline void owl_add_color(owl_packet *packet, uint64_t color) {
+            asm volatile ( 	
+                "pextlb $7, $0, %1      \n" //extend to 16bit wide channel
+                "pextlh $7, $0, $7      \n" //extend to 32bit wide channel
+		        "sq    $7,0x00(%0)      \n"
+		         : : "r" (packet->ptr), "r" (color):"$7", "memory");
+
+            packet->ptr++;
 }
 
 #endif

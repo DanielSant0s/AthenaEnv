@@ -105,6 +105,8 @@ static FT_Vector delta;
 #define ALIGN_CENTER  (ALIGN_VCENTER | ALIGN_HCENTER)
 
 
+static fnt_glyph_cache_entry_t *fntCacheGlyph(font_t *font, uint32_t gid);
+
 // a simple maximum of two
 int max(int a, int b)
 {
@@ -183,6 +185,11 @@ static void fntCacheFlush(font_t *font)
     for (aid = 0; aid < ATLAS_MAX; ++aid) {
         atlasFree(font->atlases[aid]);
         font->atlases[aid] = NULL;
+    }
+
+    for (char c = 32; c <= 126; ++c) {
+        utf8Decode(&state, &codepoint, c);
+        fntCacheGlyph(font, codepoint); // Preload all visible glyphs
     }
 }
 
@@ -527,7 +534,7 @@ void fntSetCharSize(int fontid, int width, int height)
     FT_Set_Char_Size(fonts[fontid].face, width, height, fDPI, fDPI);
 }
 
-inline void fntRenderGlyph(fnt_glyph_cache_entry_t *glyph, owl_packet *packet, int pen_x, int pen_y, float scale)
+void fntRenderGlyph(fnt_glyph_cache_entry_t *glyph, owl_packet *packet, int pen_x, int pen_y, float scale)
 {
     int y1, y2;
 
@@ -590,7 +597,9 @@ int fntRenderString(int id, int x, int y, short aligned, size_t width, size_t he
 
     const char *text_to_render = string;
 
-    int text_size = 0;
+    owl_qword *last_cnt, *last_direct, *last_prim, *before_first_draw, *after_draw;
+
+    int text_size = 0, texture_id, last_texture_id;
 
     for (; *text_to_render; ++text_to_render) {
         if (utf8Decode(&state, &codepoint, *text_to_render)) // accumulate the codepoint value
@@ -627,15 +636,33 @@ int fntRenderString(int id, int x, int y, short aligned, size_t width, size_t he
         }
 
         if (glyph->allocation) {
-            if (tex != &glyph->atlas->surface) {
+            if (tex != &glyph->atlas->surface || !glyph->atlas->surface.Vram) {
                 tex = &glyph->atlas->surface;
+                
+                if (text_to_render != string) {
+                    int last_size = (((uint32_t)after_draw)-((uint32_t)before_first_draw))/16;
+
+                    last_cnt->dword[0] = DMA_TAG((texture_id != -1? 11 : 7)+last_size, 0, DMA_CNT, 0, 0, 0);
+            
+                    last_direct->sword[3] = VIF_CODE(6+last_size, 0, VIF_DIRECT, 0);
+
+                    last_prim->dword[0] = VU_GS_GIFTAG(last_size/4, 
+				                            			1, NO_CUSTOM_DATA, 1, 
+				                            			VU_GS_PRIM(GS_PRIM_PRIM_SPRITE, 
+				                            					   0, 1, 
+				                            					   gsGlobal->PrimFogEnable, 
+				                            					   gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 1, gsGlobal->PrimContext, 0),
+    			                            			0, 4);
+
+                }
 
                 text_size = strlen(text_to_render)-count_spaces(text_to_render);
 
-                int texture_id = texture_manager_bind(gsGlobal, tex, true);
+                texture_id = texture_manager_bind(gsGlobal, tex, true);
 
 	            packet = owl_query_packet(CHANNEL_VIF1, (texture_id != -1? 12 : 8)+(text_size*4));
 
+                last_cnt = packet->ptr;
 	            owl_add_cnt_tag(packet, (texture_id != -1? 11 : 7)+(text_size*4), 0); // 4 quadwords for vif
 
 	            if (texture_id != -1) {
@@ -648,11 +675,12 @@ int fntRenderString(int id, int x, int y, short aligned, size_t width, size_t he
 	            	owl_add_tag(packet, GIF_NOP, 0);
 
 	            	owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));
-	            	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+	            	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0)); 
 	            	owl_add_uint(packet, VIF_CODE(texture_id, 0, VIF_MARK, 0));
 	            	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 1));
 	            }
 
+                last_direct = packet->ptr;
 	            owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
 	            owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
 	            owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));
@@ -683,6 +711,7 @@ int fntRenderString(int id, int x, int y, short aligned, size_t width, size_t he
 
                 owl_add_tag(packet, GS_RGBAQ, colour);
 
+                last_prim = packet->ptr; 
 	            owl_add_tag(packet, 
 					   ((uint64_t)(GS_UV) << 0 | (uint64_t)(GS_XYZ2) << 4 | (uint64_t)(GS_UV) << 8 | (uint64_t)(GS_XYZ2) << 12), 
 					   	VU_GS_GIFTAG(text_size, 
@@ -693,9 +722,13 @@ int fntRenderString(int id, int x, int y, short aligned, size_t width, size_t he
 									   gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 1, gsGlobal->PrimContext, 0),
     						0, 4)
 						);
-            }
+
+                before_first_draw = packet->ptr;
+            }                 
 
             fntRenderGlyph(glyph, packet, pen_x, y, scale);
+            
+            after_draw = packet->ptr;
         }
 
         pen_x += ((int)(glyph->shx*scale) >> 6);
@@ -706,13 +739,13 @@ int fntRenderString(int id, int x, int y, short aligned, size_t width, size_t he
  
 
 int fntRenderStringPlus(int id, int x, int y, short aligned, size_t width, size_t height, const char *string, float scale, u64 colour, float outline, u64 outline_colour, float dropshadow, u64 dropshadow_colour) {
-    if (outline) {
+    if (outline > 0.0f) {
         float offsets[][2] = { {outline, outline}, {outline, -outline}, {-outline, outline}, {-outline, -outline} };
 
 	    for(int i = 0; i < 4; i++){
             fntRenderString(id, x+offsets[i][0], y+offsets[i][1], aligned, width, height, string, scale, outline_colour);
 	    }
-    } else if (dropshadow) {
+    } else if (dropshadow > 0.0f) {
         fntRenderString(id, x+dropshadow, y+dropshadow, aligned, width, height, string, scale, dropshadow_colour);
     }
 

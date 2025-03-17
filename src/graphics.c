@@ -38,7 +38,7 @@ static int frame_interval = -1;
 
 #define OWL_PACKET_BUFFER_SIZE 1024 * 256
 
-static uint8_t owl_packet_buffer[OWL_PACKET_BUFFER_SIZE] __attribute__((aligned(128)));
+static uint8_t owl_packet_buffer[OWL_PACKET_BUFFER_SIZE] __attribute__((aligned(16))) = { 0 };
 
 void page_clear(Color color) {
 	const uint32_t page_count = gsGlobal->Width * (gsGlobal->Height) / 2048;
@@ -1121,14 +1121,12 @@ void init_graphics()
 
 	gsKit_mode_switch(gsGlobal, GS_ONESHOT);
 
-    gsKit_clear(gsGlobal, BLACK_RGBAQ);	
-	gsKit_vsync_wait();
-	flipScreen();
-	gsKit_clear(gsGlobal, BLACK_RGBAQ);	
-	gsKit_vsync_wait();
-	flipScreen();
-
 	owl_init(owl_packet_buffer, OWL_PACKET_BUFFER_SIZE/sizeof(owl_qword));
+
+	for (int i = 0; i < 2; i++) {
+    	clearScreen(BLACK_RGBAQ);	
+		flipScreen();
+	}
 }
 
 void graphicWaitVblankStart(){

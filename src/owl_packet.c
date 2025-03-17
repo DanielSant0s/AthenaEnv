@@ -8,8 +8,10 @@ owl_packet internal_packet = { 0 };
 void owl_init(void *ptr, size_t size) {
     controller.channel = CHANNEL_SIZE;
 
-    controller.base = ptr;
-    internal_packet.ptr = ptr;
+    SyncDCache(ptr, &((owl_qword *)(ptr))[size-1]);
+
+    controller.base = (uint32_t)(ptr) | 0x30000000;
+    internal_packet.ptr = controller.base;
 
     controller.size = size/2;
     controller.alloc = 0;
@@ -22,12 +24,11 @@ void owl_flush_packet() {
         return;
     }
 
-    owl_add_end_tag(&internal_packet);
+    owl_add_end_tag(&internal_packet, 0);
 
     dmaKit_wait(controller.channel, 0);
 
-	FlushCache(0);
-	dmaKit_send_chain(controller.channel, (void *)((uint32_t)(controller.base + (controller.context? controller.size : 0)) & 0x0FFFFFFF), 0);
+	dmaKit_send_chain_ucab(controller.channel, (void *)((uint32_t)(controller.base + (controller.context? controller.size : 0))));
 
     controller.context = (!controller.context); 
 
@@ -55,33 +56,21 @@ owl_packet *owl_query_packet(owl_channel channel, size_t size) {
 owl_packet *owl_create_packet(owl_channel channel, size_t size, void* buf) {
     owl_packet *packet = (owl_packet *)buf;
 
-    if (!packet) {
-        packet = (owl_packet *)memalign(128, size);
-
-        if (!packet)
-            return NULL;
-    }
-
     packet->channel = channel;
-    packet->size = size-sizeof(owl_packet);
-    packet->base = (owl_qword *)(&packet[1]);
+    packet->size = size-(sizeof(owl_packet)/sizeof(owl_qword));
+    packet->base = (owl_qword *)(((uint32_t)(buf) + sizeof(owl_packet)) | 0x30000000);
     packet->ptr = packet->base;
+
+    SyncDCache(packet->base, packet->base+packet->size);
 
     return packet;
 }
 
-void owl_send_packet(owl_packet *packet, bool free_packet) {
-    dmaKit_wait(packet->channel, 0);
-
-	FlushCache(0);
-	dmaKit_send_chain(packet->channel, ((uint32_t)(packet->base) & 0x0FFFFFFF), 0);
+void owl_send_packet(owl_packet *packet) {
     packet->ptr = packet->base;
 
-    if (free_packet) {
-        dmaKit_wait(packet->channel, 0); // don't free a packet you don't even sent xD
-        free(packet);
-    }
-
+	//FlushCache(0);
+	dmaKit_send_chain_ucab(packet->channel, (uint32_t)(packet->base)/*, (((uint32_t)(packet->ptr)-(uint32_t)(packet->base))/sizeof(owl_qword))+1*/);
 }
 
 owl_controller *owl_get_controller() {

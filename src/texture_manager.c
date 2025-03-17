@@ -41,7 +41,7 @@ static int texture_upload_callback_id = -1;
 
 #define TEXTURE_UPLOAD_QUEUE_SIZE 4096
 
-#define MAX_TEXTURE_PACKET_SIZE 603
+#define MAX_TEXTURE_PACKET_SIZE 640
 
 static int texture_upload_queue_top = 0;
 
@@ -49,15 +49,84 @@ GSTEXTURE *texture_upload_queue[TEXTURE_UPLOAD_QUEUE_SIZE] = { NULL };
 
 owl_packet* async_upload_packet = NULL;
 
-owl_qword async_upload_packet_buffer[owl_packet_size(MAX_TEXTURE_PACKET_SIZE)] __attribute__((aligned(128)));
+owl_qword async_upload_packet_buffer[owl_packet_size(MAX_TEXTURE_PACKET_SIZE)] __attribute__((aligned(16)));
 
 uint32_t *VIF1_MARK = (uint32_t *)(0x10003C30);
 
-void texture_send(u32 *mem, int width, int height, u32 tbp, u32 psm, u32 tbw, u8 clut, owl_packet* custom_packet);
+uint32_t texture_manager_get_size(int width, int height, int psm)
+{
+	switch (psm) {
+		case GS_PSM_CT32:  return (width*height*4);
+		case GS_PSM_CT24:  return (width*height*4);
+		case GS_PSM_CT16:  return (width*height*2);
+		case GS_PSM_CT16S: return (width*height*2);
+		case GS_PSM_T8:    return (width*height  );
+		case GS_PSM_T4:    return (width*height/2);
+	}
+
+	return -1;
+}
+
+void texture_send(u32 *mem, int width, int height, u32 tbp, u32 psm, u32 tbw, u8 clut)
+{
+	//int packet_size;
+	int packets;
+	int remain;
+	int qwc;
+
+	uint32_t tex_size = texture_manager_get_size(width, height, psm);
+
+	qwc = (tex_size / 16) + (tex_size % 16? 1 : 0);
+
+	packets = qwc / GS_GIF_BLOCKSIZE;
+	remain  = qwc % GS_GIF_BLOCKSIZE;
+
+	//if(clut == GS_CLUT_TEXTURE)
+	//	packet_size = (6+(packets * 3)+remain);
+	//else
+	//	packet_size = (9+(packets * 3)+remain);
+
+	//if(remain > 0)
+	//	packet_size += 3;
+
+	owl_add_cnt_tag_fill(async_upload_packet, 5);
+
+	owl_add_tag(async_upload_packet, GIF_AD, GIFTAG(4, 0, 0, 0, 0, 1));
+
+	owl_add_tag(async_upload_packet, GS_BITBLTBUF, GS_SETREG_BITBLTBUF(0, 0, 0, tbp/256, tbw, psm));
+	owl_add_tag(async_upload_packet, GS_TRXPOS, GS_SETREG_TRXPOS(0, 0, 0, 0, 0));
+	owl_add_tag(async_upload_packet, GS_TRXREG, GS_SETREG_TRXREG(width, height));
+	owl_add_tag(async_upload_packet, GS_TRXDIR, GS_SETREG_TRXDIR(0));
+
+	while (packets-- > 0)
+	{
+		owl_add_tag(async_upload_packet, 0, DMA_TAG( 1, 0, DMA_CNT, 0, 0, 0));
+		owl_add_tag(async_upload_packet, 0, GIFTAG( GS_GIF_BLOCKSIZE, 0, 0, 0, GSKIT_GIF_FLG_IMAGE, 0 ));
+		owl_add_tag(async_upload_packet, 0, DMA_TAG( GS_GIF_BLOCKSIZE, 0, DMA_REF, 0, (u32)mem, 0 ));
+
+		mem += (GS_GIF_BLOCKSIZE * 4);
+	}
+
+	if (remain > 0) {
+		owl_add_tag(async_upload_packet, 0, DMA_TAG( 1, 0, DMA_CNT, 0, 0, 0));
+		owl_add_tag(async_upload_packet, 0, GIFTAG( remain, 0, 0, 0, GSKIT_GIF_FLG_IMAGE, 0 ));
+		owl_add_tag(async_upload_packet, 0, DMA_TAG( remain, 0, DMA_REF, 0, (u32)mem, 0 ));
+	}
+
+	//if(clut != GS_CLUT_TEXTURE)
+	//{
+	//	owl_add_end_tag(custom_packet, 2);
+	//	owl_add_tag(custom_packet, GIF_AD, GIFTAG(1, 1, 0, 0, 0, 1));
+	//	owl_add_tag(custom_packet, GS_TEXFLUSH, 0);
+	//} else {
+	//	owl_add_end_tag(custom_packet, 0);
+	//}
+}
 
 int upload_texture_handler(int cause) { 
+	DIntr();
+
 	if (cause == INTC_VIF1) {
-		int has_transfer = 0;
 		uint32_t tex_id = *VIF1_MARK;
 
 		*VIF1_MARK = VIF1_MARK_CLEAN;
@@ -66,36 +135,31 @@ int upload_texture_handler(int cause) {
 			GSTEXTURE *tex = texture_upload_queue[tex_id];
 			texture_upload_queue[tex_id] = NULL;
 
+			
+
 			if ((tex->VramClut & TRANSFER_REQUEST_MASK) == TRANSFER_REQUEST_MASK) {
-				has_transfer = 1;
 				tex->VramClut &= ~TRANSFER_REQUEST_MASK;
 
 				if (tex->PSM == GS_PSM_T8) {
-					texture_send(tex->Clut, 16, 16, tex->VramClut, tex->ClutPSM, 1, GS_CLUT_PALLETE, async_upload_packet);
+					texture_send(tex->Clut, 16, 16, tex->VramClut, tex->ClutPSM, 1, GS_CLUT_PALLETE);
 
 				} else if (tex->PSM == GS_PSM_T4) {
-					texture_send(tex->Clut, 8,  2, tex->VramClut, tex->ClutPSM, 1, GS_CLUT_PALLETE, async_upload_packet);
+					texture_send(tex->Clut, 8,  2, tex->VramClut, tex->ClutPSM, 1, GS_CLUT_PALLETE);
 				}
 			}
 
 			if ((tex->Vram & TRANSFER_REQUEST_MASK) == TRANSFER_REQUEST_MASK) {
-				has_transfer = 1;
 				tex->Vram &= ~TRANSFER_REQUEST_MASK;
 
 				gsKit_setup_tbw(tex);
-				texture_send(tex->Mem, tex->Width, tex->Height, tex->Vram, tex->PSM, tex->TBW, (tex->Clut ? GS_CLUT_TEXTURE : GS_CLUT_NONE), async_upload_packet);
+				texture_send(tex->Mem, tex->Width, tex->Height, tex->Vram, tex->PSM, tex->TBW, (tex->Clut ? GS_CLUT_TEXTURE : GS_CLUT_NONE));
 			}
 
-			int tw, th;
-			athena_set_tw_th(tex, &tw, &th);
-
-			owl_add_cnt_tag_fill(async_upload_packet, 2);
-
+			owl_add_end_tag(async_upload_packet, 2);
 			owl_add_tag(async_upload_packet, GIF_AD, GIFTAG(1, 1, 0, 0, 0, 1));
+			owl_add_tag(async_upload_packet, GS_TEXFLUSH, 0);
 
-			owl_add_tag(async_upload_packet, GIF_NOP, 0);
-
-			owl_send_packet(async_upload_packet, false);
+			owl_send_packet(async_upload_packet);
 		}
 
 		VIF1_FBRST->STC = true;
@@ -133,65 +197,7 @@ void remove_texture_upload_handler()
 	EIntr();
 }
 
-void texture_send(u32 *mem, int width, int height, u32 tbp, u32 psm, u32 tbw, u8 clut, owl_packet* custom_packet)
-{
-	u32* p_mem;
-	int packet_size;
-	int packets;
-	int remain;
-	int qwc;
 
-	qwc = gsKit_texture_size_ee(width, height, psm) / 16;
-	if( gsKit_texture_size_ee(width, height, psm) % 16 )
-	{
-		qwc++;
-	}
-
-	packets = qwc / GS_GIF_BLOCKSIZE;
-	remain  = qwc % GS_GIF_BLOCKSIZE;
-	p_mem   = (u32*)mem;
-
-	if(clut == GS_CLUT_TEXTURE)
-		packet_size = (6+(packets * 3)+remain);
-	else
-		packet_size = (9+(packets * 3)+remain);
-
-	if(remain > 0)
-		packet_size += 3;
-
-	owl_packet *packet = (custom_packet? custom_packet : owl_query_packet(CHANNEL_GIF, packet_size));
-
-	owl_add_cnt_tag_fill(packet, 5);
-
-	owl_add_tag(packet, GIF_AD, GIFTAG(4, 0, 0, 0, 0, 1));
-
-	owl_add_tag(packet, GS_BITBLTBUF, GS_SETREG_BITBLTBUF(0, 0, 0, tbp/256, tbw, psm));
-	owl_add_tag(packet, GS_TRXPOS, GS_SETREG_TRXPOS(0, 0, 0, 0, 0));
-	owl_add_tag(packet, GS_TRXREG, GS_SETREG_TRXREG(width, height));
-	owl_add_tag(packet, GS_TRXDIR, GS_SETREG_TRXDIR(0));
-
-	while (packets-- > 0)
-	{
-		owl_add_tag(packet, 0, DMA_TAG( 1, 0, DMA_CNT, 0, 0, 0));
-		owl_add_tag(packet, 0, GIFTAG( GS_GIF_BLOCKSIZE, 0, 0, 0, GSKIT_GIF_FLG_IMAGE, 0 ));
-		owl_add_tag(packet, 0, DMA_TAG( GS_GIF_BLOCKSIZE, 0, DMA_REF, 0, (u32)p_mem, 0 ));
-
-		p_mem+= (GS_GIF_BLOCKSIZE * 4);
-	}
-
-	if (remain > 0) {
-		owl_add_tag(packet, 0, DMA_TAG( 1, 0, DMA_CNT, 0, 0, 0));
-		owl_add_tag(packet, 0, GIFTAG( remain, 0, 0, 0, GSKIT_GIF_FLG_IMAGE, 0 ));
-		owl_add_tag(packet, 0, DMA_TAG( remain, 0, DMA_REF, 0, (u32)p_mem, 0 ));
-	}
-
-	if(clut != GS_CLUT_TEXTURE)
-	{
-		owl_add_cnt_tag_fill(packet, 2);
-		owl_add_tag(packet, GIF_AD, GIFTAG(1, 0, 0, 0, 0, 1));
-		owl_add_tag(packet, GS_TEXFLUSH, 0);
-	}
-}
 
 void texture_upload(GSGLOBAL *gsGlobal, GSTEXTURE *Texture)
 {
@@ -199,18 +205,18 @@ void texture_upload(GSGLOBAL *gsGlobal, GSTEXTURE *Texture)
 
 	if (Texture->PSM == GS_PSM_T8)
 	{
-		texture_send(Texture->Mem, Texture->Width, Texture->Height, Texture->Vram, Texture->PSM, Texture->TBW, GS_CLUT_TEXTURE, NULL);
-		texture_send(Texture->Clut, 16, 16, Texture->VramClut, Texture->ClutPSM, 1, GS_CLUT_PALLETE, NULL);
+		//texture_send(Texture->Mem, Texture->Width, Texture->Height, Texture->Vram, Texture->PSM, Texture->TBW, GS_CLUT_TEXTURE, NULL);
+		//texture_send(Texture->Clut, 16, 16, Texture->VramClut, Texture->ClutPSM, 1, GS_CLUT_PALLETE, NULL);
 
 	}
 	else if (Texture->PSM == GS_PSM_T4)
 	{
-		texture_send(Texture->Mem, Texture->Width, Texture->Height, Texture->Vram, Texture->PSM, Texture->TBW, GS_CLUT_TEXTURE, NULL);
-		texture_send(Texture->Clut, 8,  2, Texture->VramClut, Texture->ClutPSM, 1, GS_CLUT_PALLETE, NULL);
+		//texture_send(Texture->Mem, Texture->Width, Texture->Height, Texture->Vram, Texture->PSM, Texture->TBW, GS_CLUT_TEXTURE, NULL);
+		//texture_send(Texture->Clut, 8,  2, Texture->VramClut, Texture->ClutPSM, 1, GS_CLUT_PALLETE, NULL);
 	}
 	else
 	{
-		texture_send(Texture->Mem, Texture->Width, Texture->Height, Texture->Vram, Texture->PSM, Texture->TBW, GS_CLUT_NONE, NULL);
+		//texture_send(Texture->Mem, Texture->Width, Texture->Height, Texture->Vram, Texture->PSM, Texture->TBW, GS_CLUT_NONE, NULL);
 	}
 }
 
@@ -460,7 +466,7 @@ int texture_manager_bind(GSGLOBAL *gsGlobal, GSTEXTURE *tex, bool async)
 		if (async) {
 			tex->Vram |= TRANSFER_REQUEST_MASK;
 		} else {
-			texture_send(tex->Mem, tex->Width, tex->Height, tex->Vram, tex->PSM, tex->TBW, tex->Clut ? GS_CLUT_TEXTURE : GS_CLUT_NONE, NULL);
+			//texture_send(tex->Mem, tex->Width, tex->Height, tex->Vram, tex->PSM, tex->TBW, tex->Clut ? GS_CLUT_TEXTURE : GS_CLUT_NONE, NULL);
 		}
 
 	}
@@ -472,7 +478,7 @@ int texture_manager_bind(GSGLOBAL *gsGlobal, GSTEXTURE *tex, bool async)
 		if (async) {
 			tex->VramClut |= TRANSFER_REQUEST_MASK;
 		} else {
-			texture_send(tex->Clut, cwidth, cheight, tex->VramClut, tex->ClutPSM, 1, GS_CLUT_PALLETE, NULL);
+			//texture_send(tex->Clut, cwidth, cheight, tex->VramClut, tex->ClutPSM, 1, GS_CLUT_PALLETE, NULL);
 		}
 		
 
