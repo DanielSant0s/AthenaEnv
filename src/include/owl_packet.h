@@ -184,10 +184,23 @@ inline void owl_add_xy_uv_2x(owl_packet *packet, int x1, int y1, int u1, int v1,
 		 : : "r" (packet->ptr), "r" ((uint64_t)(u1) | ((uint64_t)(v1) << 32)):"$7","memory");
 
 	asm volatile ( 	
-        "psllw $7, %1, 4      \n"
-        "paddw $7, $7, %2     \n"
-		"sq    $7,0x10(%0)     \n"
-		 : : "r" (packet->ptr), "r" ((uint64_t)(x1) | ((uint64_t)(y1) << 32)), "r" ((uint64_t)(0x8000) | ((uint64_t)(0x8000) << 32)):"$7", "memory");
+        "li      $8, 2048     \n" // Y_OFFSET 
+        "dsll32  $8, 0        \n"
+        "ori     $8, 2048     \n" // X_OFFSET
+
+        "paddsw $7, %1, $8    \n"
+        "pmaxw  $7, $7, $0    \n"
+
+        "psllw $7, $7, 4      \n"
+        
+        "li      $9, 0xFFFE   \n" // MAX_Y_COORD
+        "dsll32  $9, 0        \n"
+        "ori     $9, 0xFFFE   \n" // MAX_X_COORD
+         
+        "pminw $7, $7, $9     \n"
+
+		"sq    $7,0x10(%0)    \n"
+		 : : "r" (packet->ptr), "r" (((union { uint32_t coors[2]; uint64_t dw; }){ .coors = {x1, y1} }).dw): "$7", "$8", "$9", "memory");
 	
 	asm volatile ( 	
         "psllw $7, %1, 4   \n"
@@ -195,22 +208,56 @@ inline void owl_add_xy_uv_2x(owl_packet *packet, int x1, int y1, int u1, int v1,
 		 : : "r" (packet->ptr), "r" ((uint64_t)(u2) | ((uint64_t)(v2) << 32)):"$7","memory");
 
 	asm volatile ( 	
-        "psllw $7, %1, 4      \n"
-        "paddw $7, $7, %2     \n"
-		"sq    $7,0x30(%0)     \n"
-		 : : "r" (packet->ptr), "r" ((uint64_t)(x2) | ((uint64_t)(y2) << 32)), "r" ((uint64_t)(0x8000) | ((uint64_t)(0x8000) << 32)):"$7", "memory");
+        "li      $8, 2048     \n" // Y_OFFSET
+        "dsll32  $8, 0        \n"
+        "ori     $8, 2048     \n" // X_OFFSET
+
+        "paddsw $7, %1, $8    \n"
+        "pmaxw  $7, $7, $0    \n"
+
+        "psllw $7, $7, 4      \n"
+        
+        "li      $9, 0xFFFE   \n" // MAX_Y_COORD
+        "dsll32  $9, 0        \n"
+        "ori     $9, 0xFFFE   \n" // MAX_X_COORD
+         
+        "pminw $7, $7, $9     \n"
+
+		"sq    $7,0x30(%0)    \n"
+		 : : "r" (packet->ptr), "r" (((union { uint32_t coors[2]; uint64_t dw; }){ .coors = {x2, y2} }).dw): "$7", "$8", "$9", "memory");
 
 	packet->ptr += 4;
 }
 
-inline void owl_add_color(owl_packet *packet, uint64_t color) {
-            asm volatile ( 	
-                "pextlb $7, $0, %1      \n" //extend to 16bit wide channel
-                "pextlh $7, $0, $7      \n" //extend to 32bit wide channel
-		        "sq    $7,0x00(%0)      \n"
-		         : : "r" (packet->ptr), "r" (color):"$7", "memory");
+inline void owl_add_xy(owl_packet *packet, int x, int y) {
+	asm volatile ( 	
+        "li      $8, 2048     \n" // Y_OFFSET
+        "dsll32  $8, 0        \n"
+        "ori     $8, 2048     \n" // X_OFFSET
 
-            packet->ptr++;
+        "paddsw $7, %1, $8    \n"
+        "pmaxw  $7, $7, $0    \n"
+
+        "psllw $7, $7, 4      \n"
+        
+        "li      $9, 0xFFFE   \n" // MAX_Y_COORD
+        "dsll32  $9, 0        \n"
+        "ori     $9, 0xFFFE   \n" // MAX_X_COORD
+         
+        "pminw $7, $7, $9     \n"
+
+		"sq    $7,0x00(%0)    \n"
+		 : : "r" (packet->ptr++), "r" (((union { uint32_t coors[2]; uint64_t dw; }){ .coors = {x, y} }).dw): "$7", "$8", "$9", "memory");
+}
+
+inline void owl_add_color(owl_packet *packet, uint64_t color) {
+    asm volatile ( 	
+        "pextlb $7, $0, %1      \n" //extend to 16bit wide channel
+        "pextlh $7, $0, $7      \n" //extend to 32bit wide channel
+	    "sq    $7,0x00(%0)      \n"
+	     : : "r" (packet->ptr), "r" (color):"$7", "memory");
+
+    packet->ptr++;
 }
 
 #endif

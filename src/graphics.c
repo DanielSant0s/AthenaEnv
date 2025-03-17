@@ -216,7 +216,7 @@ void drawImage(GSTEXTURE* source, float x, float y, float width, float height, f
     						0, 5)
 						);
 
-	owl_add_tag(packet, (uint64_t)((B(color)) | ((uint64_t)(A(color)) << 32)), (uint64_t)((R(color)) | ((uint64_t)G(color) << 32)));
+	owl_add_color(packet, color);
 
     owl_add_xy_uv_2x(packet, x, 
                              y, 
@@ -341,12 +341,12 @@ void drawPixel(float x, float y, Color color)
     						0, 2)
 						);
 
-	owl_add_tag(packet, (uint64_t)((B(color)) | ((uint64_t)(A(color)) << 32)), (uint64_t)((R(color)) | ((uint64_t)G(color) << 32)));
+	owl_add_color(packet, color);
  
-	owl_add_tag(packet, 1, (uint64_t)((int)gsGlobal->OffsetX+((int)(x) << 4)) | ((uint64_t)((int)gsGlobal->OffsetY+((int)(y) << 4)) << 32));
+	owl_add_xy(packet, x, y);
 } 
 
-void drawLine(float x, float y, float x2, float y2, Color color)
+void drawLine(float x, float y, float x2, float y2, Color color) 
 {
 	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 8);
 
@@ -371,11 +371,10 @@ void drawLine(float x, float y, float x2, float y2, Color color)
     						0, 3)
 						);
 
-	owl_add_tag(packet, (uint64_t)((B(color)) | ((uint64_t)(A(color)) << 32)), (uint64_t)((R(color)) | ((uint64_t)G(color) << 32)));
+	owl_add_color(packet, color); 
 
-	owl_add_tag(packet, 1, (uint64_t)((int)gsGlobal->OffsetX+((int)(x) << 4)) | ((uint64_t)((int)gsGlobal->OffsetY+((int)(y) << 4)) << 32));
-
-	owl_add_tag(packet, 1, (uint64_t)((int)gsGlobal->OffsetX+((int)(x2) << 4)) | ((uint64_t)((int)gsGlobal->OffsetY+((int)(y2) << 4)) << 32));
+	owl_add_xy(packet, x, y);
+	owl_add_xy(packet, x2, y2); 
 }
 
 
@@ -404,11 +403,11 @@ void drawRect(float x, float y, int width, int height, Color color)
     						0, 3)
 						);
 
-	owl_add_tag(packet, (uint64_t)((B(color)) | ((uint64_t)(A(color)) << 32)), (uint64_t)((R(color)) | ((uint64_t)G(color) << 32)));
+	owl_add_color(packet, color);
 
-	owl_add_tag(packet, 1, (uint64_t)((int)gsGlobal->OffsetX+((int)(x) << 4)) | ((uint64_t)((int)gsGlobal->OffsetY+((int)(y) << 4)) << 32));
+	owl_add_xy(packet, x, y);
 
-	owl_add_tag(packet, 1, (uint64_t)((int)gsGlobal->OffsetX+((int)(x+width) << 4)) | ((uint64_t)((int)gsGlobal->OffsetY+((int)(y+height) << 4)) << 32));
+	owl_add_xy(packet, x+width, y+height);
 }
 
 void drawTriangle(float x, float y, float x2, float y2, float x3, float y3, Color color)
@@ -436,13 +435,13 @@ void drawTriangle(float x, float y, float x2, float y2, float x3, float y3, Colo
     						0, 4)
 						);
 
-	owl_add_tag(packet, (uint64_t)((B(color)) | ((uint64_t)(A(color)) << 32)), (uint64_t)((R(color)) | ((uint64_t)G(color) << 32)));
+	owl_add_color(packet, color);
 
-	owl_add_tag(packet, 1, (uint64_t)((int)gsGlobal->OffsetX+((int)(x) << 4)) | ((uint64_t)((int)gsGlobal->OffsetY+((int)(y) << 4)) << 32));
+	owl_add_xy(packet, x, y);
 
-	owl_add_tag(packet, 1, (uint64_t)((int)gsGlobal->OffsetX+((int)(x2) << 4)) | ((uint64_t)((int)gsGlobal->OffsetY+((int)(y2) << 4)) << 32));
+	owl_add_xy(packet, x2, y2);
 
-	owl_add_tag(packet, 1, (uint64_t)((int)gsGlobal->OffsetX+((int)(x3) << 4)) | ((uint64_t)((int)gsGlobal->OffsetY+((int)(y3) << 4)) << 32));
+	owl_add_xy(packet, x3, y3);
 }
 
 void drawTriangle_gouraud(float x, float y, float x2, float y2, float x3, float y3, Color color, Color color2, Color color3)
@@ -470,17 +469,17 @@ void drawTriangle_gouraud(float x, float y, float x2, float y2, float x3, float 
     						0, 2)
 						);
 
-	owl_add_tag(packet, (uint64_t)((B(color)) | ((uint64_t)(A(color)) << 32)), (uint64_t)((R(color)) | ((uint64_t)G(color) << 32)));
+	owl_add_color(packet, color);
 
-	owl_add_tag(packet, 1, (uint64_t)((int)gsGlobal->OffsetX+((int)(x) << 4)) | ((uint64_t)((int)gsGlobal->OffsetY+((int)(y) << 4)) << 32));
+	owl_add_xy(packet, x, y);
 
-	owl_add_tag(packet, (uint64_t)((B(color2)) | ((uint64_t)(A(color2)) << 32)), (uint64_t)((R(color2)) | ((uint64_t)G(color2) << 32)));
+	owl_add_color(packet, color2);
 
-	owl_add_tag(packet, 1, (uint64_t)((int)gsGlobal->OffsetX+((int)(x2) << 4)) | ((uint64_t)((int)gsGlobal->OffsetY+((int)(y2) << 4)) << 32));
+	owl_add_xy(packet, x2, y2);
 
-	owl_add_tag(packet, (uint64_t)((B(color3)) | ((uint64_t)(A(color3)) << 32)), (uint64_t)((R(color3)) | ((uint64_t)G(color3) << 32)));
+	owl_add_color(packet, color3);
 
-	owl_add_tag(packet, 1, (uint64_t)((int)gsGlobal->OffsetX+((int)(x3) << 4)) | ((uint64_t)((int)gsGlobal->OffsetY+((int)(y3) << 4)) << 32));
+	owl_add_xy(packet, x3, y3);
 }
 
 void drawQuad(float x, float y, float x2, float y2, float x3, float y3, float x4, float y4, Color color)
@@ -508,15 +507,15 @@ void drawQuad(float x, float y, float x2, float y2, float x3, float y3, float x4
     						0, 5)
 						);
 
-	owl_add_tag(packet, (uint64_t)((B(color)) | ((uint64_t)(A(color)) << 32)), (uint64_t)((R(color)) | ((uint64_t)G(color) << 32)));
+	owl_add_color(packet, color);
 
-	owl_add_tag(packet, 1, (uint64_t)((int)gsGlobal->OffsetX+((int)(x) << 4)) | ((uint64_t)((int)gsGlobal->OffsetY+((int)(y) << 4)) << 32));
+	owl_add_xy(packet, x, y);
 
-	owl_add_tag(packet, 1, (uint64_t)((int)gsGlobal->OffsetX+((int)(x2) << 4)) | ((uint64_t)((int)gsGlobal->OffsetY+((int)(y2) << 4)) << 32));
+	owl_add_xy(packet, x2, y2);
 
-	owl_add_tag(packet, 1, (uint64_t)((int)gsGlobal->OffsetX+((int)(x3) << 4)) | ((uint64_t)((int)gsGlobal->OffsetY+((int)(y3) << 4)) << 32));
+	owl_add_xy(packet, x3, y3);
 
-	owl_add_tag(packet, 1, (uint64_t)((int)gsGlobal->OffsetX+((int)(x4) << 4)) | ((uint64_t)((int)gsGlobal->OffsetY+((int)(y4) << 4)) << 32));
+	owl_add_xy(packet, x4, y4);
 }
 
 void drawQuad_gouraud(float x, float y, float x2, float y2, float x3, float y3, float x4, float y4, Color color, Color color2, Color color3, Color color4)
@@ -544,21 +543,21 @@ void drawQuad_gouraud(float x, float y, float x2, float y2, float x3, float y3, 
     						0, 2)
 						);
 
-	owl_add_tag(packet, (uint64_t)((B(color)) | ((uint64_t)(A(color)) << 32)), (uint64_t)((R(color)) | ((uint64_t)G(color) << 32)));
+	owl_add_color(packet, color);
 
-	owl_add_tag(packet, 1, (uint64_t)((int)gsGlobal->OffsetX+((int)(x) << 4)) | ((uint64_t)((int)gsGlobal->OffsetY+((int)(y) << 4)) << 32));
+	owl_add_xy(packet, x, y);
 
-	owl_add_tag(packet, (uint64_t)((B(color2)) | ((uint64_t)(A(color2)) << 32)), (uint64_t)((R(color2)) | ((uint64_t)G(color2) << 32)));
+	owl_add_color(packet, color2);
 
-	owl_add_tag(packet, 1, (uint64_t)((int)gsGlobal->OffsetX+((int)(x2) << 4)) | ((uint64_t)((int)gsGlobal->OffsetY+((int)(y2) << 4)) << 32));
+	owl_add_xy(packet, x2, y2);
 
-	owl_add_tag(packet, (uint64_t)((B(color3)) | ((uint64_t)(A(color3)) << 32)), (uint64_t)((R(color3)) | ((uint64_t)G(color3) << 32)));
+	owl_add_color(packet, color3);
 
-	owl_add_tag(packet, 1, (uint64_t)((int)gsGlobal->OffsetX+((int)(x3) << 4)) | ((uint64_t)((int)gsGlobal->OffsetY+((int)(y3) << 4)) << 32));
+	owl_add_xy(packet, x3, y3);
 
-	owl_add_tag(packet, (uint64_t)((B(color4)) | ((uint64_t)(A(color4)) << 32)), (uint64_t)((R(color4)) | ((uint64_t)G(color4) << 32)));
+	owl_add_color(packet, color4);
 
-	owl_add_tag(packet, 1, (uint64_t)((int)gsGlobal->OffsetX+((int)(x4) << 4)) | ((uint64_t)((int)gsGlobal->OffsetY+((int)(y4) << 4)) << 32));
+	owl_add_xy(packet, x4, y4);
 }
 
 void drawCircle(float x, float y, float radius, u64 color, u8 filled)
@@ -589,13 +588,11 @@ void drawCircle(float x, float y, float radius, u64 color, u8 filled)
 						);
 
 	for (int a = 0; a < 36; a++) {
-		owl_add_tag(packet, 1, (uint64_t)((int)gsGlobal->OffsetX+((int)((athena_cosf(a * (M_PI*2)/36) * radius) + x) << 4)) | 
-							  ((uint64_t)((int)gsGlobal->OffsetY+((int)((athena_sinf(a * (M_PI*2)/36) * radius) + y) << 4)) << 32));
+		owl_add_xy(packet, (athena_cosf(a * (M_PI*2)/36) * radius) + x, (athena_sinf(a * (M_PI*2)/36) * radius) + y);
 	}
 
 	if (!filled) {
-		owl_add_tag(packet, 1, (uint64_t)((int)gsGlobal->OffsetX+((int)(radius + x) << 4)) | 
-							  ((uint64_t)((int)gsGlobal->OffsetY+((int)(y) << 4)) << 32));
+		owl_add_xy(packet, radius + x, y);
 	}
 }
 
@@ -620,79 +617,6 @@ int GetInterlacedFrameMode()
 GSGLOBAL *getGSGLOBAL(){ return gsGlobal; }
 
 static void switchFlipScreenFunction();
-
-void fntDrawQuad(rm_quad_t *q)
-{
-    int texture_id = texture_manager_bind(gsGlobal, q->txt, true);
-
-	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, texture_id != -1? 16 : 12);
-
-	owl_add_cnt_tag(packet, texture_id != -1? 15 : 11, 0); // 4 quadwords for vif
-
-	if (texture_id != -1) {
-		owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0)); 
-		owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0)); 
-		owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSH, 0));
-		owl_add_uint(packet, VIF_CODE(2, 0, VIF_DIRECT, 0));
-
-		owl_add_tag(packet, GIF_AD, GIFTAG(1, 1, 0, 0, 0, 1));
-		owl_add_tag(packet, GIF_NOP, 0);
-
-		owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));
-		owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
-		owl_add_uint(packet, VIF_CODE(texture_id, 0, VIF_MARK, 0));
-		owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 1));
-	}
-
-	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
-	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
-	owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));
-	owl_add_uint(packet, VIF_CODE(10, 0, VIF_DIRECT, 0)); // 3 giftags
-	
-	owl_add_tag(packet, GIF_AD, GIFTAG(3, 1, 0, 0, 0, 1));
-
-	owl_add_tag(packet, GS_TEST_1, GS_SETREG_TEST_1(0, 0, 0, 0, 0, 0, 1, 1));
-
-	int tw, th;
-	athena_set_tw_th(q->txt, &tw, &th);
-
-	owl_add_tag(packet, 
-		GS_TEX0_1, 
-		GS_SETREG_TEX0((q->txt->Vram & ~TRANSFER_REQUEST_MASK)/256, 
-					  q->txt->TBW, 
-					  q->txt->PSM,
-					  tw, th, 
-					  gsGlobal->PrimAlphaEnable, 
-					  COLOR_MODULATE,
-					  (q->txt->VramClut & ~TRANSFER_REQUEST_MASK)/256, 
-					  q->txt->ClutPSM, 
-					  0, 0, 
-					  q->txt->VramClut? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD)
-	);
-	
-	owl_add_tag(packet, GS_TEX1_1, GS_SETREG_TEX1(1, 0, q->txt->Filter, q->txt->Filter, 0, 0, 0));
-
-	owl_add_tag(packet, 
-					   ((uint64_t)(GS_RGBAQ)  << 0 | (uint64_t)(GS_UV) << 4 | (uint64_t)(GS_XYZ2) << 8 | (uint64_t)(GS_UV) << 12 | (uint64_t)(GS_XYZ2) << 16), 
-					   	VU_GS_GIFTAG(1, 
-							1, NO_CUSTOM_DATA, 1, 
-							VU_GS_PRIM(GS_PRIM_PRIM_SPRITE, 
-									   0, 1, 
-									   gsGlobal->PrimFogEnable, 
-									   gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 1, gsGlobal->PrimContext, 0),
-    						0, 5)
-						);
-
-	owl_add_tag(packet, (uint64_t)((B(q->color)) | ((uint64_t)(A(q->color)) << 32)), (uint64_t)((R(q->color)) | ((uint64_t)G(q->color) << 32)));
-
-	owl_add_tag(packet, 0, GS_SETREG_STQ( (int)(q->ul.u) << 4, (int)(q->ul.v) << 4 ));
-
-	owl_add_tag(packet, 1, (uint64_t)((int)gsGlobal->OffsetX+((int)(q->ul.x) << 4)) | ((uint64_t)((int)gsGlobal->OffsetY+((int)(q->ul.y) << 4)) << 32));
-	
-	owl_add_tag(packet, 0, GS_SETREG_STQ( (int)(q->br.u) << 4, (int)(q->br.v) << 4 ));
-
-	owl_add_tag(packet, 1, (uint64_t)((int)gsGlobal->OffsetX+((int)(q->br.x) << 4)) | ((uint64_t)((int)gsGlobal->OffsetY+((int)(q->br.y) << 4)) << 32));
-}
 
 /* PRIVATE METHODS */
 static int vsync_handler()
