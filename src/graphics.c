@@ -74,13 +74,10 @@ void page_clear(Color color) {
     		    "pcpyld $7, %1, $7    \n"
 				"sq    $7,0x00(%0)    \n"
 
-				"li     $8, 0x200000  \n" // page height (32)
-				"ori    $8,$8,0x40    \n" // page width  (64)
-				"psllh  $8, $8,  4    \n"
-
-				"paddw  $7, $7, $8    \n"
-				"sq     $7,0x10(%0)    \n"
-				 : : "r" (packet->ptr), "r" (GS_XYZ2), "r" (GS_SETREG_XYZ(i, j, 0)):"$7", "$8", "memory");
+				"psllh  $7, %3,  4    \n"
+    		    "pcpyld $7, %1, $7    \n"
+				"sq    $7,0x10(%0)    \n"
+				 : : "r" (packet->ptr), "r" (GS_XYZ2), "r" (GS_SETREG_XYZ(i, j, 0)), "r" (GS_SETREG_XYZ(i+64, j+32, 0)):"$7", "$8", "memory");
 
 				packet->ptr += 2;
 
