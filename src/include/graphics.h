@@ -66,8 +66,6 @@ void setVSync(bool vsync_flag);
 
 void toggleFrameCounter(bool enable);
 
-void gsKit_clear_screens();
-
 GSGLOBAL *getGSGLOBAL();
 
 int GetInterlacedFrameMode();
@@ -91,11 +89,6 @@ void drawTriangle(float x, float y, float x2, float y2, float x3, float y3, Colo
 void drawTriangle_gouraud(float x, float y, float x2, float y2, float x3, float y3, Color color, Color color2, Color color3);
 void drawQuad(float x, float y, float x2, float y2, float x3, float y3, float x4, float y4, Color color);
 void drawQuad_gouraud(float x, float y, float x2, float y2, float x3, float y3, float x4, float y4, Color color, Color color2, Color color3, Color color4);
-
-void InvalidateTexture(GSTEXTURE *txt);
-void UnloadTexture(GSTEXTURE *txt);
-
-void fntDrawQuad(rm_quad_t *q);
 
 GSFONT* loadFont(const char* path);
 void printFontText(GSFONT* font, const char* text, float x, float y, float scale, Color color);

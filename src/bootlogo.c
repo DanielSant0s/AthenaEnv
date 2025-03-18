@@ -24,7 +24,6 @@ bool bootlogo_finished() {
 }
 
 void bootlogoThread(void* data) {
-    GSGLOBAL* gsGlobal = getGSGLOBAL();
     clock_t start_time = 0;
     uint8_t logo_alpha = 0;
     GSTEXTURE bootlogo = { };
@@ -92,7 +91,7 @@ void bootlogoThread(void* data) {
         flipScreen();
     }
 
-    texture_manager_free(gsGlobal, &bootlogo);
+    texture_manager_free(&bootlogo);
 
     exitkill_task();
 }

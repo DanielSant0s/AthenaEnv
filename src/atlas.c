@@ -118,7 +118,7 @@ void atlasFree(atlas_t *atlas)
     allocFree(atlas->allocation);
     atlas->allocation = NULL;
 
-    UnloadTexture(&atlas->surface);
+    texture_manager_free(&atlas->surface);
     free(atlas->surface.Mem);
     atlas->surface.Mem = NULL;
 
@@ -179,7 +179,7 @@ struct atlas_allocation_t *atlasPlace(atlas_t *atlas, size_t width, size_t heigh
 
     atlasCopyData(atlas, al, width, height, surface);
 
-    InvalidateTexture(&atlas->surface);
+    texture_manager_invalidate(&atlas->surface);
 
     return al;
 }

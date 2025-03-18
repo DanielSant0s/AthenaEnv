@@ -33,11 +33,11 @@ void texture_manager_init(GSGLOBAL *gsGlobal);
 int texture_manager_bind(GSGLOBAL *gsGlobal, GSTEXTURE *tex, bool async);
 
 /// Invalidate a texture, will automatically transfer the texture on next bind call.
-void texture_manager_invalidate(GSGLOBAL *gsGlobal, GSTEXTURE *tex);
+void texture_manager_invalidate(GSTEXTURE *tex);
 
 /// Free the texture, this is mainly a performance optimization.
 /// The texture will be automatically freed if not used.
-void texture_manager_free(GSGLOBAL *gsGlobal, GSTEXTURE *tex);
+void texture_manager_free(GSTEXTURE *tex);
 
 /// When starting a next frame (on vsync/swap), call this function.
 /// It updates texture usage statistics.

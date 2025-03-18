@@ -494,14 +494,14 @@ int texture_manager_bind(GSGLOBAL *gsGlobal, GSTEXTURE *tex, bool async)
 
 //---------------------------------------------------------------------------
 
-void texture_manager_invalidate(GSGLOBAL *gsGlobal, GSTEXTURE *tex)
+void texture_manager_invalidate(GSTEXTURE *tex)
 {
 	tex->Vram = 0;
 	tex->VramClut = 0;
 }
 
 //---------------------------------------------------------------------------
-void texture_manager_free(GSGLOBAL * gsGlobal, GSTEXTURE * tex)
+void texture_manager_free(GSTEXTURE * tex)
 {
 	struct SVramBlock * block;
 

@@ -39,7 +39,7 @@ static JSValue athena_image_isloaded(JSContext *ctx, JSValue this_val, int argc,
 static void athena_image_dtor(JSRuntime *rt, JSValue val){
 		JSImageData *image = JS_GetOpaque(val, js_image_class_id);
 
-		UnloadTexture(image->tex);
+		texture_manager_free(image->tex);
 
 		free(image->tex->Mem);
 		image->tex->Mem = NULL;
