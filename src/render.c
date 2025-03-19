@@ -193,11 +193,12 @@ void append_texture_tags(owl_packet* packet, GSTEXTURE *texture, int texture_id,
 }
 
 void draw_vu1_with_colors(athena_object_data *obj) {
+	athena_render_data *data = obj->data;
 	MATRIX local_world;
 
 	int batch_size = BATCH_SIZE;
 
-	if (obj->data->attributes.accurate_clipping) {
+	if (data->attributes.accurate_clipping) {
 		update_vu_program(VU1Draw3DCS);
 	} else {
 		update_vu_program(VU1Draw3DColors);
@@ -225,22 +226,22 @@ void draw_vu1_with_colors(athena_object_data *obj) {
 	int last_index = -1;
 	GSTEXTURE* tex = NULL;
 	int texture_id;
-	for(int i = 0; i < obj->data->material_index_count; i++) {
-		bool texture_mapping = ((obj->data->materials[obj->data->material_indices[i].index].texture_id != -1) && obj->data->attributes.texture_mapping);
+	for(int i = 0; i < data->material_index_count; i++) {
+		bool texture_mapping = ((data->materials[data->material_indices[i].index].texture_id != -1) && data->attributes.texture_mapping);
 
 		if (texture_mapping) {
-			GSTEXTURE *cur_tex = obj->data->textures[obj->data->materials[obj->data->material_indices[i].index].texture_id];
+			GSTEXTURE *cur_tex = data->textures[data->materials[data->material_indices[i].index].texture_id];
 			if (cur_tex != tex) {
 				texture_id = texture_manager_bind(gsGlobal, cur_tex, true);
 				tex = cur_tex;
 			}
 		}
 
-		VECTOR* positions = &obj->data->positions[last_index+1];
-		VECTOR* colours = &obj->data->colours[last_index+1];
-		VECTOR* texcoords = texture_mapping? &obj->data->texcoords[last_index+1] : NULL;
+		VECTOR* positions = &data->positions[last_index+1];
+		VECTOR* colours = &data->colours[last_index+1];
+		VECTOR* texcoords = texture_mapping? &data->texcoords[last_index+1] : NULL;
 
-		int idxs_to_draw = (obj->data->material_indices[i].end-last_index);
+		int idxs_to_draw = (data->material_indices[i].end-last_index);
 		int idxs_drawn = 0;
 
 		while (idxs_to_draw > 0) {
@@ -252,22 +253,22 @@ void draw_vu1_with_colors(athena_object_data *obj) {
 				count = idxs_to_draw;
 			}
 
-			obj->data->materials[obj->data->material_indices[i].index].clip_prim_tag.dword[1] = DRAW_STQ2_REGLIST;
-			obj->data->materials[obj->data->material_indices[i].index].clip_prim_tag.dword[0] = VU_GS_GIFTAG(obj->data->tristrip? 5 : 11, 
+			data->materials[data->material_indices[i].index].clip_prim_tag.dword[1] = DRAW_STQ2_REGLIST;
+			data->materials[data->material_indices[i].index].clip_prim_tag.dword[0] = VU_GS_GIFTAG(data->tristrip? 5 : 11, 
 							                							1, NO_CUSTOM_DATA, 1, 
 																		VU_GS_PRIM(GS_PRIM_PRIM_TRIFAN, 
-																				   obj->data->attributes.shade_model, texture_mapping, 
+																				   data->attributes.shade_model, texture_mapping, 
 																				   gsGlobal->PrimFogEnable, 
 																				   gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 0, 0, 0),
     		    														0, 3);
 
-			owl_add_unpack_data(packet, 26, (void*)&obj->data->materials[obj->data->material_indices[i].index].clip_prim_tag, 1, 0);
+			owl_add_unpack_data(packet, 26, (void*)&data->materials[data->material_indices[i].index].clip_prim_tag, 1, 0);
 
-			obj->data->materials[obj->data->material_indices[i].index].prim_tag.dword[1] = DRAW_STQ2_REGLIST;
-			obj->data->materials[obj->data->material_indices[i].index].prim_tag.dword[0] = VU_GS_GIFTAG(0, 
+			data->materials[data->material_indices[i].index].prim_tag.dword[1] = DRAW_STQ2_REGLIST;
+			data->materials[data->material_indices[i].index].prim_tag.dword[0] = VU_GS_GIFTAG(0, 
 							                							1, NO_CUSTOM_DATA, 1, 
-																		VU_GS_PRIM(obj->data->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE, 
-																				   obj->data->attributes.shade_model, texture_mapping, 
+																		VU_GS_PRIM(data->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE, 
+																				   data->attributes.shade_model, texture_mapping, 
 																				   gsGlobal->PrimFogEnable, 
 																				   gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 0, 0, 0),
     		    														0, 3);
@@ -278,8 +279,8 @@ void draw_vu1_with_colors(athena_object_data *obj) {
 
 			unpack_list_open(packet, 0, true);
 			{
-				unpack_list_append(packet, (void*)&obj->data->materials[obj->data->material_indices[i].index].prim_tag, 1);
-				unpack_list_append(packet, (void*)&obj->data->materials[obj->data->material_indices[i].index].diffuse, 1);
+				unpack_list_append(packet, (void*)&data->materials[data->material_indices[i].index].prim_tag, 1);
+				unpack_list_append(packet, (void*)&data->materials[data->material_indices[i].index].diffuse, 1);
 				unpack_list_append(packet, &positions[idxs_drawn], count);
 				unpack_list_append(packet, &colours[idxs_drawn], count);
 				if (texcoords) 
@@ -298,7 +299,7 @@ void draw_vu1_with_colors(athena_object_data *obj) {
 			idxs_drawn += count;
 		}
 
-		last_index = obj->data->material_indices[i].end;
+		last_index = data->material_indices[i].end;
 	}
 
 	owl_add_vif_codes(packet,
@@ -310,9 +311,11 @@ void draw_vu1_with_colors(athena_object_data *obj) {
 }
 
 void draw_vu1_with_lights(athena_object_data *obj) {
+	athena_render_data *data = obj->data;
+
 	int batch_size = BATCH_SIZE;
 
-	if (obj->data->attributes.accurate_clipping) {
+	if (data->attributes.accurate_clipping) {
 		update_vu_program(VU1Draw3DLCS);
 	} else {
 		update_vu_program(VU1Draw3DLightsColors);
@@ -364,23 +367,23 @@ void draw_vu1_with_lights(athena_object_data *obj) {
 	int last_index = -1;
 	GSTEXTURE* tex = NULL;
 	int texture_id;
-	for(int i = 0; i < obj->data->material_index_count; i++) {
-		bool texture_mapping = ((obj->data->materials[obj->data->material_indices[i].index].texture_id != -1) && obj->data->attributes.texture_mapping);
+	for(int i = 0; i < data->material_index_count; i++) {
+		bool texture_mapping = ((data->materials[data->material_indices[i].index].texture_id != -1) && data->attributes.texture_mapping);
 
 		if (texture_mapping) {
-			GSTEXTURE *cur_tex = obj->data->textures[obj->data->materials[obj->data->material_indices[i].index].texture_id];
+			GSTEXTURE *cur_tex = data->textures[data->materials[data->material_indices[i].index].texture_id];
 			if (cur_tex != tex) {
 				texture_id = texture_manager_bind(gsGlobal, cur_tex, true);
 				tex = cur_tex;
 			}
 		}
 
-		VECTOR* positions = &obj->data->positions[last_index+1];
-		VECTOR* texcoords = texture_mapping? &obj->data->texcoords[last_index+1] : NULL;
-		VECTOR* normals = &obj->data->normals[last_index+1];
-		VECTOR* colours = &obj->data->colours[last_index+1];
+		VECTOR* positions = &data->positions[last_index+1];
+		VECTOR* texcoords = texture_mapping? &data->texcoords[last_index+1] : NULL;
+		VECTOR* normals = &data->normals[last_index+1];
+		VECTOR* colours = &data->colours[last_index+1];
 
-		int idxs_to_draw = (obj->data->material_indices[i].end-last_index);
+		int idxs_to_draw = (data->material_indices[i].end-last_index);
 		int idxs_drawn = 0;
 
 		while (idxs_to_draw > 0) {
@@ -396,30 +399,30 @@ void draw_vu1_with_lights(athena_object_data *obj) {
 				append_texture_tags(packet, tex, texture_id, COLOR_MODULATE);
 			}
 
-			obj->data->materials[obj->data->material_indices[i].index].clip_prim_tag.dword[1] = DRAW_STQ2_REGLIST;
-			obj->data->materials[obj->data->material_indices[i].index].clip_prim_tag.dword[0] = VU_GS_GIFTAG(obj->data->tristrip? 5 : 11, 
+			data->materials[data->material_indices[i].index].clip_prim_tag.dword[1] = DRAW_STQ2_REGLIST;
+			data->materials[data->material_indices[i].index].clip_prim_tag.dword[0] = VU_GS_GIFTAG(data->tristrip? 5 : 11, 
 							                							1, NO_CUSTOM_DATA, 1, 
 																		VU_GS_PRIM(GS_PRIM_PRIM_TRIFAN, 
-																				   obj->data->attributes.shade_model, texture_mapping, 
+																				   data->attributes.shade_model, texture_mapping, 
 																				   gsGlobal->PrimFogEnable, 
 																				   gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 0, 0, 0),
     		    														0, 3);
 
-			owl_add_unpack_data(packet, 26, (void*)&obj->data->materials[obj->data->material_indices[i].index].clip_prim_tag, 1, 0);
+			owl_add_unpack_data(packet, 26, (void*)&data->materials[data->material_indices[i].index].clip_prim_tag, 1, 0);
 
-			obj->data->materials[obj->data->material_indices[i].index].prim_tag.dword[1] = DRAW_STQ2_REGLIST;
-			obj->data->materials[obj->data->material_indices[i].index].prim_tag.dword[0] = VU_GS_GIFTAG(0, 
+			data->materials[data->material_indices[i].index].prim_tag.dword[1] = DRAW_STQ2_REGLIST;
+			data->materials[data->material_indices[i].index].prim_tag.dword[0] = VU_GS_GIFTAG(0, 
 							                							1, NO_CUSTOM_DATA, 1, 
-																		VU_GS_PRIM(obj->data->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE, 
-																				   obj->data->attributes.shade_model, texture_mapping, 
+																		VU_GS_PRIM(data->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE, 
+																				   data->attributes.shade_model, texture_mapping, 
 																				   gsGlobal->PrimFogEnable, 
 																				   gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 0, 0, 0),
     		    														0, 3);
 
 			unpack_list_open(packet, 0, true);
 			{
-				unpack_list_append(packet, (void*)&obj->data->materials[obj->data->material_indices[i].index].prim_tag, 1);
-				unpack_list_append(packet, (void*)&obj->data->materials[obj->data->material_indices[i].index].diffuse, 1);
+				unpack_list_append(packet, (void*)&data->materials[data->material_indices[i].index].prim_tag, 1);
+				unpack_list_append(packet, (void*)&data->materials[data->material_indices[i].index].diffuse, 1);
 				unpack_list_append(packet, &positions[idxs_drawn], count);
 				unpack_list_append(packet, &normals[idxs_drawn], count);
 				unpack_list_append(packet, &colours[idxs_drawn], count);
@@ -440,7 +443,7 @@ void draw_vu1_with_lights(athena_object_data *obj) {
 			
 		}
 
-		last_index = obj->data->material_indices[i].end;
+		last_index = data->material_indices[i].end;
 	}
 
 	owl_add_vif_codes(packet,
@@ -454,9 +457,11 @@ void draw_vu1_with_lights(athena_object_data *obj) {
 }
 
 void draw_vu1_with_spec_lights(athena_object_data *obj) {
+	athena_render_data *data = obj->data;
+
 	int batch_size = BATCH_SIZE;
 
-	if (obj->data->attributes.accurate_clipping) {
+	if (data->attributes.accurate_clipping) {
 		update_vu_program(VU1Draw3DLCSS);
 	} else {
 		update_vu_program(VU1Draw3DSpec);
@@ -486,7 +491,7 @@ void draw_vu1_with_spec_lights(athena_object_data *obj) {
 
 	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 7);
 
-	screen_scale.w = *((uint32_t*)&obj->data->attributes);
+	screen_scale.w = *((uint32_t*)&data->attributes);
 
 	unpack_list_open(packet, 0, false);
 	{
@@ -510,23 +515,23 @@ void draw_vu1_with_spec_lights(athena_object_data *obj) {
 	int last_index = -1;
 	GSTEXTURE* tex = NULL;
 	int texture_id;
-	for(int i = 0; i < obj->data->material_index_count; i++) {
-		bool texture_mapping = ((obj->data->materials[obj->data->material_indices[i].index].texture_id != -1) && obj->data->attributes.texture_mapping);
+	for(int i = 0; i < data->material_index_count; i++) {
+		bool texture_mapping = ((data->materials[data->material_indices[i].index].texture_id != -1) && data->attributes.texture_mapping);
 
 		if (texture_mapping) {
-			GSTEXTURE *cur_tex = obj->data->textures[obj->data->materials[obj->data->material_indices[i].index].texture_id];
+			GSTEXTURE *cur_tex = data->textures[data->materials[data->material_indices[i].index].texture_id];
 			if (cur_tex != tex) {
 				texture_id = texture_manager_bind(gsGlobal, cur_tex, true);
 				tex = cur_tex;
 			}
 		}
 
-		VECTOR* positions = &obj->data->positions[last_index+1];
-		VECTOR* texcoords = texture_mapping? &obj->data->texcoords[last_index+1] : NULL;
-		VECTOR* normals = &obj->data->normals[last_index+1];
-		VECTOR* colours = &obj->data->colours[last_index+1];
+		VECTOR* positions = &data->positions[last_index+1];
+		VECTOR* texcoords = texture_mapping? &data->texcoords[last_index+1] : NULL;
+		VECTOR* normals = &data->normals[last_index+1];
+		VECTOR* colours = &data->colours[last_index+1];
 
-		int idxs_to_draw = (obj->data->material_indices[i].end-last_index);
+		int idxs_to_draw = (data->material_indices[i].end-last_index);
 		int idxs_drawn = 0;
 
 		while (idxs_to_draw > 0) {
@@ -541,30 +546,30 @@ void draw_vu1_with_spec_lights(athena_object_data *obj) {
 				append_texture_tags(packet, tex, texture_id, COLOR_MODULATE);
 			}
 
-			obj->data->materials[obj->data->material_indices[i].index].clip_prim_tag.dword[1] = DRAW_STQ2_REGLIST;
-			obj->data->materials[obj->data->material_indices[i].index].clip_prim_tag.dword[0] = VU_GS_GIFTAG(obj->data->tristrip? 5 : 11, 
+			data->materials[data->material_indices[i].index].clip_prim_tag.dword[1] = DRAW_STQ2_REGLIST;
+			data->materials[data->material_indices[i].index].clip_prim_tag.dword[0] = VU_GS_GIFTAG(data->tristrip? 5 : 11, 
 							                							1, NO_CUSTOM_DATA, 1, 
 																		VU_GS_PRIM(GS_PRIM_PRIM_TRIFAN, 
-																				   obj->data->attributes.shade_model, texture_mapping, 
+																				   data->attributes.shade_model, texture_mapping, 
 																				   gsGlobal->PrimFogEnable, 
 																				   gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 0, 0, 0),
     		    														0, 3);
 
-			owl_add_unpack_data(packet, 26, (void*)&obj->data->materials[obj->data->material_indices[i].index].clip_prim_tag, 1, 0);
+			owl_add_unpack_data(packet, 26, (void*)&data->materials[data->material_indices[i].index].clip_prim_tag, 1, 0);
 
-			obj->data->materials[obj->data->material_indices[i].index].prim_tag.dword[1] = DRAW_STQ2_REGLIST;
-			obj->data->materials[obj->data->material_indices[i].index].prim_tag.dword[0] = VU_GS_GIFTAG(0, 
+			data->materials[data->material_indices[i].index].prim_tag.dword[1] = DRAW_STQ2_REGLIST;
+			data->materials[data->material_indices[i].index].prim_tag.dword[0] = VU_GS_GIFTAG(0, 
 							                							1, NO_CUSTOM_DATA, 1, 
-																		VU_GS_PRIM(obj->data->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE, 
-																				   obj->data->attributes.shade_model, texture_mapping, 
+																		VU_GS_PRIM(data->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE, 
+																				   data->attributes.shade_model, texture_mapping, 
 																				   gsGlobal->PrimFogEnable, 
 																				   gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 0, 0, 0),
     		    														0, 3);
 
 			unpack_list_open(packet, 0, true);
 			{
-				unpack_list_append(packet, (void*)&obj->data->materials[obj->data->material_indices[i].index].prim_tag, 1);
-				unpack_list_append(packet, (void*)&obj->data->materials[obj->data->material_indices[i].index].diffuse, 1);
+				unpack_list_append(packet, (void*)&data->materials[data->material_indices[i].index].prim_tag, 1);
+				unpack_list_append(packet, (void*)&data->materials[data->material_indices[i].index].diffuse, 1);
 				unpack_list_append(packet, &positions[idxs_drawn], count);
 				unpack_list_append(packet, &normals[idxs_drawn], count);
 				unpack_list_append(packet, &colours[idxs_drawn], count);
@@ -584,7 +589,7 @@ void draw_vu1_with_spec_lights(athena_object_data *obj) {
 			idxs_drawn += count;
 		}
 
-		last_index = obj->data->material_indices[i].end;
+		last_index = data->material_indices[i].end;
 	}
 
 	owl_add_vif_codes(packet,
