@@ -26,7 +26,9 @@
 
 #include <readini.h>
 
-char boot_path[255];
+char path_workbuffer[255] = { 0 };
+
+char boot_path[255] = { 0 };
 char default_script[128] = "main.js";
 char default_cfg[128] = "athena.ini";
 bool dark_mode, boot_logo;
@@ -103,9 +105,14 @@ int main(int argc, char **argv) {
     init_memory_manager();
     init_taskman();
 
+    if (!strncmp(argv[0], "cdrom0", 6))
+        chdir("cdfs:/");
+
     getcwd(boot_path, sizeof(boot_path));
 
     dbginit(); // if we are using serial port. initialize it here before the fun starts
+
+    dbgprintf("boot path: %s\n", boot_path);
 
     if (argc > 1) {
         char* arg = NULL;
@@ -135,6 +142,11 @@ int main(int argc, char **argv) {
     #endif
 
     if (!ignore_ini) {
+        if (!strncmp(boot_path, "cdfs", 4) && !strpre("cdrom0", default_cfg)) {
+            memset(default_cfg, 0, 128);
+            strcpy(default_cfg, "cdrom0:ATHENA.INI;1"); // if using cdrom and custom arg is not valid, try to read from cdrom root.
+        }
+            
         if (readini_open(&ini, default_cfg)) {
             while(readini_getline(&ini)) {
                 if (readini_bool(&ini, "boot_logo", &boot_logo)) {

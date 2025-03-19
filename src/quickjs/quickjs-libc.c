@@ -833,6 +833,8 @@ static JSValue js_std_exists(JSContext *ctx, JSValueConst this_val,
     if (!f)
         return JS_NewBool(ctx, FALSE);
 
+    fclose(f);
+
     return JS_NewBool(ctx, TRUE);
 
  fail:

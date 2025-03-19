@@ -64,7 +64,7 @@ const stats = new Component([
 ]);
 
 const no_icon = new Image("no_icon.png");
-const js_apps = System.listDir().map(file => file.name).filter(str => str.endsWith(".js")).map( app => {
+const js_apps = System.listDir().map(file => file.name).filter(str => (str.toLowerCase().endsWith(".js"))).map( app => {
     const app_fd = std.open(app, "r");
     const metadata_str = app_fd.getline().replace("// ", "");
     app_fd.close();
@@ -75,7 +75,7 @@ const js_apps = System.listDir().map(file => file.name).filter(str => str.endsWi
 
     let metadata = JSON.parse(metadata_str);
 
-    if (std.exists(metadata.icon)) {
+    if (metadata.icon && std.exists(metadata.icon)) {
         metadata.icon = new Image(metadata.icon);
     } else {
         metadata.icon = no_icon;
