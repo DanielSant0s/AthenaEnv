@@ -14,6 +14,8 @@
 #include <def_mods.h>
 #include <taskman.h>
 
+#include <erl.h>
+
 #define MAX_DIR_FILES 512
 
 static JSValue athena_dir(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
@@ -512,6 +514,297 @@ static JSValue athena_stacktrace(JSContext *ctx, JSValue this_val, int argc, JSV
 	return arr;
 }
 
+static JSValue athena_loaddynamiclibrary(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
+  	struct erl_record_t *erl = _init_load_erl_from_file(JS_ToCString(ctx, argv[0]), 0);
+
+	if (erl)
+		return JS_NewUint32(ctx, erl);
+
+	return JS_UNDEFINED;
+}
+
+static JSValue athena_unloaddynamiclibrary(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
+  	struct erl_record_t *erl = NULL;
+	JS_ToUint32(ctx, &erl, argv[0]);
+
+	if (erl)
+		return JS_NewUint32(ctx, unload_erl(erl));
+
+	return JS_UNDEFINED;
+}
+
+static JSValue athena_findlocalrelocatableobject(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
+  	struct erl_record_t *erl = NULL;
+	JS_ToUint32(ctx, &erl, argv[0]);
+
+	if (erl) {
+		struct symbol_t *symbol = erl_find_local_symbol(JS_ToCString(ctx, argv[1]), erl);
+		printf("0x%x\n", symbol->address);
+		if (symbol)
+			return JS_NewUint32(ctx, symbol->address);
+	}
+
+	return JS_UNDEFINED;
+}
+
+static JSValue athena_findrelocatableobject(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
+	struct symbol_t *symbol = erl_find_symbol(JS_ToCString(ctx, argv[0]));
+	if (symbol)
+		return JS_NewUint32(ctx, symbol->address);
+
+	return JS_UNDEFINED;
+}
+
+inline void process_float_arg(float val, int pos) {
+	switch(pos)
+	{
+	case 0:
+		asm volatile ("mov.s $f12, %0" : : "f" (val));
+		break;
+	case 1:  
+		asm volatile ("mov.s $f13, %0" : : "f" (val));
+		break;
+	case 2:  
+		asm volatile ("mov.s $f14, %0" : : "f" (val));
+		break;
+	case 3:  
+		asm volatile ("mov.s $f15, %0" : : "f" (val));
+		break;
+	case 4:  
+		asm volatile ("mov.s $f16, %0" : : "f" (val));
+		break;
+	case 5:  
+		asm volatile ("mov.s $f17, %0" : : "f" (val));
+		break;
+	case 6:  
+		asm volatile ("mov.s $f18, %0" : : "f" (val));
+		break;
+	case 7: 
+		asm volatile ("mov.s $f19, %0" : : "f" (val));
+		break;
+	case 8:  
+		asm volatile ("mov.s $f20, %0" : : "f" (val));
+		break;
+	case 9:  
+		asm volatile ("mov.s $f21, %0" : : "f" (val));
+		break;
+	case 10: 
+		asm volatile ("mov.s $f22, %0" : : "f" (val));
+		break;
+	case 11: 
+		asm volatile ("mov.s $f23, %0" : : "f" (val));
+		break;
+	case 12: 
+		asm volatile ("mov.s $f24, %0" : : "f" (val));
+		break;
+	case 13: 
+		asm volatile ("mov.s $f25, %0" : : "f" (val));
+		break;
+	case 14: 
+		asm volatile ("mov.s $f26, %0" : : "f" (val));
+		break;
+	}
+}
+
+typedef union 
+{
+    int64_t	    long_arg;
+    uint64_t   ulong_arg;
+    int32_t		 int_arg;
+    uint32_t	uint_arg;
+    int16_t    short_arg;
+    uint16_t  ushort_arg;
+    int8_t	    char_arg;
+    uint8_t	   uchar_arg;
+
+    bool	    bool_arg;
+
+	float	   float_arg;
+
+    void*	     ptr_arg;
+    char*	  string_arg;
+} func_arg;
+
+typedef enum
+{
+	NONTYPE_VOID,
+	TYPE_LONG,
+	TYPE_ULONG,
+	TYPE_INT,
+	TYPE_UINT,
+	TYPE_SHORT, 
+	TYPE_USHORT,
+	TYPE_CHAR,
+	TYPE_UCHAR,
+	TYPE_BOOL,
+	TYPE_FLOAT,
+	TYPE_PTR,
+	TYPE_STRING
+} arg_types;
+
+typedef void (*void_return_call)(
+	func_arg, func_arg, func_arg, func_arg, 
+	func_arg, func_arg, func_arg, func_arg, 
+	func_arg, func_arg, func_arg, func_arg, 
+	func_arg, func_arg, func_arg, func_arg, 
+	func_arg, func_arg, func_arg, func_arg
+);
+
+typedef int (*int_return_call)(
+	func_arg, func_arg, func_arg, func_arg, 
+	func_arg, func_arg, func_arg, func_arg, 
+	func_arg, func_arg, func_arg, func_arg, 
+	func_arg, func_arg, func_arg, func_arg, 
+	func_arg, func_arg, func_arg, func_arg
+);
+
+typedef bool (*bool_return_call)(
+	func_arg, func_arg, func_arg, func_arg, 
+	func_arg, func_arg, func_arg, func_arg, 
+	func_arg, func_arg, func_arg, func_arg, 
+	func_arg, func_arg, func_arg, func_arg, 
+	func_arg, func_arg, func_arg, func_arg
+);
+
+typedef float (*float_return_call)(
+	func_arg, func_arg, func_arg, func_arg, 
+	func_arg, func_arg, func_arg, func_arg, 
+	func_arg, func_arg, func_arg, func_arg, 
+	func_arg, func_arg, func_arg, func_arg, 
+	func_arg, func_arg, func_arg, func_arg
+);
+
+typedef char *(*string_return_call)(
+	func_arg, func_arg, func_arg, func_arg, 
+	func_arg, func_arg, func_arg, func_arg, 
+	func_arg, func_arg, func_arg, func_arg, 
+	func_arg, func_arg, func_arg, func_arg, 
+	func_arg, func_arg, func_arg, func_arg
+);
+
+#define call_function(return_type, function) ((return_type ## _return_call)function)
+
+static JSValue athena_call_native(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
+	func_arg arg[32] = { 0 };
+	uint32_t arg_count = 0, arg_type = 0, return_type = NONTYPE_VOID;
+
+	void *func = NULL;
+
+	JS_ToUint32(ctx, &func, argv[0]);
+
+	JS_ToUint32(ctx, &arg_count, JS_GetPropertyStr(ctx, argv[1], "length"));
+
+	if (argc > 2)
+		JS_ToUint32(ctx, &return_type, argv[2]);
+
+	for (uint32_t i = 0; i < arg_count; i++) {
+		JSValue obj = JS_GetPropertyUint32(ctx, argv[1], i);
+		JS_ToUint32(ctx, &arg_type, JS_GetPropertyStr(ctx, obj, "type"));
+		JSValue val = JS_GetPropertyStr(ctx, obj, "value");
+
+		switch (arg_type) {
+			case TYPE_LONG:
+			case TYPE_ULONG:
+				JS_ToInt64(ctx, &arg[i].ulong_arg, val);
+				break;
+			case TYPE_INT:
+			case TYPE_UINT:
+			case TYPE_SHORT:
+			case TYPE_USHORT:
+			case TYPE_CHAR:
+			case TYPE_UCHAR:
+			case TYPE_PTR:
+				JS_ToInt32(ctx, &arg[i].uint_arg, val);
+				break;
+			case TYPE_BOOL:
+				arg[i].bool_arg = JS_ToBool(ctx, val);
+				break;
+			case TYPE_FLOAT:
+				{
+					float f;
+					JS_ToFloat32(ctx, &f, val);
+					process_float_arg(f, i);
+				}
+				break;
+			case TYPE_STRING:
+				arg[i].string_arg = JS_ToCString(ctx, val);
+				break;
+		}
+
+		JS_FreeValue(ctx, obj);
+	}
+
+	switch (return_type) {
+		case NONTYPE_VOID:
+			call_function(void, func)(
+				arg[0],  arg[1],  arg[2],  arg[3], 
+				arg[4],  arg[5],  arg[6],  arg[7], 
+				arg[8],  arg[9],  arg[10], arg[11], 
+				arg[12], arg[13], arg[14], arg[15], 
+				arg[16], arg[17], arg[18], arg[19]
+			);
+			break;
+		case TYPE_INT:
+		case TYPE_UINT:
+		case TYPE_SHORT:
+		case TYPE_USHORT:
+		case TYPE_CHAR:
+		case TYPE_UCHAR:
+		case TYPE_PTR:
+			{
+				int ret = call_function(int, func)(
+					arg[0],  arg[1],  arg[2],  arg[3], 
+					arg[4],  arg[5],  arg[6],  arg[7], 
+					arg[8],  arg[9],  arg[10], arg[11], 
+					arg[12], arg[13], arg[14], arg[15], 
+					arg[16], arg[17], arg[18], arg[19]
+				);
+
+				return JS_NewInt32(ctx, ret);
+			}
+		case TYPE_BOOL:
+			{
+				bool ret = call_function(bool, func)(
+					arg[0],  arg[1],  arg[2],  arg[3], 
+					arg[4],  arg[5],  arg[6],  arg[7], 
+					arg[8],  arg[9],  arg[10], arg[11], 
+					arg[12], arg[13], arg[14], arg[15], 
+					arg[16], arg[17], arg[18], arg[19]
+				);
+
+				return JS_NewBool(ctx, ret);
+			}
+		case TYPE_FLOAT:
+			{
+				float ret = call_function(float, func)(
+					arg[0],  arg[1],  arg[2],  arg[3], 
+					arg[4],  arg[5],  arg[6],  arg[7], 
+					arg[8],  arg[9],  arg[10], arg[11], 
+					arg[12], arg[13], arg[14], arg[15], 
+					arg[16], arg[17], arg[18], arg[19]
+				);
+
+				return JS_NewFloat32(ctx, ret);
+			}
+		case TYPE_STRING:
+			{
+				char *ret = call_function(string, func)(
+					arg[0],  arg[1],  arg[2],  arg[3], 
+					arg[4],  arg[5],  arg[6],  arg[7], 
+					arg[8],  arg[9],  arg[10], arg[11], 
+					arg[12], arg[13], arg[14], arg[15], 
+					arg[16], arg[17], arg[18], arg[19]
+				);
+
+				return JS_NewString(ctx, ret);
+			}
+
+	}
+
+	return JS_UNDEFINED;
+	
+}
+
 static const JSCFunctionListEntry system_funcs[] = {
 	JS_CFUNC_DEF( "listDir",  1,         			athena_dir			 		 ),
 	JS_CFUNC_DEF( "removeDirectory",    		  1,       	athena_removeDir	 ),
@@ -534,6 +827,26 @@ static const JSCFunctionListEntry system_funcs[] = {
 	JS_CFUNC_DEF( "getMemoryStats",      	  0,   		athena_geteememory	 ),
 	JS_CFUNC_DEF( "getTemperature",      	  0,   		athena_gettemps	 ),
 	JS_CFUNC_DEF( "getStackTrace",      	  1,   		athena_stacktrace	 ),
+
+	JS_CFUNC_DEF( "nativeCall",      	    3, 		  athena_call_native),
+	JS_PROP_INT32_DEF("T_LONG", TYPE_LONG, JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("T_ULONG", TYPE_ULONG, JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("T_INT", TYPE_INT, JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("T_UINT", TYPE_UINT, JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("T_SHORT", TYPE_SHORT, JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("T_USHORT", TYPE_USHORT, JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("T_CHAR", TYPE_CHAR, JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("T_UCHAR", TYPE_UCHAR, JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("T_BOOL", TYPE_BOOL, JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("T_FLOAT", TYPE_FLOAT, JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("T_PTR", TYPE_PTR, JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("T_STRING", TYPE_STRING, JS_PROP_CONFIGURABLE ),
+
+	JS_CFUNC_DEF( "loadReloc",      	    1, 		  athena_loaddynamiclibrary	 ),
+	JS_CFUNC_DEF( "unloadReloc",            1, 		  athena_unloaddynamiclibrary	 ),
+	JS_CFUNC_DEF( "findRelocObject",        1,        athena_findrelocatableobject	 ),
+	JS_CFUNC_DEF( "findRelocLocalObject",   2,        athena_findlocalrelocatableobject	 ),
+
 	JS_PROP_STRING_DEF("boot_path", boot_path, JS_PROP_CONFIGURABLE ),
 	JS_PROP_INT32_DEF("READ_ONLY", 1, JS_PROP_CONFIGURABLE ),
 	JS_PROP_INT32_DEF("SELECT", 2, JS_PROP_CONFIGURABLE ),

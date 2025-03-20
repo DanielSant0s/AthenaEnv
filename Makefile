@@ -187,9 +187,13 @@ all: $(DIR_GUARD) $(EXT_LIBS) $(EE_OBJS)
 
 # mpgs: src/vu1/draw_3D_colors.vsm src/vu1/draw_3D_colors_scissor.vsm src/vu1/draw_3D_lights.vsm src/vu1/draw_3D_lights_scissor.vsm src/vu1/draw_3D_spec.vsm src/vu1/draw_3D_spec_scissor.vsm
 
-debug: $(EXT_LIBS) $(EE_BIN)
-	echo "Building $(EE_BIN) with debug symbols..."
-	mv $(EE_BIN) bin/athena_debug.elf
+debug: $(DIR_GUARD) $(EXT_LIBS) $(EE_OBJS) 
+	$(EE_CC) -T$(EE_LINKFILE) $(EE_OPTFLAGS) -o $(EE_BIN_DIR)tmp.elf $(EE_OBJS) $(EE_LDFLAGS) $(EXTRA_LDFLAGS) $(EE_LIBS) $(EE_SRC_DIR)dummy-exports.c
+	./build-exports.sh
+	$(EE_CC) -T$(EE_LINKFILE) $(EE_OPTFLAGS) -o bin/athena_debug.elf $(EE_OBJS) $(EE_LDFLAGS) $(EXTRA_LDFLAGS) $(EE_LIBS) $(EE_SRC_DIR)exports.c
+	rm $(EE_BIN_DIR)tmp.elf
+
+	echo "Building bin/athena_debug.elf with debug symbols..."
 
 tests: all
 	mv bin/$(EE_BIN) tests/test_suite.elf
