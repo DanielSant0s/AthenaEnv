@@ -756,6 +756,8 @@ void init_graphics()
     	clearScreen(BLACK_RGBAQ);	
 		flipScreen();
 	}
+
+	owl_flush_packet();
 }
 
 void graphicWaitVblankStart(){
