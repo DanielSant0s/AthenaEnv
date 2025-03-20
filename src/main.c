@@ -26,6 +26,9 @@
 
 #include <readini.h>
 
+#include <erl.h>
+
+
 char path_workbuffer[255] = { 0 };
 
 char boot_path[255] = { 0 };
@@ -87,6 +90,37 @@ void set_default_script(const char* path) {
     strcpy(default_script, path);
     default_script[strlen(path)] = '\0';
 }
+
+
+extern struct export_list_t {
+    char * name;
+    void * pointer;
+} export_list[];
+
+static char * prohibit_list[] = {
+    "_edata", "_end", "_end_bss", "_fbss", "_fdata", "_fini",
+    "_ftext", "_gp", "_init", "main", 
+    0
+};
+
+static void export_symbols() {
+    struct export_list_t * p;
+    int i, prohibit;
+    
+    for (p = export_list; p->name; p++) {
+	prohibit = 0;
+	for (i = 0; prohibit_list[i]; i++) {
+	    if (!(strcmp(prohibit_list[i], p->name))) {
+		prohibit = 1;
+		break;
+	    }
+	}
+	if (!prohibit)
+	    erl_add_global_symbol(p->name, p->pointer);
+    }
+}
+
+typedef void (*func_t)(void);
 
 int main(int argc, char **argv) {
     IniReader ini;
@@ -192,6 +226,8 @@ int main(int argc, char **argv) {
 
         wait_device(boot_path);
     }
+
+    export_symbols();
 
     #ifdef ATHENA_GRAPHICS
     fntInit();

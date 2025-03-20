@@ -33,6 +33,7 @@ EE_EXT = .elf
 EE_BIN = athena
 EE_BIN_PKD = athena_pkd
 
+EE_BIN_DIR = bin/
 EE_SRC_DIR = src/
 EE_OBJS_DIR = obj/
 EE_EMBED_DIR = embed/
@@ -166,22 +167,23 @@ VU1_MPGS := $(VU1_MPGS:%=$(VU1_MPGS_DIR)%) #prepend the microprograms folder
 EE_OBJS = $(APP_CORE) $(INI_READER) $(JS_CORE) $(ATHENA_MODULES) $(VU1_MPGS) $(IOP_MODULES) $(EMBEDDED_ASSETS) # group them all
 EE_OBJS := $(EE_OBJS:%=$(EE_OBJS_DIR)%) #prepend the object folder
 
-EE_BIN := $(EE_BIN)$(EE_EXT)
-EE_BIN_PKD := $(EE_BIN_PKD)$(EE_EXT)
+EE_BIN := $(EE_BIN_DIR)$(EE_BIN)$(EE_EXT)
+EE_BIN_PKD := $(EE_BIN_DIR)$(EE_BIN_PKD)$(EE_EXT)
 
 
 #-------------------------- App Content ---------------------------#
 
-all: $(EXT_LIBS) $(EE_BIN) $(EE_EMBED_DIR) $(EE_OBJS_DIR)
+all: $(DIR_GUARD) $(EXT_LIBS) $(EE_OBJS) 
+	$(EE_CC) -T$(EE_LINKFILE) $(EE_OPTFLAGS) -o $(EE_BIN_DIR)tmp.elf $(EE_OBJS) $(EE_LDFLAGS) $(EXTRA_LDFLAGS) $(EE_LIBS) $(EE_SRC_DIR)dummy-exports.c
+	./build-exports.sh
+	$(EE_CC) -T$(EE_LINKFILE) $(EE_OPTFLAGS) -o $(EE_BIN) $(EE_OBJS) $(EE_LDFLAGS) $(EXTRA_LDFLAGS) $(EE_LIBS) $(EE_SRC_DIR)exports.c
+	rm $(EE_BIN_DIR)tmp.elf
 	@echo "$$HEADER"
-
+	
 	echo "Building $(EE_BIN)..."
-	$(EE_STRIP) $(EE_BIN)
-
+	$(EE_STRIP) $(EE_BIN) 
+	
 	ps2-packer $(EE_BIN) $(EE_BIN_PKD) > /dev/null
-
-	mv $(EE_BIN) bin/
-	mv $(EE_BIN_PKD) bin/
 
 # mpgs: src/vu1/draw_3D_colors.vsm src/vu1/draw_3D_colors_scissor.vsm src/vu1/draw_3D_lights.vsm src/vu1/draw_3D_lights_scissor.vsm src/vu1/draw_3D_spec.vsm src/vu1/draw_3D_spec_scissor.vsm
 

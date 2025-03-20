@@ -16,3 +16,4 @@ bin/brew_data.json
 !.gitattributes
 !modules/mmceman/mmceman.irx
 
+src/exports.c
