@@ -26,6 +26,7 @@ jobs:
 
     - name: Compile project
       run: |
+        chmod +x build-exports.sh
         make clean all
 
     - name: Get short SHA
