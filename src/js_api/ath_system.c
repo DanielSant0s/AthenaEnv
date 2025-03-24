@@ -539,7 +539,6 @@ static JSValue athena_findlocalrelocatableobject(JSContext *ctx, JSValue this_va
 
 	if (erl) {
 		struct symbol_t *symbol = erl_find_local_symbol(JS_ToCString(ctx, argv[1]), erl);
-		printf("0x%x\n", symbol->address);
 		if (symbol)
 			return JS_NewUint32(ctx, symbol->address);
 	}

@@ -50,6 +50,8 @@
 #include "list.h"
 #include "quickjs-libc.h"
 
+#include <erl.h>
+
 /* TODO:
    - add socket calls
 */
@@ -455,9 +457,31 @@ static JSValue js_std_loadFile(JSContext *ctx, JSValueConst this_val,
 typedef JSModuleDef *(JSInitModuleFunc)(JSContext *ctx,
                                         const char *module_name);
 
-static JSModuleDef *js_module_loader_so(JSContext *ctx,
-                                        const char *module_name)
+typedef JSModuleDef *(*extern_loader_function)(JSContext* ctx);
+
+static JSModuleDef *js_module_loader_erl(JSContext *ctx, const char *module_name)
 {
+  	struct erl_record_t *erl = _init_load_erl_from_file(module_name, 0);
+    
+
+	if (erl) {
+        struct symbol_t *symbol = erl_find_local_symbol("js_init_module", erl);
+		if (symbol) {
+            extern_loader_function load_extern_module = symbol->address;
+
+            JSModuleDef *m = load_extern_module(ctx);
+
+            if (!m) {
+                JS_ThrowReferenceError(ctx, "could not load module filename '%s': initialization error",
+                                       module_name);
+
+                return NULL;
+            }
+
+            return m;
+        }
+    }
+    
     return NULL;
 }
 
@@ -519,8 +543,8 @@ JSModuleDef *js_module_loader(JSContext *ctx,
 {
     JSModuleDef *m;
 
-    if (has_suffix(module_name, ".so")) {
-        m = js_module_loader_so(ctx, module_name);
+    if (has_suffix(module_name, ".erl")) {
+        m = js_module_loader_erl(ctx, module_name);
     } else {
         size_t buf_len;
         uint8_t *buf;
