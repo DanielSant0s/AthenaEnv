@@ -1,0 +1,12 @@
+EE_BIN_DIR = bin/
+EE_SRC_DIR = src/
+EE_OBJ_DIR = obj/
+EE_EMBED_DIR = embed/
+
+JS_API_DIR = js_api/
+VU1_MPGS_DIR = vu1/
+
+BIN2S = $(PS2SDK)/bin/bin2c
+EE_DVP = dvp-as
+EE_VCL = vcl
+EE_VCLPP = vclpp

@@ -1,4 +1,5 @@
 .SILENT:
+include Makefile.const
 
 define HEADER
 
@@ -33,14 +34,6 @@ EE_EXT = .elf
 EE_BIN = athena
 EE_BIN_PKD = athena_pkd
 
-EE_BIN_DIR = bin/
-EE_SRC_DIR = src/
-EE_OBJS_DIR = obj/
-EE_EMBED_DIR = embed/
-
-JS_API_DIR = js_api/
-VU1_MPGS_DIR = vu1/
-
 RESET_IOP ?= 1
 DEBUG ?= 0
 EE_SIO ?= 0
@@ -48,10 +41,17 @@ EE_SIO ?= 0
 PADEMU ?= 1
 GRAPHICS ?= 1
 AUDIO ?= 1
-KEYBOARD ?= 1
-MOUSE ?= 1
-NETWORK ?= 1
-CAMERA ?= 0
+
+# Module linking control
+STATIC_KEYBOARD ?= 0
+STATIC_MOUSE ?= 0
+STATIC_NETWORK ?= 1
+STATIC_CAMERA ?= 0
+
+DYNAMIC_KEYBOARD ?= 1
+DYNAMIC_MOUSE ?= 1
+DYNAMIC_NETWORK ?= 0
+DYNAMIC_CAMERA ?= 0
 
 EE_LIBS = -L$(PS2SDK)/ports/lib -lmc -lpad -lpatches -ldebug -lz -llzma -lzip -lfileXio -lelf-loader-nocolour -lerl
 
@@ -65,11 +65,6 @@ endif
 ifeq ($(DEBUG),1)
   EE_CFLAGS += -DDEBUG
 endif
-
-BIN2S = $(PS2SDK)/bin/bin2c
-EE_DVP = dvp-as
-EE_VCL = vcl
-EE_VCLPP = vclpp
 
 JS_CORE = quickjs/cutils.o quickjs/libbf.o quickjs/libregexp.o quickjs/libunicode.o \
 				 quickjs/realpath.o quickjs/quickjs.o quickjs/quickjs-libc.o
@@ -105,10 +100,10 @@ endif
 
 ifeq ($(PADEMU),1)
   EE_CFLAGS += -DATHENA_PADEMU
-  EE_INCS += -Imodules/ds34bt/ee -Imodules/ds34usb/ee
-  EE_LIBS += -Lmodules/ds34bt/ee/ -Lmodules/ds34usb/ee/ -lds34bt -lds34usb
+  EE_INCS += -Iiop_modules/ds34bt/ee -Iiop_modules/ds34usb/ee
+  EE_LIBS += -Liop_modules/ds34bt/ee/ -Liop_modules/ds34usb/ee/ -lds34bt -lds34usb
   IOP_MODULES += ds34usb.o ds34bt.o
-	EXT_LIBS = modules/ds34usb/ee/libds34usb.a modules/ds34bt/ee/libds34bt.a
+	EXT_LIBS = iop_modules/ds34usb/ee/libds34usb.a iop_modules/ds34bt/ee/libds34bt.a
 endif
 
 ifeq ($(AUDIO),1)
@@ -120,39 +115,6 @@ ifeq ($(AUDIO),1)
   EE_LIBS += -laudsrv -lvorbisfile -lvorbis -logg
 endif
 
-ifeq ($(NETWORK),1)
-  EE_CFLAGS += -DATHENA_NETWORK
-  APP_CORE += network.o
-  ATHENA_MODULES += ath_network.o ath_socket.o
-  IOP_MODULES += NETMAN.o SMAP.o ps2ips.o
-  EE_LIBS += -lnetman -lps2ip -lcurl -lwolfssl
-endif
-
-ifeq ($(KEYBOARD),1)
-  EE_CFLAGS += -DATHENA_KEYBOARD
-  ATHENA_MODULES += ath_keyboard.o
-  IOP_MODULES += ps2kbd.o
-
-  EE_LIBS += -lkbd
-endif
-
-ifeq ($(MOUSE),1)
-  EE_CFLAGS += -DATHENA_MOUSE
-  ATHENA_MODULES += ath_mouse.o
-  IOP_MODULES += ps2mouse.o
-
-  EE_LIBS += -lmouse
-endif
-
-ifeq ($(CAMERA),1)
-  EE_BIN := $(EE_BIN)_cam
-  EE_BIN_PKD := $(EE_BIN_PKD)_cam
-  EE_CFLAGS += -DATHENA_CAMERA
-  ATHENA_MODULES += ath_camera.o
-  IOP_MODULES += ps2cam.o
-  EE_LIBS += -lps2cam
-endif
-
 ifneq ($(EE_SIO), 0)
   EE_BIN := $(EE_BIN)_eesio
   EE_BIN_PKD := $(EE_BIN_PKD)_eesio
@@ -160,12 +122,51 @@ ifneq ($(EE_SIO), 0)
   EE_LIBS += -lsiocookie
 endif
 
+# Static module linking
+ifeq ($(STATIC_NETWORK),1)
+  EE_CFLAGS += -DATHENA_NETWORK
+  APP_CORE += network.o
+  ATHENA_MODULES += ath_network.o ath_socket.o
+  IOP_MODULES += NETMAN.o SMAP.o ps2ips.o
+  EE_LIBS += -lnetman -lps2ip -lcurl -lwolfssl
+
+  DYNAMIC_NETWORK = 0
+endif
+
+ifeq ($(STATIC_KEYBOARD),1)
+  EE_CFLAGS += -DATHENA_KEYBOARD
+  ATHENA_MODULES += ath_keyboard.o
+  IOP_MODULES += ps2kbd.o
+  EE_LIBS += -lkbd
+
+  DYNAMIC_KEYBOARD = 0
+endif
+
+ifeq ($(STATIC_MOUSE),1)
+  EE_CFLAGS += -DATHENA_MOUSE
+  ATHENA_MODULES += ath_mouse.o
+  IOP_MODULES += ps2mouse.o
+  EE_LIBS += -lmouse
+
+  DYNAMIC_MOUSE = 0
+endif
+
+ifeq ($(STATIC_CAMERA),1)
+  EE_BIN := $(EE_BIN)_cam
+  EE_BIN_PKD := $(EE_BIN_PKD)_cam
+  EE_CFLAGS += -DATHENA_CAMERA
+  ATHENA_MODULES += ath_camera.o
+  IOP_MODULES += ps2cam.o
+  EE_LIBS += -lps2cam
+
+  DYNAMIC_CAMERA = 0
+endif
 
 ATHENA_MODULES := $(ATHENA_MODULES:%=$(JS_API_DIR)%) #prepend the modules folder
 VU1_MPGS := $(VU1_MPGS:%=$(VU1_MPGS_DIR)%) #prepend the microprograms folder
 
 EE_OBJS = $(APP_CORE) $(INI_READER) $(JS_CORE) $(ATHENA_MODULES) $(VU1_MPGS) $(IOP_MODULES) $(EMBEDDED_ASSETS) # group them all
-EE_OBJS := $(EE_OBJS:%=$(EE_OBJS_DIR)%) #prepend the object folder
+EE_OBJS := $(EE_OBJS:%=$(EE_OBJ_DIR)%) #prepend the object folder
 
 EE_BIN := $(EE_BIN_DIR)$(EE_BIN)$(EE_EXT)
 EE_BIN_PKD := $(EE_BIN_DIR)$(EE_BIN_PKD)$(EE_EXT)
@@ -173,7 +174,10 @@ EE_BIN_PKD := $(EE_BIN_DIR)$(EE_BIN_PKD)$(EE_EXT)
 
 #-------------------------- App Content ---------------------------#
 
-all: $(DIR_GUARD) $(EXT_LIBS) $(EE_OBJS) 
+all: $(DIR_GUARD) $(EXT_LIBS) $(EE_OBJS)
+	$(MAKE) -f Makefile.dl KEYBOARD=$(DYNAMIC_KEYBOARD)
+	$(MAKE) -f Makefile.dl MOUSE=$(DYNAMIC_MOUSE)
+
 	$(EE_CC) -T$(EE_LINKFILE) $(EE_OPTFLAGS) -o $(EE_BIN_DIR)tmp.elf $(EE_OBJS) $(EE_LDFLAGS) $(EXTRA_LDFLAGS) $(EE_LIBS) $(EE_SRC_DIR)dummy-exports.c
 	./build-exports.sh
 	$(EE_CC) -T$(EE_LINKFILE) $(EE_OPTFLAGS) -o $(EE_BIN) $(EE_OBJS) $(EE_LDFLAGS) $(EXTRA_LDFLAGS) $(EE_LIBS) $(EE_SRC_DIR)exports.c
@@ -188,6 +192,9 @@ all: $(DIR_GUARD) $(EXT_LIBS) $(EE_OBJS)
 # mpgs: src/vu1/draw_3D_colors.vsm src/vu1/draw_3D_colors_scissor.vsm src/vu1/draw_3D_lights.vsm src/vu1/draw_3D_lights_scissor.vsm src/vu1/draw_3D_spec.vsm src/vu1/draw_3D_spec_scissor.vsm
 
 debug: $(DIR_GUARD) $(EXT_LIBS) $(EE_OBJS) 
+	$(MAKE) -f Makefile.dl KEYBOARD=$(DYNAMIC_KEYBOARD)
+	$(MAKE) -f Makefile.dl MOUSE=$(DYNAMIC_MOUSE)
+
 	$(EE_CC) -T$(EE_LINKFILE) $(EE_OPTFLAGS) -o $(EE_BIN_DIR)tmp.elf $(EE_OBJS) $(EE_LDFLAGS) $(EXTRA_LDFLAGS) $(EE_LIBS) $(EE_SRC_DIR)dummy-exports.c
 	./build-exports.sh
 	$(EE_CC) -T$(EE_LINKFILE) $(EE_OPTFLAGS) -o bin/athena_debug.elf $(EE_OBJS) $(EE_LDFLAGS) $(EXTRA_LDFLAGS) $(EE_LIBS) $(EE_SRC_DIR)exports.c
@@ -195,35 +202,35 @@ debug: $(DIR_GUARD) $(EXT_LIBS) $(EE_OBJS)
 
 	echo "Building bin/athena_debug.elf with debug symbols..."
 
-tests: all
-	mv bin/$(EE_BIN) tests/test_suite.elf
-
 clean:
 	echo Cleaning executables...
 	rm -f bin/$(EE_BIN) bin/$(EE_BIN_PKD)
-	rm -rf $(EE_OBJS_DIR)
+	rm -rf $(EE_OBJ_DIR)
 	rm -rf $(EE_EMBED_DIR)
-	$(MAKE) -C modules/ds34usb clean
-	$(MAKE) -C modules/ds34bt clean
+	$(MAKE) -C iop_modules/ds34usb clean
+	$(MAKE) -C iop_modules/ds34bt clean
+
+	$(MAKE) -f Makefile.dl KEYBOARD=$(DYNAMIC_KEYBOARD) clean
+	$(MAKE) -f Makefile.dl MOUSE=$(DYNAMIC_MOUSE) clean
 
 rebuild: clean all
 
 include $(PS2SDK)/samples/Makefile.pref
 include $(PS2SDK)/samples/Makefile.eeglobal
-include embed.make
+include Makefile.embed
 
 $(EE_EMBED_DIR):
 	@mkdir -p $@
 
-$(EE_OBJS_DIR):
+$(EE_OBJ_DIR):
 	@mkdir -p $@
 
-$(EE_OBJS_DIR)%.o: $(EE_SRC_DIR)%.c | $(EE_OBJS_DIR)
+$(EE_OBJ_DIR)%.o: $(EE_SRC_DIR)%.c | $(EE_OBJ_DIR)
 	@echo CC - $<
 	$(DIR_GUARD)
 	$(EE_CC) $(EE_CFLAGS) $(EE_INCS) -c $< -o $@
 
-$(EE_OBJS_DIR)%.o: $(EE_SRC_DIR)%.vsm | $(EE_OBJS_DIR)
+$(EE_OBJ_DIR)%.o: $(EE_SRC_DIR)%.vsm | $(EE_OBJ_DIR)
 	@echo DVP - $<
 	$(DIR_GUARD)
 	$(EE_DVP) $< -o $@
@@ -238,7 +245,7 @@ $(EE_SRC_DIR)%.vsm: $(EE_SRC_DIR)%.vcl | $(EE_SRC_DIR)
 	$(DIR_GUARD)
 	$(EE_VCL) -Isrc -g -o$@ $<
 
-$(EE_OBJS_DIR)%.o: $(EE_EMBED_DIR)%.c | $(EE_OBJS_DIR)
+$(EE_OBJ_DIR)%.o: $(EE_EMBED_DIR)%.c | $(EE_OBJ_DIR)
 	@echo BIN2C - $<
 	$(DIR_GUARD)
 	$(EE_CC) $(EE_CFLAGS) $(EE_INCS) -c $< -o $@
