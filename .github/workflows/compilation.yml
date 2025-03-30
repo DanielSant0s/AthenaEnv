@@ -28,6 +28,8 @@ jobs:
       run: |
         chmod +x build-exports.sh
         make clean all
+      env:
+        ATHENAENV_SRC: "/__w/AthenaEnv/AthenaEnv/src"
 
     - name: Get short SHA
       id: slug
