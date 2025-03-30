@@ -56,31 +56,31 @@ $(EE_EMBED_DIR)cdfs.c: $(PS2SDK)/iop/irx/cdfs.irx | $(EE_EMBED_DIR)
 $(EE_EMBED_DIR)poweroff.c: $(PS2SDK)/iop/irx/poweroff.irx | $(EE_EMBED_DIR)
 	$(BIN2S) $< $@ poweroff_irx
 
-$(EE_EMBED_DIR)mmceman.c: modules/mmceman/mmceman.irx | $(EE_EMBED_DIR)
+$(EE_EMBED_DIR)mmceman.c: iop_modules/mmceman/mmceman.irx | $(EE_EMBED_DIR)
 	$(BIN2S) $< $@ mmceman_irx
 
-modules/ds34bt/ee/libds34bt.a: modules/ds34bt/ee
+iop_modules/ds34bt/ee/libds34bt.a: iop_modules/ds34bt/ee
 	$(MAKE) -C $<
 
-modules/ds34bt/iop/ds34bt.irx: modules/ds34bt/iop
+iop_modules/ds34bt/iop/ds34bt.irx: iop_modules/ds34bt/iop
 	$(MAKE) -C $<
 
-$(EE_EMBED_DIR)ds34bt.c: modules/ds34bt/iop/ds34bt.irx | $(EE_EMBED_DIR)
+$(EE_EMBED_DIR)ds34bt.c: iop_modules/ds34bt/iop/ds34bt.irx | $(EE_EMBED_DIR)
 	$(BIN2S) $< $@ ds34bt_irx
 
-modules/ds34usb/ee/libds34usb.a: modules/ds34usb/ee
+iop_modules/ds34usb/ee/libds34usb.a: iop_modules/ds34usb/ee
 	$(MAKE) -C $<
 
-modules/ds34usb/iop/ds34usb.irx: modules/ds34usb/iop
+iop_modules/ds34usb/iop/ds34usb.irx: iop_modules/ds34usb/iop
 	$(MAKE) -C $<
 
-$(EE_EMBED_DIR)ds34usb.c: modules/ds34usb/iop/ds34usb.irx | $(EE_EMBED_DIR)
+$(EE_EMBED_DIR)ds34usb.c: iop_modules/ds34usb/iop/ds34usb.irx | $(EE_EMBED_DIR)
 	$(BIN2S) $< $@ ds34usb_irx
 
-modules/freeram/freeram.irx: modules/freeram
+iop_modules/freeram/freeram.irx: iop_modules/freeram
 	$(MAKE) -C $<
 
-$(EE_EMBED_DIR)freeram.c: modules/freeram/freeram.irx | $(EE_EMBED_DIR)
+$(EE_EMBED_DIR)freeram.c: iop_modules/freeram/freeram.irx | $(EE_EMBED_DIR)
 	$(BIN2S) $< $@ freeram_irx
 
 $(EE_EMBED_DIR)NETMAN.c: $(PS2SDK)/iop/irx/netman.irx | $(EE_EMBED_DIR)

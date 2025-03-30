@@ -78,7 +78,16 @@ static int module_init(JSContext *ctx, JSModuleDef *m)
     return JS_SetModuleExportList(ctx, m, module_funcs, countof(module_funcs));
 }
 
-JSModuleDef *athena_mouse_init(JSContext* ctx){
+#ifdef DYNAMIC_ATHENA_MOUSE
+char * erl_dependancies[] = {
+    "libmouse",
+    0
+};
+JSModuleDef *js_init_module(JSContext* ctx)
+#else
+JSModuleDef *athena_mouse_init(JSContext* ctx)
+#endif
+{
     return athena_push_module(ctx, module_init, module_funcs, countof(module_funcs), "Mouse");
 }
 

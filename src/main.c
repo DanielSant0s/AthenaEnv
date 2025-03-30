@@ -18,6 +18,7 @@
 #define NEWLIB_PORT_AWARE
 #include <fileXio_rpc.h>
 #include <fileio.h>
+#include <ps2sdkapi.h>
 
 #ifdef ATHENA_GRAPHICS
 #include <graphics.h>
@@ -35,6 +36,13 @@ char boot_path[255] = { 0 };
 char default_script[128] = "main.js";
 char default_cfg[128] = "athena.ini";
 bool dark_mode, boot_logo;
+
+static __attribute__((used)) void *bypass_modulated_libs() {
+    void* func = NULL;
+    func = (void*)_ps2sdk_ioctl;
+
+    return func;
+}
 
 static void init_drivers() {
     load_default_module(MC_MODULE);
