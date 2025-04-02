@@ -13,7 +13,7 @@ function str2ab(str) {
     return buf;
   }
 
-Screen.log("Athena network system\n");
+console.log("Athena network system\n");
 
 IOP.reset();
 
@@ -21,11 +21,13 @@ IOP.loadDefaultModule(IOP.network);
 
 Network.init();
 
-Screen.log(JSON.stringify(Network.getConfig()));
+console.log(JSON.stringify(Network.getConfig()));
 
 let req = new Request();
 
-var ws = new WebSocket("wss://gateway.discord.gg/?v=10&encoding=json");
+let ws = new WebSocket("wss://gateway.discord.gg/?v=10&encoding=json");
+
+console.log(ab2str(ws.recv()));
 
 ws = null;
 

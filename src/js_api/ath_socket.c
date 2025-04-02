@@ -2,6 +2,7 @@
 
 #include <ath_env.h>
 #include <network.h>
+#include <network.h>
 #include <malloc.h>
 
 typedef struct {
@@ -52,9 +53,10 @@ static JSValue athena_socket_connect(JSContext *ctx, JSValue this_val, int argc,
     memset(&addr, 0, sizeof(addr));
     addr.sin_len = sizeof(addr);
     addr.sin_family = s->sin_family;
-    addr.sin_addr.s_addr = inet_addr(JS_ToCString(ctx, argv[0]));
+    addr.sin_addr.s_addr = ipaddr_addr(JS_ToCString(ctx, argv[0]));
+
     JS_ToInt32(ctx, &sin_port, argv[1]);
-    addr.sin_port = PP_HTONS(sin_port);
+    addr.sin_port = htons(sin_port);
 
     int ret = connect(s->id, (struct sockaddr*)&addr, sizeof(addr));
 
@@ -72,9 +74,9 @@ static JSValue athena_socket_bind(JSContext *ctx, JSValue this_val, int argc, JS
     memset(&addr, 0, sizeof(addr));
     addr.sin_len = sizeof(addr);
     addr.sin_family = s->sin_family;
-    addr.sin_addr.s_addr = inet_addr(JS_ToCString(ctx, argv[0]));
+    addr.sin_addr.s_addr = ipaddr_addr(JS_ToCString(ctx, argv[0]));
     JS_ToInt32(ctx, &sin_port, argv[1]);
-    addr.sin_port = PP_HTONS(sin_port);
+    addr.sin_port = htons(sin_port);
 
     int ret = bind(s->id, (struct sockaddr*)&addr, sizeof(addr));
 

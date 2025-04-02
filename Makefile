@@ -125,8 +125,8 @@ endif
 # Static module linking
 ifeq ($(STATIC_NETWORK),1)
   EE_CFLAGS += -DATHENA_NETWORK
-  APP_CORE += network.o
-  ATHENA_MODULES += ath_network.o ath_socket.o
+  APP_CORE += network.o request.o
+  ATHENA_MODULES += ath_network.o ath_socket.o ath_request.o ath_websocket.o
   IOP_MODULES += NETMAN.o SMAP.o ps2ips.o
   EE_LIBS += -lnetman -lps2ip -lcurl -lwolfssl
 

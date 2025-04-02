@@ -38,8 +38,8 @@ char default_cfg[128] = "athena.ini";
 bool dark_mode, boot_logo;
 
 static __attribute__((used)) void *bypass_modulated_libs() {
-    void* func = NULL;
-    func = (void*)_ps2sdk_ioctl;
+    int func = NULL;
+    func |= (int)_ps2sdk_ioctl;
 
     return func;
 }
@@ -106,8 +106,8 @@ extern struct export_list_t {
 } export_list[];
 
 static char * prohibit_list[] = {
-    "_edata", "_end", "_end_bss", "_fbss", "_fdata", "_fini",
-    "_ftext", "_gp", "_init", "main", 
+    "_edata", "_end_bss", "_fbss", "_fdata", "_fini",
+    "_ftext", "_init", "main", //"_gp", "_end", 
     0
 };
 
