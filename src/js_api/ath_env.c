@@ -304,7 +304,7 @@ static JSContext *JS_NewCustomContext(JSRuntime *rt)
 	athena_network_init(ctx);
 	athena_request_init(ctx);
 	athena_socket_init(ctx);
-	athena_ws_init(ctx);
+	athena_ws_init(ctx); 
 	#endif
 
     return ctx;

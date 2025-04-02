@@ -1,3 +1,6 @@
+#ifndef ATHENA_NETWORK_H
+#define ATHENA_NETWORK_H
+
 #include <ath_env.h>
 
 #include <netman.h>
@@ -51,3 +54,6 @@ int ethApplyNetIFConfig(int mode);
 int ethWaitValidNetIFLinkState(void);
 int ethWaitValidDHCPState(void);
 int ethApplyIPConfig(int use_dhcp, const struct ip4_addr *ip, const struct ip4_addr *netmask, const struct ip4_addr *gateway, const struct ip4_addr *dns);
+
+
+#endif
