@@ -31,8 +31,8 @@ export HEADER
 
 EE_EXT = .elf
 
-EE_BIN = athena
-EE_BIN_PKD = athena_pkd
+EE_BIN_PREF ?= athena
+EE_BIN_PKD = $(EE_BIN_PREF)_pkd
 
 RESET_IOP ?= 1
 DEBUG ?= 0
@@ -43,13 +43,13 @@ GRAPHICS ?= 1
 AUDIO ?= 1
 
 # Module linking control
-STATIC_KEYBOARD ?= 0
-STATIC_MOUSE ?= 0
+STATIC_KEYBOARD ?= 1
+STATIC_MOUSE ?= 1
 STATIC_NETWORK ?= 1
 STATIC_CAMERA ?= 0
 
-DYNAMIC_KEYBOARD ?= 1
-DYNAMIC_MOUSE ?= 1
+DYNAMIC_KEYBOARD ?= 0
+DYNAMIC_MOUSE ?= 0
 DYNAMIC_NETWORK ?= 0
 DYNAMIC_CAMERA ?= 0
 
@@ -116,7 +116,7 @@ ifeq ($(AUDIO),1)
 endif
 
 ifneq ($(EE_SIO), 0)
-  EE_BIN := $(EE_BIN)_eesio
+  EE_BIN_PREF := $(EE_BIN_PREF)_eesio
   EE_BIN_PKD := $(EE_BIN_PKD)_eesio
   EE_CFLAGS += -D__EESIO_PRINTF
   EE_LIBS += -lsiocookie
@@ -152,7 +152,7 @@ ifeq ($(STATIC_MOUSE),1)
 endif
 
 ifeq ($(STATIC_CAMERA),1)
-  EE_BIN := $(EE_BIN)_cam
+  EE_BIN_PREF := $(EE_BIN_PREF)_cam
   EE_BIN_PKD := $(EE_BIN_PKD)_cam
   EE_CFLAGS += -DATHENA_CAMERA
   ATHENA_MODULES += ath_camera.o
@@ -168,7 +168,7 @@ VU1_MPGS := $(VU1_MPGS:%=$(VU1_MPGS_DIR)%) #prepend the microprograms folder
 EE_OBJS = $(APP_CORE) $(INI_READER) $(JS_CORE) $(ATHENA_MODULES) $(VU1_MPGS) $(IOP_MODULES) $(EMBEDDED_ASSETS) # group them all
 EE_OBJS := $(EE_OBJS:%=$(EE_OBJ_DIR)%) #prepend the object folder
 
-EE_BIN := $(EE_BIN_DIR)$(EE_BIN)$(EE_EXT)
+EE_BIN := $(EE_BIN_DIR)$(EE_BIN_PREF)$(EE_EXT)
 EE_BIN_PKD := $(EE_BIN_DIR)$(EE_BIN_PKD)$(EE_EXT)
 
 
