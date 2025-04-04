@@ -701,7 +701,9 @@ typedef enum
 	TYPE_BOOL,
 	TYPE_FLOAT,
 	TYPE_PTR,
-	TYPE_STRING
+	TYPE_STRING,
+
+	JS_TYPE_BUFFER,
 } arg_types;
 
 typedef void (*void_return_call)(
@@ -790,6 +792,13 @@ static JSValue athena_call_native(JSContext *ctx, JSValue this_val, int argc, JS
 				break;
 			case TYPE_STRING:
 				arg[i].string_arg = JS_ToCString(ctx, val);
+				break;
+			case JS_TYPE_BUFFER:
+				{
+					uint32_t tmp;
+					arg[i].ptr_arg = JS_GetArrayBuffer(ctx, &tmp, val);
+				}
+				
 				break;
 		}
 
@@ -905,6 +914,8 @@ static const JSCFunctionListEntry system_funcs[] = {
 	JS_PROP_INT32_DEF("T_FLOAT", TYPE_FLOAT, JS_PROP_CONFIGURABLE ),
 	JS_PROP_INT32_DEF("T_PTR", TYPE_PTR, JS_PROP_CONFIGURABLE ),
 	JS_PROP_INT32_DEF("T_STRING", TYPE_STRING, JS_PROP_CONFIGURABLE ),
+
+	JS_PROP_INT32_DEF("JS_BUFFER", JS_TYPE_BUFFER, JS_PROP_CONFIGURABLE ),
 
 	JS_CFUNC_DEF( "loadReloc",      	    1, 		  athena_loaddynamiclibrary	 ),
 	JS_CFUNC_DEF( "unloadReloc",            1, 		  athena_unloaddynamiclibrary	 ),
