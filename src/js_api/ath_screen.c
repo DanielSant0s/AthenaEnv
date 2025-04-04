@@ -32,6 +32,25 @@ static JSValue athena_clear(JSContext *ctx, JSValue this_val, int argc, JSValueC
 	return JS_UNDEFINED;
 }
 
+static JSValue athena_alphablendmode(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+  	if (argc > 1) {
+		uint32_t a, b, c, d, fix;
+		JS_ToUint32(ctx, &a,   argv[0]);
+		JS_ToUint32(ctx, &b,   argv[1]);
+		JS_ToUint32(ctx, &c,   argv[2]);
+		JS_ToUint32(ctx, &d,   argv[3]);
+		JS_ToUint32(ctx, &fix, argv[4]);
+
+		set_alpha_blend_mode(ALPHA_EQUATION(a, b, c, d, fix));
+	} else {
+		uint64_t preset;
+		JS_ToInt64(ctx, &preset, argv[0]);
+		set_alpha_blend_mode(preset);
+	}
+
+	return JS_UNDEFINED;
+}
+
 
 static JSValue athena_vblank(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	graphicWaitVblankStart();
@@ -182,6 +201,7 @@ static JSValue athena_cls(JSContext *ctx, JSValue this_val, int argc, JSValueCon
 static const JSCFunctionListEntry module_funcs[] = {
     JS_CFUNC_DEF("flip", 0, athena_flip),
     JS_CFUNC_DEF("clear", 1, athena_clear),
+	JS_CFUNC_DEF("alphaBlendMode", 5, athena_alphablendmode),
 	JS_CFUNC_DEF("getFreeVRAM", 0, athena_getFreeVRAM),
 	JS_CFUNC_DEF("getFPS", 1, athena_getFPS),
     JS_CFUNC_DEF("waitVblankStart", 0, athena_vblank),
@@ -194,6 +214,18 @@ static const JSCFunctionListEntry module_funcs[] = {
 
 	JS_CFUNC_DEF("clearColor", 1, athena_set_clear_color),
 	JS_CFUNC_DEF("display", 1, athena_displayfunc),
+
+	JS_PROP_INT32_DEF("SRC_RGB", SRC_RGB, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("DST_RGB", DST_RGB, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("ZERO_RGB", ZERO_RGB, JS_PROP_CONFIGURABLE),
+
+	JS_PROP_INT32_DEF("SRC_ALPHA", SRC_ALPHA, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("DST_ALPHA", DST_ALPHA, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("ALPHA_FIX", ALPHA_FIX, JS_PROP_CONFIGURABLE),
+
+	JS_PROP_INT64_DEF("BLEND_DEFAULT", GS_ALPHA_BLEND_NORMAL, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT64_DEF("BLEND_ADD_NOALPHA", GS_ALPHA_BLEND_ADD_NOALPHA, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT64_DEF("BLEND_ADD", GS_ALPHA_BLEND_ADD, JS_PROP_CONFIGURABLE),
 
 	JS_PROP_INT32_DEF("NTSC", GS_MODE_NTSC, JS_PROP_CONFIGURABLE),
 	JS_PROP_INT32_DEF("DTV_480p", GS_MODE_DTV_480P, JS_PROP_CONFIGURABLE),

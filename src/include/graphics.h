@@ -16,6 +16,29 @@
 
 #include <texture_manager.h>
 
+// The GS's alpha blending formula is fixed but it contains four variables that can be reconfigured:
+// Output = (((A - B) * C) >> 7) + D
+// A, B, and D are colors and C is an alpha value. Their specific values come from the ALPHA register:
+//       A                B                C                   D
+//   0   Source RGB       Source RGB       Source alpha        Source RGB
+//   1   Framebuffer RGB  Framebuffer RGB  Framebuffer alpha   Framebuffer RGB
+//   2   0                0                FIX                 0
+//   3   Reserved         Reserved         Reserved            Reserved
+
+#define SRC_RGB 0
+#define DST_RGB 1
+#define ZERO_RGB 2
+
+#define SRC_ALPHA 0
+#define DST_ALPHA 1
+#define ALPHA_FIX 2
+
+#define ALPHA_EQUATION(A,B,C,D,FIX) ( (((uint64_t)(A))&3) | ((((uint64_t)(B))&3)<<2) | ((((uint64_t)(C))&3)<<4) | ((((uint64_t)(D))&3)<<6) | ((((uint64_t)(FIX)))<<32UL) )//(A - B)*C >> 7 + D
+
+#define GS_ALPHA_BLEND_NORMAL         (ALPHA_EQUATION(SRC_RGB, DST_RGB, SRC_ALPHA, DST_ALPHA, 0x00))
+#define GS_ALPHA_BLEND_ADD_NOALPHA    (ALPHA_EQUATION(SRC_RGB, ZERO_RGB, ALPHA_FIX, DST_ALPHA, 0x80))
+#define GS_ALPHA_BLEND_ADD            (ALPHA_EQUATION(SRC_RGB, ZERO_RGB, SRC_ALPHA, DST_ALPHA, 0x00))
+
 extern GSGLOBAL *gsGlobal;
 
 /// GSKit CLUT base struct. This should've been in gsKit from the start :)
@@ -89,6 +112,8 @@ void drawTriangle(float x, float y, float x2, float y2, float x3, float y3, Colo
 void drawTriangle_gouraud(float x, float y, float x2, float y2, float x3, float y3, Color color, Color color2, Color color3);
 void drawQuad(float x, float y, float x2, float y2, float x3, float y3, float x4, float y4, Color color);
 void drawQuad_gouraud(float x, float y, float x2, float y2, float x3, float y3, float x4, float y4, Color color, Color color2, Color color3, Color color4);
+
+void set_alpha_blend_mode(uint64_t alpha_equation);
 
 GSFONT* loadFont(const char* path);
 void printFontText(GSFONT* font, const char* text, float x, float y, float scale, Color color);

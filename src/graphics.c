@@ -40,6 +40,21 @@ static int frame_interval = -1;
 
 static owl_qword owl_packet_buffer[OWL_PACKET_BUFFER_SIZE] __attribute__((aligned(16))) = { 0 };
 
+void set_alpha_blend_mode(uint64_t alpha_equation) {
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 4);
+
+	owl_add_cnt_tag(packet, 3, 0);
+
+	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+	owl_add_uint(packet, VIF_CODE(2, 0, VIF_DIRECT, 0)); // 3 giftags
+
+	owl_add_tag(packet, GIF_AD, VU_GS_GIFTAG(1, 1, NULL, 0, 0, 0, 1));
+
+	owl_add_tag(packet, GS_ALPHA_1, alpha_equation);
+}
+
 void page_clear(Color color) {
 	const uint32_t page_count = gsGlobal->Width * (gsGlobal->Height) / 2048;
 
