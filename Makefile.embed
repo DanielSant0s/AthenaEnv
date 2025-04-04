@@ -38,6 +38,9 @@ $(EE_EMBED_DIR)bdmfs_fatfs.c: $(PS2SDK)/iop/irx/bdmfs_fatfs.irx | $(EE_EMBED_DIR
 $(EE_EMBED_DIR)usbmass_bd.c: $(PS2SDK)/iop/irx/usbmass_bd.irx | $(EE_EMBED_DIR)
 	$(BIN2S) $< $@ usbmass_bd_irx
 
+$(EE_EMBED_DIR)mx4sio_bd.c: $(PS2SDK)/iop/irx/mx4sio_bd.irx | $(EE_EMBED_DIR)
+	$(BIN2S) $< $@ mx4sio_bd_irx
+
 $(EE_EMBED_DIR)ps2dev9.c: $(PS2SDK)/iop/irx/ps2dev9.irx | $(EE_EMBED_DIR)
 	$(BIN2S) $< $@ ps2dev9_irx
 

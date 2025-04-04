@@ -33,6 +33,8 @@ bool mc_started = false;
 bool hdd_started = false;
 bool filexio_started = false;
 bool camera_started = false;
+bool mx4sio_started = false;
+
 bool HDD_USABLE = false;
 
 void prepare_IOP() {
@@ -69,6 +71,7 @@ void prepare_IOP() {
 	hdd_started = false;
 	filexio_started = false;
 	camera_started = false;
+	mx4sio_started = false;
 }
 
 bool wait_device(char *path) {
@@ -113,6 +116,10 @@ int get_boot_device(const char* path) {
 /// @note this checks if ret is not 1 instead of checking if it is 0. this way we implicitly support value 2 (`MODULE_REMOVABLE_END`)
 #define LOAD_SUCCESS() (ID > 0 && ret != 1)
 
+inline void load_filexio_module() {
+	if (!filexio_started)
+		load_default_module(FILEXIO_MODULE);
+}
 
 int load_default_module(int id) {
 	int ds3pads = 1;
@@ -195,8 +202,7 @@ int load_default_module(int id) {
 		#endif
 
 		case SIO2MAN_MODULE:
-			if (!filexio_started)
-				load_default_module(FILEXIO_MODULE);
+			load_filexio_module();
 			if (!sio2man_started) {
 				ID = SifExecModuleBuffer(&sio2man_irx, size_sio2man_irx, 0, NULL, &ret);
 				REPORT("SIO2MAN");
@@ -241,6 +247,8 @@ int load_default_module(int id) {
 		#endif
 
 		case BDM_MODULE:
+			load_filexio_module();
+
 			if (!bdm_started) {
     			ID = SifExecModuleBuffer(&bdm_irx, size_bdm_irx, 0, NULL, &ret);
 				REPORT("BDM");
@@ -253,6 +261,8 @@ int load_default_module(int id) {
 			}
 			break;
         case USB_MASS_MODULE:
+			load_filexio_module();
+
 			if (!bdm_started)
 				load_default_module(BDM_MODULE);
 			if (!usbd_started)
@@ -265,13 +275,29 @@ int load_default_module(int id) {
 			}
 			break;
         case MMCEMAN_MODULE:
+			load_filexio_module();
+
             if (!mmceman_started) {
                 ID = SifExecModuleBuffer(&mmceman_irx, size_mmceman_irx, 0, NULL, &ret);
                 REPORT("MMCEMAN");
                 mmceman_started = LOAD_SUCCESS();
             }
             break;
+		case MX4SIO_MODULE:
+			load_filexio_module();
+
+			if (!bdm_started)
+				load_default_module(BDM_MODULE);
+			if (!mx4sio_started) {
+    			ID = SifExecModuleBuffer(&mx4sio_bd_irx, size_mx4sio_bd_irx, 0, NULL, &ret);
+				REPORT("MX4SIO_BD");
+
+				mx4sio_started = LOAD_SUCCESS();
+			}
+			break;
         case CDFS_MODULE:
+			load_filexio_module();
+
 			if (!cdfs_started) {
 				ID = SifExecModuleBuffer(&cdfs_irx, size_cdfs_irx, 0, NULL, &ret);
 				REPORT("CDFS");
@@ -286,8 +312,8 @@ int load_default_module(int id) {
 			}
 		    break;
 		case HDD_MODULE:
-			if (!filexio_started)
-				load_default_module(FILEXIO_MODULE);
+			load_filexio_module();
+
 			if (!dev9_started)
 				load_default_module(DEV9_MODULE);
 			if (!usb_mass_started)

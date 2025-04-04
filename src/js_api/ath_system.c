@@ -14,6 +14,13 @@
 #include <def_mods.h>
 #include <taskman.h>
 
+#include <usbhdfsd-common.h>
+#include <hdd-ioctl.h>
+#define NEWLIB_PORT_AWARE
+#include <fileXio_rpc.h>
+#include <fileio.h>
+#include <io_common.h>
+
 #include <erl.h>
 
 #define MAX_DIR_FILES 512
@@ -403,6 +410,62 @@ static JSValue athena_getfileprogress(JSContext *ctx, JSValue this_val, int argc
 
 	return obj;
 }
+
+static JSValue athena_devices(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
+{
+	if (!filexio_started) return JS_ThrowInternalError(ctx, "Can't use fileXio functions if fileXio is not loaded.");
+	int i, devcnt;
+	struct fileXioDevice DEV[FILEXIO_MAX_DEVICES];
+	
+	devcnt = fileXioGetDeviceList(DEV, FILEXIO_MAX_DEVICES);
+	if (devcnt > 0) {
+		JSValue arr = JS_NewArray(ctx);
+		for(i = 0; i < devcnt; i++ )
+		{
+			JSValue obj = JS_NewObject(ctx);
+			JS_DefinePropertyValueStr(ctx, obj, "name", JS_NewString(ctx, DEV[i].name), JS_PROP_C_W_E);
+			JS_DefinePropertyValueStr(ctx, obj, "desc", JS_NewString(ctx, DEV[i].desc), JS_PROP_C_W_E);
+
+			JS_DefinePropertyValueUint32(ctx, arr, i, obj, JS_PROP_C_W_E);
+		}
+
+		return arr;
+	}
+
+	return JS_NULL;
+}
+
+// Gets BDM driver name via fileXio
+static JSValue athena_getbdminfo(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
+	if (argc != 1)
+		return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
+
+	const char *mass = JS_ToCString(ctx, argv[0]);
+
+	int fd = fileXioDopen(mass);
+	if (fd >= 0) {
+		char driverName[10];
+		int deviceNumber;
+		if (fileXioIoctl2(fd, USBMASS_IOCTL_GET_DRIVERNAME, NULL, 0, driverName, sizeof(driverName) - 1) >= 0) {
+			// Null-terminate the string before mapping
+			driverName[sizeof(driverName) - 1] = '\0';
+	
+			fileXioIoctl2(fd, USBMASS_IOCTL_GET_DEVICE_NUMBER, NULL, 0, &deviceNumber, sizeof(deviceNumber));
+	
+			fileXioDclose(fd);
+	
+			JSValue data = JS_NewObject(ctx);
+		
+			JS_DefinePropertyValueStr(ctx, data, "name", JS_NewString(ctx, driverName), JS_PROP_C_W_E);
+			JS_DefinePropertyValueStr(ctx, data, "number", JS_NewInt32(ctx, deviceNumber), JS_PROP_C_W_E);
+		
+			return data;
+		}
+	}
+
+	return JS_UNDEFINED;
+}
+
 
 static JSValue athena_darkmode(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
 	dark_mode = JS_ToBool(ctx, argv[0]);
@@ -805,6 +868,8 @@ static JSValue athena_call_native(JSContext *ctx, JSValue this_val, int argc, JS
 }
 
 static const JSCFunctionListEntry system_funcs[] = {
+	JS_CFUNC_DEF( "getBDMInfo",  0,         			athena_getbdminfo		 ),
+	JS_CFUNC_DEF( "devices",  0,         			athena_devices			 	 ),
 	JS_CFUNC_DEF( "listDir",  1,         			athena_dir			 		 ),
 	JS_CFUNC_DEF( "removeDirectory",    		  1,       	athena_removeDir	 ),
 	JS_CFUNC_DEF( "moveFile",	       		  2,        	athena_movefile	 ),
@@ -957,6 +1022,7 @@ static const JSCFunctionListEntry sif_funcs[] = {
 	JS_PROP_INT32_DEF("hdd", HDD_MODULE, JS_PROP_CONFIGURABLE),
 	JS_PROP_INT32_DEF("boot_device", BOOT_MODULE, JS_PROP_CONFIGURABLE),
 	JS_PROP_INT32_DEF("camera", CAMERA_MODULE, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("mx4sio", MX4SIO_MODULE, JS_PROP_CONFIGURABLE),
 };
 
 static int system_init(JSContext *ctx, JSModuleDef *m)

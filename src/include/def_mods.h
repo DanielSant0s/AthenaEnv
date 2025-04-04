@@ -49,6 +49,8 @@ extern bool mc_started;
 extern bool hdd_started;
 extern bool filexio_started;
 extern bool camera_started;
+extern bool mx4sio_started;
+
 extern bool HDD_USABLE;
 
 /// @brief list of modules ID to be used with `load_default_module` loads the mentioned module and manages their IRX dependencies
@@ -73,6 +75,7 @@ enum MODLIST {
     SIO2MAN_MODULE,
     DEV9_MODULE,
     CAMERA_MODULE,
+    MX4SIO_MODULE, 
 };
 
 #define BOOT_MODULE 99
@@ -90,6 +93,7 @@ irx_define(usbd);
 irx_define(bdm);
 irx_define(bdmfs_fatfs);
 irx_define(usbmass_bd);
+irx_define(mx4sio_bd);
 irx_define(ps2dev9);
 irx_define(ps2atad);
 irx_define(ps2hdd);

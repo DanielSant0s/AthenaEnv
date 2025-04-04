@@ -62,8 +62,12 @@ bool readini_comment(IniReader* ini, char* value_ptr) {
 
 bool readini_emptyline(IniReader* ini) {
     if(ini->cur_line[0]) {
+        if (ini->cur_line[0] == "\n" || (ini->cur_line[0] == "\r" && ini->cur_line[1] == "\n")) {
+            return true;
+        }
         return false;
     }
+
     return true;
 }
 

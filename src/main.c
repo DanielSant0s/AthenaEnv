@@ -29,6 +29,53 @@
 
 #include <erl.h>
 
+const char* module_ini_entries[] = {
+    "keyboard",
+    "mouse",
+    "ds34bt",
+    "ds34usb",
+    "network",
+    "usb_mass",
+    "pads",
+    "audio",
+    "mmce",
+    "cdfs",
+    "mc",
+    "hdd",
+    "mx4sio"
+};
+
+bool module_ini_values[] = {
+    false, // kbd 
+    false, // mouse
+    false, // ds34bt
+    false, // ds34usb
+    false, // network
+    true,  // usb_mass
+    true , // pads
+    true , // audio
+    false, // mmceman
+    false, // cdfs
+    false, // mc
+    false, // hdd
+    false  // mx4sio
+};
+
+enum module_masks {
+    index_kbd,
+    index_mouse,
+    index_ds34bt,
+    index_ds34usb,
+    index_network,
+    index_usb_mass,
+    index_pads,
+    index_audio,
+    index_mmceman,
+    index_cdfs,
+    index_mc,
+    index_hdd,
+    index_mx4sio
+};
 
 char path_workbuffer[255] = { 0 };
 
@@ -45,14 +92,23 @@ static __attribute__((used)) void *bypass_modulated_libs() {
 }
 
 static void init_drivers() {
-    load_default_module(MC_MODULE);
-    load_default_module(MMCEMAN_MODULE);
-    load_default_module(CDFS_MODULE);
-    load_default_module(HDD_MODULE);
-    load_default_module(USB_MASS_MODULE);
-    load_default_module(PADS_MODULE);
-    load_default_module(DS34BT_MODULE);
-    load_default_module(DS34USB_MODULE);
+    if (module_ini_values[index_mc])
+        load_default_module(MC_MODULE);
+    if (module_ini_values[index_mmceman])
+        load_default_module(MMCEMAN_MODULE);
+    if (module_ini_values[index_cdfs])
+        load_default_module(CDFS_MODULE);
+    if (module_ini_values[index_hdd])
+        load_default_module(HDD_MODULE);
+    if (module_ini_values[index_usb_mass])
+        load_default_module(USB_MASS_MODULE);
+    if (module_ini_values[index_pads])
+        load_default_module(PADS_MODULE);
+    if (module_ini_values[index_ds34bt])
+        load_default_module(DS34BT_MODULE);
+    if (module_ini_values[index_ds34usb])
+        load_default_module(DS34USB_MODULE);
+    if (module_ini_values[index_audio])
     load_default_module(AUDIO_MODULE);
 
     // SifExecModuleBuffer(&mtapman_irx, size_mtapman_irx, 0, NULL, NULL);
@@ -90,7 +146,6 @@ int mnt(const char* path, int index, int openmod)
 void init_base_fs_drivers() {
     SifExecModuleBuffer(&poweroff_irx, size_poweroff_irx, 0, NULL, NULL);
 
-    load_default_module(FILEXIO_MODULE);
     load_default_module(get_boot_device(boot_path));
 }
 
@@ -191,7 +246,9 @@ int main(int argc, char **argv) {
             
         if (readini_open(&ini, default_cfg)) {
             while(readini_getline(&ini)) {
-                if (readini_bool(&ini, "boot_logo", &boot_logo)) {
+                if (readini_emptyline(&ini)) {
+                    continue;
+                } if (readini_bool(&ini, "boot_logo", &boot_logo)) {
                     dbgprintf("reading boot_logo at athena.ini\n");
 
                 } else if (readini_bool(&ini, "dark_mode", &dark_mode)) {
@@ -200,6 +257,12 @@ int main(int argc, char **argv) {
                 } else if (readini_string(&ini, "default_script", default_script)) {
                     dbgprintf("reading default_script at athena.ini\n");
 
+                } else {
+                    for (int i = 0; i < sizeof(module_ini_entries)/sizeof(char*); i++) {
+                        if (readini_bool(&ini, module_ini_entries[i], &module_ini_values[i])) {
+                            printf("reading %s at athena.ini\n", module_ini_entries[i]);
+                        }
+                    }
                 }
             }
 

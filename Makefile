@@ -80,7 +80,7 @@ INI_READER = readini/src/readini.o
 ATHENA_MODULES = ath_env.o ath_physics.o ath_vector.o ath_pads.o ath_system.o ath_archive.o ath_timer.o ath_task.o
 
 IOP_MODULES = iomanx.o filexio.o sio2man.o mcman.o mcserv.o padman.o  \
-			  usbd.o bdm.o bdmfs_fatfs.o usbmass_bd.o cdfs.o \
+			  usbd.o bdm.o bdmfs_fatfs.o usbmass_bd.o mx4sio_bd.o cdfs.o \
 			  freeram.o ps2dev9.o mtapman.o poweroff.o ps2atad.o \
 			  ps2hdd.o ps2fs.o mmceman.o
 
