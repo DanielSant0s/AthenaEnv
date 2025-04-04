@@ -34,6 +34,10 @@ EE_EXT = .elf
 EE_BIN_PREF ?= athena
 EE_BIN_PKD = $(EE_BIN_PREF)_pkd
 
+UDPBD ?= 0
+ILINK ?= 0
+MX4SIO ?= 0
+
 RESET_IOP ?= 1
 DEBUG ?= 0
 EE_SIO ?= 0
@@ -80,13 +84,28 @@ INI_READER = readini/src/readini.o
 ATHENA_MODULES = ath_env.o ath_physics.o ath_vector.o ath_pads.o ath_system.o ath_archive.o ath_timer.o ath_task.o
 
 IOP_MODULES = iomanx.o filexio.o sio2man.o mcman.o mcserv.o padman.o  \
-			  usbd.o bdm.o bdmfs_fatfs.o usbmass_bd.o mx4sio_bd.o cdfs.o \
+			  usbd.o bdm.o bdmfs_fatfs.o usbmass_bd.o cdfs.o \
 			  freeram.o ps2dev9.o mtapman.o poweroff.o ps2atad.o \
-			  ps2hdd.o ps2fs.o mmceman.o
+			  ps2hdd.o ps2fs.o mmceman.o 
 
 EMBEDDED_ASSETS = quicksand_regular.o owl_indices.o owl_palette.o
 
 EE_OBJS = $(APP_CORE) $(INI_READER) $(JS_CORE) $(ATHENA_MODULES) $(IOP_MODULES) $(EMBEDDED_ASSETS) # group them all
+
+ifeq ($(UDPBD),1)
+  EE_CFLAGS += -DATHENA_UDPBD
+  IOP_MODULES += smap_udpbd.o
+endif
+
+ifeq ($(ILINK),1)
+  EE_CFLAGS += -DATHENA_ILINK
+  IOP_MODULES += IEEE1394_bd.o
+endif
+
+ifeq ($(MX4SIO),1)
+  EE_CFLAGS += -DATHENA_MX4SIO
+  IOP_MODULES += mx4sio_bd.o
+endif
 
 ifeq ($(GRAPHICS),1)
   EE_LIBS += -L$(PS2DEV)/gsKit/lib/ -lmath3d -ljpeg -lfreetype -lgskit_toolkit -lgskit -ldmakit -lpng

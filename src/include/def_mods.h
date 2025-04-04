@@ -50,6 +50,8 @@ extern bool hdd_started;
 extern bool filexio_started;
 extern bool camera_started;
 extern bool mx4sio_started;
+extern bool ieee1394_started;
+extern bool udpbd_started;
 
 extern bool HDD_USABLE;
 
@@ -76,6 +78,8 @@ enum MODLIST {
     DEV9_MODULE,
     CAMERA_MODULE,
     MX4SIO_MODULE, 
+    IEEE1394_MODULE, 
+    UDPBD_MODULE, 
 };
 
 #define BOOT_MODULE 99
@@ -93,7 +97,15 @@ irx_define(usbd);
 irx_define(bdm);
 irx_define(bdmfs_fatfs);
 irx_define(usbmass_bd);
+#ifdef ATHENA_MX4SIO
 irx_define(mx4sio_bd);
+#endif
+#ifdef ATHENA_ILINK
+irx_define(IEEE1394_bd);
+#endif
+#ifdef ATHENA_UDPBD
+irx_define(smap_udpbd);
+#endif
 irx_define(ps2dev9);
 irx_define(ps2atad);
 irx_define(ps2hdd);

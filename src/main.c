@@ -42,7 +42,9 @@ const char* module_ini_entries[] = {
     "cdfs",
     "mc",
     "hdd",
-    "mx4sio"
+    "mx4sio",
+    "ieee1394",
+    "udpbd",
 };
 
 bool module_ini_values[] = {
@@ -58,7 +60,9 @@ bool module_ini_values[] = {
     false, // cdfs
     false, // mc
     false, // hdd
-    false  // mx4sio
+    false, // mx4sio
+    false,  // ieee1394
+    false  // udpbd
 };
 
 enum module_masks {
@@ -74,7 +78,9 @@ enum module_masks {
     index_cdfs,
     index_mc,
     index_hdd,
-    index_mx4sio
+    index_mx4sio,
+    index_ieee1394,
+    index_udpbd,
 };
 
 char path_workbuffer[255] = { 0 };

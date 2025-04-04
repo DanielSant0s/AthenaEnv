@@ -34,6 +34,8 @@ bool hdd_started = false;
 bool filexio_started = false;
 bool camera_started = false;
 bool mx4sio_started = false;
+bool ieee1394_started = false;
+bool udpbd_started = false;
 
 bool HDD_USABLE = false;
 
@@ -72,6 +74,8 @@ void prepare_IOP() {
 	filexio_started = false;
 	camera_started = false;
 	mx4sio_started = false;
+	ieee1394_started = false;
+	udpbd_started = false;
 }
 
 bool wait_device(char *path) {
@@ -254,8 +258,8 @@ int load_default_module(int id) {
 				REPORT("BDM");
     			ID = SifExecModuleBuffer(&bdmfs_fatfs_irx, size_bdmfs_fatfs_irx, 0, NULL, &ret);
 				REPORT("BDMFS_FATFS");
-    			ID = SifExecModuleBuffer(&ps2atad_irx, size_ps2atad_irx, 0, NULL, &ret);
-				REPORT("ATAD");
+    			//ID = SifExecModuleBuffer(&ps2atad_irx, size_ps2atad_irx, 0, NULL, &ret);
+				//REPORT("ATAD");
 
 				bdm_started = LOAD_SUCCESS();
 			}
@@ -283,6 +287,7 @@ int load_default_module(int id) {
                 mmceman_started = LOAD_SUCCESS();
             }
             break;
+		#ifdef ATHENA_MX4SIO
 		case MX4SIO_MODULE:
 			load_filexio_module();
 
@@ -295,6 +300,36 @@ int load_default_module(int id) {
 				mx4sio_started = LOAD_SUCCESS();
 			}
 			break;
+		#endif
+		#ifdef ATHENA_ILINK
+		case IEEE1394_MODULE:
+			load_filexio_module();
+
+			if (!bdm_started)
+				load_default_module(BDM_MODULE);
+			if (!ieee1394_started) {
+    			ID = SifExecModuleBuffer(&IEEE1394_bd_irx, size_IEEE1394_bd_irx, 0, NULL, &ret);
+				REPORT("IEEE1394_BD");
+
+				ieee1394_started = LOAD_SUCCESS();
+			}
+			break;
+		#endif
+		#ifdef ATHENA_UDPBD
+		case UDPBD_MODULE:
+			load_filexio_module();
+			if (!bdm_started)
+				load_default_module(BDM_MODULE);
+			if (!dev9_started)
+				load_default_module(DEV9_MODULE);
+			if (!udpbd_started) {
+    			ID = SifExecModuleBuffer(&smap_udpbd_irx, size_smap_udpbd_irx, 0, NULL, &ret);
+				REPORT("SMAP_UDPBD");
+
+				udpbd_started = LOAD_SUCCESS();
+			}
+			break;
+		#endif
         case CDFS_MODULE:
 			load_filexio_module();
 
