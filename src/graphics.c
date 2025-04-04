@@ -36,9 +36,9 @@ static float fps = 0.0f;
 static int frames = 0;
 static int frame_interval = -1;
 
-#define OWL_PACKET_BUFFER_SIZE 1024 * 256
+#define OWL_PACKET_BUFFER_SIZE 1024
 
-static uint8_t owl_packet_buffer[OWL_PACKET_BUFFER_SIZE] __attribute__((aligned(16))) = { 0 };
+static owl_qword owl_packet_buffer[OWL_PACKET_BUFFER_SIZE] __attribute__((aligned(16))) = { 0 };
 
 void page_clear(Color color) {
 	const uint32_t page_count = gsGlobal->Width * (gsGlobal->Height) / 2048;
@@ -750,7 +750,7 @@ void init_graphics()
 
 	gsKit_mode_switch(gsGlobal, GS_ONESHOT);
 
-	owl_init(owl_packet_buffer, OWL_PACKET_BUFFER_SIZE/sizeof(owl_qword));
+	owl_init(owl_packet_buffer, OWL_PACKET_BUFFER_SIZE);
 
 	for (int i = 0; i < 2; i++) {
     	clearScreen(BLACK_RGBAQ);	

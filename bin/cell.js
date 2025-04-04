@@ -3,6 +3,10 @@
 Screen.setFrameCounter(true);
 Screen.setVSync(false);
 
+const transparent = Color.new(255, 255, 255, 40);
+const purple = Color.new(64, 0, 128);
+const white = Color.new(255, 255, 255);
+
 let font = new Font("fonts/LEMONMILK-Regular.otf");
 font.scale = (2);
 
@@ -27,7 +31,7 @@ function World2Screen(rect, camera){
 
 function drawCell(coords, radius, color, hollow){
     Draw.circle(coords[0], coords[1], radius, color);
-    if(hollow) Draw.circle(coords[0], coords[1], radius, Color.new(255, 255, 255), false);
+    if(hollow) Draw.circle(coords[0], coords[1], radius, white, false);
 }
 
 function circleCircleColl(c1, c2) {
@@ -49,10 +53,7 @@ function randint(min, max) {
 
 let main_menu_ptr = 0;
 
-let pad = Pads.get();
-
-const transparent = Color.new(255, 255, 255, 40);
-const purple = Color.new(64, 0, 128);
+const pad = Pads.get();
 
 Screen.clearColor(purple);
 
@@ -165,7 +166,7 @@ Screen.display(() => {
                 drawCell(enemy_coords, enemies[i].r, enemies[i].color, false);
                 if (circleCircleColl(enemies[i], player)) {
                     if (enemies[i].r < player.r) {
-                        player.r += enemies[i].r/2.0f;
+                        player.r += enemies[i].r/2
                         enemies.splice(i, 1);
                         if (!enemies.length){
                             game_state = GAME_OVER;
