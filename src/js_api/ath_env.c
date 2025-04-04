@@ -155,6 +155,7 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"import * as Screen from 'Screen';\n"
 				"import * as Draw from 'Draw';\n"
 				"import * as Font from 'Font';\n"
+				"import * as FontAlign from 'FontAlign';\n"
 				"import * as Image from 'Image';\n"
 				"import * as ImageList from 'ImageList';\n"
 				"import * as Render from 'Render';\n"
@@ -183,6 +184,8 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"globalThis.Z24 = Screen.Z24;\n"
 				"globalThis.Z32 = Screen.Z32;\n"
 				"globalThis.Draw = Draw;\n"
+				
+				"globalThis.FontAlign = FontAlign;\n"
 				"globalThis.Font = Font.Font;\n"
 
 				"globalThis.NEAREST = 0;\n"

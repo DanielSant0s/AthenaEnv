@@ -16,18 +16,13 @@ enum {
 
 bool truetypefnt_loaded = false;
 
-enum {
-    ALIGN_LEFT,
-    ALIGN_CENTER,
-    ALIGN_RIGHT
-} FontAlign;
-
 typedef struct {
     uint32_t type;
     GSFONT* data;
     int id;
     Color color;
     float scale;
+    int align;
 
     float outline;
     Color outline_color;
@@ -38,7 +33,6 @@ typedef struct {
 typedef struct {
     JSFontData* font_data;
     const char* text;
-    uint8_t align;
     Coords size;
 } JSFontRenderData;
 
@@ -98,6 +92,7 @@ static JSValue athena_font_ctor(JSContext *ctx, JSValueConst new_target, int arg
 
     font->color = 0x80808080;
     font->scale = 1.0f;
+    font->align = ALIGN_LEFT;
 
     proto = JS_GetPropertyStr(ctx, new_target, "prototype");
     if (JS_IsException(proto))
@@ -128,7 +123,7 @@ static JSValue athena_font_print(JSContext *ctx, JSValue this_val, int argc, JSV
     if (font->type == image_font){
 	    printFontText(font->data, text, x, y, font->scale, font->color);
     } else {
-        fntRenderStringPlus(font->id, x, y, 0, 0, 0, text, font->scale, font->color, font->outline, font->outline_color, font->dropshadow, font->dropshadow_color);
+        fntRenderStringPlus(font->id, x, y, font->align, 0, 0, text, font->scale, font->color, font->outline, font->outline_color, font->dropshadow, font->dropshadow_color);
     }
 
     JS_FreeCString(ctx, text);
@@ -218,6 +213,8 @@ static JSValue athena_font_get_color(JSContext *ctx, JSValueConst this_val, int 
             return JS_NewUint32(ctx, s->outline_color);
         case 2:
             return JS_NewUint32(ctx, s->dropshadow_color);
+        case 3:
+            return JS_NewUint32(ctx, s->align);
     }
     
     return JS_UNDEFINED;
@@ -242,6 +239,9 @@ static JSValue athena_font_set_color(JSContext *ctx, JSValueConst this_val, JSVa
         case 2:
             s->dropshadow_color = color;
             break;
+        case 3:
+            s->align = (int)color;
+            break;
     }
 
     
@@ -261,10 +261,6 @@ static JSValue athena_render_font(JSContext *ctx, JSValueConst this_val, int arg
 
         render_data->font_data = JS_GetOpaque2(ctx, this_val, js_font_class_id);
         render_data->text = JS_ToCString(ctx, argv[0]);
-
-        if (argc == 2) {
-            JS_ToUint32(ctx, &render_data->align, argv[1]);
-        }
 
         if (render_data->font_data->type == truetype_font) {
             render_data->size = fntGetTextSize(render_data->font_data->id, render_data->text, render_data->font_data->scale);
@@ -321,6 +317,8 @@ static const JSCFunctionListEntry js_font_proto_funcs[] = {
     JS_CGETSET_MAGIC_DEF("outline_color", athena_font_get_color, athena_font_set_color, 1),
     JS_CGETSET_MAGIC_DEF("dropshadow_color", athena_font_get_color, athena_font_set_color, 2),
 
+    JS_CGETSET_MAGIC_DEF("align", athena_font_get_color, athena_font_set_color, 3),
+
     JS_CFUNC_DEF("print", 3, athena_font_print),
     JS_CFUNC_DEF("render", 3, athena_render_font),
     JS_CFUNC_DEF("getTextSize", 1, athena_font_gettextsize),
@@ -362,8 +360,25 @@ static int font_init(JSContext *ctx, JSModuleDef *m) {
     return 0;
 }
 
+static const JSCFunctionListEntry js_font_align[] = {
+    JS_PROP_INT32_DEF("TOP", ALIGN_TOP, JS_PROP_CONFIGURABLE ),
+    JS_PROP_INT32_DEF("BOTTOM", ALIGN_BOTTOM, JS_PROP_CONFIGURABLE ),
+    JS_PROP_INT32_DEF("VCENTER", ALIGN_VCENTER, JS_PROP_CONFIGURABLE ),
+    JS_PROP_INT32_DEF("LEFT", ALIGN_LEFT, JS_PROP_CONFIGURABLE ),
+    JS_PROP_INT32_DEF("RIGHT", ALIGN_RIGHT, JS_PROP_CONFIGURABLE ),
+    JS_PROP_INT32_DEF("HCENTER", ALIGN_HCENTER, JS_PROP_CONFIGURABLE ),
+    JS_PROP_INT32_DEF("NONE", ALIGN_NONE, JS_PROP_CONFIGURABLE ),
+    JS_PROP_INT32_DEF("CENTER", ALIGN_CENTER, JS_PROP_CONFIGURABLE ),
+};
+
+static int font_align_init(JSContext *ctx, JSModuleDef *m){
+    return JS_SetModuleExportList(ctx, m, js_font_align, countof(js_font_align));
+}
+
 JSModuleDef *athena_font_init(JSContext *ctx)
 {
+    athena_push_module(ctx, font_align_init, js_font_align, countof(js_font_align), "FontAlign");
+    
     JSModuleDef *m;
     m = JS_NewCModule(ctx, "Font", font_init);
     if (!m)

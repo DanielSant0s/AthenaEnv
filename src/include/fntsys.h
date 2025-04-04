@@ -12,6 +12,14 @@
 
 #define FNTSYS_CHAR_SIZE 26 
 
+#define ALIGN_TOP     (0 << 0)
+#define ALIGN_BOTTOM  (1 << 0)
+#define ALIGN_VCENTER (2 << 0)
+#define ALIGN_LEFT    (0 << 2)
+#define ALIGN_RIGHT   (1 << 2)
+#define ALIGN_HCENTER (2 << 2)
+#define ALIGN_NONE    (ALIGN_TOP | ALIGN_LEFT)
+#define ALIGN_CENTER  (ALIGN_VCENTER | ALIGN_HCENTER)
 
 /// default (built-in) font id
 #define FNT_DEFAULT (0)
@@ -51,7 +59,7 @@ void fntFitString(int id, char *string, size_t width);
 
 /** Calculates the width of the given text string
  * We can't use the height for alignment, as the horizontal center would depends of the contained text itself */
-int fntCalcDimensions(int id, const char *str);
+int fntCalcDimensions(int id, float scale, const char *str);
 
 void fntSetPixelSize(int fontid, int width, int height);
 

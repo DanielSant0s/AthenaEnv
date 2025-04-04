@@ -95,16 +95,6 @@ static FT_Vector delta;
 
 #define GLYPH_PAGE_OK(font, page) ((pageid <= font->cacheMaxPageID) && (font->glyphCache[page]))
 
-#define ALIGN_TOP     (0 << 0)
-#define ALIGN_BOTTOM  (1 << 0)
-#define ALIGN_VCENTER (2 << 0)
-#define ALIGN_LEFT    (0 << 2)
-#define ALIGN_RIGHT   (1 << 2)
-#define ALIGN_HCENTER (2 << 2)
-#define ALIGN_NONE    (ALIGN_TOP | ALIGN_LEFT)
-#define ALIGN_CENTER  (ALIGN_VCENTER | ALIGN_HCENTER)
-
-
 static fnt_glyph_cache_entry_t *fntCacheGlyph(font_t *font, uint32_t gid);
 
 // a simple maximum of two
@@ -560,19 +550,20 @@ int fntRenderString(int id, int x, int y, short aligned, size_t width, size_t he
     font_t *font = &fonts[id];
     SignalSema(gFontSemaId);
 
-    if (aligned & ALIGN_HCENTER) {
-        if (width) {
-            x -= min(fntCalcDimensions(id, string), width) >> 1;
-        } else {
-            x -= fntCalcDimensions(id, string) >> 1;
-        }
-    }
+    int text_width = fntCalcDimensions(id, scale, string);
+    int text_height = FNTSYS_CHAR_SIZE*scale; 
 
-    if (aligned & ALIGN_VCENTER) {
-        y += ((int)(FNTSYS_CHAR_SIZE) - 4) >> 1;
-    } else {
-        y += ((int)(FNTSYS_CHAR_SIZE) - 2);
-    }
+    if (aligned & ALIGN_HCENTER)
+        x -= text_width >> 1;
+    else if (aligned & ALIGN_RIGHT)
+        x -= text_width;
+
+    if (aligned & ALIGN_VCENTER)
+        y += (height - text_height) >> 1;
+    else if (aligned & ALIGN_BOTTOM)
+        y += height - text_height;
+    else
+        y += (text_height - 2);
 
     int pen_x = x;
     int xmax = x + width;
@@ -614,7 +605,7 @@ int fntRenderString(int id, int x, int y, short aligned, size_t width, size_t he
             glyph_index = FT_Get_Char_Index(font->face, codepoint);
             if (glyph_index) {
                 FT_Get_Kerning(font->face, previous, glyph_index, FT_KERNING_DEFAULT, &delta);
-                pen_x += (delta.x >> 6)*scale;
+                pen_x += ((int)(delta.x*scale) >> 6);
             }
             previous = glyph_index;
         }
@@ -772,7 +763,7 @@ Coords fntGetTextSize(int id, const char* text, float scale) {
             glyph_index = FT_Get_Char_Index(font->face, codepoint);
             if (glyph_index) {
                 FT_Get_Kerning(font->face, previous, glyph_index, FT_KERNING_DEFAULT, &delta);
-                width += delta.x >> 6;
+                width += (int)(delta.x*scale) >> 6;
             }
             previous = glyph_index;
         }
@@ -934,6 +925,7 @@ int fntRenderString(int id, int x, int y, short aligned, size_t width, size_t he
 }
 #endif
 
+#if 0
 void fntFitString(int id, char *string, size_t width)
 {
     size_t cw = 0;
@@ -989,8 +981,9 @@ void fntFitString(int id, char *string, size_t width)
         str = ++sp;
     }
 }
+#endif
 
-int fntCalcDimensions(int id, const char *str)
+int fntCalcDimensions(int id, float scale, const char *str)
 {
     int w = 0;
 
@@ -1020,12 +1013,12 @@ int fntCalcDimensions(int id, const char *str)
             glyph_index = FT_Get_Char_Index(font->face, codepoint);
             if (glyph_index) {
                 FT_Get_Kerning(font->face, previous, glyph_index, FT_KERNING_DEFAULT, &delta);
-                w += delta.x >> 6;
+                w += (int)(delta.x*scale) >> 6;
             }
             previous = glyph_index;
         }
 
-        w += glyph->shx >> 6;
+        w += (int)(glyph->shx*scale) >> 6;
     }
 
     return w;

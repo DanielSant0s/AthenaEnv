@@ -10,7 +10,6 @@ Screen.setMode(canvas);
 //Screen.setFrameCounter(true);
 //Screen.setVSync(false);
 
-
 const unsel_color = Color.new(255, 255, 255, 64);
 const sel_color = Color.new(255, 255, 255);
 
@@ -92,7 +91,7 @@ const main_menu = new Menu("JS Apps", js_apps,
     
         for(let i = 1; i < (ctx.entries.length < 10? ctx.entries.length : 10); i++) {
             font.color = unsel_color;
-            font.print(210, 125+(23*i), ctx.entries[i].name);
+            font.print(210, 135+(23*i), ctx.entries[i].name);
         }
     }, 
     [(ctx, pad) => {
