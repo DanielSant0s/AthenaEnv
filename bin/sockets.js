@@ -2,7 +2,7 @@
 
 IOP.reset();
 
-IOP.loadDefaultModule(IOP.network);
+IOP.loadDefaultModule("SMAP");
 
 Network.init();
 

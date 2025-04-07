@@ -13,12 +13,19 @@ function load_app_db(fname) {
 function load_network_driver() {
     IOP.reset();
 
-    IOP.loadDefaultModule(IOP.hdd);
-    IOP.loadDefaultModule(IOP.cdfs);
-    IOP.loadDefaultModule(IOP.memcard);
-    IOP.loadDefaultModule(IOP.usb_mass);
-    IOP.loadDefaultModule(IOP.pads);
-    IOP.loadDefaultModule(IOP.network);
+    IOP.loadDefaultModule("usbmass_bd");
+
+    try {
+        IOP.loadDefaultModule("ps2fs");
+    } catch (error) {
+        console.log(error);
+    }
+
+    IOP.loadDefaultModule("cdfs");
+    IOP.loadDefaultModule("mcserv");
+    
+    IOP.loadDefaultModule("padman");
+    IOP.loadDefaultModule("SMAP");
     
     Network.init();
 }

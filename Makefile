@@ -57,7 +57,7 @@ DYNAMIC_MOUSE ?= 0
 DYNAMIC_NETWORK ?= 0
 DYNAMIC_CAMERA ?= 0
 
-EE_LIBS = -L$(PS2SDK)/ports/lib -lmc -lpad -lpatches -ldebug -lz -llzma -lzip -lfileXio -lelf-loader-nocolour -lerl
+EE_LIBS = -L$(PS2SDK)/ports/lib -lmc -lpad -lmtap -lpatches -ldebug -lz -llzma -lzip -lfileXio -lelf-loader-nocolour -lerl
 
 EE_INCS += -I$(PS2SDK)/ports/include -I$(PS2SDK)/ports/include/zlib -Isrc/readini/include -Isrc/include
 
@@ -77,7 +77,7 @@ VU1_MPGS = draw_3D_colors.o draw_3D_colors_scissor.o \
            draw_3D_lights.o draw_3D_lights_scissor.o \
            draw_3D_spec.o   draw_3D_spec_scissor.o
 
-APP_CORE = main.o bootlogo.o texture_manager.o owl_packet.o vif.o athena_math.o memory.o ee_tools.o module_system.o taskman.o pad.o system.o strUtils.o
+APP_CORE = main.o bootlogo.o texture_manager.o owl_packet.o vif.o athena_math.o memory.o ee_tools.o module_system.o iop_manager.o taskman.o pad.o system.o strUtils.o
 
 INI_READER = readini/src/readini.o
 

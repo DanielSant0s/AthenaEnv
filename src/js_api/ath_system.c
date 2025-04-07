@@ -21,6 +21,8 @@
 #include <fileio.h>
 #include <io_common.h>
 
+#include <iop_manager.h>
+
 #include <erl.h>
 
 #define MAX_DIR_FILES 512
@@ -411,9 +413,7 @@ static JSValue athena_getfileprogress(JSContext *ctx, JSValue this_val, int argc
 	return obj;
 }
 
-static JSValue athena_devices(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
-{
-	if (!filexio_started) return JS_ThrowInternalError(ctx, "Can't use fileXio functions if fileXio is not loaded.");
+static JSValue athena_devices(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
 	int i, devcnt;
 	struct fileXioDevice DEV[FILEXIO_MAX_DEVICES];
 	
@@ -962,37 +962,37 @@ static JSValue athena_sifloadmodulebuffer(JSContext *ctx, JSValue this_val, int 
 }
 
 static JSValue athena_sifloaddefaultmodule(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-	if (argc != 1) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
-	int mod_id = -1;
+	char *module_name = JS_ToCString(ctx, argv[0]);
 
-	JS_ToInt32(ctx, &mod_id, argv[0]);
+	int arg_len = 0;
+	const char *args = NULL;
 
-	if (mod_id == BOOT_MODULE) {
-		mod_id = get_boot_device(boot_path);
+	if(argc == 3){
+		JS_ToInt32(ctx, &arg_len, argv[1]);
+		args = JS_ToCString(ctx, argv[2]);
 	}
 
-	load_default_module(mod_id);
+	module_entry *module = iop_manager_search_module(module_name);
 
+	if (module) {
+		int ret = iop_manager_load_module(module, arg_len, args);
+		if (ret == MODULE_STATUS_INCOMPATIBILITY) {
+			return JS_ThrowInternalError(ctx, "loadModule: %s module is incompatible with %s, which is actually loaded. Keep or reset IOP.", 
+					module->name, 
+					iop_manager_get_incompatible_module()->name);
+		} else if (ret == MODULE_STATUS_ERROR) {
+			return JS_ThrowInternalError(ctx, "loadModule: error while loading %s.", module->name);
+		}
+	} else {
+		return JS_ThrowInternalError(ctx, "loadModule: %s module not found.", module_name);
+	}
+		
 	return JS_UNDEFINED;
 }
 
 static JSValue athena_resetiop(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-	if (argc != 0) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
-	#ifdef ATHENA_PADEMU
-	if(ds34bt_started) ds34bt_deinit();
-	if(ds34usb_started) ds34usb_deinit();
-	#endif
-	if(pads_started) padEnd();
-	#ifdef ATHENA_AUDIO
-	if(audio_started) audsrv_quit();
-	#endif
+	iop_manager_reset();
 
-	prepare_IOP();
-
-	SifExecModuleBuffer(&poweroff_irx, size_poweroff_irx, 0, NULL, NULL);
-	load_default_module(FILEXIO_MODULE);
-
-	//poweroffSetCallback(&poweroffHandler, NULL);
 	return JS_UNDEFINED;
 }
 
@@ -1000,6 +1000,8 @@ static JSValue athena_getiopmemory(JSContext *ctx, JSValue this_val, int argc, J
 	if (argc != 0) return JS_ThrowSyntaxError(ctx, "Wrong number of arguments");
 	s32 freeram = 0;
     s32 usedram = 0;
+
+	iop_manager_load_module(iop_manager_search_module("freeram"), 0, NULL);
 
     smem_read((void *)(1 * 1024 * 1024), &freeram, 4);
     usedram = (2 * 1024 * 1024) - freeram;
@@ -1017,25 +1019,6 @@ static const JSCFunctionListEntry sif_funcs[] = {
 	JS_CFUNC_DEF("loadDefaultModule",     3,       athena_sifloaddefaultmodule),
 	JS_CFUNC_DEF("reset",      			  0,     	athena_resetiop),
 	JS_CFUNC_DEF("getMemoryStats",        0,     	athena_getiopmemory),
-	JS_PROP_INT32_DEF("keyboard", KEYBOARD_MODULE, JS_PROP_CONFIGURABLE),
-	JS_PROP_INT32_DEF("mouse", MOUSE_MODULE, JS_PROP_CONFIGURABLE),
-	JS_PROP_INT32_DEF("freeram", FREERAM_MODULE, JS_PROP_CONFIGURABLE),
-	JS_PROP_INT32_DEF("ds34bt", DS34BT_MODULE, JS_PROP_CONFIGURABLE),
-	JS_PROP_INT32_DEF("ds34usb", DS34USB_MODULE, JS_PROP_CONFIGURABLE),
-	JS_PROP_INT32_DEF("network", NETWORK_MODULE, JS_PROP_CONFIGURABLE),
-	JS_PROP_INT32_DEF("pads", PADS_MODULE, JS_PROP_CONFIGURABLE),
-	JS_PROP_INT32_DEF("memcard", MC_MODULE, JS_PROP_CONFIGURABLE),
-	JS_PROP_INT32_DEF("audio", AUDIO_MODULE, JS_PROP_CONFIGURABLE),
-	JS_PROP_INT32_DEF("usb_mass", USB_MASS_MODULE, JS_PROP_CONFIGURABLE),
-	JS_PROP_INT32_DEF("bdm", BDM_MODULE, JS_PROP_CONFIGURABLE),
-	JS_PROP_INT32_DEF("mmceman", MMCEMAN_MODULE, JS_PROP_CONFIGURABLE),
-	JS_PROP_INT32_DEF("cdfs", CDFS_MODULE, JS_PROP_CONFIGURABLE),
-	JS_PROP_INT32_DEF("hdd", HDD_MODULE, JS_PROP_CONFIGURABLE),
-	JS_PROP_INT32_DEF("boot_device", BOOT_MODULE, JS_PROP_CONFIGURABLE),
-	JS_PROP_INT32_DEF("camera", CAMERA_MODULE, JS_PROP_CONFIGURABLE),
-	JS_PROP_INT32_DEF("mx4sio", MX4SIO_MODULE, JS_PROP_CONFIGURABLE),
-	JS_PROP_INT32_DEF("ieee1394", IEEE1394_MODULE, JS_PROP_CONFIGURABLE),
-	JS_PROP_INT32_DEF("udpbd", UDPBD_MODULE, JS_PROP_CONFIGURABLE),
 };
 
 static int system_init(JSContext *ctx, JSModuleDef *m)

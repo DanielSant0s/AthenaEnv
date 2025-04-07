@@ -29,6 +29,8 @@
 
 #include <erl.h>
 
+#include <iop_manager.h>
+
 const char* module_ini_entries[] = {
     "keyboard",
     "mouse",
@@ -98,28 +100,28 @@ static __attribute__((used)) void *bypass_modulated_libs() {
 }
 
 static void init_drivers() {
+    int ds34pads = 1;
+
+    register_iop_modules();
+
     if (module_ini_values[index_mc])
-        load_default_module(MC_MODULE);
+        iop_manager_load_module(iop_manager_search_module("mcserv"), 0, NULL);
     if (module_ini_values[index_mmceman])
-        load_default_module(MMCEMAN_MODULE);
+        iop_manager_load_module(iop_manager_search_module("mmceman"), 0, NULL);
     if (module_ini_values[index_cdfs])
-        load_default_module(CDFS_MODULE);
+        iop_manager_load_module(iop_manager_search_module("cdfs"), 0, NULL);
     if (module_ini_values[index_hdd])
-        load_default_module(HDD_MODULE);
+        iop_manager_load_module(iop_manager_search_module("ps2fs"), 0, NULL);
     if (module_ini_values[index_usb_mass])
-        load_default_module(USB_MASS_MODULE);
+        iop_manager_load_module(iop_manager_search_module("usbmass_bd"), 0, NULL);
     if (module_ini_values[index_pads])
-        load_default_module(PADS_MODULE);
+        iop_manager_load_module(iop_manager_search_module("padman"), 0, NULL);
     if (module_ini_values[index_ds34bt])
-        load_default_module(DS34BT_MODULE);
+        iop_manager_load_module(iop_manager_search_module("ds34bt"), 4, (char*)&ds34pads);
     if (module_ini_values[index_ds34usb])
-        load_default_module(DS34USB_MODULE);
+        iop_manager_load_module(iop_manager_search_module("ds34usb"), 4, (char*)&ds34pads);
     if (module_ini_values[index_audio])
-    load_default_module(AUDIO_MODULE);
-
-    // SifExecModuleBuffer(&mtapman_irx, size_mtapman_irx, 0, NULL, NULL);
-    // mtapInit();
-
+        iop_manager_load_module(iop_manager_search_module("audsrv"), 0, NULL);
 }
 
 int mnt(const char* path, int index, int openmod)
@@ -147,12 +149,6 @@ int mnt(const char* path, int index, int openmod)
         dbgprintf("mount successfull on first attempt\n");
     }
     return 0;
-}
-
-void init_base_fs_drivers() {
-    SifExecModuleBuffer(&poweroff_irx, size_poweroff_irx, 0, NULL, NULL);
-
-    load_default_module(get_boot_device(boot_path));
 }
 
 void set_default_script(const char* path) {
