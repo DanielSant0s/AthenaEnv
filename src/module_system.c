@@ -14,30 +14,121 @@
 static const char hddarg[] = "-o" "\0" "4" "\0" "-n" "\0" "20";
 static const char pfsarg[] = "-m" "\0" "4" "\0" "-o" "\0" "10" "\0" "-n" "\0" "40";
 
-bool kbd_started = false;
-bool mouse_started = false;
-bool freeram_started = false;
-bool ds34bt_started = false;
-bool ds34usb_started = false;
-bool network_started = false;
-bool sio2man_started = false;
-bool usbd_started = false;
-bool usb_mass_started = false;
-bool pads_started = false;
-bool audio_started = false;
-bool bdm_started = false;
-bool mmceman_started = false;
-bool cdfs_started = false;
-bool dev9_started = false;
-bool mc_started = false;
-bool hdd_started = false;
-bool filexio_started = false;
-bool camera_started = false;
-bool mx4sio_started = false;
-bool ieee1394_started = false;
-bool udpbd_started = false;
-
 bool HDD_USABLE = false;
+
+int check_hdd_usability() {
+	int ID, ret;
+	int HDDSTAT; // IOCTL...
+
+	sleep(1); // Introduce delay to prevent ps2hdd module from hanging
+
+	HDDSTAT = fileXioDevctl("hdd0:", HDIOC_STATUS, NULL, 0, NULL, 0); /* 0 = HDD connected and formatted, 1 = not formatted, 2 = HDD not usable, 3 = HDD not connected. */
+	dbgprintf("%s: HDD status is %d\n", __func__, HDDSTAT);
+	HDD_USABLE = (HDDSTAT == 0 || HDDSTAT == 1); // ONLY if HDD is usable. as we will offer HDD Formatting operation
+
+	return !HDD_USABLE;
+}
+
+
+uint8_t no_dependencies[4] = {
+	EMPTY_ENTRY, 
+	EMPTY_ENTRY,
+	EMPTY_ENTRY,
+	EMPTY_ENTRY
+};
+
+#define lambda(return_type, function_body) \
+({ \
+      return_type __fn__ function_body \
+          __fn__; \
+})
+
+#define iop_deps(a, b, c, d) ((uint8_t []) { a, b, c, d })
+#define iop_dependency(dep) iop_deps(dep->id, EMPTY_ENTRY, EMPTY_ENTRY, EMPTY_ENTRY)
+
+void register_iop_modules() {
+    module_entry *iomanX_entry      = iop_manager_register_module_buffer("iomanX", iomanX, no_dependencies, NULL, NULL);
+	module_entry *fileXio_entry     = iop_manager_register_module_buffer("fileXio", fileXio, iop_dependency(iomanX_entry), fileXioInit, fileXioExit);
+
+	module_entry *sio2man_entry     = iop_manager_register_module_buffer("sio2man", sio2man, iop_dependency(fileXio_entry), NULL, NULL);
+
+	module_entry *mcman_entry       = iop_manager_register_module_buffer("mcman", mcman, iop_dependency(sio2man_entry), NULL, NULL);
+	module_entry *mcserv_entry      = iop_manager_register_module_buffer("mcserv", mcserv, iop_dependency(mcman_entry), lambda(void, (module_entry *mod) { if (mod->started) mcInit(MC_TYPE_XMC); }), NULL);
+
+	module_entry *padman_entry      = iop_manager_register_module_buffer("padman", padman, iop_dependency(sio2man_entry), pad_init, padEnd);
+
+	module_entry *mtapman_entry     = iop_manager_register_module_buffer("mtapman", mtapman, iop_dependency(sio2man_entry), mtapInit, NULL);
+
+	module_entry *mmceman_entry     = iop_manager_register_module_buffer("mmceman", mmceman, iop_dependency(fileXio_entry), NULL, NULL);
+
+	module_entry *cdfs_entry        = iop_manager_register_module_buffer("cdfs", cdfs, iop_dependency(fileXio_entry), NULL, NULL);
+
+	module_entry *usbd_entry        = iop_manager_register_module_buffer("usbd", usbd, no_dependencies, NULL, NULL);
+
+	module_entry *bdm_entry         = iop_manager_register_module_buffer("bdm", bdm, iop_dependency(fileXio_entry), NULL, NULL);
+
+	module_entry *bdmfs_fatfs_entry = iop_manager_register_module_buffer("bdmfs_fatfs", bdmfs_fatfs, iop_dependency(bdm_entry), NULL, NULL);
+
+	module_entry *usbmass_bd_entry  = iop_manager_register_module_buffer("usbmass_bd", usbmass_bd, iop_deps(bdmfs_fatfs_entry->id, usbd_entry->id, EMPTY_ENTRY, EMPTY_ENTRY), NULL, NULL);
+	
+	module_entry *ps2dev9_entry     = iop_manager_register_module_buffer("ps2dev9", ps2dev9, no_dependencies, NULL, NULL);
+
+	module_entry *ps2atad_entry     = iop_manager_register_module_buffer("ps2atad", ps2atad, iop_dependency(ps2dev9_entry), NULL, NULL);
+
+	module_entry *ps2hdd_entry      = iop_manager_register_module_buffer("ps2hdd", ps2hdd, iop_dependency(ps2atad_entry), NULL, NULL);
+	iop_manager_set_module_args(ps2hdd_entry, sizeof(hddarg), hddarg);
+
+	module_entry *ps2fs_entry       = iop_manager_register_module_buffer("ps2fs", ps2fs, iop_dependency(ps2hdd_entry), NULL, NULL);
+	iop_manager_set_module_args(ps2fs_entry, sizeof(pfsarg), pfsarg);
+	iop_manager_set_prepare_function(ps2fs_entry, check_hdd_usability);
+	
+	#ifdef ATHENA_MX4SIO
+	module_entry *mx4sio_bd_entry   = iop_manager_register_module_buffer("mx4sio_bd", mx4sio_bd, iop_dependency(bdmfs_fatfs_entry), NULL, NULL);
+	iop_manager_add_incompatible_module(mx4sio_bd_entry, mmceman_entry);
+	#endif
+	
+	#ifdef ATHENA_ILINK
+	module_entry *IEEE1394_bd_entry = iop_manager_register_module_buffer("IEEE1394_bd", IEEE1394_bd, iop_deps(bdmfs_fatfs_entry->id, ps2dev9_entry->id, EMPTY_ENTRY, EMPTY_ENTRY), NULL, NULL);
+	#endif
+	
+	#ifdef ATHENA_UDPBD
+	module_entry *smap_udpbd_entry  = iop_manager_register_module_buffer("smap_udpbd", smap_udpbd, iop_deps(bdmfs_fatfs_entry->id, ps2dev9_entry->id, EMPTY_ENTRY, EMPTY_ENTRY), NULL, NULL);
+	#endif
+	
+	#ifdef ATHENA_NETWORK
+	module_entry *NETMAN_entry      = iop_manager_register_module_buffer("NETMAN", NETMAN, iop_dependency(ps2dev9_entry), NULL, NULL);
+	module_entry *SMAP_entry        = iop_manager_register_module_buffer("SMAP", SMAP, iop_dependency(NETMAN_entry), NULL, NULL);
+	#ifdef ATHENA_UDPBD
+	iop_manager_add_incompatible_module(smap_udpbd_entry, NETMAN_entry);
+	#endif
+	#endif
+	
+	#ifdef ATHENA_AUDIO
+	module_entry *libsd_entry       = iop_manager_register_module_buffer("libsd", libsd, no_dependencies, NULL, NULL);
+	module_entry *audsrv_entry      = iop_manager_register_module_buffer("audsrv", audsrv, iop_dependency(libsd_entry), audsrv_init, audsrv_quit);
+	#endif
+	
+	#ifdef ATHENA_KEYBOARD
+	module_entry *ps2kbd_entry      = iop_manager_register_module_buffer("ps2kbd", ps2kbd, iop_dependency(usbd_entry), NULL, NULL);
+	#endif
+	
+	#ifdef ATHENA_MOUSE
+	module_entry *ps2mouse_entry    = iop_manager_register_module_buffer("ps2mouse", ps2mouse, iop_dependency(usbd_entry), NULL, NULL);
+	#endif
+	
+	#ifdef ATHENA_CAMERA
+	module_entry *ps2cam_entry      = iop_manager_register_module_buffer("ps2cam", ps2cam, iop_dependency(usbd_entry), NULL, NULL);
+	#endif
+	
+	#ifdef ATHENA_PADEMU
+	module_entry *ds34bt_entry      = iop_manager_register_module_buffer("ds34bt", ds34bt, iop_dependency(usbd_entry), ds34bt_init, ds34bt_deinit);
+	module_entry *ds34usb_entry     = iop_manager_register_module_buffer("ds34usb", ds34usb, iop_dependency(usbd_entry), ds34usb_init, ds34usb_deinit);
+	#endif
+	
+	module_entry *poweroff_entry    = iop_manager_register_module_buffer("poweroff", poweroff, no_dependencies, NULL, NULL);
+
+	module_entry *freeram_entry     = iop_manager_register_module_buffer("freeram", freeram, no_dependencies, NULL, NULL);
+}
 
 void prepare_IOP() {
     dbgprintf("AthenaEnv: Starting IOP Reset...\n");
@@ -53,29 +144,6 @@ void prepare_IOP() {
     dbgprintf("AthenaEnv: Installing SBV Patches...\n");
     sbv_patch_enable_lmb();
     sbv_patch_disable_prefix_check();
-
-	kbd_started = false;
-	mouse_started = false;
-	freeram_started = false;
-	ds34bt_started = false;
-	ds34usb_started = false;
-	network_started = false;
-	sio2man_started = false;
-	usbd_started = false;
-	usb_mass_started = false;
-	pads_started = false;
-	audio_started = false;
-    bdm_started = false;
-    mmceman_started = false;
-	cdfs_started = false;
-	dev9_started = false;
-	mc_started = false;
-	hdd_started = false;
-	filexio_started = false;
-	camera_started = false;
-	mx4sio_started = false;
-	ieee1394_started = false;
-	udpbd_started = false;
 }
 
 bool wait_device(char *path) {
@@ -95,310 +163,20 @@ bool wait_device(char *path) {
     return ret == 0;
 }
 
-int get_boot_device(const char* path) {
-	int device = -1;
-	if(started_from("host")) {
-		device = -1;
-	} else if(started_from("mass")) {
-		device = USB_MASS_MODULE;
+char *get_boot_device(const char* path) {
+	char * device = NULL;
+
+	if(started_from("mass")) {
+		device = "usbmass_bd";
 	} else if(started_from("mc")) {
-		device = MC_MODULE;
+		device = "mcserv";
 	} else if(started_from("mmce")) {
-		device = MMCEMAN_MODULE;
+		device = "mmceman";
 	} else if(started_from("cdfs") || started_from("cdrom")) {
-		device = CDFS_MODULE;
+		device = "cdfs";
 	} else if(started_from("hdd")) {
-		device = HDD_MODULE;
+		device = "ps2fs";
 	}
 
 	return device;
-}
-
-#define REPORT(MODNAME) dbgprintf(" [%s]: ret=%d, ID=%d\n", MODNAME, ret, ID)
-
-/// @brief small macro to check if module loaded sucessfully
-/// @note this checks if ret is not 1 instead of checking if it is 0. this way we implicitly support value 2 (`MODULE_REMOVABLE_END`)
-#define LOAD_SUCCESS() (ID > 0 && ret != 1)
-
-inline void load_filexio_module() {
-	if (!filexio_started)
-		load_default_module(FILEXIO_MODULE);
-}
-
-int load_default_module(int id) {
-	int ds3pads = 1;
-	int ID, ret;
-	int HDDSTAT; // IOCTL...
-	switch (id) {
-		case USBD_MODULE:
-		if (!usbd_started) {
-				ID = SifExecModuleBuffer(&usbd_irx, size_usbd_irx, 0, NULL, &ret);
-				REPORT("USBD");
-				usbd_started = LOAD_SUCCESS();
-			}
-			break;
-
-		#ifdef ATHENA_KEYBOARD
-		case KEYBOARD_MODULE:
-			if (!usbd_started)
-				load_default_module(USBD_MODULE);
-			if (!kbd_started) {
-				ID = SifExecModuleBuffer((void*)ps2kbd_irx, size_ps2kbd_irx, 0, NULL, &ret);
-				REPORT("PS2KBD");
-				kbd_started = LOAD_SUCCESS();
-			}
-			break;
-		#endif
-
-		#ifdef ATHENA_MOUSE
-		case MOUSE_MODULE:
-			if (!usbd_started)
-				load_default_module(USBD_MODULE);
-			if (!mouse_started) {
-				ID = SifExecModuleBuffer((void*)ps2mouse_irx, size_ps2mouse_irx, 0, NULL, &ret);
-				REPORT("PS2MOUSE");
-				mouse_started = LOAD_SUCCESS();
-			}
-			break;
-		#endif
-
-		case FREERAM_MODULE:
-			if (!freeram_started) {
-				ID = SifExecModuleBuffer((void*)freeram_irx, size_freeram_irx, 0, NULL, &ret);
-				// freeram_started = true; // senseless... FreeRam always returns MODULE_NO_RESIDENT_END. so MODLOAD removes it alwyays...
-			}
-			break;
-        #ifdef ATHENA_PADEMU
-		case DS34BT_MODULE:
-			if (!usbd_started)
-				load_default_module(USBD_MODULE);
-			if (!ds34bt_started) {
-				ID = SifExecModuleBuffer((void*)ds34bt_irx, size_ds34bt_irx, 4, (char*)&ds3pads, &ret);
-				REPORT("DS34BT");
-				ds34bt_init();
-				ds34bt_started = LOAD_SUCCESS();
-			}
-			break;
-		case DS34USB_MODULE:
-			if (!usbd_started)
-				load_default_module(USBD_MODULE);
-			if (!ds34usb_started) {
-				ID = SifExecModuleBuffer((void*)ds34usb_irx, size_ds34usb_irx, 4, (char*)&ds3pads, &ret);
-				REPORT("DS34USB");
-				ds34usb_init();
-				ds34usb_started = LOAD_SUCCESS();
-			}
-			break;
-        #endif
-
-		#ifdef ATHENA_NETWORK
-		case NETWORK_MODULE:
-			if (!dev9_started)
-				load_default_module(DEV9_MODULE);
-			if (!network_started) {
-				ID = SifExecModuleBuffer((void*)NETMAN_irx, size_NETMAN_irx, 0, NULL, &ret);
-				REPORT("NETMAN");
-				ID = SifExecModuleBuffer((void*)SMAP_irx, size_SMAP_irx, 0, NULL, &ret);
-				REPORT("SMAP");
-				network_started = LOAD_SUCCESS();
-			}
-			break;
-		#endif
-
-		case SIO2MAN_MODULE:
-			load_filexio_module();
-			if (!sio2man_started) {
-				ID = SifExecModuleBuffer(&sio2man_irx, size_sio2man_irx, 0, NULL, &ret);
-				REPORT("SIO2MAN");
-				sio2man_started = LOAD_SUCCESS();
-			}
-		break;
-		case PADS_MODULE:
-			if (!sio2man_started)
-				load_default_module(SIO2MAN_MODULE);
-
-			if (!pads_started) {
-				ID = SifExecModuleBuffer(&padman_irx, size_padman_irx, 0, NULL, &ret);
-				REPORT("PADMAN");
-				pad_init();
-				pads_started = LOAD_SUCCESS();
-			}
-			break;
-		case MC_MODULE:
-			if (!sio2man_started)
-				load_default_module(SIO2MAN_MODULE);
-			if (!mc_started) {
-				ID = SifExecModuleBuffer(&mcman_irx, size_mcman_irx, 0, NULL, &ret);
-				REPORT("MCMAN");
-    			ID = SifExecModuleBuffer(&mcserv_irx, size_mcserv_irx, 0, NULL, &ret);
-				REPORT("MCSERV");
-				mc_started = LOAD_SUCCESS();
-				if (mc_started) mcInit(MC_TYPE_XMC); //to avoid hang on RPC for a module that did not remain resident
-			}
-			break;
-
-		#ifdef ATHENA_AUDIO
-		case AUDIO_MODULE:
-			if (!audio_started) {
-				ID = SifExecModuleBuffer(&libsd_irx, size_libsd_irx, 0, NULL, &ret);
-				REPORT("LIBSD");
-    			ID = SifExecModuleBuffer(&audsrv_irx, size_audsrv_irx, 0, NULL, &ret);
-				REPORT("AUDSVR");
-    			audsrv_init();
-				audio_started = LOAD_SUCCESS();
-			}
-			break;
-		#endif
-
-		case BDM_MODULE:
-			load_filexio_module();
-
-			if (!bdm_started) {
-    			ID = SifExecModuleBuffer(&bdm_irx, size_bdm_irx, 0, NULL, &ret);
-				REPORT("BDM");
-    			ID = SifExecModuleBuffer(&bdmfs_fatfs_irx, size_bdmfs_fatfs_irx, 0, NULL, &ret);
-				REPORT("BDMFS_FATFS");
-    			//ID = SifExecModuleBuffer(&ps2atad_irx, size_ps2atad_irx, 0, NULL, &ret);
-				//REPORT("ATAD");
-
-				bdm_started = LOAD_SUCCESS();
-			}
-			break;
-        case USB_MASS_MODULE:
-			load_filexio_module();
-
-			if (!bdm_started)
-				load_default_module(BDM_MODULE);
-			if (!usbd_started)
-				load_default_module(USBD_MODULE);
-			if (!usb_mass_started) {
-    			ID = SifExecModuleBuffer(&usbmass_bd_irx, size_usbmass_bd_irx, 0, NULL, &ret);
-				REPORT("USBMASS_BD");
-
-				usb_mass_started = LOAD_SUCCESS();
-			}
-			break;
-        case MMCEMAN_MODULE:
-			load_filexio_module();
-
-            if (!mmceman_started) {
-                ID = SifExecModuleBuffer(&mmceman_irx, size_mmceman_irx, 0, NULL, &ret);
-                REPORT("MMCEMAN");
-                mmceman_started = LOAD_SUCCESS();
-            }
-            break;
-		#ifdef ATHENA_MX4SIO
-		case MX4SIO_MODULE:
-			load_filexio_module();
-
-			if (!bdm_started)
-				load_default_module(BDM_MODULE);
-			if (!mx4sio_started) {
-    			ID = SifExecModuleBuffer(&mx4sio_bd_irx, size_mx4sio_bd_irx, 0, NULL, &ret);
-				REPORT("MX4SIO_BD");
-
-				mx4sio_started = LOAD_SUCCESS();
-			}
-			break;
-		#endif
-		#ifdef ATHENA_ILINK
-		case IEEE1394_MODULE:
-			load_filexio_module();
-
-			if (!bdm_started)
-				load_default_module(BDM_MODULE);
-			if (!ieee1394_started) {
-    			ID = SifExecModuleBuffer(&IEEE1394_bd_irx, size_IEEE1394_bd_irx, 0, NULL, &ret);
-				REPORT("IEEE1394_BD");
-
-				ieee1394_started = LOAD_SUCCESS();
-			}
-			break;
-		#endif
-		#ifdef ATHENA_UDPBD
-		case UDPBD_MODULE:
-			load_filexio_module();
-			if (!bdm_started)
-				load_default_module(BDM_MODULE);
-			if (!dev9_started)
-				load_default_module(DEV9_MODULE);
-			if (!udpbd_started) {
-    			ID = SifExecModuleBuffer(&smap_udpbd_irx, size_smap_udpbd_irx, 0, NULL, &ret);
-				REPORT("SMAP_UDPBD");
-
-				udpbd_started = LOAD_SUCCESS();
-			}
-			break;
-		#endif
-        case CDFS_MODULE:
-			load_filexio_module();
-
-			if (!cdfs_started) {
-				ID = SifExecModuleBuffer(&cdfs_irx, size_cdfs_irx, 0, NULL, &ret);
-				REPORT("CDFS");
-				cdfs_started = LOAD_SUCCESS();
-			}
-			break;
-		case DEV9_MODULE:
-			if (!dev9_started) {
-				ID = SifExecModuleBuffer(&ps2dev9_irx, size_ps2dev9_irx, 0, NULL, &ret);
-				REPORT("DEV9");
-				dev9_started = LOAD_SUCCESS();
-			}
-		    break;
-		case HDD_MODULE:
-			load_filexio_module();
-
-			if (!dev9_started)
-				load_default_module(DEV9_MODULE);
-			if (!usb_mass_started)
-				load_default_module(USB_MASS_MODULE);
-			if ((!hdd_started) && filexio_started) {
-
-    			ID = SifExecModuleBuffer(&ps2hdd_irx, size_ps2hdd_irx, sizeof(hddarg), hddarg, &ret);
-				REPORT("PS2HDD");
-                // Introduce delay to prevent ps2hdd module from hanging
-                sleep(1);
-
-    			HDDSTAT = fileXioDevctl("hdd0:", HDIOC_STATUS, NULL, 0, NULL, 0); /* 0 = HDD connected and formatted, 1 = not formatted, 2 = HDD not usable, 3 = HDD not connected. */
-				dbgprintf("%s: HDD status is %d\n", __func__, HDDSTAT);
-    			HDD_USABLE = (HDDSTAT == 0 || HDDSTAT == 1); // ONLY if HDD is usable. as we will offer HDD Formatting operation
-
-    			if (HDD_USABLE)
-    			{
-    			    ID = SifExecModuleBuffer(&ps2fs_irx, size_ps2fs_irx, sizeof(pfsarg), pfsarg,  &ret);
-    			    REPORT("PS2FS");
-					hdd_started = LOAD_SUCCESS();
-    			} else {
-					hdd_started = false;
-				}
-
-			}
-			break;
-		case FILEXIO_MODULE:
-			if (!filexio_started) {
-				ID = SifExecModuleBuffer(&iomanX_irx, size_iomanX_irx, 0, NULL, &ret);
-				REPORT("IOMANX");
-    			ID = SifExecModuleBuffer(&fileXio_irx, size_fileXio_irx, 0, NULL, &ret);
-				REPORT("FILEXIO");
-				filexio_started = LOAD_SUCCESS();
-
-                fileXioInit();
-			}
-			break;
-		#ifdef ATHENA_CAMERA
-		case CAMERA_MODULE:
-			if (!usbd_started)
-				load_default_module(USBD_MODULE);
-			if (!camera_started) {
-				ID = SifExecModuleBuffer(&ps2cam_irx, size_ps2cam_irx, 0, NULL, &ret);
-				REPORT("PS2CAM");
-				camera_started = LOAD_SUCCESS();
-			}
-			break;
-		#endif
-		default:
-			break;
-	}
-	return 0;
 }

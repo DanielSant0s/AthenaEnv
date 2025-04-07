@@ -5,8 +5,8 @@ Screen.log("Athena network system\n");
 
 IOP.reset();
 
-IOP.loadDefaultModule(IOP.pads);
-IOP.loadDefaultModule(IOP.network);
+IOP.loadDefaultModule("padman");
+IOP.loadDefaultModule("SMAP");
 
 Network.init();
 

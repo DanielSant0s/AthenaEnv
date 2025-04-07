@@ -52,11 +52,12 @@ const stats = new Component([
         (ctx) => { 
             ctx.mem = undefined;
             ctx.ee_info = System.getCPUInfo();
+            ctx.iop_mem = IOP.getMemoryStats();
         }, 
         (ctx) => { 
             ctx.mem = System.getMemoryStats();
             font.color = unsel_color;
-            font.print(15, 420, `Temp: ${System.getTemperature() === undefined? "NaN" : System.getTemperature()} C | RAM Usage: ${Math.floor(ctx.mem.used / 1024)}KB / ${Math.floor(ctx.ee_info.RAMSize / 1024)}KB`);
+            font.print(15, 420, `Temp: ${System.getTemperature() === undefined? "NaN" : System.getTemperature()} C | Core RAM Usage: ${Math.floor(ctx.mem.used / 1024)}KB / ${Math.floor(ctx.ee_info.RAMSize / 1024)}KB | I/O RAM Usage: ${Math.floor(ctx.iop_mem.used / 1024)}KB / ${2048}KB`);
         }, 
         (ctx, pad) => {}
     )

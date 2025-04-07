@@ -17,7 +17,7 @@ console.log("Athena network system\n");
 
 IOP.reset();
 
-IOP.loadDefaultModule(IOP.network);
+IOP.loadDefaultModule("SMAP");
 
 Network.init();
 
