@@ -772,7 +772,7 @@ static const JSCFunctionListEntry system_funcs[] = {
 	JS_CFUNC_DEF( "getMemoryStats",      	  0,   		athena_geteememory	 		 ),
 	JS_CFUNC_DEF( "getTemperature",      	  0,   		athena_gettemps	 			 ),
 
-	JS_CFUNC_DEF( "nativeCall",      	      3, 		  athena_call_native		 ),
+	JS_CFUNC_DEF( "nativeCall",      	      3, 		athena_call_native		 	 ),
 
 	JS_PROP_INT32_DEF("T_LONG",    TYPE_LONG,   JS_PROP_CONFIGURABLE ),
 	JS_PROP_INT32_DEF("T_ULONG",   TYPE_ULONG,  JS_PROP_CONFIGURABLE ),

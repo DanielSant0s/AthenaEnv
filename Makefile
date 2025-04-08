@@ -57,7 +57,7 @@ DYNAMIC_MOUSE ?= 0
 DYNAMIC_NETWORK ?= 0
 DYNAMIC_CAMERA ?= 0
 
-EE_LIBS = -L$(PS2SDK)/ports/lib -lmc -lpad -lmtap -lpatches -ldebug -lz -llzma -lzip -lfileXio -lelf-loader-nocolour -lerl
+EE_LIBS = -L$(PS2SDK)/ports/lib -lmc -lpad -lmtap -lpatches -lz -llzma -lzip -lfileXio -lelf-loader-nocolour -lerl
 
 EE_INCS += -I$(PS2SDK)/ports/include -I$(PS2SDK)/ports/include/zlib -Isrc/readini/include -Isrc/include
 
