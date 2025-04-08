@@ -5,6 +5,15 @@ const canvas = Screen.getMode();
 canvas.zbuffering = false;
 canvas.psmz = Z16S;
 
+for (let i = 0; i < 4; i++) {
+    
+    let bdm_info = System.getBDMInfo(`mass${i}:`);
+    console.log(JSON.stringify(bdm_info));
+    if (bdm_info) {
+        console.log(JSON.stringify(os.readdir(`mass${i}:`)));
+    }
+}
+
 Screen.setMode(canvas);
 
 //Screen.setFrameCounter(true);

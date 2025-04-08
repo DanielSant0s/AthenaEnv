@@ -144,3 +144,9 @@ void iop_manager_reset() {
     sbv_patch_enable_lmb();
     sbv_patch_disable_prefix_check();
 }
+
+void iop_manager_modules_apply(iop_manager_func func) {
+    for (int i = 0; i < registry_entries; i++) {
+        func(&module_registry[i]);
+    }
+}
