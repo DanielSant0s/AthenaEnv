@@ -29,68 +29,68 @@
 
 extern bool HDD_USABLE;
 
-iop_manager_define_module(iomanX);
-iop_manager_define_module(fileXio);
-iop_manager_define_module(sio2man);
-iop_manager_define_module(mcman);
-iop_manager_define_module(mcserv);
-iop_manager_define_module(padman);
-iop_manager_define_module(mtapman);
-iop_manager_define_module(mmceman);
-iop_manager_define_module(cdfs);
-iop_manager_define_module(usbd);
-iop_manager_define_module(bdm);
-iop_manager_define_module(bdmfs_fatfs);
-iop_manager_define_module(usbmass_bd);
+iopman_define_module(iomanX);
+iopman_define_module(fileXio);
+iopman_define_module(sio2man);
+iopman_define_module(mcman);
+iopman_define_module(mcserv);
+iopman_define_module(padman);
+iopman_define_module(mtapman);
+iopman_define_module(mmceman);
+iopman_define_module(cdfs);
+iopman_define_module(usbd);
+iopman_define_module(bdm);
+iopman_define_module(bdmfs_fatfs);
+iopman_define_module(usbmass_bd);
 
-iop_manager_define_module(ps2dev9);
-iop_manager_define_module(ps2atad);
-iop_manager_define_module(ps2hdd);
-iop_manager_define_module(ps2fs);
+iopman_define_module(ps2dev9);
+iopman_define_module(ps2atad);
+iopman_define_module(ps2hdd);
+iopman_define_module(ps2fs);
 
-iop_manager_define_module(ata_bd);
+iopman_define_module(ata_bd);
 
 #ifdef ATHENA_MX4SIO
-iop_manager_define_module(mx4sio_bd);
+iopman_define_module(mx4sio_bd);
 #endif
 
 #ifdef ATHENA_ILINK
-iop_manager_define_module(IEEE1394_bd);
+iopman_define_module(IEEE1394_bd);
 #endif
 
 #ifdef ATHENA_UDPBD
-iop_manager_define_module(smap_udpbd);
+iopman_define_module(smap_udpbd);
 #endif
 
 #ifdef ATHENA_NETWORK
-iop_manager_define_module(SMAP);
-iop_manager_define_module(NETMAN);
+iopman_define_module(SMAP);
+iopman_define_module(NETMAN);
 #endif
 
 #ifdef ATHENA_AUDIO
-iop_manager_define_module(libsd);
-iop_manager_define_module(audsrv);
+iopman_define_module(libsd);
+iopman_define_module(audsrv);
 #endif
 
 #ifdef ATHENA_KEYBOARD
-iop_manager_define_module(ps2kbd);
+iopman_define_module(ps2kbd);
 #endif
 
 #ifdef ATHENA_MOUSE
-iop_manager_define_module(ps2mouse);
+iopman_define_module(ps2mouse);
 #endif
 
 #ifdef ATHENA_CAMERA
-iop_manager_define_module(ps2cam);
+iopman_define_module(ps2cam);
 #endif
 
 #ifdef ATHENA_PADEMU
-iop_manager_define_module(ds34bt);
-iop_manager_define_module(ds34usb);
+iopman_define_module(ds34bt);
+iopman_define_module(ds34usb);
 #endif
 
-iop_manager_define_module(poweroff);
-iop_manager_define_module(freeram);
+iopman_define_module(poweroff);
+iopman_define_module(freeram);
 
 void register_iop_modules();
 

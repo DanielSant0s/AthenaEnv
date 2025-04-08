@@ -692,25 +692,10 @@ Asynchronous functions:
 
 ### IOP module
 
-* let result = IOP.loadModule(fname, *arg_len*, *args*)
-* let result = IOP.loadModuleBuffer(mod_buf, *arg_len*, *args*)
-* IOP.loadDefaultModule(mod_id)  
-  • IOP.keyboard - USB Keyboard  
-  • IOP.mouse - USB Mouse  
-  • IOP.freeram - IOP RAM Info  
-  • IOP.ds34bt - Bluetooth DualShock 3/4 pads  
-  • IOP.ds34usb - USB DualShock 3/4 pads  
-  • IOP.network - Network drivers  
-  • IOP.pads - DualShock 1/2 pads  
-  • IOP.memcard - Memory Card  
-  • IOP.audio - Audio driver  
-  • IOP.usb_mass - USB Mass storage, supports FAT32 and exFAT  
-  • IOP.cdfs - Disc driver  
-  • IOP.hdd - Internal HDD driver  
-  • IOP.boot_device - Storage device used to boot Athena    
-  
+* const module = IOP.newModule(name, data, *arg_len*, *args*) - data can be a string when it is a file or an ArrayBuffer when loading from memory.
+* IOP.loadModule(module, arg) - Loads an IOP module created by newModule.
 * IOP.reset()
-* let stats = IOP.getMemoryStats() - P.S.: Requires IOP.loadDefaultModule(IOP.freeram) first!
+* let stats = IOP.getMemoryStats()  
   • stats.free  
   • stats.used  
 

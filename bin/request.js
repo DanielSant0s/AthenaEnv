@@ -4,8 +4,8 @@
 
 IOP.reset();
 
-//IOP.loadDefaultModule("padman");
-IOP.loadDefaultModule("SMAP");
+//IOP.loadModule("padman");
+IOP.loadModule("SMAP");
 
 Network.init();
 
