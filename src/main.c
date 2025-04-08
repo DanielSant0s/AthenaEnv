@@ -31,59 +31,7 @@
 
 #include <iop_manager.h>
 
-const char* module_ini_entries[] = {
-    "keyboard",
-    "mouse",
-    "ds34bt",
-    "ds34usb",
-    "network",
-    "usb_mass",
-    "pads",
-    "audio",
-    "mmce",
-    "cdfs",
-    "mc",
-    "hdd",
-    "mx4sio",
-    "ieee1394",
-    "udpbd",
-};
-
-bool module_ini_values[] = {
-    false, // kbd 
-    false, // mouse
-    false, // ds34bt
-    false, // ds34usb
-    false, // network
-    true,  // usb_mass
-    true , // pads
-    true , // audio
-    false, // mmceman
-    false, // cdfs
-    false, // mc
-    false, // hdd
-    false, // mx4sio
-    false,  // ieee1394
-    false  // udpbd
-};
-
-enum module_masks {
-    index_kbd,
-    index_mouse,
-    index_ds34bt,
-    index_ds34usb,
-    index_network,
-    index_usb_mass,
-    index_pads,
-    index_audio,
-    index_mmceman,
-    index_cdfs,
-    index_mc,
-    index_hdd,
-    index_mx4sio,
-    index_ieee1394,
-    index_udpbd,
-};
+#include <macros.h>
 
 char path_workbuffer[255] = { 0 };
 
@@ -97,31 +45,6 @@ static __attribute__((used)) void *bypass_modulated_libs() {
     func |= (int)_ps2sdk_ioctl;
 
     return func;
-}
-
-static void init_drivers() {
-    int ds34pads = 1;
-
-    register_iop_modules();
-
-    if (module_ini_values[index_mc])
-        iop_manager_load_module(iop_manager_search_module("mcserv"), 0, NULL);
-    if (module_ini_values[index_mmceman])
-        iop_manager_load_module(iop_manager_search_module("mmceman"), 0, NULL);
-    if (module_ini_values[index_cdfs])
-        iop_manager_load_module(iop_manager_search_module("cdfs"), 0, NULL);
-    if (module_ini_values[index_hdd])
-        iop_manager_load_module(iop_manager_search_module("ps2fs"), 0, NULL);
-    if (module_ini_values[index_usb_mass])
-        iop_manager_load_module(iop_manager_search_module("usbmass_bd"), 0, NULL);
-    if (module_ini_values[index_pads])
-        iop_manager_load_module(iop_manager_search_module("padman"), 0, NULL);
-    if (module_ini_values[index_ds34bt])
-        iop_manager_load_module(iop_manager_search_module("ds34bt"), 4, (char*)&ds34pads);
-    if (module_ini_values[index_ds34usb])
-        iop_manager_load_module(iop_manager_search_module("ds34usb"), 4, (char*)&ds34pads);
-    if (module_ini_values[index_audio])
-        iop_manager_load_module(iop_manager_search_module("audsrv"), 0, NULL);
 }
 
 int mnt(const char* path, int index, int openmod)
@@ -187,6 +110,12 @@ static void export_symbols() {
 
 typedef void (*func_t)(void);
 
+void _flush_cache() {
+    FlushCache(0);
+    FlushCache(2);
+}
+
+
 int main(int argc, char **argv) {
     IniReader ini;
     boot_logo = true;
@@ -203,6 +132,8 @@ int main(int argc, char **argv) {
 
     init_memory_manager();
     init_taskman();
+
+    register_iop_modules();
 
     if (!strncmp(argv[0], "cdrom0", 6))
         chdir("cdfs:/");
@@ -260,11 +191,11 @@ int main(int argc, char **argv) {
                     dbgprintf("reading default_script at athena.ini\n");
 
                 } else {
-                    for (int i = 0; i < sizeof(module_ini_entries)/sizeof(char*); i++) {
-                        if (readini_bool(&ini, module_ini_entries[i], &module_ini_values[i])) {
-                            printf("reading %s at athena.ini\n", module_ini_entries[i]);
+                    iop_manager_modules_apply(lambda(void, (module_entry *module) { 
+                        if (readini_bool(&ini, module->name, &module->start_at_boot)) {
+                            printf("reading %s at athena.ini\n", module->name);
                         }
-                    }
+                    }));
                 }
             }
 
@@ -277,9 +208,13 @@ int main(int argc, char **argv) {
     }
 
     if (reset_iop) {
-        prepare_IOP();
+        iop_manager_reset();
 
-        init_drivers();
+        iop_manager_modules_apply(lambda(void, (module_entry *module) { 
+            if (module->start_at_boot) {
+                iop_manager_load_module(module, 0, NULL);
+            }
+        }));
 
         if ((!strncmp(boot_path, "hdd0:", 5)) && (strstr(boot_path, ":pfs:") != NULL) && HDD_USABLE) // we booted from HDD and our modules are loaded and running...
         {

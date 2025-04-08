@@ -48,6 +48,8 @@ iop_manager_define_module(ps2atad);
 iop_manager_define_module(ps2hdd);
 iop_manager_define_module(ps2fs);
 
+iop_manager_define_module(ata_bd);
+
 #ifdef ATHENA_MX4SIO
 iop_manager_define_module(mx4sio_bd);
 #endif

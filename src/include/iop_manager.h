@@ -50,6 +50,8 @@ module_entry *iop_manager_register_module(char* name, void *data, uint32_t size,
 
 #define iop_manager_set_prepare_function(module, func) module->prepare = func 
 
+#define iop_manager_start_module_at_boot(module) module->start_at_boot = true 
+
 void iop_manager_add_incompatible_module(module_entry *module, module_entry *incompatibility);
 
 module_entry *iop_manager_get_incompatible_module();
@@ -61,5 +63,7 @@ module_entry *iop_manager_get_incompatible_module();
 int iop_manager_load_module(module_entry *module, int arglen, char *args);
 
 void iop_manager_reset();
+
+void iop_manager_modules_apply(iop_manager_func func);
 
 #endif

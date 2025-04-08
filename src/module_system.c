@@ -9,10 +9,14 @@
 #include <fileio.h>
 #include <hdd-ioctl.h>
 
+#include <macros.h>
+
 #define started_from(device) (strstr(path, device) == path)
 
 static const char hddarg[] = "-o" "\0" "4" "\0" "-n" "\0" "20";
 static const char pfsarg[] = "-m" "\0" "4" "\0" "-o" "\0" "10" "\0" "-n" "\0" "40";
+
+static const int ds34pads = 1;
 
 bool HDD_USABLE = false;
 
@@ -37,12 +41,6 @@ uint8_t no_dependencies[4] = {
 	EMPTY_ENTRY
 };
 
-#define lambda(return_type, function_body) \
-({ \
-      return_type __fn__ function_body \
-          __fn__; \
-})
-
 #define iop_deps(a, b, c, d) ((uint8_t []) { a, b, c, d })
 #define iop_dependency(dep) iop_deps(dep->id, EMPTY_ENTRY, EMPTY_ENTRY, EMPTY_ENTRY)
 
@@ -54,14 +52,17 @@ void register_iop_modules() {
 
 	module_entry *mcman_entry       = iop_manager_register_module_buffer("mcman", mcman, iop_dependency(sio2man_entry), NULL, NULL);
 	module_entry *mcserv_entry      = iop_manager_register_module_buffer("mcserv", mcserv, iop_dependency(mcman_entry), lambda(void, (module_entry *mod) { if (mod->started) mcInit(MC_TYPE_XMC); }), NULL);
+	iop_manager_start_module_at_boot(mcserv_entry);
 
 	module_entry *padman_entry      = iop_manager_register_module_buffer("padman", padman, iop_dependency(sio2man_entry), pad_init, padEnd);
+	iop_manager_start_module_at_boot(padman_entry);
 
 	module_entry *mtapman_entry     = iop_manager_register_module_buffer("mtapman", mtapman, iop_dependency(sio2man_entry), mtapInit, NULL);
 
 	module_entry *mmceman_entry     = iop_manager_register_module_buffer("mmceman", mmceman, iop_dependency(fileXio_entry), NULL, NULL);
 
 	module_entry *cdfs_entry        = iop_manager_register_module_buffer("cdfs", cdfs, iop_dependency(fileXio_entry), NULL, NULL);
+	iop_manager_start_module_at_boot(cdfs_entry);
 
 	module_entry *usbd_entry        = iop_manager_register_module_buffer("usbd", usbd, no_dependencies, NULL, NULL);
 
@@ -73,7 +74,7 @@ void register_iop_modules() {
 	
 	module_entry *ps2dev9_entry     = iop_manager_register_module_buffer("ps2dev9", ps2dev9, no_dependencies, NULL, NULL);
 
-	module_entry *ps2atad_entry     = iop_manager_register_module_buffer("ps2atad", ps2atad, iop_dependency(ps2dev9_entry), NULL, NULL);
+	module_entry *ps2atad_entry     = iop_manager_register_module_buffer("ps2atad", ps2atad, iop_deps(ps2dev9_entry->id, fileXio_entry->id, EMPTY_ENTRY, EMPTY_ENTRY), NULL, NULL);
 
 	module_entry *ps2hdd_entry      = iop_manager_register_module_buffer("ps2hdd", ps2hdd, iop_dependency(ps2atad_entry), NULL, NULL);
 	iop_manager_set_module_args(ps2hdd_entry, sizeof(hddarg), hddarg);
@@ -81,6 +82,8 @@ void register_iop_modules() {
 	module_entry *ps2fs_entry       = iop_manager_register_module_buffer("ps2fs", ps2fs, iop_dependency(ps2hdd_entry), NULL, NULL);
 	iop_manager_set_module_args(ps2fs_entry, sizeof(pfsarg), pfsarg);
 	iop_manager_set_prepare_function(ps2fs_entry, check_hdd_usability);
+
+	module_entry *ata_bd_entry     = iop_manager_register_module_buffer("ata_bd", ata_bd, iop_deps(bdmfs_fatfs_entry->id, ps2dev9_entry->id, EMPTY_ENTRY, EMPTY_ENTRY), NULL, NULL);
 	
 	#ifdef ATHENA_MX4SIO
 	module_entry *mx4sio_bd_entry   = iop_manager_register_module_buffer("mx4sio_bd", mx4sio_bd, iop_dependency(bdmfs_fatfs_entry), NULL, NULL);
@@ -122,7 +125,9 @@ void register_iop_modules() {
 	
 	#ifdef ATHENA_PADEMU
 	module_entry *ds34bt_entry      = iop_manager_register_module_buffer("ds34bt", ds34bt, iop_dependency(usbd_entry), ds34bt_init, ds34bt_deinit);
+	iop_manager_set_module_args(ds34bt_entry, sizeof(ds34pads), ds34pads);
 	module_entry *ds34usb_entry     = iop_manager_register_module_buffer("ds34usb", ds34usb, iop_dependency(usbd_entry), ds34usb_init, ds34usb_deinit);
+	iop_manager_set_module_args(ds34bt_entry, sizeof(ds34pads), ds34pads);
 	#endif
 	
 	module_entry *poweroff_entry    = iop_manager_register_module_buffer("poweroff", poweroff, no_dependencies, NULL, NULL);

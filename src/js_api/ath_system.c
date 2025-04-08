@@ -444,20 +444,17 @@ static JSValue athena_getbdminfo(JSContext *ctx, JSValue this_val, int argc, JSV
 
 	int fd = fileXioDopen(mass);
 	if (fd >= 0) {
-		char driverName[10];
-		int deviceNumber;
-		if (fileXioIoctl2(fd, USBMASS_IOCTL_GET_DRIVERNAME, NULL, 0, driverName, sizeof(driverName) - 1) >= 0) {
-			// Null-terminate the string before mapping
-			driverName[sizeof(driverName) - 1] = '\0';
-	
-			fileXioIoctl2(fd, USBMASS_IOCTL_GET_DEVICE_NUMBER, NULL, 0, &deviceNumber, sizeof(deviceNumber));
+		char dev_name[10];
+		int dev_index = (int)(mass[4]-'0');
+		if (fileXioIoctl2(fd, USBMASS_IOCTL_GET_DRIVERNAME, NULL, 0, dev_name, sizeof(dev_name) - 1) >= 0) {
+			dev_name[sizeof(dev_name) - 1] = '\0'; // Null-terminate the string before mapping
 	
 			fileXioDclose(fd);
 	
 			JSValue data = JS_NewObject(ctx);
 		
-			JS_DefinePropertyValueStr(ctx, data, "name", JS_NewString(ctx, driverName), JS_PROP_C_W_E);
-			JS_DefinePropertyValueStr(ctx, data, "number", JS_NewInt32(ctx, deviceNumber), JS_PROP_C_W_E);
+			JS_DefinePropertyValueStr(ctx, data, "name", JS_NewString(ctx, dev_name), JS_PROP_C_W_E);
+			JS_DefinePropertyValueStr(ctx, data, "index", JS_NewInt32(ctx, dev_index), JS_PROP_C_W_E);
 		
 			return data;
 		}
