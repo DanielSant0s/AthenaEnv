@@ -5,6 +5,8 @@ const canvas = Screen.getMode();
 canvas.zbuffering = false;
 canvas.psmz = Z16S;
 
+console.log(JSON.stringify(IOP.getModules()));
+
 for (let i = 0; i < 4; i++) {
     
     let bdm_info = System.getBDMInfo(`mass${i}:`);

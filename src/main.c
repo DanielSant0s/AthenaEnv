@@ -191,7 +191,7 @@ int main(int argc, char **argv) {
                     dbgprintf("reading default_script at athena.ini\n");
 
                 } else {
-                    iop_manager_modules_apply(lambda(void, (module_entry *module) { 
+                    iopman_modules_apply(lambda(void, (module_entry *module) { 
                         if (readini_bool(&ini, module->name, &module->start_at_boot)) {
                             printf("reading %s at athena.ini\n", module->name);
                         }
@@ -208,11 +208,11 @@ int main(int argc, char **argv) {
     }
 
     if (reset_iop) {
-        iop_manager_reset();
+        iopman_reset();
 
-        iop_manager_modules_apply(lambda(void, (module_entry *module) { 
+        iopman_modules_apply(lambda(void, (module_entry *module) { 
             if (module->start_at_boot) {
-                iop_manager_load_module(module, 0, NULL);
+                iopman_load_module(module, 0, NULL);
             }
         }));
 
