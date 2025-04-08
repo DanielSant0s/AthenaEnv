@@ -268,6 +268,7 @@ static JSContext *JS_NewCustomContext(JSRuntime *rt)
     js_init_module_os(ctx, "os");
 
 	athena_system_init(ctx);
+	athena_iop_init(ctx);
 	athena_archive_init(ctx);
 	athena_timer_init(ctx);
 	athena_task_init(ctx);

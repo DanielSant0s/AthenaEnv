@@ -24,6 +24,7 @@
 #include <iop_manager.h>
 
 #include <macros.h>
+#include <n32_call.h>
 
 #include <erl.h>
 
@@ -172,13 +173,6 @@ static JSValue athena_copyfile(JSContext *ctx, JSValue this_val, int argc, JSVal
     close(dest);
 
 	return JS_UNDEFINED;
-}
-
-static char modulePath[256];
-
-static void setModulePath()
-{
-	getcwd( modulePath, 256 );
 }
 
 static JSValue athena_sleep(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
@@ -415,6 +409,36 @@ static JSValue athena_getfileprogress(JSContext *ctx, JSValue this_val, int argc
 	return obj;
 }
 
+static JSValue athena_mount(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
+	if (argc != 2 && argc != 3) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
+
+	int mode = 0;
+	const char *mountpoint = JS_ToCString(ctx, argv[0]);
+	const char *blockdev = JS_ToCString(ctx, argv[1]);
+
+	if (argc == 3)
+		JS_ToInt32(ctx, &mode, argv[2]);
+
+	int ret = fileXioMount(mountpoint, blockdev, mode);
+
+	JS_FreeCString(ctx, mountpoint);
+	JS_FreeCString(ctx, blockdev);
+
+	return JS_NewInt32(ctx, ret);
+}
+
+static JSValue athena_umount(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
+	if (argc != 1) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
+
+	const char *device = JS_ToCString(ctx, argv[0]);
+
+	int ret = fileXioUmount(device);
+
+	JS_FreeCString(ctx, device);
+
+	return JS_NewInt32(ctx, ret);
+}
+
 static JSValue athena_devices(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
 	int i, devcnt;
 	struct fileXioDevice DEV[FILEXIO_MAX_DEVICES];
@@ -555,27 +579,6 @@ static JSValue athena_gettemps(JSContext *ctx, JSValue this_val, int argc, JSVal
 
 }
 
-static JSValue athena_stacktrace(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
-	int n = 0;
-	JS_ToInt32(ctx, &n, argv[0]);
-
-	JSValue arr = JS_NewArray(ctx);
-
-	unsigned int stackTrace[n];
-
-	ps2GetStackTrace(stackTrace, n);
-
-  	for(int i = 0; i < n; i++)
-  	{
-  		if (stackTrace[i] == 0)
-  	  		break;
-
-		JS_SetPropertyUint32(ctx, arr, i, JS_NewUint32(ctx, stackTrace[i]));
-  	}
-
-	return arr;
-}
-
 static JSValue athena_loaddynamiclibrary(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
   	struct erl_record_t *erl = _init_load_erl_from_file(JS_ToCString(ctx, argv[0]), 0);
 
@@ -615,137 +618,6 @@ static JSValue athena_findrelocatableobject(JSContext *ctx, JSValue this_val, in
 
 	return JS_UNDEFINED;
 }
-
-inline void process_float_arg(float val, int pos) {
-	switch(pos)
-	{
-	case 0:
-		asm volatile ("mov.s $f12, %0" : : "f" (val));
-		break;
-	case 1:  
-		asm volatile ("mov.s $f13, %0" : : "f" (val));
-		break;
-	case 2:  
-		asm volatile ("mov.s $f14, %0" : : "f" (val));
-		break;
-	case 3:  
-		asm volatile ("mov.s $f15, %0" : : "f" (val));
-		break;
-	case 4:  
-		asm volatile ("mov.s $f16, %0" : : "f" (val));
-		break;
-	case 5:  
-		asm volatile ("mov.s $f17, %0" : : "f" (val));
-		break;
-	case 6:  
-		asm volatile ("mov.s $f18, %0" : : "f" (val));
-		break;
-	case 7: 
-		asm volatile ("mov.s $f19, %0" : : "f" (val));
-		break;
-	case 8:  
-		asm volatile ("mov.s $f20, %0" : : "f" (val));
-		break;
-	case 9:  
-		asm volatile ("mov.s $f21, %0" : : "f" (val));
-		break;
-	case 10: 
-		asm volatile ("mov.s $f22, %0" : : "f" (val));
-		break;
-	case 11: 
-		asm volatile ("mov.s $f23, %0" : : "f" (val));
-		break;
-	case 12: 
-		asm volatile ("mov.s $f24, %0" : : "f" (val));
-		break;
-	case 13: 
-		asm volatile ("mov.s $f25, %0" : : "f" (val));
-		break;
-	case 14: 
-		asm volatile ("mov.s $f26, %0" : : "f" (val));
-		break;
-	}
-}
-
-typedef union 
-{
-    int64_t	    long_arg;
-    uint64_t   ulong_arg;
-    int32_t		 int_arg;
-    uint32_t	uint_arg;
-    int16_t    short_arg;
-    uint16_t  ushort_arg;
-    int8_t	    char_arg;
-    uint8_t	   uchar_arg;
-
-    bool	    bool_arg;
-
-	float	   float_arg;
-
-    void*	     ptr_arg;
-    char*	  string_arg;
-} func_arg;
-
-typedef enum
-{
-	NONTYPE_VOID,
-	TYPE_LONG,
-	TYPE_ULONG,
-	TYPE_INT,
-	TYPE_UINT,
-	TYPE_SHORT, 
-	TYPE_USHORT,
-	TYPE_CHAR,
-	TYPE_UCHAR,
-	TYPE_BOOL,
-	TYPE_FLOAT,
-	TYPE_PTR,
-	TYPE_STRING,
-
-	JS_TYPE_BUFFER,
-} arg_types;
-
-typedef void (*void_return_call)(
-	func_arg, func_arg, func_arg, func_arg, 
-	func_arg, func_arg, func_arg, func_arg, 
-	func_arg, func_arg, func_arg, func_arg, 
-	func_arg, func_arg, func_arg, func_arg, 
-	func_arg, func_arg, func_arg, func_arg
-);
-
-typedef int (*int_return_call)(
-	func_arg, func_arg, func_arg, func_arg, 
-	func_arg, func_arg, func_arg, func_arg, 
-	func_arg, func_arg, func_arg, func_arg, 
-	func_arg, func_arg, func_arg, func_arg, 
-	func_arg, func_arg, func_arg, func_arg
-);
-
-typedef bool (*bool_return_call)(
-	func_arg, func_arg, func_arg, func_arg, 
-	func_arg, func_arg, func_arg, func_arg, 
-	func_arg, func_arg, func_arg, func_arg, 
-	func_arg, func_arg, func_arg, func_arg, 
-	func_arg, func_arg, func_arg, func_arg
-);
-
-typedef float (*float_return_call)(
-	func_arg, func_arg, func_arg, func_arg, 
-	func_arg, func_arg, func_arg, func_arg, 
-	func_arg, func_arg, func_arg, func_arg, 
-	func_arg, func_arg, func_arg, func_arg, 
-	func_arg, func_arg, func_arg, func_arg
-);
-
-typedef char *(*string_return_call)(
-	func_arg, func_arg, func_arg, func_arg, 
-	func_arg, func_arg, func_arg, func_arg, 
-	func_arg, func_arg, func_arg, func_arg, 
-	func_arg, func_arg, func_arg, func_arg, 
-	func_arg, func_arg, func_arg, func_arg
-);
-
-#define call_function(return_type, function) ((return_type ## _return_call)function)
 
 static JSValue athena_call_native(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
 	func_arg arg[32] = { 0 };
@@ -792,7 +664,7 @@ static JSValue athena_call_native(JSContext *ctx, JSValue this_val, int argc, JS
 			case TYPE_STRING:
 				arg[i].string_arg = JS_ToCString(ctx, val);
 				break;
-			case JS_TYPE_BUFFER:
+			case TYPE_BUFFER:
 				{
 					uint32_t tmp;
 					arg[i].ptr_arg = JS_GetArrayBuffer(ctx, &tmp, val);
@@ -872,49 +744,50 @@ static JSValue athena_call_native(JSContext *ctx, JSValue this_val, int argc, JS
 	}
 
 	return JS_UNDEFINED;
-	
 }
 
 static const JSCFunctionListEntry system_funcs[] = {
-	JS_CFUNC_DEF( "getBDMInfo",  0,         			athena_getbdminfo		 ),
-	JS_CFUNC_DEF( "devices",  0,         			athena_devices			 	 ),
-	JS_CFUNC_DEF( "listDir",  1,         			athena_dir			 		 ),
-	JS_CFUNC_DEF( "removeDirectory",    		  1,       	athena_removeDir	 ),
-	JS_CFUNC_DEF( "moveFile",	       		  2,        	athena_movefile	 ),
-	JS_CFUNC_DEF( "copyFile",	       		  2,        	athena_copyfile	 ),
-	JS_CFUNC_DEF( "threadCopyFile",	   		  2,       	athena_copyasync	   	 ),
-	JS_CFUNC_DEF( "getFileProgress",	  		  0,  	athena_getfileprogress     ),
-	JS_CFUNC_DEF( "rename",           		  2,          athena_rename		 ),
-	JS_CFUNC_DEF( "sleep",           		  1,           athena_sleep		 ),
-	JS_CFUNC_DEF( "delay",           		  0,           athena_delay		 ),
-	JS_CFUNC_DEF( "exitToBrowser",  		  0,            athena_exit	 ),
-	JS_CFUNC_DEF( "getMCInfo",          2,       	athena_getmcinfo	 		 ),
-	JS_CFUNC_DEF( "loadELF",         3,        	athena_loadELF	 			 ),
-	JS_CFUNC_DEF( "checkValidDisc",     		  0,  		athena_checkValidDisc ),
-	JS_CFUNC_DEF( "getDiscType",        		  0,     	athena_getDiscType	 ),
-	JS_CFUNC_DEF( "checkDiscTray",      		  0,   		athena_checkDiscTray	 ),
-	JS_CFUNC_DEF( "setDarkMode",      		  1,   		athena_darkmode	 ),
-	JS_CFUNC_DEF( "getCPUInfo",      		  0,   		athena_getcpuinfo	 ),
-	JS_CFUNC_DEF( "getGPUInfo",      		  0,   		athena_getgpuinfo	 ),
-	JS_CFUNC_DEF( "getMemoryStats",      	  0,   		athena_geteememory	 ),
-	JS_CFUNC_DEF( "getTemperature",      	  0,   		athena_gettemps	 ),
-	JS_CFUNC_DEF( "getStackTrace",      	  1,   		athena_stacktrace	 ),
+	JS_CFUNC_DEF( "getBDMInfo",               0,        athena_getbdminfo		 	 ),
+	JS_CFUNC_DEF( "mount",                    3,        athena_mount		 		 ),
+	JS_CFUNC_DEF( "umount",                   1,        athena_umount		 		 ),
+	JS_CFUNC_DEF( "devices",                  0,        athena_devices			 	 ),
+	JS_CFUNC_DEF( "listDir",                  1,        athena_dir			 		 ),
+	JS_CFUNC_DEF( "removeDirectory",    	  1,       	athena_removeDir	 		 ),
+	JS_CFUNC_DEF( "moveFile",	       		  2,        athena_movefile	 			 ),
+	JS_CFUNC_DEF( "copyFile",	       		  2,        athena_copyfile	 			 ),
+	JS_CFUNC_DEF( "threadCopyFile",	   		  2,       	athena_copyasync	   	     ),
+	JS_CFUNC_DEF( "getFileProgress",	  	  0,  		athena_getfileprogress       ),
+	JS_CFUNC_DEF( "rename",           		  2,        athena_rename		 		 ),
+	JS_CFUNC_DEF( "sleep",           		  1,        athena_sleep		 		 ),
+	JS_CFUNC_DEF( "delay",           		  0,        athena_delay		 		 ),
+	JS_CFUNC_DEF( "exitToBrowser",  		  0,        athena_exit	 				 ),
+	JS_CFUNC_DEF( "getMCInfo",                2,       	athena_getmcinfo	 		 ),
+	JS_CFUNC_DEF( "loadELF",                  3,        athena_loadELF	 			 ),
+	JS_CFUNC_DEF( "checkValidDisc",     	  0,  		athena_checkValidDisc 		 ),
+	JS_CFUNC_DEF( "getDiscType",        	  0,     	athena_getDiscType	  		 ),
+	JS_CFUNC_DEF( "checkDiscTray",      	  0,   		athena_checkDiscTray	 	 ),
+	JS_CFUNC_DEF( "setDarkMode",      		  1,   		athena_darkmode	 			 ),
+	JS_CFUNC_DEF( "getCPUInfo",      		  0,   		athena_getcpuinfo	 		 ),
+	JS_CFUNC_DEF( "getGPUInfo",      		  0,   		athena_getgpuinfo	 		 ),
+	JS_CFUNC_DEF( "getMemoryStats",      	  0,   		athena_geteememory	 		 ),
+	JS_CFUNC_DEF( "getTemperature",      	  0,   		athena_gettemps	 			 ),
 
-	JS_CFUNC_DEF( "nativeCall",      	    3, 		  athena_call_native),
-	JS_PROP_INT32_DEF("T_LONG", TYPE_LONG, JS_PROP_CONFIGURABLE ),
-	JS_PROP_INT32_DEF("T_ULONG", TYPE_ULONG, JS_PROP_CONFIGURABLE ),
-	JS_PROP_INT32_DEF("T_INT", TYPE_INT, JS_PROP_CONFIGURABLE ),
-	JS_PROP_INT32_DEF("T_UINT", TYPE_UINT, JS_PROP_CONFIGURABLE ),
-	JS_PROP_INT32_DEF("T_SHORT", TYPE_SHORT, JS_PROP_CONFIGURABLE ),
-	JS_PROP_INT32_DEF("T_USHORT", TYPE_USHORT, JS_PROP_CONFIGURABLE ),
-	JS_PROP_INT32_DEF("T_CHAR", TYPE_CHAR, JS_PROP_CONFIGURABLE ),
-	JS_PROP_INT32_DEF("T_UCHAR", TYPE_UCHAR, JS_PROP_CONFIGURABLE ),
-	JS_PROP_INT32_DEF("T_BOOL", TYPE_BOOL, JS_PROP_CONFIGURABLE ),
-	JS_PROP_INT32_DEF("T_FLOAT", TYPE_FLOAT, JS_PROP_CONFIGURABLE ),
-	JS_PROP_INT32_DEF("T_PTR", TYPE_PTR, JS_PROP_CONFIGURABLE ),
-	JS_PROP_INT32_DEF("T_STRING", TYPE_STRING, JS_PROP_CONFIGURABLE ),
+	JS_CFUNC_DEF( "nativeCall",      	      3, 		  athena_call_native		 ),
 
-	JS_PROP_INT32_DEF("JS_BUFFER", JS_TYPE_BUFFER, JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("T_LONG",    TYPE_LONG,   JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("T_ULONG",   TYPE_ULONG,  JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("T_INT",     TYPE_INT,    JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("T_UINT",    TYPE_UINT,   JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("T_SHORT",   TYPE_SHORT,  JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("T_USHORT",  TYPE_USHORT, JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("T_CHAR",    TYPE_CHAR,   JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("T_UCHAR",   TYPE_UCHAR,  JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("T_BOOL",    TYPE_BOOL,   JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("T_FLOAT",   TYPE_FLOAT,  JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("T_PTR",     TYPE_PTR,    JS_PROP_CONFIGURABLE ),
+	JS_PROP_INT32_DEF("T_STRING",  TYPE_STRING, JS_PROP_CONFIGURABLE ),
+
+	JS_PROP_INT32_DEF("JS_BUFFER", TYPE_BUFFER, JS_PROP_CONFIGURABLE ),
 
 	JS_CFUNC_DEF( "loadReloc",      	    1, 		  athena_loaddynamiclibrary	 ),
 	JS_CFUNC_DEF( "unloadReloc",            1, 		  athena_unloaddynamiclibrary	 ),
@@ -926,194 +799,12 @@ static const JSCFunctionListEntry system_funcs[] = {
 	JS_PROP_INT32_DEF("SELECT", 2, JS_PROP_CONFIGURABLE ),
 };
 
-static JSValue athena_sifregistermodule(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-	void *data = NULL;
-	size_t size = 0;
-	uint8_t dependencies[4] = { EMPTY_ENTRY, EMPTY_ENTRY, EMPTY_ENTRY, EMPTY_ENTRY };
-
-	JSValue init_fun = NULL, end_fun = NULL;
-
-	iopman_func init = NULL, end = NULL;
-
-	char* name = JS_ToCStringLen(ctx, &size, argv[0]);
-
-	if (JS_IsString(argv[1])) {
-		data = JS_ToCString(ctx, argv[1]);
-	} else {
-		data = JS_GetArrayBuffer(ctx, &size, argv[1]);
-	}
-
-	if (argc > 2) {
-		JSValue arg_array = JS_GetPropertyStr(ctx, argv[2], "deps");
-
-		uint32_t num_deps = 0;
-		JS_ToUint32(ctx, &num_deps, JS_GetPropertyStr(ctx, arg_array, "length"));
-	
-		uint32_t dep_id = EMPTY_ENTRY;
-		for (int i = 0; i < num_deps; i++) {
-			JS_ToUint32(ctx, &num_deps, JS_GetPropertyUint32(ctx, arg_array, i));
-			dependencies[i] = dep_id;
-		}
-
-		JS_FreeValue(ctx, arg_array);
-
-		init_fun = JS_GetPropertyStr(ctx, argv[2], "init");
-
-		if (JS_IsFunction(ctx, init_fun)) {
-			init = lambda(int, (module_entry *module) {
-				JS_Call(ctx, (JSValue)module->init_args, JS_UNDEFINED, 0, NULL);
-				return 0;
-			});
-		} else if (JS_IsNumber(init_fun)) {
-			JS_ToUint32(ctx, &init, init_fun);
-		}
-
-		end_fun = JS_GetPropertyStr(ctx, argv[2], "end");
-
-		if (JS_IsFunction(ctx, end_fun)) {
-			end = lambda(int, (module_entry *module) {
-				JS_Call(ctx, (JSValue)module->end_args, JS_UNDEFINED, 0, NULL);
-				return 0;
-			});
-		} else if (JS_IsNumber(end_fun)) {
-			JS_ToUint32(ctx, &end, end_fun);
-		}
-	}
-
-	module_entry *result = iopman_register_module(name, data, size, dependencies, init, end);
-
-	if (init_fun)
-		result->init_args = init_fun;
-
-	if (end_fun)
-		result->end_args = end_fun;
-
-	return JS_NewInt32(ctx, result);
-}
-
-static JSValue athena_sifloadmodule(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-	module_entry *module = NULL;
-
-	if (JS_IsString(argv[0])) {	
-		char *module_name = JS_ToCString(ctx, argv[0]);
-		module = iopman_search_module(module_name);
-
-		JS_FreeCString(ctx, module_name);
-	} else {
-		JS_ToUint32(ctx, &module, argv[0]);
-	}
-
-	if (module) {
-		int arg_len = 0;
-		const char *args = NULL;
-	
-		if(argc == 3){
-			JS_ToInt32(ctx, &arg_len, argv[1]);
-			args = JS_ToCString(ctx, argv[2]);
-		}
-
-		int ret = iopman_load_module(module, arg_len, args);
-		if (ret == MODULE_STATUS_INCOMPATIBILITY) {
-			return JS_ThrowInternalError(ctx, "loadModule: %s module is incompatible with %s, which is actually loaded. Keep or reset IOP.", 
-					module->name, 
-					iopman_get_incompatible_module()->name);
-		} else if (ret == MODULE_STATUS_ERROR) {
-			return JS_ThrowInternalError(ctx, "loadModule: error while loading %s.", module->name);
-		}
-	} else {
-		return JS_ThrowInternalError(ctx, "loadModule: module not found.");
-	}
-		
-	return JS_UNDEFINED;
-}
-
-static JSValue athena_sifgetmodule(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-	module_entry *module = NULL;
-
-	if (JS_IsString(argv[0])) {	
-		char *module_name = JS_ToCString(ctx, argv[0]);
-		module = iopman_search_module(module_name);
-
-		JS_FreeCString(ctx, module_name);
-
-		if (module)
-			return JS_NewUint32(ctx, (uint32_t)module);
-	} else {
-		uint32_t id = 0xFF;
-		JS_ToUint32(ctx, &id, argv[0]);
-		return JS_NewUint32(ctx, (uint32_t)iopman_get_module(id));
-	}
-		
-	return JS_UNDEFINED;
-}
-
-static JSValue athena_sifgetmodules(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-	uint32_t list_size = 0;
-	module_entry *modules = iopman_get_modules(&list_size);
-
-	if (list_size) {	
-		JSValue arr = JS_NewArray(ctx);
-
-		for (int i = 0; i < list_size; i++) {
-			JSValue obj = JS_NewObject(ctx);
-
-			JS_DefinePropertyValueStr(ctx, obj, "name", JS_NewString(ctx, modules[i].name), JS_PROP_C_W_E);
-			JS_DefinePropertyValueStr(ctx, obj, "id", JS_NewUint32(ctx, modules[i].id), JS_PROP_C_W_E);
-
-			JS_DefinePropertyValueUint32(ctx, arr, i, obj, JS_PROP_C_W_E);
-		}
-
-		return arr;
-	}
-		
-	return JS_UNDEFINED;
-}
-
-static JSValue athena_resetiop(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-	iopman_reset();
-
-	return JS_UNDEFINED;
-}
-
-static JSValue athena_getiopmemory(JSContext *ctx, JSValue this_val, int argc, JSValueConst * argv){
-	if (argc != 0) return JS_ThrowSyntaxError(ctx, "Wrong number of arguments");
-	s32 freeram = 0;
-    s32 usedram = 0;
-
-	iopman_load_module(iopman_search_module("freeram"), 0, NULL);
-
-    smem_read((void *)(1 * 1024 * 1024), &freeram, 4);
-    usedram = (2 * 1024 * 1024) - freeram;
-
-	JSValue obj = JS_NewObject(ctx);
-    JS_DefinePropertyValueStr(ctx, obj, "free", JS_NewUint32(ctx, freeram), JS_PROP_C_W_E);
-	JS_DefinePropertyValueStr(ctx, obj, "used", JS_NewUint32(ctx, usedram), JS_PROP_C_W_E);
-
-	return obj;
-}
-
-static const JSCFunctionListEntry sif_funcs[] = {
-	JS_CFUNC_DEF("newModule",             3, 		athena_sifregistermodule),
-	JS_CFUNC_DEF("loadModule",     		  3,        athena_sifloadmodule),
-	JS_CFUNC_DEF("getModule",     		  1,        athena_sifgetmodule),
-	JS_CFUNC_DEF("getModules",     		  0,        athena_sifgetmodules),
-	JS_CFUNC_DEF("reset",      			  0,     	athena_resetiop),
-	JS_CFUNC_DEF("getMemoryStats",        0,     	athena_getiopmemory),
-};
-
 static int system_init(JSContext *ctx, JSModuleDef *m)
 {
     return JS_SetModuleExportList(ctx, m, system_funcs, countof(system_funcs));
 }
 
-static int sif_init(JSContext *ctx, JSModuleDef *m)
-{
-    return JS_SetModuleExportList(ctx, m, sif_funcs, countof(sif_funcs));
-}
-
 JSModuleDef *athena_system_init(JSContext* ctx){
-	setModulePath();
-	athena_push_module(ctx, system_init, system_funcs, countof(system_funcs), "System");
-	return athena_push_module(ctx, sif_init, sif_funcs, countof(sif_funcs), "IOP");
+	return athena_push_module(ctx, system_init, system_funcs, countof(system_funcs), "System");
 }
 
