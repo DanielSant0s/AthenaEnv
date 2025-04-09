@@ -127,7 +127,7 @@ void register_iop_modules() {
 	
 	#ifdef ATHENA_NETWORK
 	module_entry *NETMAN_entry = 
-		iopman_register_module_buffer("NETMAN", NETMAN, iop_dependency(ps2dev9_entry), NULL, NULL);
+		iopman_register_module_buffer("NETMAN", NETMAN, iop_dependency(ps2dev9_entry), NetManInit, NetManDeinit);
 	module_entry *SMAP_entry = 
 		iopman_register_module_buffer("SMAP", SMAP, iop_dependency(NETMAN_entry), NULL, NULL);
 	#ifdef ATHENA_UDPBD

@@ -7,8 +7,6 @@ static JSValue athena_nw_init(JSContext *ctx, JSValue this_val, int argc, JSValu
 	
     struct ip4_addr IP, NM, GW, DNS;
 
-    NetManInit();
-
 	if(ethApplyNetIFConfig(NETMAN_NETIF_ETH_LINK_MODE_AUTO) != 0) {
 		return JS_ThrowInternalError(ctx, "Error: failed to set link mode.");
 	}
@@ -75,7 +73,6 @@ static JSValue athena_nw_deinit(JSContext *ctx, JSValue this_val, int argc, JSVa
     curl_easy_cleanup(curl);
     curl_global_cleanup();
 	ps2ipDeinit();
-	NetManDeinit();
 
     return JS_UNDEFINED;
 }
