@@ -25,6 +25,9 @@
 #include <fntsys.h>
 #endif
 
+#include <dirent.h>
+#include <errno.h>
+
 #include <readini.h>
 
 #include <erl.h>
@@ -123,9 +126,6 @@ int main(int argc, char **argv) {
 
     bool ignore_ini = false;
     bool reset_iop = true;
-#if defined(RESET_IOP)
-    reset_iop = RESET_IOP;
-#endif
 
     char MountPoint[32+6+1]; // max partition name + 'hdd0:/' + '\0'
     char newCWD[255];
@@ -171,50 +171,34 @@ int main(int argc, char **argv) {
 	init_graphics();
     #endif
 
-    if (!ignore_ini) {
-        if (!strncmp(boot_path, "cdfs", 4) && !strpre("cdrom0", default_cfg)) {
-            memset(default_cfg, 0, 128);
-            strcpy(default_cfg, "cdrom0:ATHENA.INI;1"); // if using cdrom and custom arg is not valid, try to read from cdrom root.
-        }
-            
-        if (readini_open(&ini, default_cfg)) {
-            while(readini_getline(&ini)) {
-                if (readini_emptyline(&ini)) {
-                    continue;
-                } if (readini_bool(&ini, "boot_logo", &boot_logo)) {
-                    dbgprintf("reading boot_logo at athena.ini\n");
-
-                } else if (readini_bool(&ini, "dark_mode", &dark_mode)) {
-                    dbgprintf("reading dark_mode at athena.ini\n");
-
-                } else if (readini_string(&ini, "default_script", default_script)) {
-                    dbgprintf("reading default_script at athena.ini\n");
-
-                } else {
-                    iopman_modules_apply(lambda(void, (module_entry *module) { 
-                        if (readini_bool(&ini, module->name, &module->start_at_boot)) {
-                            printf("reading %s at athena.ini\n", module->name);
-                        }
-                    }));
-                }
-            }
-
-            readini_close(&ini);
-        }
-    }
-
-    if (boot_logo) {
-        init_bootlogo();
-    }
+    char *boot_device = get_boot_device(boot_path);
+    bool is_bd = boot_device? !strncmp(boot_device, "bdm", 3) : false;
 
     if (reset_iop) {
         iopman_reset();
 
-        iopman_modules_apply(lambda(void, (module_entry *module) { 
-            if (module->start_at_boot) {
-                iopman_load_module(module, 0, NULL);
+        if (boot_device) {
+            if (is_bd) {
+                iopman_load_module(iopman_search_module("usbmass_bd"), 0, NULL);
+                iopman_load_module(iopman_search_module("ata_bd"), 0, NULL);
+                
+                #ifdef ATHENA_UDPBD
+                iopman_load_module(iopman_search_module("smap_udpbd"), 0, NULL);
+                #endif
+    
+                #ifdef ATHENA_ILINK
+                iopman_load_module(iopman_search_module("IEEE1394_bd"), 0, NULL);
+                #endif
+                
+                #ifdef ATHENA_MX4SIO
+                iopman_load_module(iopman_search_module("mx4sio_bd"), 0, NULL);
+                #endif
+            } else {
+                iopman_load_module(iopman_search_module(boot_device), 0, NULL);
             }
-        }));
+        } else {
+            iopman_load_module(iopman_search_module("fileXio"), 0, NULL);
+        }
 
         if ((!strncmp(boot_path, "hdd0:", 5)) && (strstr(boot_path, ":pfs:") != NULL) && HDD_USABLE) // we booted from HDD and our modules are loaded and running...
         {
@@ -232,7 +216,85 @@ int main(int argc, char **argv) {
             }
         }
 
+        if (!strncmp(boot_path, "mass", 4)) {
+            char temp_path[255];
+            if (!strncmp(boot_path, "mass:", 5)) {
+                strcpy(temp_path, "mass0:");
+                strncat(temp_path, boot_path + 5, 255 - strlen(temp_path) - 1);
+            } else {
+                strcpy(temp_path, boot_path);
+                
+                for (int i = 0; i < 5; i++) { // actually we have 5 block devices: usb, udp, ata, sdc, sd
+                    temp_path[4] = '0' + i;
+                    wait_device(temp_path);
+                    chdir(temp_path);
+
+                    FILE *f = fopen(default_script, "r");
+
+                    if (f) {
+                        fclose(f);
+                        break;
+                    } 
+                }
+                
+            }
+
+            strcpy(boot_path, temp_path); 
+        }
+
         wait_device(boot_path);
+
+        if (is_bd) {
+            boot_device = get_block_device(boot_path);
+
+            iopman_reset(); // reset again to keep just the boot module
+            iopman_load_module(iopman_search_module(boot_device), 0, NULL);
+            wait_device(boot_path);
+        }
+    }
+
+    if (!ignore_ini) {
+        if (!strncmp(boot_path, "cdfs", 4) && !strpre("cdrom0", default_cfg)) {
+            memset(default_cfg, 0, 128);
+            strcpy(default_cfg, "cdrom0:ATHENA.INI;1"); // if using cdrom and custom arg is not valid, try to read from cdrom root.
+        }
+            
+        if (readini_open(&ini, default_cfg)) {
+            while(readini_getline(&ini)) {
+                if (readini_emptyline(&ini)) {
+                    continue;
+                } else if (readini_bool(&ini, "boot_logo", &boot_logo)) {
+                    dbgprintf("reading boot_logo at athena.ini\n");
+
+                } else if (readini_bool(&ini, "dark_mode", &dark_mode)) {
+                    dbgprintf("reading dark_mode at athena.ini\n");
+
+                } else if (readini_string(&ini, "default_script", default_script)) {
+                    dbgprintf("reading default_script at athena.ini\n");
+
+                } else {
+                    iopman_modules_apply(lambda(void, (module_entry *module) { 
+                        if (readini_bool(&ini, module->name, &module->start_at_boot)) {
+                            dbgprintf("reading %s at athena.ini\n", module->name);
+                        }
+                    }));
+                }
+            }
+
+            readini_close(&ini);
+        }
+    }
+
+    if (boot_logo) {
+        init_bootlogo();
+    }
+
+    if (reset_iop) {
+        iopman_modules_apply(lambda(void, (module_entry *module) { 
+            if (module->start_at_boot) {
+                iopman_load_module(module, 0, NULL);
+            }
+        }));
     }
 
     export_symbols();
@@ -245,8 +307,7 @@ int main(int argc, char **argv) {
 
     int jump_ret = setjmp(*get_reset_buf());
 
-    do
-    {
+    do {
         err_msg = run_script(default_script, false);
 
         athena_error_screen(err_msg, dark_mode);
