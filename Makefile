@@ -95,7 +95,7 @@ endif
 
 ifeq ($(ILINK),1)
   EE_CFLAGS += -DATHENA_ILINK
-  IOP_MODULES += IEEE1394_bd.o
+  IOP_MODULES += iLinkman.o IEEE1394_bd.o
 endif
 
 ifeq ($(MX4SIO),1)
