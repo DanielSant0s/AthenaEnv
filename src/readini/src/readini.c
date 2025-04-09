@@ -92,7 +92,6 @@ bool readini_bool(IniReader* ini, const char* key, bool* value_ptr) {
         } else {
             ret = true;
         }
-        
     }
 
     return !ret;

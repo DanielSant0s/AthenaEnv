@@ -96,6 +96,8 @@ void register_iop_modules();
 
 char *get_boot_device(const char* path);
 
+char *get_block_device(const char* path);
+
 int load_default_module(int id);
 
 bool wait_device(char *path);

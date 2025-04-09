@@ -147,9 +147,8 @@ void iopman_reset() {
 
     dbgprintf("AthenaEnv: Starting IOP Reset...\n");
     SifInitRpc(0);
-    #if defined(RESET_IOP)
     while (!SifIopReset("", 0)){};
-    #endif
+
     while (!SifIopSync()){};
     SifInitRpc(0);
     dbgprintf("AthenaEnv: IOP reset done.\n");

@@ -38,7 +38,6 @@ UDPBD ?= 0
 ILINK ?= 0
 MX4SIO ?= 0
 
-RESET_IOP ?= 1
 DEBUG ?= 0
 EE_SIO ?= 0
 
@@ -62,9 +61,6 @@ EE_LIBS = -L$(PS2SDK)/ports/lib -lmc -lpad -lmtap -lpatches -lz -llzma -lzip -lf
 EE_INCS += -I$(PS2SDK)/ports/include -I$(PS2SDK)/ports/include/zlib -Isrc/readini/include -Isrc/include
 
 EE_CFLAGS += -Wno-sign-compare -fno-strict-aliasing -fno-exceptions -fpermissive -DCONFIG_VERSION=\"$(shell cat VERSION)\" -D__TM_GMTOFF=tm_gmtoff -DPATH_MAX=256 -DPS2
-ifeq ($(RESET_IOP),1)
-  EE_CFLAGS += -DRESET_IOP
-endif
 
 ifeq ($(DEBUG),1)
   EE_CFLAGS += -DDEBUG
