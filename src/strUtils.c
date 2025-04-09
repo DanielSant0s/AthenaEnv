@@ -130,14 +130,22 @@ quit:
     return 0;
 }
 
-int count_spaces(const char *str) {
+int count_spaces(const char *str, const char *chars) {
     int count = 0;
-    while (*str) {
-        if (*str == ' ') {
-            count++;
+
+    while (*chars) {
+        char *tmp_str = str;
+
+        while (*tmp_str) {
+            if (*tmp_str == *chars) {
+                count++;
+            }
+            tmp_str++;
         }
-        str++;
+
+        chars++;
     }
+
     return count;
 }
 

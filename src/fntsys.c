@@ -566,7 +566,7 @@ int fntRenderString(int id, int x, int y, short aligned, size_t width, size_t he
         y += (text_height - 2);
 
     int pen_x = x;
-    int xmax = x + width;
+    int xmax = x + width; 
     int ymax = y + height;
 
     use_kerning = FT_HAS_KERNING(font->face);
@@ -592,6 +592,8 @@ int fntRenderString(int id, int x, int y, short aligned, size_t width, size_t he
 
     int text_size = 0, texture_id, last_texture_id;
 
+    char *chars_to_count = width? " \n" : " ";
+
     for (; *text_to_render; ++text_to_render) {
         if (utf8Decode(&state, &codepoint, *text_to_render)) // accumulate the codepoint value
             continue;
@@ -613,16 +615,18 @@ int fntRenderString(int id, int x, int y, short aligned, size_t width, size_t he
         if (width) {
             if (codepoint == '\n') {
                 pen_x = x;
-                y +=19; // hmax is too tight and unordered, generally
+                y += 19; // hmax is too tight and unordered, generally
                 continue;
             }
 
-            if (y > ymax) // stepped over the max
-                break;
+            //if (y > ymax) // stepped over the max
+            //    break;
 
             if (pen_x + glyph->width > xmax) {
-                pen_x = xmax + 1; // to be sure no other cahr will be written (even not a smaller one just following)
-                continue;
+                //pen_x = xmax + 1; // to be sure no other cahr will be written (even not a smaller one just following)
+                pen_x = x;
+                y += 19; // hmax is too tight and unordered, generally
+                //continue;
             }
         }
 
@@ -633,28 +637,29 @@ int fntRenderString(int id, int x, int y, short aligned, size_t width, size_t he
                 if (text_to_render != string) {
                     int last_size = (((uint32_t)after_draw)-((uint32_t)before_first_draw))/16;
 
-                    last_cnt->dword[0] = DMA_TAG((texture_id != -1? 11 : 7)+last_size, 0, DMA_CNT, 0, 0, 0);
+                    last_cnt->dword[0] = DMA_TAG((texture_id != -1? 12 : 8)+last_size, 0, DMA_CNT, 0, 0, 0);
             
-                    last_direct->sword[3] = VIF_CODE(6+last_size, 0, VIF_DIRECT, 0);
+                    last_direct->sword[3] = VIF_CODE(7+last_size, 0, VIF_DIRECT, 0);
 
-                    last_prim->dword[0] = VU_GS_GIFTAG(last_size/4, 
+                    last_prim->dword[0] = VU_GS_GIFTAG(last_size/2, 
 				                            			1, NO_CUSTOM_DATA, 1, 
 				                            			VU_GS_PRIM(GS_PRIM_PRIM_SPRITE, 
 				                            					   0, 1, 
 				                            					   gsGlobal->PrimFogEnable, 
 				                            					   gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 1, gsGlobal->PrimContext, 0),
-    			                            			0, 4);
+    			                            			1, 4);
 
                 }
 
-                text_size = strlen(text_to_render)-count_spaces(text_to_render);
+                text_size = strlen(text_to_render)-count_spaces(text_to_render, chars_to_count);
+                int text_vert_size = (text_size*2);
 
                 texture_id = texture_manager_bind(gsGlobal, tex, true);
 
-	            packet = owl_query_packet(CHANNEL_VIF1, (texture_id != -1? 12 : 8)+(text_size*4));
+	            packet = owl_query_packet(CHANNEL_VIF1, (texture_id != -1? 13 : 9)+text_vert_size);
 
                 last_cnt = packet->ptr;
-	            owl_add_cnt_tag(packet, (texture_id != -1? 11 : 7)+(text_size*4), 0); // 4 quadwords for vif
+	            owl_add_cnt_tag(packet, (texture_id != -1? 12 : 8)+text_vert_size, 0); // 4 quadwords for vif
 
 	            if (texture_id != -1) {
 	            	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0)); 
@@ -675,9 +680,9 @@ int fntRenderString(int id, int x, int y, short aligned, size_t width, size_t he
 	            owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
 	            owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
 	            owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));
-	            owl_add_uint(packet, VIF_CODE(6+(text_size*4), 0, VIF_DIRECT, 0)); // 3 giftags
+	            owl_add_uint(packet, VIF_CODE(7+(text_size*2), 0, VIF_DIRECT, 0)); // 3 giftags
 
-	            owl_add_tag(packet, GIF_AD, GIFTAG(4, 1, 0, 0, 0, 1));
+	            owl_add_tag(packet, GIF_AD, GIFTAG(5, 1, 0, 0, 0, 1));
 
 	            owl_add_tag(packet, GS_TEST_1, GS_SETREG_TEST_1(0, 0, 0, 0, 0, 0, 1, 1));
 
@@ -700,18 +705,29 @@ int fntRenderString(int id, int x, int y, short aligned, size_t width, size_t he
 
 	            owl_add_tag(packet, GS_TEX1_1, GS_SETREG_TEX1(1, 0, tex->Filter, tex->Filter, 0, 0, 0));
 
+                owl_add_tag(packet, GS_PRIM, 
+                    VU_GS_PRIM(
+                        GS_PRIM_PRIM_SPRITE, 
+                        0, 
+                        1, 
+                        gsGlobal->PrimFogEnable, 
+                        gsGlobal->PrimAlphaEnable, 
+                        gsGlobal->PrimAAEnable, 
+                        1, 
+                        gsGlobal->PrimContext, 
+                        0
+                    )
+                );
+
                 owl_add_tag(packet, GS_RGBAQ, colour);
 
                 last_prim = packet->ptr; 
 	            owl_add_tag(packet, 
-					   ((uint64_t)(GS_UV) << 0 | (uint64_t)(GS_XYZ2) << 4 | (uint64_t)(GS_UV) << 8 | (uint64_t)(GS_XYZ2) << 12), 
-					   	VU_GS_GIFTAG(text_size, 
-							1, NO_CUSTOM_DATA, 1, 
-							VU_GS_PRIM(GS_PRIM_PRIM_SPRITE, 
-									   0, 1, 
-									   gsGlobal->PrimFogEnable, 
-									   gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 1, gsGlobal->PrimContext, 0),
-    						0, 4)
+					   ((uint64_t)(GS_UV) << 0 | (uint64_t)(GS_XYZ2) << 4), 
+					   	VU_GS_GIFTAG(text_vert_size, 
+							1, NO_CUSTOM_DATA, 0, 
+							0,
+    						1, 2)
 						);
 
                 before_first_draw = packet->ptr;
