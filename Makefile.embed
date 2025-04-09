@@ -41,6 +41,9 @@ $(EE_EMBED_DIR)usbmass_bd.c: $(PS2SDK)/iop/irx/usbmass_bd.irx | $(EE_EMBED_DIR)
 $(EE_EMBED_DIR)mx4sio_bd.c: $(PS2SDK)/iop/irx/mx4sio_bd.irx | $(EE_EMBED_DIR)
 	$(BIN2S) $< $@ mx4sio_bd_irx
 
+$(EE_EMBED_DIR)iLinkman.c: $(PS2SDK)/iop/irx/iLinkman.irx | $(EE_EMBED_DIR)
+	$(BIN2S) $< $@ iLinkman_irx
+
 $(EE_EMBED_DIR)IEEE1394_bd.c: $(PS2SDK)/iop/irx/IEEE1394_bd.irx | $(EE_EMBED_DIR)
 	$(BIN2S) $< $@ IEEE1394_bd_irx
 

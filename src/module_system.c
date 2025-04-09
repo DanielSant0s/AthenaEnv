@@ -116,8 +116,10 @@ void register_iop_modules() {
 	#endif
 	
 	#ifdef ATHENA_ILINK
+	module_entry *iLinkman_entry = 
+		iopman_register_module_buffer("iLinkman", iLinkman, no_dependencies, NULL, NULL);
 	module_entry *IEEE1394_bd_entry = 
-		iopman_register_module_buffer("IEEE1394_bd", IEEE1394_bd, iop_deps(bdmfs_fatfs_entry->id, ps2dev9_entry->id, EMPTY_ENTRY, EMPTY_ENTRY), NULL, NULL);
+		iopman_register_module_buffer("IEEE1394_bd", IEEE1394_bd, iop_deps(bdmfs_fatfs_entry->id, iLinkman_entry->id, EMPTY_ENTRY, EMPTY_ENTRY), NULL, NULL);
 	#endif
 	
 	#ifdef ATHENA_UDPBD

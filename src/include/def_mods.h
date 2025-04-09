@@ -55,6 +55,7 @@ iopman_define_module(mx4sio_bd);
 #endif
 
 #ifdef ATHENA_ILINK
+iopman_define_module(iLinkman);
 iopman_define_module(IEEE1394_bd);
 #endif
 
