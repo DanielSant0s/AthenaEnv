@@ -175,23 +175,22 @@ inline void unpack_list_close(owl_packet *packet) {
     packet->list.top = false;
 }
 
-static const uint16_t OWL_XYOFFSET[8] __attribute__((aligned(16))) = { 2048, 2048, 0, 0, 2048, 2048, 0, 0 };
-static const uint16_t OWL_XYMAX[8] __attribute__((aligned(16))) =    { 0xFFFE, 0xFFFE, 0, 0, 0xFFFE, 0xFFFE, 0, 0 };
+static const int16_t OWL_XYOFFSET[8] __attribute__((aligned(16))) = { 2048, 2048, 0, 0, 2048, 2048, 0, 0 };
+static const uint16_t OWL_XYMAX[8] __attribute__((aligned(16))) =   { 4096, 4096, 0, 0, 4096, 4096, 0, 0 };
 
 // Too much specific stuff
 inline void owl_add_xy_uv_2x(owl_packet *packet, int x1, int y1, int u1, int v1, int x2, int y2, int u2, int v2) {
 	asm volatile ( 	
         "lq      $8, %[xyoffset] \n"
-        "lq      $9, %[xymax] \n"
+        "lq      $9, %[xymax]    \n"
         
         "pcpyld $7, %[xy2], %[xy1]    \n" // upper: x1, y1 - lower: x2, y2
         "paddsh $7, $7, $8    \n" // Add XYOFFSET
         
         "pmaxh  $7, $7, $0    \n" // Clamp XY >= 0
+        "pminh  $7, $7, $9     \n"  // Clamp MAX_XY > XY
         
         "psllh $7, $7, 4      \n" // ftoi4 - convert XY to 12:4
-        
-        "pminh $7, $7, $9     \n"  // Clamp MAX_XY > XY
 
         "pcpyld  $9, %[uv2], %[uv1]   \n" // upper: u1, v1 - lower: u2, v2
 
@@ -200,15 +199,15 @@ inline void owl_add_xy_uv_2x(owl_packet *packet, int x1, int y1, int u1, int v1,
         "pcpyld  $8, $7, $9   \n" // upper: u1, v1 - lower: x1, y1
         "pcpyud  $7, $9, $7   \n" // upper: u2, u2 - lower: x2, y2
 
-        "sq    $8,0x00(%[ptr])    \n"
-		"sq    $7,0x10(%[ptr])    \n"
+        "sq    $8, 0x00(%[ptr])    \n"
+		"sq    $7, 0x10(%[ptr])    \n"
 
         "daddiu   %0, %0, 0x20    \n" // packet->ptr += 2;
 		 : [ptr] "+r" (packet->ptr) : 
-            [xy1] "r"  (((union { uint16_t coors[2]; uint32_t w; }){ .coors = {x1, y1} }).w),
-            [xy2] "r"  (((union { uint16_t coors[2]; uint32_t w; }){ .coors = {x2, y2} }).w),
-            [uv1] "r"  (((union { uint16_t coors[2]; uint32_t w; }){ .coors = {u1, v1} }).w),
-            [uv2] "r"  (((union { uint16_t coors[2]; uint32_t w; }){ .coors = {u2, v2} }).w),
+            [xy1] "r"  (((union { int16_t coors[2]; uint32_t w; }){ .coors = {x1, y1} }).w),
+            [xy2] "r"  (((union { int16_t coors[2]; uint32_t w; }){ .coors = {x2, y2} }).w),
+            [uv1] "r"  (((union { int16_t coors[2]; uint32_t w; }){ .coors = {u1, v1} }).w),
+            [uv2] "r"  (((union { int16_t coors[2]; uint32_t w; }){ .coors = {u2, v2} }).w),
             [xyoffset] "m" (OWL_XYOFFSET),
             [xymax]    "m" (OWL_XYMAX)
          : "$7", "$8", "$9", "memory");
@@ -232,7 +231,7 @@ inline void owl_add_xy(owl_packet *packet, int x, int y) {
         "pminw $7, $7, $9     \n"
 
 		"sq    $7,0x00(%0)    \n"
-		 : : "r" (packet->ptr++), "r" (((union { uint32_t coors[2]; uint64_t dw; }){ .coors = {x, y} }).dw): "$7", "$8", "$9", "memory");
+		 : : "r" (packet->ptr++), "r" (((union { int32_t coors[2]; uint64_t dw; }){ .coors = {x, y} }).dw): "$7", "$8", "$9", "memory");
 }
 
 inline void owl_add_color(owl_packet *packet, uint64_t color) {
