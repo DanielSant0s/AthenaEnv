@@ -227,7 +227,9 @@ char *get_boot_device(const char* path) {
 }
 
 char *get_block_device(const char* path) {
-	int fd = fileXioDopen(path);
+	char massdev[7] = { 0 };
+	strncpy(massdev, path, 6);
+	int fd = fileXioDopen(massdev);
 	if (fd >= 0) {
 		char dev_name[10];
 		if (fileXioIoctl2(fd, USBMASS_IOCTL_GET_DRIVERNAME, NULL, 0, dev_name, sizeof(dev_name) - 1) >= 0) {
