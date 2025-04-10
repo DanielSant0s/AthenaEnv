@@ -167,10 +167,6 @@ int main(int argc, char **argv) {
         }
     }
 
-    #ifdef ATHENA_GRAPHICS
-	init_graphics();
-    #endif
-
     char *boot_device = get_boot_device(boot_path);
     bool is_bd = boot_device? !strncmp(boot_device, "bdm", 3) : false;
 
@@ -179,9 +175,9 @@ int main(int argc, char **argv) {
 
         if (boot_device) {
             if (is_bd) {
+                //iopman_load_module(iopman_search_module("ata_bd"), 0, NULL);
                 iopman_load_module(iopman_search_module("usbmass_bd"), 0, NULL);
-                iopman_load_module(iopman_search_module("ata_bd"), 0, NULL);
-                
+
                 #ifdef ATHENA_UDPBD
                 iopman_load_module(iopman_search_module("smap_udpbd"), 0, NULL);
                 #endif
@@ -221,6 +217,8 @@ int main(int argc, char **argv) {
             if (!strncmp(boot_path, "mass:", 5)) {
                 strcpy(temp_path, "mass0:");
                 strncat(temp_path, boot_path + 5, 255 - strlen(temp_path) - 1);
+                chdir(temp_path);
+
             } else {
                 strcpy(temp_path, boot_path);
                 
@@ -285,9 +283,13 @@ int main(int argc, char **argv) {
         }
     }
 
+    #ifdef ATHENA_GRAPHICS
+	init_graphics();
+    
     if (boot_logo) {
         init_bootlogo();
     }
+    #endif
 
     if (reset_iop) {
         iopman_modules_apply(lambda(void, (module_entry *module) { 

@@ -153,6 +153,8 @@ void iopman_reset() {
     SifInitRpc(0);
     dbgprintf("AthenaEnv: IOP reset done.\n");
 
+    SifLoadFileInit();
+
     // install sbv patch fix
     dbgprintf("AthenaEnv: Installing SBV Patches...\n");
     sbv_patch_enable_lmb();
