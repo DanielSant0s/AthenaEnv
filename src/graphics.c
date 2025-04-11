@@ -1050,10 +1050,10 @@ void init_screen(GSGLOBAL *gsGlobal)
 		*p_data++ = GS_ZBUF_2;
 	}
 
-	*p_data++ = GS_BLEND_BACK2FRONT;
+	*p_data++ = GS_ALPHA_BLEND_NORMAL;
 	*p_data++ = GS_ALPHA_1;
 
-	*p_data++ = GS_BLEND_BACK2FRONT;
+	*p_data++ = GS_ALPHA_BLEND_NORMAL;
 	*p_data++ = GS_ALPHA_2;
 
 	*p_data++ = GS_SETREG_DIMX(gsGlobal->DitherMatrix[0],gsGlobal->DitherMatrix[1],
