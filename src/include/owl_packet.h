@@ -177,6 +177,33 @@ inline void unpack_list_close(owl_packet *packet) {
     packet->list.top = false;
 }
 
+typedef struct {
+    uint64_t NLOOP : 15;  
+    uint64_t EOP   : 1;   
+    uint64_t      : 30;   
+    uint64_t PRE   : 1;   
+    uint64_t PRIM  : 11;  
+    uint64_t FLG   : 2;   
+    uint64_t NREG  : 4;   
+} giftag_t;
+
+typedef struct {
+    uint32_t immediate : 16; 
+    uint32_t num       : 8;  
+    uint32_t cmd       : 7;  
+    uint32_t irq       : 1;  
+} vifcode_t;
+
+typedef struct {
+    uint64_t QWC   : 16;  
+    uint64_t       : 10;  
+    uint64_t PCE   : 2;   
+    uint64_t ID    : 3;   
+    uint64_t IRQ   : 1;   
+    uint64_t ADDR  : 31;  
+    uint64_t SPR   : 1;   
+} dmatag_t;
+
 extern const int16_t OWL_XYOFFSET[8] __attribute__((aligned(16)));
 extern const uint16_t OWL_XYMAX[8] __attribute__((aligned(16)));
 

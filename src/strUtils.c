@@ -130,6 +130,19 @@ quit:
     return 0;
 }
 
+int count_nonascii(const char *str) {
+    int count = 0;
+
+    while (*str) {
+        if ((*str & ~0x7f)) {
+            count++;
+        }
+        str++;
+    }
+
+    return count/2;
+}
+
 int count_spaces(const char *str, const char *chars) {
     int count = 0;
 

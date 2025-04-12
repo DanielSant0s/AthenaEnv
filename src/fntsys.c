@@ -595,8 +595,9 @@ int fntRenderString(int id, int x, int y, short aligned, size_t width, size_t he
     char *chars_to_count = width? " \n" : " ";
 
     for (; *text_to_render; ++text_to_render) {
-        if (utf8Decode(&state, &codepoint, *text_to_render)) // accumulate the codepoint value
+        if (utf8Decode(&state, &codepoint, *text_to_render)) // accumulate the codepoint value 
             continue;
+            
 
         glyph = fntCacheGlyph(font, codepoint);
         if (!glyph)
@@ -651,7 +652,7 @@ int fntRenderString(int id, int x, int y, short aligned, size_t width, size_t he
 
                 }
 
-                text_size = strlen(text_to_render)-count_spaces(text_to_render, chars_to_count);
+                text_size = strlen(text_to_render)-count_spaces(text_to_render, chars_to_count)-count_nonascii(text_to_render);
                 int text_vert_size = (text_size*2);
 
                 texture_id = texture_manager_bind(gsGlobal, tex, true);
