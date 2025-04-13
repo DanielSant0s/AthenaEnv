@@ -6,7 +6,6 @@
 #include <gsKit.h>
 #include <dmaKit.h>
 
-#include <gsToolkit.h>
 #include <gsInline.h>
 
 #include <math3d.h>
@@ -40,6 +39,77 @@
 #define GS_ALPHA_BLEND_ADD            (ALPHA_EQUATION(SRC_RGB, ZERO_RGB, SRC_ALPHA, DST_ALPHA, 0x00))
 
 extern GSGLOBAL *gsGlobal;
+
+struct gsBitMapFileHeader
+{
+	u16	Type;
+	u32	Size;
+	u16 Reserved1;
+	u16 Reserved2;
+	u32 Offset;
+} __attribute__ ((packed));
+typedef struct gsBitMapFileHeader GSBMFHDR;
+
+struct gsBitMapInfoHeader
+{
+	u32	Size;
+	u32	Width;
+	u32	Height;
+	u16	Planes;
+	u16 BitCount;
+	u32 Compression;
+	u32 SizeImage;
+	u32 XPelsPerMeter;
+	u32 YPelsPerMeter;
+	u32 ColorUsed;
+	u32 ColorImportant;
+} __attribute__ ((packed));
+typedef struct gsBitMapInfoHeader GSBMIHDR;
+
+struct gsBitMapClut
+{
+	u8 Blue;
+	u8 Green;
+	u8 Red;
+	u8 Alpha;
+} __attribute__ ((packed));
+typedef struct gsBitMapClut GSBMCLUT;
+
+struct gsBitmap
+{
+	GSBMFHDR FileHeader;
+	GSBMIHDR InfoHeader;
+	char *Texture;
+	GSBMCLUT *Clut;
+};
+typedef struct gsBitmap GSBITMAP;
+
+//remove fontm specific things here
+typedef enum {
+    FONT_TYPE_FNT,
+    FONT_TYPE_BMP_DAT,
+    FONT_TYPE_PNG_DAT
+} eTextureFontTypes;
+
+/// gsKit Font Structure
+/// This structure holds all relevant data for any
+/// given font object, regardless of original format or type.
+struct gsFont
+{
+	char *Path;		///< Path (string) to the Font File
+	char *Path_DAT;		///< Path (string) to the Glyph DAT File
+	u8 Type;		///< Font Type
+	u8 *RawData;		///< Raw File Data
+	int RawSize;		///< Raw File Datasize
+	GSTEXTURE *Texture;	///< Font Texture Object
+	u32 CharWidth;		///< Character Width
+	u32 CharHeight;		///< Character Height
+	u32 HChars;		///< Character Rows
+	u32 VChars;		///< Character Columns
+	s16 *Additional;		///< Additional Font Data
+    int pgcount;    /// Number of pages used in one call to gsKit_font_print_scaled
+};
+typedef struct gsFont GSFONT;
 
 /// GSKit CLUT base struct. This should've been in gsKit from the start :)
 typedef struct

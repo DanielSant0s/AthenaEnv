@@ -19,7 +19,7 @@ int athena_load_png(GSTEXTURE* tex, FILE* File, bool delayed)
 	if (File == NULL)
 	{
 		dbgprintf("Failed to load PNG file\n");
-		return NULL;
+		return -1;
 	}
 
 	png_structp png_ptr;
@@ -36,7 +36,7 @@ int athena_load_png(GSTEXTURE* tex, FILE* File, bool delayed)
 	{
 		dbgprintf("PNG Read Struct Init Failed\n");
 		fclose(File);
-		return NULL;
+		return -1;
 	}
 
 	info_ptr = png_create_info_struct(png_ptr);
@@ -46,7 +46,7 @@ int athena_load_png(GSTEXTURE* tex, FILE* File, bool delayed)
 		dbgprintf("PNG Info Struct Init Failed\n");
 		fclose(File);
 		png_destroy_read_struct(&png_ptr, (png_infopp)NULL, (png_infopp)NULL);
-		return NULL;
+		return -1;
 	}
 
 	if(setjmp(png_jmpbuf(png_ptr)))
@@ -54,7 +54,7 @@ int athena_load_png(GSTEXTURE* tex, FILE* File, bool delayed)
 		dbgprintf("Got PNG Error!\n");
 		png_destroy_read_struct(&png_ptr, &info_ptr, (png_infopp)NULL);
 		fclose(File);
-		return NULL;
+		return -1;
 	}
 
 	png_init_io(png_ptr, File);
@@ -253,7 +253,7 @@ int athena_load_png(GSTEXTURE* tex, FILE* File, bool delayed)
 	else
 	{
 		dbgprintf("This texture depth is not supported yet!\n");
-		return NULL;
+		return -1;
 	}
 
 	tex->Filter = GS_FILTER_NEAREST;
@@ -267,7 +267,7 @@ int athena_load_png(GSTEXTURE* tex, FILE* File, bool delayed)
 		if(tex->Vram == GSKIT_ALLOC_ERROR)
 		{
 			dbgprintf("VRAM Allocation Failed. Will not upload texture.\n");
-			return NULL;
+			return -1;
 		}
 
 		if(tex->Clut != NULL)
@@ -280,7 +280,7 @@ int athena_load_png(GSTEXTURE* tex, FILE* File, bool delayed)
 			if(tex->VramClut == GSKIT_ALLOC_ERROR)
 			{
 				dbgprintf("VRAM CLUT Allocation Failed. Will not upload texture.\n");
-				return NULL;
+				return -1;
 			}
 		}
 
@@ -319,20 +319,20 @@ int athena_load_bmp(GSTEXTURE* tex, FILE* File, bool delayed)
 	if (File == NULL)
 	{
 		dbgprintf("BMP: Failed to load bitmap\n");
-		return NULL;
+		return -1;
 	}
 	if (fread(&Bitmap.FileHeader, sizeof(Bitmap.FileHeader), 1, File) <= 0)
 	{
 		dbgprintf("BMP: Could not load bitmap\n");
 		fclose(File);
-		return NULL;
+		return -1;
 	}
 
 	if (fread(&Bitmap.InfoHeader, sizeof(Bitmap.InfoHeader), 1, File) <= 0)
 	{
 		dbgprintf("BMP: Could not load bitmap\n");
 		fclose(File);
-		return NULL;
+		return -1;
 	}
 
 	tex->Width = Bitmap.InfoHeader.Width;
@@ -359,7 +359,7 @@ int athena_load_bmp(GSTEXTURE* tex, FILE* File, bool delayed)
 			}
 			dbgprintf("BMP: Could not load bitmap\n");
 			fclose(File);
-			return NULL;
+			return -1;
 		}
 
 		GSBMCLUT *clut = (GSBMCLUT *)tex->Clut;
@@ -394,7 +394,7 @@ int athena_load_bmp(GSTEXTURE* tex, FILE* File, bool delayed)
 			}
 			dbgprintf("BMP: Could not load bitmap\n");
 			fclose(File);
-			return NULL;
+			return -1;
 		}
 
 		GSBMCLUT *clut = (GSBMCLUT *)tex->Clut;
@@ -460,7 +460,7 @@ int athena_load_bmp(GSTEXTURE* tex, FILE* File, bool delayed)
 				tex->Clut = NULL;
 			}
 			fclose(File);
-			return NULL;
+			return -1;
 		}
 
 		fread(image, FTexSize, 1, File);
@@ -489,7 +489,7 @@ int athena_load_bmp(GSTEXTURE* tex, FILE* File, bool delayed)
 				tex->Clut = NULL;
 			}
 			fclose(File);
-			return NULL;
+			return -1;
 		}
 
 		fread(image, FTexSize, 1, File);
@@ -522,7 +522,7 @@ int athena_load_bmp(GSTEXTURE* tex, FILE* File, bool delayed)
 				tex->Clut = NULL;
 			}
 			fclose(File);
-			return NULL;
+			return -1;
 		}
 
 		if (fread(image, FTexSize, 1, File) != 1)
@@ -539,7 +539,7 @@ int athena_load_bmp(GSTEXTURE* tex, FILE* File, bool delayed)
 			free(image);
 			image = NULL;
 			fclose(File);
-			return NULL;
+			return -1;
 		}
 		for (y = tex->Height - 1; y >= 0; y--)
 		{
@@ -576,7 +576,7 @@ int athena_load_bmp(GSTEXTURE* tex, FILE* File, bool delayed)
 		if(tex->Vram == GSKIT_ALLOC_ERROR)
 		{
 			dbgprintf("VRAM Allocation Failed. Will not upload texture.\n");
-			return NULL;
+			return -1;
 		}
 
 		if(tex->Clut != NULL)
@@ -589,7 +589,7 @@ int athena_load_bmp(GSTEXTURE* tex, FILE* File, bool delayed)
 			if(tex->VramClut == GSKIT_ALLOC_ERROR)
 			{
 				dbgprintf("VRAM CLUT Allocation Failed. Will not upload texture.\n");
-				return NULL;
+				return -1;
 			}
 		}
 
@@ -684,13 +684,13 @@ int athena_load_jpeg(GSTEXTURE* tex, FILE* fp, bool scale_down, bool delayed)
 
 	if (tex == NULL) {
 		dbgprintf("jpeg: error Texture is NULL\n");
-		return NULL;
+		return -1;
 	}
 
 	if (fp == NULL)
 	{
 		dbgprintf("jpeg: Failed to load file\n");
-		return NULL;
+		return -1;
 	}
 
 	/* We set up the normal JPEG error routines, then override error_exit. */
@@ -706,7 +706,7 @@ int athena_load_jpeg(GSTEXTURE* tex, FILE* fp, bool scale_down, bool delayed)
 		if (tex->Mem)
 			free(tex->Mem);
 		dbgprintf("jpeg: error during processing file\n");
-		return NULL;
+		return -1;
 	}
 	jpeg_create_decompress(&cinfo);
 	jpeg_stdio_src(&cinfo, fp);
@@ -724,7 +724,7 @@ int athena_load_jpeg(GSTEXTURE* tex, FILE* fp, bool scale_down, bool delayed)
 		if(tex->Vram == GSKIT_ALLOC_ERROR)
 		{
 			dbgprintf("VRAM Allocation Failed. Will not upload texture.\n");
-			return NULL;
+			return -1;
 		}
 
 		if(tex->Clut != NULL)
@@ -737,7 +737,7 @@ int athena_load_jpeg(GSTEXTURE* tex, FILE* fp, bool scale_down, bool delayed)
 			if(tex->VramClut == GSKIT_ALLOC_ERROR)
 			{
 				dbgprintf("VRAM CLUT Allocation Failed. Will not upload texture.\n");
-				return NULL;
+				return -1;
 			}
 		}
 

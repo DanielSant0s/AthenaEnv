@@ -21,10 +21,6 @@
 
 static const u64 BLACK_RGBAQ   = GS_SETREG_RGBAQ(0x00,0x00,0x00,0x80,0x00);
 
-#define RENDER_QUEUE_PER_POOLSIZE 1024 * 32 // 256K of persistent renderqueue
-/* Size of Oneshot drawbuffer (Double Buffered, so it uses this size * 2) */
-#define RENDER_QUEUE_OS_POOLSIZE 1024 * 32 // 2048K of oneshot renderqueue
-
 GSGLOBAL *gsGlobal = NULL;
 
 void (*flipScreen)();
@@ -130,50 +126,6 @@ float FPSCounter(int interval)
 {
 	frame_interval = interval;
 	return fps;
-}
-
-GSFONT* loadFont(const char* path){
-	int file = open(path, O_RDONLY, 0777);
-	uint16_t magic;
-	read(file, &magic, 2);
-	close(file);
-	GSFONT* font = NULL;
-	if (magic == 0x4D42) {
-		font = gsKit_init_font(GSKIT_FTYPE_BMP_DAT, (char*)path);
-		gsKit_font_upload(gsGlobal, font);
-	} else if (magic == 0x4246) {
-		font = gsKit_init_font(GSKIT_FTYPE_FNT, (char*)path);
-		gsKit_font_upload(gsGlobal, font);
-	} else if (magic == 0x5089) { 
-		font = gsKit_init_font(GSKIT_FTYPE_PNG_DAT, (char*)path);
-		gsKit_font_upload(gsGlobal, font);
-	}
-
-	return font;
-}
-
-void printFontText(GSFONT* font, const char* text, float x, float y, float scale, Color color)
-{ 
-	gsKit_set_test(gsGlobal, GS_ATEST_ON);
-	gsKit_font_print_scaled(gsGlobal, font, x-0.5f, y-0.5f, 1, scale, color, text);
-}
-
-void unloadFont(GSFONT* font)
-{
-	texture_manager_free(font->Texture);
-	// clut was pointing to static memory, so do not free
-	font->Texture->Clut = NULL;
-	// mem was pointing to 'TexBase', so do not free
-	font->Texture->Mem = NULL;
-	// free texture
-	free(font->Texture);
-	font->Texture = NULL;
-
-	if (font->RawData != NULL)
-		free(font->RawData);
-
-	free(font);
-	font = NULL;
 }
 
 int getFreeVRAM(){
@@ -424,27 +376,27 @@ void athena_error_screen(const char* errMsg, bool dark_mode) {
     uint64_t color = GS_SETREG_RGBAQ(0x20,0x20,0x20,0x80,0x00);
     uint64_t color2 = GS_SETREG_RGBAQ(0x80,0x80,0x80,0x80,0x00);
 
-    if (errMsg != NULL)
+    if (errMsg)
     {
         printf("AthenaEnv ERROR!\n%s", errMsg);
 
-        if (strstr(errMsg, "EvalError") != NULL) {
+        if (strstr(errMsg, "EvalError")) {
             color = GS_SETREG_RGBAQ(0x56,0x71,0x7D,0x80,0x00);
-        } else if (strstr(errMsg, "SyntaxError") != NULL) {
+        } else if (strstr(errMsg, "SyntaxError")) {
             color = GS_SETREG_RGBAQ(0x20,0x60,0xB0,0x80,0x00);
-        } else if (strstr(errMsg, "TypeError") != NULL) {
+        } else if (strstr(errMsg, "TypeError")) {
             color = GS_SETREG_RGBAQ(0x3b,0x81,0x32,0x80,0x00);
-        } else if (strstr(errMsg, "ReferenceError") != NULL) {
+        } else if (strstr(errMsg, "ReferenceError")) {
             color = GS_SETREG_RGBAQ(0xE5,0xDE,0x00,0x80,0x00);
-        } else if (strstr(errMsg, "RangeError") != NULL) {
+        } else if (strstr(errMsg, "RangeError")) {
             color = GS_SETREG_RGBAQ(0xD0,0x31,0x3D,0x80,0x00);
-        } else if (strstr(errMsg, "InternalError") != NULL) {
+        } else if (strstr(errMsg, "InternalError")) {
             color = GS_SETREG_RGBAQ(0x8A,0x00,0xC2,0x80,0x00);
-        } else if (strstr(errMsg, "URIError") != NULL) {
+        } else if (strstr(errMsg, "URIError")) {
             color = GS_SETREG_RGBAQ(0xFF,0x78,0x1F,0x80,0x00);
-        } else if (strstr(errMsg, "AggregateError") != NULL) {
+        } else if (strstr(errMsg, "AggregateError")) {
             color = GS_SETREG_RGBAQ(0xE2,0x61,0x9F,0x80,0x00);
-        } else if (strstr(errMsg, "AthenaError") != NULL) {
+        } else if (strstr(errMsg, "AthenaError")) {
             color = GS_SETREG_RGBAQ(0x70,0x29,0x63,0x80,0x00);
         }
 
@@ -1077,6 +1029,113 @@ void init_screen(GSGLOBAL *gsGlobal)
 	dmaKit_wait_fast();
 }
 
+GSGLOBAL *temp_init_global()
+{
+    //s8 dither_matrix[16] = {-4,2,-3,3,0,-2,1,-1,-3,3,-4,2,1,-1,0,-2};
+    s8 dither_matrix[16] = {4,2,5,3,0,6,1,7,5,3,4,2,1,7,0,6}; //different matrix
+    int i = 0;
+
+	GSGLOBAL *gsGlobal = calloc(1,sizeof(GSGLOBAL));
+	gsGlobal->BGColor = calloc(1,sizeof(GSBGCOLOR));
+	gsGlobal->Test = calloc(1,sizeof(GSTEST));
+	gsGlobal->Clamp = calloc(1,sizeof(GSCLAMP));
+	gsGlobal->dma_misc = gsKit_alloc_ucab(512);
+
+	/* Generic Values */
+	_io_driver driver = posixIODriver;
+	if(configGetTvScreenTypeWithIODriver(&driver) == 2) gsGlobal->Aspect = GS_ASPECT_16_9;
+    else
+    gsGlobal->Aspect = GS_ASPECT_4_3;
+
+    gsGlobal->PSM = GS_PSM_CT24;
+    gsGlobal->PSMZ = GS_PSMZ_32;
+
+    gsGlobal->Dithering = GS_SETTING_OFF;
+    gsGlobal->DoubleBuffering = GS_SETTING_ON;
+    gsGlobal->ZBuffering = GS_SETTING_ON;
+
+    // Setup a mode automatically
+    gsGlobal->Mode = check_rom();
+    gsGlobal->Interlace = GS_INTERLACED;
+	gsGlobal->Field = GS_FIELD;
+    gsGlobal->Width = 640;
+
+    if(gsGlobal->Mode == GS_MODE_PAL) gsGlobal->Height = 512;
+    else gsGlobal->Height = 448;
+
+    gsGlobal->CurrentPointer = 0;
+
+	gsGlobal->DrawOrder = GS_PER_OS;
+
+	gsGlobal->EvenOrOdd = 0;
+
+	gsGlobal->OffsetX = (int)(2048.0f * 16.0f);
+	gsGlobal->OffsetY = (int)(2048.0f * 16.0f);
+	gsGlobal->ActiveBuffer = 1;
+    gsGlobal->LockBuffer = GS_SETTING_OFF;
+	gsGlobal->PrimFogEnable = GS_SETTING_OFF;
+	gsGlobal->PrimAAEnable = GS_SETTING_OFF;
+	gsGlobal->PrimAlphaEnable = GS_SETTING_OFF;
+	gsGlobal->PrimAlpha = GS_BLEND_BACK2FRONT;
+	gsGlobal->PrimContext = 0;
+	gsGlobal->FirstFrame = GS_SETTING_ON;
+
+	for(i = 0; i < 15; i++) {
+	    gsGlobal->DitherMatrix[i] = dither_matrix[i];
+	}
+
+	/* BGColor Register Values */
+	gsGlobal->BGColor->Red = 0x00;
+	gsGlobal->BGColor->Green = 0x00;
+	gsGlobal->BGColor->Blue = 0x00;
+
+	/* TEST Register Values */
+	gsGlobal->Test->ATE = GS_SETTING_OFF;
+	gsGlobal->Test->ATST = GS_SETTING_ON;
+	gsGlobal->Test->AREF = 0x80;
+	gsGlobal->Test->AFAIL = 0;
+	gsGlobal->Test->DATE = GS_SETTING_OFF;
+	gsGlobal->Test->DATM = 0;
+	gsGlobal->Test->ZTE = GS_SETTING_ON;
+	gsGlobal->Test->ZTST = 2;
+
+	gsGlobal->Clamp->WMS = GS_CMODE_CLAMP;
+	gsGlobal->Clamp->WMT = GS_CMODE_CLAMP;
+	gsGlobal->Clamp->MINU = 0;
+	gsGlobal->Clamp->MAXU = 0;
+	gsGlobal->Clamp->MINV = 0;
+	gsGlobal->Clamp->MAXV = 0;
+
+	return gsGlobal;
+}
+
+void set_display_offset(GSGLOBAL *gsGlobal, int x, int y)
+{
+	gsGlobal->StartXOffset = x;
+	gsGlobal->StartYOffset = y;
+
+	if (gsGlobal->Interlace == GS_INTERLACED) {
+		// Do not change odd/even start position in interlaced mode
+		gsGlobal->StartYOffset &= ~1;
+	}
+
+	GS_SET_DISPLAY1(
+			gsGlobal->StartX + gsGlobal->StartXOffset,	// X position in the display area (in VCK unit
+			gsGlobal->StartY + gsGlobal->StartYOffset,	// Y position in the display area (in Raster u
+			gsGlobal->MagH,			// Horizontal Magnification
+			gsGlobal->MagV,			// Vertical Magnification
+			gsGlobal->DW - 1,	// Display area width
+			gsGlobal->DH - 1);		// Display area height
+
+	GS_SET_DISPLAY2(
+			gsGlobal->StartX + gsGlobal->StartXOffset,	// X position in the display area (in VCK units)
+			gsGlobal->StartY + gsGlobal->StartYOffset,	// Y position in the display area (in Raster units)
+			gsGlobal->MagH,			// Horizontal Magnification
+			gsGlobal->MagV,			// Vertical Magnification
+			gsGlobal->DW - 1,	// Display area width
+			gsGlobal->DH - 1);		// Display area height
+}
+
 void setVideoMode(s16 mode, int width, int height, int psm, s16 interlace, s16 field, bool zbuffering, int psmz, bool double_buffering, uint8_t pass_count) {
 	gsGlobal->Mode = mode;
 	gsGlobal->Width = width;
@@ -1096,26 +1155,16 @@ void setVideoMode(s16 mode, int width, int height, int psm, s16 interlace, s16 f
 	gsGlobal->Interlace = interlace;
 	gsGlobal->Field = field;
 
-	gsKit_set_primalpha(gsGlobal, GS_SETREG_ALPHA(0, 1, 0, 1, 0), 0);
-
 	dbgprintf("\nGraphics: created video surface of (%d, %d)\n",
 		gsGlobal->Width, gsGlobal->Height);
 
-	gsKit_set_clamp(gsGlobal, GS_CMODE_REPEAT);
-
-	if (pass_count > 1) {
-		gsKit_hires_init_screen(gsGlobal, pass_count);
-		hires = true;
-	} else {
-		gsKit_init_screen(gsGlobal);
-		hires = false;
-	}
+	init_screen(gsGlobal);
 
 	texture_manager_init(gsGlobal);
 
 	switchFlipScreenFunction();
 	
-	gsKit_set_display_offset(gsGlobal, -0.5f, -0.5f);
+	set_display_offset(gsGlobal, -0.5f, -0.5f);
 
 	sync_screen(gsGlobal);
 	flip_screen(gsGlobal);
@@ -1129,9 +1178,8 @@ void init_graphics()
     sema.option = 0;
     vsync_sema_id = CreateSema(&sema);
 
-	gsGlobal = gsKit_init_global_custom(RENDER_QUEUE_OS_POOLSIZE, RENDER_QUEUE_PER_POOLSIZE);
+	gsGlobal = temp_init_global();
 
-	gsGlobal->Mode = check_rom();
 	if (gsGlobal->Mode == GS_MODE_PAL){
 		gsGlobal->Height = 512;
 	} else {
@@ -1147,8 +1195,6 @@ void init_graphics()
 	gsGlobal->DoubleBuffering = GS_SETTING_ON;
 	gsGlobal->PrimAlphaEnable = GS_SETTING_ON;
 	gsGlobal->Dithering = GS_SETTING_OFF;
-
-	gsKit_set_primalpha(gsGlobal, GS_SETREG_ALPHA(0, 1, 0, 1, 0), 0);
 
 	dmaKit_init(D_CTRL_RELE_OFF, D_CTRL_MFD_OFF, D_CTRL_STS_UNSPEC, D_CTRL_STD_OFF, D_CTRL_RCYC_8, 1 << DMA_CHANNEL_GIF);
 	dmaKit_chan_init(DMA_CHANNEL_GIF);
@@ -1167,7 +1213,12 @@ void init_graphics()
 
 	texture_manager_init(gsGlobal);
 
-	gsKit_add_vsync_handler(vsync_handler);
+	DIntr();
+	int callback_id = AddIntcHandler(INTC_VBLANK_S, vsync_handler, 0);
+	EnableIntc(INTC_VBLANK_S);
+	// Unmask VSync interrupt
+	GsPutIMR(GsGetIMR() & ~0x0800);
+	EIntr();
 
 	owl_init(owl_packet_buffer, OWL_PACKET_BUFFER_SIZE);
 
