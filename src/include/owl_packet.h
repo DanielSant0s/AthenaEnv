@@ -207,6 +207,9 @@ typedef struct {
 extern const int16_t OWL_XYOFFSET[8] __attribute__((aligned(16)));
 extern const uint16_t OWL_XYMAX[8] __attribute__((aligned(16)));
 
+extern const int16_t OWL_XYOFFSET_FIXED[8] __attribute__((aligned(16)));
+extern const uint16_t OWL_XYMAX_FIXED[8] __attribute__((aligned(16)));
+
 // Too much specific stuff
 inline void owl_add_xy(owl_packet *packet, int x, int y) { // each call increases 8 bytes in pointer
 	asm volatile ( 	
@@ -287,6 +290,57 @@ inline void owl_add_xy_uv_2x(owl_packet *packet, int x1, int y1, int u1, int v1,
          : "$7", "$8", "$9", "memory");
 }
 
+inline void vu0_ftoi4_clamp_8x(float values[8], int results[8], float max_clamps[4]) {
+    __asm__ volatile (
+        "lqc2    $vf1, 0(%1)\n"     
+        "lqc2    $vf2, 16(%1)\n" 
+
+        "lqc2    $vf3, 0(%2)\n"  
+        
+        "vmax.xyzw $vf1, $vf1, $vf0\n"
+        "vmax.xyzw $vf2, $vf2, $vf0\n"
+
+        "vmini.xyzw $vf1, $vf1, $vf3\n"
+        "vmini.xyzw $vf2, $vf2, $vf3\n"
+
+        "vftoi4.xyzw $vf4, $vf1\n"  
+        "vftoi4.xyzw $vf5, $vf2\n"  
+
+        "sqc2    $vf4, 0(%0)\n"     
+        "sqc2    $vf5, 16(%0)\n"    
+        : 
+        : "r" (results), "r" (values), "r" (max_clamps)
+        : "memory"
+    );
+}
+
+inline void owl_add_xy_uv_2x_font(owl_packet *packet, int x1, int y1, int u1, int v1, int x2, int y2, int u2, int v2) {
+	asm volatile ( 	
+        "lq      $8, %[xyoffset] \n"
+        
+        "pcpyld $7, %[xy2], %[xy1]    \n" // upper: x1, y1 - lower: x2, y2
+        "paddsh $7, $7, $8    \n" // Add XYOFFSET
+
+        "pcpyld  $9, %[uv2], %[uv1]   \n" // upper: u1, v1 - lower: u2, v2
+
+        //"psllh  $9, $9, 4     \n"  // ftoi4 - convert UVs to 12:4
+
+        "pcpyld  $8, $7, $9   \n" // upper: u1, v1 - lower: x1, y1
+        "pcpyud  $7, $9, $7   \n" // upper: u2, u2 - lower: x2, y2
+
+        "sq    $8, 0x00(%[ptr])    \n"
+		"sq    $7, 0x10(%[ptr])    \n"
+
+        "daddiu   %0, %0, 0x20    \n" // packet->ptr += 2;
+		 : [ptr] "+r" (packet->ptr) : 
+            [xy1] "r"  (((union { int16_t coors[2]; uint32_t w; }){ .coors = {x1, y1} }).w),
+            [xy2] "r"  (((union { int16_t coors[2]; uint32_t w; }){ .coors = {x2, y2} }).w),
+            [uv1] "r"  (((union { int16_t coors[2]; uint32_t w; }){ .coors = {u1, v1} }).w),
+            [uv2] "r"  (((union { int16_t coors[2]; uint32_t w; }){ .coors = {u2, v2} }).w),
+            [xyoffset] "m" (OWL_XYOFFSET_FIXED)
+         : "$7", "$8", "$9", "memory");
+}
+
 
 
 inline void owl_add_rgba_xy(owl_packet *packet, uint64_t rgba, int x, int y) {
@@ -305,8 +359,8 @@ inline void owl_add_rgba_xy(owl_packet *packet, uint64_t rgba, int x, int y) {
 
 		"sq    $7,0x00(%[ptr])            \n"
         "daddiu   %[ptr], %[ptr], 0x10    \n" // packet->ptr++;
-		 : [ptr]      "+r" (packet->ptr) : 
-           [xy]       "r" (((union { int16_t coors[2]; uint32_t w; }){ .coors = {x, y} }).w),
+		 : [ptr]      "+r" (packet->ptr) 
+         : [xy]       "r" (((union { int16_t coors[2]; uint32_t w; }){ .coors = {x, y} }).w),
            [rgba]     "r" (rgba),
            [xyoffset] "m" (OWL_XYOFFSET),
            [xymax]    "m" (OWL_XYMAX)

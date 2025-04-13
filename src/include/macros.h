@@ -7,4 +7,6 @@
           __fn__; \
 })
 
+#define clamp(x, minv, maxv) ((x) < (minv) ? (minv) : ((x) > (maxv) ? (maxv) : (x)))
+
 #endif

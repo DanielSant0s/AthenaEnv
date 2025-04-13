@@ -17,6 +17,9 @@
 const int16_t OWL_XYOFFSET[8] __attribute__((aligned(16))) = { 2048, 2048, 0, 0, 2048, 2048, 0, 0 };
 const uint16_t OWL_XYMAX[8] __attribute__((aligned(16))) =   { 4095, 4095, 0, 0, 4095, 4095, 0, 0 };
 
+const int16_t OWL_XYOFFSET_FIXED[8] __attribute__((aligned(16))) = { 2048 << 4, 2048 << 4, 0, 0, 2048 << 4, 2048 << 4, 0, 0 };
+const uint16_t OWL_XYMAX_FIXED[8] __attribute__((aligned(16))) =   { 4095 << 4, 4095 << 4, 0, 0, 4095 << 4, 4095 << 4, 0, 0 };
+
 void drawPixel(float x, float y, Color color)
 {
 	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 7);

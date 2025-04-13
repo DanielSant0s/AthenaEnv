@@ -21,6 +21,8 @@
 
 #include <strUtils.h>
 
+#include <macros.h>
+
 #include FT_FREETYPE_H
 
 extern void *quicksand_regular;
@@ -524,25 +526,38 @@ void fntSetCharSize(int fontid, int width, int height)
     FT_Set_Char_Size(fonts[fontid].face, width, height, fDPI, fDPI);
 }
 
+const float XYUV_MAX_FLOAT[4] __attribute__((aligned(16))) = { 4095.75f, 4095.75f, 1024.0f, 1024.0f };
+
 void fntRenderGlyph(fnt_glyph_cache_entry_t *glyph, owl_packet *packet, int pen_x, int pen_y, float scale)
 {
-    int y1, y2;
+    float x1, y1, x2, y2;
+    float u1, v1, u2, v2;
 
-    y1 = GetInterlacedFrameMode() ? ((float)pen_y + ((float)glyph->oy / 2.0f)*scale) : (pen_y + (glyph->oy)*scale);
+    x1 = (float)pen_x + ((float)glyph->ox * scale)-0.5f;
+    
+    if (GetInterlacedFrameMode()) {
+        y1 = ((float)pen_y + ((float)glyph->oy / 2.0f) * scale)-0.5f;
+        y2 = (y1 + ((float)glyph->height / 2.0f) * scale)-0.5f;
+    } else {
+        y1 = (float)pen_y + ((float)glyph->oy * scale)-0.5f;
+        y2 = y1 + ((float)glyph->height * scale)-0.5f;
+    }
+    
+    x2 = x1 + ((float)glyph->width * scale)-0.5f;
 
-    y2 = GetInterlacedFrameMode() ? (y1 + (((float)glyph->height / 2.0f)*scale)) : (y1 + (glyph->height*scale));
+    u1 = glyph->allocation->x; 
+    v1 = glyph->allocation->y;
+    u2 = glyph->allocation->x + glyph->width + 0.5f;
+    v2 = glyph->allocation->y + glyph->height + 0.5f;
 
-    owl_add_xy_uv_2x(packet, (pen_x + glyph->ox*scale), 
-                             y1, 
-                             glyph->allocation->x, 
-                             glyph->allocation->y, 
-                             (pen_x + glyph->ox*scale) + (glyph->width*scale), 
-                             y2, 
-                             (glyph->allocation->x + glyph->width + 1.0f), 
-                             (glyph->allocation->y + glyph->height + 1.0f));
+    float float_pos[8] = { x1, y1, u1, v1, x2, y2, u2, v2 };
+    int fixed_pos[8];
+    vu0_ftoi4_clamp_8x(float_pos, fixed_pos, XYUV_MAX_FLOAT);
+
+    owl_add_xy_uv_2x_font(packet, fixed_pos[0], fixed_pos[1], fixed_pos[2], fixed_pos[3], fixed_pos[4], fixed_pos[5], fixed_pos[6], fixed_pos[7]);
 }
 
-#ifndef __RTL
+#ifndef __RTL  
 int fntRenderString(int id, int x, int y, short aligned, size_t width, size_t height, const char *string, float scale, u64 colour)
 {
     // wait for font lock to unlock
