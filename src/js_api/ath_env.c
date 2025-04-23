@@ -267,6 +267,11 @@ static JSContext *JS_NewCustomContext(JSRuntime *rt)
     js_init_module_std(ctx, "std");
     js_init_module_os(ctx, "os");
 
+	JS_AddIntrinsicBigFloat(ctx);
+	JS_AddIntrinsicBigDecimal(ctx);
+	JS_AddIntrinsicOperators(ctx);
+	JS_EnableBignumExt(ctx, TRUE);
+
 	athena_system_init(ctx);
 	athena_iop_init(ctx);
 	athena_archive_init(ctx);

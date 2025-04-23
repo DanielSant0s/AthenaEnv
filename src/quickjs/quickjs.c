@@ -10279,7 +10279,11 @@ static JSValue js_atof(JSContext *ctx, const char *str, const char **pp,
 
 #ifdef CONFIG_BIGNUM
     if (flags & ATOD_ACCEPT_SUFFIX) {
-        if (*p == 'n') {
+        if (*p == 'f') {
+            p++;
+            val = JS_NewFloat32(ctx, atof(buf));
+            goto done;
+        } else if (*p == 'n') {
             p++;
             atod_type = ATOD_TYPE_BIG_INT;
         } else if (*p == 'l') {
