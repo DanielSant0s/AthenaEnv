@@ -16404,6 +16404,32 @@ static JSValue js_call_c_function(JSContext *ctx, JSValueConst func_obj,
             ret_val = JS_NewFloat32(ctx, func.f_d(d1));
         }
         break;
+        case JS_CFUNC_i_i:
+        {
+            int i;
+
+            if (unlikely(JS_ToInt32(ctx, &i, arg_buf[0]))) {
+                ret_val = JS_EXCEPTION;
+                break;
+            }
+            ret_val = JS_NewInt32(ctx, func.i_i(i));
+        }
+        break;
+    case JS_CFUNC_i_i_i:
+        {
+            int i, j;
+
+            if (unlikely(JS_ToInt32(ctx, &i, arg_buf[0]))) {
+                ret_val = JS_EXCEPTION;
+                break;
+            }
+            if (unlikely(JS_ToInt32(ctx, &j, arg_buf[1]))) {
+                ret_val = JS_EXCEPTION;
+                break;
+            }
+            ret_val = JS_NewInt32(ctx, func.i_i_i(i, j));
+        }
+        break;
     case JS_CFUNC_iterator_next:
         {
             int done;

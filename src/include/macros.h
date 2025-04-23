@@ -9,4 +9,7 @@
 
 #define clamp(x, minv, maxv) ((x) < (minv) ? (minv) : ((x) > (maxv) ? (maxv) : (x)))
 
+#define xstringify(s) str(s)
+#define stringify(s) #s
+
 #endif

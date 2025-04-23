@@ -17,6 +17,10 @@
 
 #include <dbgprintf.h>
 
+#include <macros.h>
+
+#define ATHENA_PROP_INT32(item) 	JS_PROP_INT32_DEF(stringify(item),    item,   JS_PROP_CONFIGURABLE )
+
 extern bool boot_logo, dark_mode;
 
 #ifdef ATHENA_GRAPHICS

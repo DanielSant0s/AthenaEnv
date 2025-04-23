@@ -171,17 +171,140 @@ void setVideoMode(s16 mode, int width, int height, int psm, s16 interlace, s16 f
 
 int load_image(GSTEXTURE* image, const char* path, bool delayed);
 
-void drawImage(GSTEXTURE* source, float x, float y, float width, float height, float startx, float starty, float endx, float endy, Color color);
-void drawImageRotate(GSTEXTURE* source, float x, float y, float width, float height, float startx, float starty, float endx, float endy, float angle, Color color);
+void draw_image(GSTEXTURE* source, float x, float y, float width, float height, float startx, float starty, float endx, float endy, Color color);
+void draw_image_rotate(GSTEXTURE* source, float x, float y, float width, float height, float startx, float starty, float endx, float endy, float angle, Color color);
 
-void drawPixel(float x, float y, Color color);
-void drawLine(float x, float y, float x2, float y2, Color color);
-void drawRect(float x, float y, int width, int height, Color color);
-void drawCircle(float x, float y, float radius, u64 color, u8 filled);
-void drawTriangle(float x, float y, float x2, float y2, float x3, float y3, Color color);
-void drawTriangle_gouraud(float x, float y, float x2, float y2, float x3, float y3, Color color, Color color2, Color color3);
-void drawQuad(float x, float y, float x2, float y2, float x3, float y3, float x4, float y4, Color color);
-void drawQuad_gouraud(float x, float y, float x2, float y2, float x3, float y3, float x4, float y4, Color color, Color color2, Color color3, Color color4);
+typedef struct {
+	float x;
+	float y;
+
+	Color rgba;
+} prim_point;
+
+typedef struct {
+	float x;
+	float y;
+
+	float x2;
+	float y2;
+
+	Color rgba;
+} prim_line;
+
+typedef struct {
+	float x;
+	float y;
+    Color rgba;
+
+	float x2;
+	float y2;
+    Color rgba2;
+} prim_gouraud_line;
+
+typedef struct {
+	float x;
+	float y;
+
+	float x2;
+	float y2;
+
+	float x3;
+	float y3;
+
+	Color rgba;
+} prim_triangle;
+
+typedef struct {
+	float x;
+	float y;
+    Color rgba;
+
+	float x2;
+	float y2;
+    Color rgba2;
+
+	float x3;
+	float y3;
+	Color rgba3;
+} prim_gouraud_triangle;
+
+typedef struct {
+	float x;
+	float y;
+	float u;
+	float v;
+
+	float x2;
+	float y2;
+	float u2;
+	float v2;
+
+	float x3;
+	float y3;
+	float u3;
+	float v3;
+
+	Color rgba;
+} prim_tex_triangle;
+
+typedef struct {
+	float x;
+	float y;
+	float u;
+	float v;
+    Color rgba;
+
+	float x2;
+	float y2;
+	float u2;
+	float v2;
+    Color rgba2;
+
+	float x3;
+	float y3;
+	float u3;
+	float v3;
+	Color rgba3;
+} prim_tex_gouraud_triangle;
+
+typedef struct {
+	float x;
+	float y;
+	float u1;
+	float v1;
+
+	float w;
+	float h;
+	float u2;
+	float v2;
+
+	Color rgba;
+} prim_tex_sprite;
+
+void draw_point_list(float x, float y, prim_point *list, int list_size);
+
+void draw_line_list(float x, float y, prim_line *list, int list_size);
+
+void draw_line_gouraud_list(float x, float y, prim_gouraud_line *list, int list_size);
+
+void draw_triangle_list(float x, float y, prim_triangle *list, int list_size);
+
+void draw_triangle_gouraud_list(float x, float y, prim_gouraud_triangle *list, int list_size);
+
+void draw_tex_triangle_list(GSTEXTURE* source, float x, float y, prim_tex_triangle *list, int list_size);
+
+void draw_tex_triangle_gouraud_list(GSTEXTURE* source, float x, float y, prim_tex_gouraud_triangle *list, int list_size);
+
+void draw_image_list(GSTEXTURE* source, float x, float y, prim_tex_sprite *list, int list_size);
+
+void draw_point(float x, float y, Color color);
+void draw_line(float x, float y, float x2, float y2, Color color);
+void draw_sprite(float x, float y, int width, int height, Color color);
+void draw_circle(float x, float y, float radius, u64 color, u8 filled);
+void draw_triangle(float x, float y, float x2, float y2, float x3, float y3, Color color);
+void draw_triangle_gouraud(float x, float y, float x2, float y2, float x3, float y3, Color color, Color color2, Color color3);
+void draw_quad(float x, float y, float x2, float y2, float x3, float y3, float x4, float y4, Color color);
+void draw_quad_gouraud(float x, float y, float x2, float y2, float x3, float y3, float x4, float y4, Color color, Color color2, Color color3, Color color4);
 
 void set_alpha_blend_mode(uint64_t alpha_equation);
 

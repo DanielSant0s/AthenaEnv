@@ -136,6 +136,13 @@ inline void owl_add_unpack_data(owl_packet *packet, uint32_t t_dest_address, voi
                 );
 }
 
+inline void owl_align_packet(owl_packet *packet) {
+    uint32_t ptr = (uint32_t)packet->ptr;
+    while (ptr & 15) ptr++;
+
+    packet->ptr = (owl_qword*)ptr;
+}
+
 #define owl_add_cnt_tag_fill(packet, count) \
     owl_add_tag(packet, 0, DMA_TAG(count, 0, DMA_CNT, 0, 0, 0))
 
@@ -204,13 +211,30 @@ typedef struct {
     uint64_t SPR   : 1;   
 } dmatag_t;
 
+#define owl_add_direct(packet, size) \
+    owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0)); \
+    owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0)); \
+    owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0)); \
+    owl_add_uint(packet, VIF_CODE(size, 0, VIF_DIRECT, 0)) 
+
+// Too much specific stuff
 extern const int16_t OWL_XYOFFSET[8] __attribute__((aligned(16)));
 extern const uint16_t OWL_XYMAX[8] __attribute__((aligned(16)));
 
 extern const int16_t OWL_XYOFFSET_FIXED[8] __attribute__((aligned(16)));
 extern const uint16_t OWL_XYMAX_FIXED[8] __attribute__((aligned(16)));
 
-// Too much specific stuff
+inline void owl_add_uv(owl_packet *packet, int u, int v) { // each call increases 8 bytes in pointer
+	asm volatile ( 	
+        "psllh $7, %[uv], 4      \n"
+
+		"sd    $7,0x00(%[ptr])           \n"
+        "daddiu   %[ptr], %[ptr], 0x8    \n" // (uint64_t *)(packet->ptr)++;
+		 : [ptr]      "+r" (packet->ptr) : 
+           [uv]       "r" (((union { int16_t coors[2]; uint32_t w; }){ .coors = {u, v} }).w)
+         : "$7", "$8", "$9", "memory");
+}
+
 inline void owl_add_xy(owl_packet *packet, int x, int y) { // each call increases 8 bytes in pointer
 	asm volatile ( 	
         "ld      $8, %[xyoffset] \n"
@@ -285,6 +309,31 @@ inline void owl_add_xy_uv_2x(owl_packet *packet, int x1, int y1, int u1, int v1,
             [xy2] "r"  (((union { int16_t coors[2]; uint32_t w; }){ .coors = {x2, y2} }).w),
             [uv1] "r"  (((union { int16_t coors[2]; uint32_t w; }){ .coors = {u1, v1} }).w),
             [uv2] "r"  (((union { int16_t coors[2]; uint32_t w; }){ .coors = {u2, v2} }).w),
+            [xyoffset] "m" (OWL_XYOFFSET),
+            [xymax]    "m" (OWL_XYMAX)
+         : "$7", "$8", "$9", "memory");
+}
+
+inline void owl_add_xy_uv(owl_packet *packet, int x1, int y1, int u1, int v1) {
+	asm volatile ( 	
+        "lq      $8, %[xyoffset] \n"
+        "lq      $9, %[xymax]    \n"
+
+        "paddsh $7, %[xy1], $8    \n" // Add XYOFFSET
+        
+        "pmaxh  $7, $7, $0    \n" // Clamp XY >= 0
+        "pminh  $7, $7, $9     \n"  // Clamp MAX_XY > XY
+
+        "pcpyld  $7, $7, %[uv1]   \n" // upper: u1, v1 - lower: x1, y1
+        
+        "psllh $7, $7, 4      \n" // ftoi4 - convert UVXY to 12:4
+
+        "sq    $7, 0x00(%[ptr])    \n"
+
+        "daddiu   %[ptr], %[ptr], 0x10    \n" // packet->ptr += 2;
+		 : [ptr] "+r" (packet->ptr) : 
+            [xy1] "r"  (((union { int16_t coors[2]; uint32_t w; }){ .coors = {x1, y1} }).w),
+            [uv1] "r"  (((union { int16_t coors[2]; uint32_t w; }){ .coors = {u1, v1} }).w),
             [xyoffset] "m" (OWL_XYOFFSET),
             [xymax]    "m" (OWL_XYMAX)
          : "$7", "$8", "$9", "memory");

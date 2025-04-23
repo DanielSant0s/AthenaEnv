@@ -77,7 +77,7 @@ void bootlogoThread(void* data) {
 
         }
 
-        drawImage(&bootlogo, 
+        draw_image(&bootlogo, 
                   (gsGlobal->Width/2)-(bootlogo.Width/2), 
                   (gsGlobal->Height/2)-(bootlogo.Height/2), 
                   bootlogo.Width, 

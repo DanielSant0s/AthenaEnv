@@ -120,9 +120,9 @@ static JSValue athena_image_draw(JSContext *ctx, JSValue this_val, int argc, JSV
 	JS_ToFloat32(ctx, &y, argv[1]);
 
 	if(image->angle != 0.0f){
-		drawImageRotate(image->tex, x, y, image->width, image->height, image->startx, image->starty, image->endx, image->endy, image->angle, image->color);
+		draw_image_rotate(image->tex, x, y, image->width, image->height, image->startx, image->starty, image->endx, image->endy, image->angle, image->color);
 	} else {
-		drawImage(image->tex, x, y, image->width, image->height, image->startx, image->starty, image->endx, image->endy, image->color);
+		draw_image(image->tex, x, y, image->width, image->height, image->startx, image->starty, image->endx, image->endy, image->color);
 	}
 
 	return JS_UNDEFINED;

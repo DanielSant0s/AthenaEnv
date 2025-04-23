@@ -517,7 +517,6 @@ static int js_pads_init(JSContext *ctx, JSModuleDef *m)
 
     return JS_SetModuleExportList(ctx, m, module_funcs,
                            countof(module_funcs));
-;
 }
 
 JSModuleDef *athena_pads_init(JSContext* ctx){
