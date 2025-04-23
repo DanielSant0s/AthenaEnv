@@ -9,6 +9,7 @@
 #include <taskman.h>
 
 typedef struct {
+    int id;
     JSContext *ctx;
     JSValue func;
     JSValue this_obj;
@@ -17,26 +18,37 @@ typedef struct {
     JSValue ret;
 } thread_info_t;
 
+static JSClassID js_thread_class_id;
+
 void worker_thread(void *arg) {
     thread_info_t *tinfo = (thread_info_t *)arg;
 
-    // Executa a fun��o
+    JS_UpdateStackTop(JS_GetRuntime(tinfo->ctx));
+
     if (JS_IsFunction(tinfo->ctx, tinfo->func)) {
         tinfo->ret = JS_Call(tinfo->ctx, tinfo->func, tinfo->this_obj, tinfo->argc, tinfo->argv);
     }
-    
-    // Libera a mem�ria alocada para os argumentos
+
     for (int i = 0; i < tinfo->argc; i++) {
         JS_FreeValue(tinfo->ctx, tinfo->argv[i]);
     }
-    free(tinfo->argv);
 }
 
 static JSValue athena_newtask(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    // Aloca a mem�ria para a estrutura thread_info_t
-    thread_info_t *tinfo = (thread_info_t *)malloc(sizeof(thread_info_t));
+    thread_info_t *tinfo;
+    
+    JSValue obj = JS_UNDEFINED;
+    JSValue proto;
 
-    // Salva as informa��es necess�rias para executar a fun��o com pthreads
+    obj = JS_NewObjectClass(ctx, js_thread_class_id);
+	if (JS_IsException(obj))
+        goto fail;
+        tinfo = js_mallocz(ctx, sizeof(*tinfo));
+    if (!tinfo)
+        return JS_EXCEPTION;
+
+    JS_DupValue(ctx, argv[0]);
+
     tinfo->ctx = ctx;
     tinfo->func = argv[0];
     tinfo->this_obj = this_val;
@@ -44,21 +56,28 @@ static JSValue athena_newtask(JSContext *ctx, JSValueConst this_val, int argc, J
     tinfo->argv = (JSValue *)malloc(sizeof(JSValue) * tinfo->argc);
     memcpy(tinfo->argv, argv + 1, sizeof(JSValue) * tinfo->argc);
 
-	int task = create_task("Athena: Task", worker_thread, 16000, 16);
-	init_task(task, tinfo);
+    for (int i = 0; i < tinfo->argc; i++) {
+        JS_DupValue(ctx, argv[i]);
+    }
 
-    if (task < 0) {
+	tinfo->id = create_task("Athena: Worker thread", worker_thread, 16000, 16);
+
+    if (tinfo->id < 0) {
         return JS_ThrowInternalError(ctx, "Failed to create thread");
     }
 
-    // Retorna imediatamente
-    return JS_UNDEFINED;
+    JS_SetOpaque(obj, tinfo);
+    return obj;
+
+ fail:
+    js_free(ctx, tinfo);
+    return JS_EXCEPTION;
 }
 
 static JSValue athena_killtask(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
   	if (argc != 1) return JS_ThrowSyntaxError(ctx, "wrong number of arguments.");
-	int task ;
-	JS_ToInt32(ctx, &task, argv[0]) ;
+	int task;
+	JS_ToInt32(ctx, &task, argv[0]);
 
 	kill_task(task);
 
@@ -88,16 +107,52 @@ static JSValue athena_gettasklist(JSContext *ctx, JSValue this_val, int argc, JS
 }
 
 static const JSCFunctionListEntry module_funcs[] = {
-    JS_CFUNC_DEF("new", -1, athena_newtask),
+    JS_CFUNC_DEF("new", 32, athena_newtask),
 	JS_CFUNC_DEF("get", 0, athena_gettasklist),
 	JS_CFUNC_DEF("kill", 1, athena_killtask),
 };
 
+static JSValue athena_start_thread(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+    thread_info_t *tinfo = JS_GetOpaque2(ctx, this_val, js_thread_class_id);
+
+    init_task(tinfo->id, tinfo);
+
+    return JS_UNDEFINED;
+}
+
+static JSValue athena_stop_thread(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+    thread_info_t *tinfo = JS_GetOpaque2(ctx, this_val, js_thread_class_id);
+    kill_task(tinfo->id);
+
+    return JS_UNDEFINED;
+}
+
+
+static const JSCFunctionListEntry js_thread_proto_funcs[] = {
+    JS_CFUNC_DEF("start", 0, athena_start_thread),
+    JS_CFUNC_DEF("stop", 0, athena_stop_thread),
+};
+
+static JSClassDef js_thread_class = {
+    "Thread",
+    //.finalizer = js_std_file_finalizer,
+};
+
 static int task_init(JSContext *ctx, JSModuleDef *m)
 {
+    JSValue proto;
+
+    /* the class ID is created once */
+    JS_NewClassID(&js_thread_class_id);
+    /* the class is created once per runtime */
+    JS_NewClass(JS_GetRuntime(ctx), js_thread_class_id, &js_thread_class);
+    proto = JS_NewObject(ctx);
+    JS_SetPropertyFunctionList(ctx, proto, js_thread_proto_funcs, countof(js_thread_proto_funcs));
+    JS_SetClassProto(ctx, js_thread_class_id, proto);
+
     return JS_SetModuleExportList(ctx, m, module_funcs, countof(module_funcs));
 }
 
 JSModuleDef *athena_task_init(JSContext* ctx){
-    return athena_push_module(ctx, task_init, module_funcs, countof(module_funcs), "Tasks");
+    return athena_push_module(ctx, task_init, module_funcs, countof(module_funcs), "Threads");
 }
