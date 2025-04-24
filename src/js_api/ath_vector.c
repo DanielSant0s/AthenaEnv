@@ -273,16 +273,20 @@ static const JSCFunctionListEntry js_vector2_proto_funcs[] = {
 
 static void js_vector2_init_operators(JSContext *ctx, JSValue proto)
 {
-    JSValue operatorSet, obj;
+    JSValue operatorSet, obj, global;
     JSValue Operators, Symbol;
     JSValue symbol_operatorSet;
 
-    Symbol = JS_GetPropertyStr(ctx, JS_GetGlobalObject(ctx), "Symbol");
+    global = JS_GetGlobalObject(ctx);
+
+    Symbol = JS_GetPropertyStr(ctx, global, "Symbol");
     
     symbol_operatorSet = JS_GetPropertyStr(ctx, Symbol, "operatorSet");
     JS_FreeValue(ctx, Symbol);
     
-    Operators = JS_GetPropertyStr(ctx, JS_GetGlobalObject(ctx), "Operators");
+    Operators = JS_GetPropertyStr(ctx, global, "Operators");
+
+    JS_FreeValue(ctx, global);
 
     JSValue create_func = JS_GetPropertyStr(ctx, Operators, "create");
 
@@ -315,7 +319,7 @@ static int js_vector2_init(JSContext *ctx, JSModuleDef *m)
     vector2_proto = JS_NewObject(ctx);
     JS_SetPropertyFunctionList(ctx, vector2_proto, js_vector2_proto_funcs, countof(js_vector2_proto_funcs));
     
-    vector2_class = JS_NewCFunction2(ctx, js_vector2_ctor, "Vector2", 2, JS_CFUNC_constructor, 0);
+    vector2_class = JS_NewCFunction2(ctx, js_vector2_ctor, "Vector2", 2, JS_CFUNC_constructor_or_func, 0);
     /* set proto.constructor and ctor.prototype */
     JS_SetConstructor(ctx, vector2_class, vector2_proto);
     JS_SetClassProto(ctx, js_vector2_class_id, vector2_proto);
@@ -639,16 +643,20 @@ static const JSCFunctionListEntry js_vector3_proto_funcs[] = {
 
 static void js_vector3_init_operators(JSContext *ctx, JSValue proto)
 {
-    JSValue operatorSet, obj;
+    JSValue operatorSet, obj, global;
     JSValue Operators, Symbol;
     JSValue symbol_operatorSet;
 
-    Symbol = JS_GetPropertyStr(ctx, JS_GetGlobalObject(ctx), "Symbol");
+    global = JS_GetGlobalObject(ctx);
+
+    Symbol = JS_GetPropertyStr(ctx, global, "Symbol");
     
     symbol_operatorSet = JS_GetPropertyStr(ctx, Symbol, "operatorSet");
     JS_FreeValue(ctx, Symbol);
     
-    Operators = JS_GetPropertyStr(ctx, JS_GetGlobalObject(ctx), "Operators");
+    Operators = JS_GetPropertyStr(ctx, global, "Operators");
+
+    JS_FreeValue(ctx, global);
 
     JSValue create_func = JS_GetPropertyStr(ctx, Operators, "create");
 
@@ -681,7 +689,7 @@ static int js_vector3_init(JSContext *ctx, JSModuleDef *m)
     vector3_proto = JS_NewObject(ctx);
     JS_SetPropertyFunctionList(ctx, vector3_proto, js_vector3_proto_funcs, countof(js_vector3_proto_funcs));
     
-    vector3_class = JS_NewCFunction2(ctx, js_vector3_ctor, "Vector3", 2, JS_CFUNC_constructor, 0);
+    vector3_class = JS_NewCFunction2(ctx, js_vector3_ctor, "Vector3", 3, JS_CFUNC_constructor_or_func, 0);
     /* set proto.constructor and ctor.prototype */
     JS_SetConstructor(ctx, vector3_class, vector3_proto);
     JS_SetClassProto(ctx, js_vector3_class_id, vector3_proto);
