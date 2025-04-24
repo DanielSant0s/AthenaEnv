@@ -695,6 +695,10 @@ static JSValue js_std_gc(JSContext *ctx, JSValueConst this_val,
     return JS_UNDEFINED;
 }
 
+static JSValue js_std_refcount(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    return JS_NewUint32(ctx, JS_GetRefCount(ctx, argv[0])-1);
+}
+
 static int interrupt_handler(JSRuntime *rt, void *opaque)
 {
     return (os_pending_signals >> SIGINT) & 1;
@@ -1301,6 +1305,7 @@ static const JSCFunctionListEntry js_std_error_props[] = {
 static const JSCFunctionListEntry js_std_funcs[] = {
     JS_CFUNC_DEF("exit", 1, js_std_exit ),
     JS_CFUNC_DEF("gc", 0, js_std_gc ),
+    JS_CFUNC_DEF("getRefCount", 0, js_std_refcount ),
     JS_CFUNC_DEF("evalScript", 1, js_evalScript ),
     JS_CFUNC_DEF("loadScript", 1, js_loadScript ),
     JS_CFUNC_DEF("reload", 1, js_reload ),
