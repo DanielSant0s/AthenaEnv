@@ -394,7 +394,7 @@ static JSValue js_vector3_get_xyz(JSContext *ctx, JSValueConst this_val, int mag
 
 static JSValue js_vector3_set_xyz(JSContext *ctx, JSValueConst this_val, JSValue val, int magic)
 {
-    Vector3 *s = JS_GetOpaque2(ctx, this_val, js_vector2_class_id);
+    Vector3 *s = JS_GetOpaque2(ctx, this_val, js_vector3_class_id);
     float v;
     if (!s)
         return JS_EXCEPTION;
