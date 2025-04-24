@@ -99,18 +99,6 @@ static FT_Vector delta;
 
 static fnt_glyph_cache_entry_t *fntCacheGlyph(font_t *font, uint32_t gid);
 
-// a simple maximum of two
-int max(int a, int b)
-{
-    return a > b ? a : b;
-}
-
-// a simple minimum of two
-int min(int a, int b)
-{
-    return a < b ? a : b;
-}
-
 void *readFile(const char* path, int align, int *size)
 {
     void *buffer = NULL;
