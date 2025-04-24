@@ -225,8 +225,8 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"globalThis.System = System;\n"
 				"globalThis.Archive = Archive;\n"
 				"globalThis.IOP = IOP;\n"
-				"globalThis.Vector2 = Vector2;\n"
-				"globalThis.Vector3 = Vector3;\n"
+				"globalThis.Vector2 = Vector2.Vector2;\n"
+				"globalThis.Vector3 = Vector3.Vector3;\n"
 				"globalThis.Physics = Physics;\n";
 
 				
@@ -267,7 +267,7 @@ static JSContext *JS_NewCustomContext(JSRuntime *rt)
     js_init_module_std(ctx, "std");
     js_init_module_os(ctx, "os");
 
-	JS_AddIntrinsicBigFloat(ctx);
+	JS_AddIntrinsicBigFloat(ctx); 
 	JS_AddIntrinsicBigDecimal(ctx);
 	JS_AddIntrinsicOperators(ctx);
 	JS_EnableBignumExt(ctx, TRUE);

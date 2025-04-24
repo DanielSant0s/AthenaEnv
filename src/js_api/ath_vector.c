@@ -254,15 +254,6 @@ static JSValue js_vector2_div(JSContext *ctx, JSValueConst new_target, int argc,
     return JS_EXCEPTION;
 }
 
-
-static const JSCFunctionListEntry js_vector2_funcs[] = {
-    JS_CFUNC_DEF("new", 2, js_vector2_ctor),
-    JS_CFUNC_DEF("add", 2, js_vector2_add),
-    JS_CFUNC_DEF("sub", 2, js_vector2_sub),
-    JS_CFUNC_DEF("mul", 2, js_vector2_mul),
-    JS_CFUNC_DEF("div", 2, js_vector2_div),
-};
-
 static JSClassDef js_vector2_class = {
     "Vector2",
     .finalizer = js_vector2_finalizer,
@@ -280,6 +271,39 @@ static const JSCFunctionListEntry js_vector2_proto_funcs[] = {
     JS_CFUNC_DEF("toString", 0, js_vector2_tostring),
 };
 
+static void js_vector2_init_operators(JSContext *ctx, JSValue proto)
+{
+    JSValue operatorSet, obj;
+    JSValue Operators, Symbol;
+    JSValue symbol_operatorSet;
+
+    Symbol = JS_GetPropertyStr(ctx, JS_GetGlobalObject(ctx), "Symbol");
+    
+    symbol_operatorSet = JS_GetPropertyStr(ctx, Symbol, "operatorSet");
+    JS_FreeValue(ctx, Symbol);
+    
+    Operators = JS_GetPropertyStr(ctx, JS_GetGlobalObject(ctx), "Operators");
+
+    JSValue create_func = JS_GetPropertyStr(ctx, Operators, "create");
+
+    obj = JS_NewObject(ctx);
+    JS_SetPropertyStr(ctx, obj, "+", JS_NewCFunction(ctx, js_vector2_add, "+", 2));
+    JS_SetPropertyStr(ctx, obj, "-", JS_NewCFunction(ctx, js_vector2_sub, "-", 2));
+    JS_SetPropertyStr(ctx, obj, "*", JS_NewCFunction(ctx, js_vector2_mul, "*", 2));
+    JS_SetPropertyStr(ctx, obj, "/", JS_NewCFunction(ctx, js_vector2_div, "/", 2));
+
+    JSValueConst args[1] = { obj };
+    operatorSet = JS_Call(ctx, create_func, Operators, 1, args);
+    
+    JS_FreeValue(ctx, create_func);
+    JS_FreeValue(ctx, obj);
+    JS_FreeValue(ctx, Operators);
+
+    JS_SetProperty(ctx, proto, JS_ValueToAtom(ctx, symbol_operatorSet), operatorSet);
+
+    JS_FreeValue(ctx, symbol_operatorSet);
+}
+
 static int js_vector2_init(JSContext *ctx, JSModuleDef *m)
 {
     JSValue vector2_proto, vector2_class;
@@ -291,13 +315,19 @@ static int js_vector2_init(JSContext *ctx, JSModuleDef *m)
     vector2_proto = JS_NewObject(ctx);
     JS_SetPropertyFunctionList(ctx, vector2_proto, js_vector2_proto_funcs, countof(js_vector2_proto_funcs));
     
-    //vector2_class = JS_NewCFunction2(ctx, js_vector2_ctor, "xy", 2, JS_CFUNC_constructor, 0);
+    vector2_class = JS_NewCFunction2(ctx, js_vector2_ctor, "Vector2", 2, JS_CFUNC_constructor, 0);
     /* set proto.constructor and ctor.prototype */
-    //JS_SetConstructor(ctx, vector2_class, vector2_proto);
+    JS_SetConstructor(ctx, vector2_class, vector2_proto);
     JS_SetClassProto(ctx, js_vector2_class_id, vector2_proto);
-                      
-    //JS_SetModuleExport(ctx, m, "Vector2", vector2_class);
-    return JS_SetModuleExportList(ctx, m, js_vector2_funcs, countof(js_vector2_funcs));
+
+    js_vector2_init_operators(ctx, vector2_proto);
+
+    //JSValue global = JS_GetGlobalObject(ctx);
+    //JS_SetPropertyStr(ctx, global, "Vector2", vector2_class);
+    //JS_FreeValue(ctx, global);
+      
+    //return 0;
+    return JS_SetModuleExport(ctx, m, "Vector2", vector2_class);
 }
 
 typedef struct {
@@ -560,13 +590,13 @@ static JSValue js_vector3_div(JSContext *ctx, JSValueConst new_target, int argc,
     return JS_EXCEPTION;
 }
 
-static JSValue js_vector3_cross(JSContext *ctx, JSValueConst new_target, int argc, JSValueConst *argv)
+static JSValue js_vector3_cross(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
 {
     Vector3 *s;
     JSValue obj = JS_UNDEFINED;
 
-    Vector3 *v1 = JS_GetOpaque2(ctx, argv[0], js_vector3_class_id);
-    Vector3 *v2 = JS_GetOpaque2(ctx, argv[1], js_vector3_class_id);
+    Vector3 *v1 = JS_GetOpaque2(ctx, this_val, js_vector3_class_id);
+    Vector3 *v2 = JS_GetOpaque2(ctx, argv[0], js_vector3_class_id);
     if (!v1 || !v2)
         return JS_EXCEPTION;
 
@@ -590,15 +620,6 @@ static JSValue js_vector3_cross(JSContext *ctx, JSValueConst new_target, int arg
     return JS_EXCEPTION;
 }
 
-static const JSCFunctionListEntry js_vector3_funcs[] = {
-    JS_CFUNC_DEF("new", 3, js_vector3_ctor),
-    JS_CFUNC_DEF("add", 2, js_vector3_add),
-    JS_CFUNC_DEF("sub", 2, js_vector3_sub),
-    JS_CFUNC_DEF("mul", 2, js_vector3_mul),
-    JS_CFUNC_DEF("div", 2, js_vector3_div),
-    JS_CFUNC_DEF("cross", 2, js_vector3_cross),
-};
-
 static JSClassDef js_vector3_class = {
     "Vector3",
     .finalizer = js_vector3_finalizer,
@@ -607,6 +628,7 @@ static JSClassDef js_vector3_class = {
 static const JSCFunctionListEntry js_vector3_proto_funcs[] = {
     JS_CFUNC_DEF("norm", 0, js_vector3_norm),
     JS_CFUNC_DEF("dot", 1, js_vector3_dotproduct),
+    JS_CFUNC_DEF("cross", 1, js_vector3_cross),
     JS_CFUNC_DEF("dist", 1, js_vector3_dist),
     JS_CFUNC_DEF("distsqr", 1, js_vector3_distsqr),
     JS_CFUNC_DEF("toString", 0, js_vector3_tostring),
@@ -614,6 +636,39 @@ static const JSCFunctionListEntry js_vector3_proto_funcs[] = {
     JS_CGETSET_MAGIC_DEF("y", js_vector3_get_xyz, js_vector3_set_xyz, 1),
     JS_CGETSET_MAGIC_DEF("z", js_vector3_get_xyz, js_vector3_set_xyz, 2)
 };
+
+static void js_vector3_init_operators(JSContext *ctx, JSValue proto)
+{
+    JSValue operatorSet, obj;
+    JSValue Operators, Symbol;
+    JSValue symbol_operatorSet;
+
+    Symbol = JS_GetPropertyStr(ctx, JS_GetGlobalObject(ctx), "Symbol");
+    
+    symbol_operatorSet = JS_GetPropertyStr(ctx, Symbol, "operatorSet");
+    JS_FreeValue(ctx, Symbol);
+    
+    Operators = JS_GetPropertyStr(ctx, JS_GetGlobalObject(ctx), "Operators");
+
+    JSValue create_func = JS_GetPropertyStr(ctx, Operators, "create");
+
+    obj = JS_NewObject(ctx);
+    JS_SetPropertyStr(ctx, obj, "+", JS_NewCFunction(ctx, js_vector3_add, "+", 2));
+    JS_SetPropertyStr(ctx, obj, "-", JS_NewCFunction(ctx, js_vector3_sub, "-", 2));
+    JS_SetPropertyStr(ctx, obj, "*", JS_NewCFunction(ctx, js_vector3_mul, "*", 2));
+    JS_SetPropertyStr(ctx, obj, "/", JS_NewCFunction(ctx, js_vector3_div, "/", 2));
+
+    JSValueConst args[1] = { obj };
+    operatorSet = JS_Call(ctx, create_func, Operators, 1, args);
+    
+    JS_FreeValue(ctx, create_func);
+    JS_FreeValue(ctx, obj);
+    JS_FreeValue(ctx, Operators);
+
+    JS_SetProperty(ctx, proto, JS_ValueToAtom(ctx, symbol_operatorSet), operatorSet);
+
+    JS_FreeValue(ctx, symbol_operatorSet);
+}
 
 static int js_vector3_init(JSContext *ctx, JSModuleDef *m)
 {
@@ -626,18 +681,28 @@ static int js_vector3_init(JSContext *ctx, JSModuleDef *m)
     vector3_proto = JS_NewObject(ctx);
     JS_SetPropertyFunctionList(ctx, vector3_proto, js_vector3_proto_funcs, countof(js_vector3_proto_funcs));
     
-    //vector2_class = JS_NewCFunction2(ctx, js_vector3_ctor, "xy", 2, JS_CFUNC_constructor, 0);
+    vector3_class = JS_NewCFunction2(ctx, js_vector3_ctor, "Vector3", 2, JS_CFUNC_constructor, 0);
     /* set proto.constructor and ctor.prototype */
-    //JS_SetConstructor(ctx, vector3_class, vector2_proto);
+    JS_SetConstructor(ctx, vector3_class, vector3_proto);
     JS_SetClassProto(ctx, js_vector3_class_id, vector3_proto);
-                      
-    //JS_SetModuleExport(ctx, m, "Vector3", vector3_class);
-    return JS_SetModuleExportList(ctx, m, js_vector3_funcs, countof(js_vector3_funcs));
+
+    js_vector3_init_operators(ctx, vector3_proto);
+
+    return JS_SetModuleExport(ctx, m, "Vector3", vector3_class);
 }
 
 
-JSModuleDef *athena_vector_init(JSContext *ctx)
-{
-    athena_push_module(ctx, js_vector3_init, js_vector3_funcs, countof(js_vector3_funcs), "Vector3");
-    return athena_push_module(ctx, js_vector2_init, js_vector2_funcs, countof(js_vector2_funcs), "Vector2");
+JSModuleDef *athena_vector_init(JSContext *ctx) {
+    JSModuleDef *m;
+
+    m = JS_NewCModule(ctx, "Vector2", js_vector2_init);
+    if (!m)
+        return NULL;
+    JS_AddModuleExport(ctx, m, "Vector2");
+
+    m = JS_NewCModule(ctx, "Vector3", js_vector3_init);
+    if (!m)
+        return NULL;
+    JS_AddModuleExport(ctx, m, "Vector3");
+    return m;
 }
