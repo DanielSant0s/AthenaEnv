@@ -3,7 +3,7 @@ import { Element, Component, Menu, MenuList, Interface } from 'UI.js'
 const canvas = Screen.getMode();
 
 canvas.zbuffering = false;
-canvas.psmz = Z16S;
+canvas.psmz = Screen.Z16S;
 
 System.sleep(1);
 

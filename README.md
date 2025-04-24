@@ -503,15 +503,15 @@ You have 4 lights to use in 3D scenes, use set to configure them.
 * Screen.waitVblankStart() - Waits for a vertical sync.  
 * let fps = Screen.getFPS(frame_interval) - Get Frames per second measure within the specified frame_interval in msec. Dependant on Screen.setFrameCounter(true) to work.
 * const canvas = Screen.getMode() - Get actual video mode parameters. Returns an object.
-  • canvas.mode - Available modes: NTSC, DTV_480p, PAL, DTV_576p, DTV_720p, DTV_1080i.  
+  • canvas.mode - Available modes: Screen.NTSC, Screen.DTV_480p, Screen.PAL, Screen.DTV_576p, Screen.DTV_720p, Screen.DTV_1080i.  
   • canvas.width - Screen width. Default: 640.  
   • canvas.height - Screen height. Default: 448 on NTSC consoles, 512 on PAL consoles.  
-  • canvas.psm - Color mode. Available colormodes: CT16, CT16S, CT24, CT32.  
-  • canvas.interlace - Available interlaces: INTERLACED, PROGRESSIVE.  
-  • canvas.field - Available fields: FIELD, FRAME.  
+  • canvas.psm - Color mode. Available colormodes: Screen.CT16, Screen.CT16S, Screen.CT24, Screen.CT32.  
+  • canvas.interlace - Available interlaces: Screen.INTERLACED, Screen.PROGRESSIVE.  
+  • canvas.field - Available fields: Screen.FIELD, Screen.FRAME.  
   • canvas.double_buffering - Enable or disable double buffering(bool).  
   • canvas.zbuffering - Enable or disable Z buffering (3D buffering)(bool).  
-  • canvas.psmz - ZBuffering color mode. Available zbuffer colormodes: Z16, Z16S, Z24, Z32.  
+  • canvas.psmz - ZBuffering color mode. Available zbuffer colormodes: Screen.Z16, Screen.Z16S, Screen.Z24, Screen.Z32.  
 * Screen.setMode(canvas) - Set the current video mode, get an video mode object as an argument.  
 
 ### Font module

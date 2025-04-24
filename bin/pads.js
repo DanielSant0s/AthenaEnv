@@ -2,7 +2,7 @@
 
 const canvas = Screen.getMode();
 
-canvas.psm = CT24;
+canvas.psm = Screen.CT24;
 canvas.zbuffering = false;
 canvas.double_buffering = false;
 

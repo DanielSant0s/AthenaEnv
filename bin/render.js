@@ -19,7 +19,7 @@ Screen.setVSync(false);
 const canvas = Screen.getMode();
 
 canvas.zbuffering = true;
-canvas.psmz = Z16S;
+canvas.psmz = Screen.Z16S;
 
 Screen.setMode(canvas);
 
