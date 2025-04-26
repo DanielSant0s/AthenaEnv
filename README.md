@@ -347,10 +347,8 @@ Methods:
 * draw(x, y) - Draw loaded image onscreen(call it every frame). Example: image.draw(15.0, 100.0);
 * optimize() - If your image has 24 bits per-pixel (aka RGB), you can use this to make it 16 bits per-pixel, saving some memory!
 * ready() - Returns true if an asynchronous image was successfully loaded in memory. 
-```js
-let loaded = image.ready();  
-```
-
+* free() - Free asset content immediately. P.S.: This is a way to quick free stuff from memory, but you can also wait for the garbage collector so it's not mandatory.
+  
 **ImageList**
 
 Construction:
@@ -427,6 +425,7 @@ Methods:
 
 * getTexture(id) - Gets the nth texture object from the model.
 * setTexture(id, texture) - Changes or sets the nth texture on models.
+* free() - Free asset content immediately. P.S.: This is a way to quick free stuff from memory, but you can also wait for the garbage collector so it's not mandatory.
   
 Properties:
 
@@ -462,6 +461,7 @@ Methods:
 
 * render() - Draws the object on screen.
 * renderBounds() - Draws object bounding box.
+* free() - Free asset content immediately. P.S.: This is a way to quick free stuff from memory, but you can also wait for the garbage collector so it's not mandatory.
   
 Properties:
 
