@@ -39,6 +39,9 @@ static JSValue athena_image_isloaded(JSContext *ctx, JSValue this_val, int argc,
 static void athena_image_dtor(JSRuntime *rt, JSValue val) {
 	JSImageData *image = JS_GetOpaque(val, js_image_class_id);
 
+	if (!image)
+		return;
+
 	texture_manager_free(image->tex);
 
 	if(image->tex->Mem) {
@@ -53,6 +56,8 @@ static void athena_image_dtor(JSRuntime *rt, JSValue val) {
 
 	js_free_rt(rt, image->tex);
 	js_free_rt(rt, image);
+
+	JS_SetOpaque(val, NULL);
 }
 
 static JSValue athena_image_ctor(JSContext *ctx, JSValueConst new_target, int argc, JSValueConst *argv) {
@@ -110,6 +115,12 @@ static JSValue athena_image_ctor(JSContext *ctx, JSValueConst new_target, int ar
     js_free(ctx, image);
     JS_FreeValue(ctx, obj);
     return JS_EXCEPTION;
+}
+
+static JSValue athena_image_free(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	athena_image_dtor(JS_GetRuntime(ctx), this_val);
+
+	return JS_UNDEFINED;
 }
 
 static JSValue athena_image_draw(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
@@ -311,6 +322,8 @@ static const JSCFunctionListEntry js_image_proto_funcs[] = {
     JS_CFUNC_DEF("draw", 2, athena_image_draw),
 	JS_CFUNC_DEF("ready", 0, athena_image_isloaded),
 	JS_CFUNC_DEF("optimize", 0, athena_image_optimize),
+	JS_CFUNC_DEF("free", 0, athena_image_free),
+
 	JS_CGETSET_MAGIC_DEF("width", js_image_get, js_image_set, 0),
 	JS_CGETSET_MAGIC_DEF("height", js_image_get, js_image_set, 1),
 	JS_CGETSET_MAGIC_DEF("startx", js_image_get, js_image_set, 2),

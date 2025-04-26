@@ -18,6 +18,9 @@ typedef struct {
 static void athena_render_data_dtor(JSRuntime *rt, JSValue val){
 	JSRenderData* ro = JS_GetOpaque(val, js_render_data_class_id);
 
+	if (!ro)
+		return;
+
 	dbgprintf("Freeing RenderData\n");
 
 	if (ro->m.positions)
@@ -54,6 +57,8 @@ static void athena_render_data_dtor(JSRuntime *rt, JSValue val){
 		free(ro->textures);
 
 	js_free_rt(rt, ro);
+
+	JS_SetOpaque(val, NULL);
 }
 
 static const char* vert_attributes[] = {
@@ -232,6 +237,12 @@ static JSClassDef js_render_data_class = {
     "RenderData",
     .finalizer = athena_render_data_dtor,
 }; 
+
+static JSValue athena_rdfree(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	athena_render_data_dtor(JS_GetRuntime(ctx), this_val);
+
+	return JS_UNDEFINED;
+}
 
 static JSValue athena_getpipeline(JSContext *ctx, JSValueConst this_val, int magic)
 {
@@ -565,6 +576,8 @@ static const JSCFunctionListEntry js_render_data_proto_funcs[] = {
 	JS_CFUNC_DEF("setTexture",  3,  athena_settexture),
 	JS_CFUNC_DEF("getTexture",  1,  athena_gettexture),
 
+	JS_CFUNC_DEF("free",  0,  athena_rdfree),
+
 	JS_CGETSET_MAGIC_DEF("vertices",          js_render_data_get, js_render_data_set, 0),
 	JS_CGETSET_MAGIC_DEF("materials",         js_render_data_get, js_render_data_set, 1),
 	JS_CGETSET_MAGIC_DEF("material_indices",  js_render_data_get, js_render_data_set, 2),
@@ -588,7 +601,12 @@ typedef struct {
 static void athena_render_object_dtor(JSRuntime *rt, JSValue val){
 	JSRenderObject* ro = JS_GetOpaque(val, js_render_object_class_id);
 
+    if (!ro)
+        return;
+
 	js_free_rt(rt, ro);
+	
+	JS_SetOpaque(val, NULL);
 }
 
 static JSValue athena_render_object_ctor(JSContext *ctx, JSValueConst new_target, int argc, JSValueConst *argv) {
@@ -630,6 +648,12 @@ static JSClassDef js_render_object_class = {
     "RenderObject",
     .finalizer = athena_render_object_dtor,
 }; 
+
+static JSValue athena_drawfree(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	athena_render_object_dtor(JS_GetRuntime(ctx), this_val);
+
+	return JS_UNDEFINED;
+}
 
 static JSValue athena_drawobject(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	JSRenderObject* ro = JS_GetOpaque2(ctx, this_val, js_render_object_class_id);
@@ -709,6 +733,7 @@ static JSValue js_render_object_set(JSContext *ctx, JSValueConst this_val, JSVal
 static const JSCFunctionListEntry js_render_object_proto_funcs[] = {
     JS_CFUNC_DEF("render",        0,  athena_drawobject),
 	JS_CFUNC_DEF("renderBounds",  0,    athena_drawbbox),
+	JS_CFUNC_DEF("free",  0,    athena_drawfree),
 
 	JS_CGETSET_MAGIC_DEF("position",          js_render_object_get, js_render_object_set, 0),
 	JS_CGETSET_MAGIC_DEF("rotation",          js_render_object_get, js_render_object_set, 1),
