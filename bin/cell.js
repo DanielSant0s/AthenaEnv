@@ -45,12 +45,6 @@ function circleCircleColl(c1, c2) {
     return false;
 }
 
-function randint(min, max) {
-    min = Math.ceilf(min);
-    max = Math.floorf(max);
-    return Math.floorf(Math.random() * (max - min + 1)) + min;
-}
-
 let main_menu_ptr = 0;
 
 const pad = Pads.get();
@@ -86,11 +80,11 @@ Screen.display(() => {
                     camera.y = -224;
 
 
-                    let enemies_qt = randint(8, 15);
+                    let enemies_qt = Math.randomi(8, 15);
 
                     while(enemies_qt > enemies.length){
-                        let color = Color.new(randint(0, 255), randint(0, 255), randint(0, 255));
-                        let enemy = {color:color, x:randint(0, 640), y:randint(0, 448), r:randint(5, 75)};
+                        let color = Color.new(Math.randomi(0, 255), Math.randomi(0, 255), Math.randomi(0, 255));
+                        let enemy = {color:color, x:Math.randomi(0, 640), y:Math.randomi(0, 448), r:Math.randomi(5, 75)};
 
                         let found_collision = false;
 

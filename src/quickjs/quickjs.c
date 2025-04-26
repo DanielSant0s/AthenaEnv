@@ -1785,6 +1785,8 @@ static const JSMallocFunctions def_malloc_funcs = {
     NULL,
 #elif defined(__linux__)
     (size_t (*)(const void *))malloc_usable_size,
+#elif defined(PS2)
+    NULL,
 #else
     /* change this to `NULL,` if compilation fails */
     NULL,
@@ -12197,6 +12199,13 @@ static bf_t *JS_ToBigFloat(JSContext *ctx, bf_t *buf, JSValueConst val)
         r = buf;
         bf_init(ctx->bf_ctx, r);
         if (bf_set_float64(r, JS_VALUE_GET_FLOAT64(val))) {
+            goto fail;
+        }
+        break;
+    case JS_CUSTOM_TAG_FLOAT32:
+        r = buf;
+        bf_init(ctx->bf_ctx, r);
+        if (bf_set_float64(r, (double)JS_VALUE_GET_FLOAT32(val))) {
         fail:
             bf_delete(r);
             return NULL;
@@ -12299,6 +12308,17 @@ static bf_t *JS_ToBigIntFree(JSContext *ctx, bf_t *buf, JSValue val)
         r = buf;
         bf_init(ctx->bf_ctx, r);
         bf_set_si(r, JS_VALUE_GET_INT(val));
+        break;
+    case JS_CUSTOM_TAG_FLOAT32:
+        {
+            float f = JS_VALUE_GET_FLOAT32(val);
+            if (!is_math_mode(ctx))
+                goto fail;
+            r = buf;
+            bf_init(ctx->bf_ctx, r);
+            f = truncf(f);
+            bf_set_float64(r, (double)f);
+        }
         break;
     case JS_TAG_FLOAT64:
         {
@@ -12982,6 +13002,28 @@ static no_inline __exception int js_unary_arith_slow(JSContext *ctx,
     uint32_t tag;
 
     op1 = sp[-1];
+
+    if (JS_TAG_IS_FLOAT32(JS_VALUE_GET_NORM_TAG(op1))) {
+        float f = JS_VALUE_GET_FLOAT32(op1);
+        switch(op) {
+        case OP_inc:
+            f+=1.0f;
+            break;
+        case OP_dec:
+            f-=1.0f;
+            break;
+        case OP_plus:
+            break;
+        case OP_neg:
+            f = -f;
+            break;
+        default:
+            abort();
+        }
+        sp[-1] = JS_NewFloat32(ctx, f);
+        return 0;
+    }
+
     /* fast path for float64 */
     if (JS_TAG_IS_FLOAT64(JS_VALUE_GET_TAG(op1)))
         goto handle_float64;
@@ -13433,6 +13475,7 @@ static no_inline __exception int js_binary_arith_slow(JSContext *ctx, JSValue *s
     uint32_t tag1, tag2;
     int ret;
     double d1, d2;
+    float f1, f2;
 
     op1 = sp[-2];
     op2 = sp[-1];
@@ -13475,6 +13518,35 @@ static no_inline __exception int js_binary_arith_slow(JSContext *ctx, JSValue *s
     }
     tag1 = JS_VALUE_GET_NORM_TAG(op1);
     tag2 = JS_VALUE_GET_NORM_TAG(op2);
+
+    if (JS_TAG_IS_FLOAT32(tag1) || JS_TAG_IS_FLOAT32(tag2)){
+        float fres;
+        JS_ToFloat32Free(ctx, &f1, op1);
+        JS_ToFloat32Free(ctx, &f2, op2);
+
+        switch(op) {
+        case OP_sub:
+            fres = f1 - f2;
+            break;
+        case OP_mul:
+            fres = f1 * f2;
+            break;
+        case OP_div:
+            fres = f1 / f2;
+            break;
+        case OP_mod:
+            fres = fmodf(f1, f2);
+            break;
+        case OP_pow:
+            fres = powf(f1, f2);
+            break;
+        default:
+            abort();
+        }
+        sp[-2] = JS_NewFloat32(ctx, fres);
+        return 0;
+    }
+
 
     if (tag1 == JS_TAG_INT && tag2 == JS_TAG_INT) {
         int32_t v1, v2;
@@ -13602,6 +13674,21 @@ static no_inline __exception int js_add_slow(JSContext *ctx, JSValue *sp)
     tag1 = JS_VALUE_GET_NORM_TAG(op1);
     tag2 = JS_VALUE_GET_NORM_TAG(op2);
     /* fast path for float64 */
+
+    if ((tag1 == JS_TAG_INT || JS_TAG_IS_FLOAT32(tag1) || JS_TAG_IS_FLOAT64(tag1)) &&
+        (tag2 == JS_TAG_INT || JS_TAG_IS_FLOAT32(tag2) || JS_TAG_IS_FLOAT64(tag2))) {
+        float f1, f2;
+        if (JS_ToFloat32Free(ctx, &f1, op1)) {
+            JS_FreeValue(ctx, op2);
+            goto exception;
+        }
+        if (JS_ToFloat32Free(ctx, &f2, op2))
+            goto exception;
+        sp[-2] = JS_NewFloat32(ctx, f1 + f2);
+        return 0;
+
+    }
+
     if (tag1 == JS_TAG_FLOAT64 && tag2 == JS_TAG_FLOAT64) {
         double d1, d2;
         d1 = JS_VALUE_GET_FLOAT64(op1);
@@ -13959,6 +14046,36 @@ static no_inline int js_relational_slow(JSContext *ctx, JSValue *sp,
                (tag2 <= JS_TAG_NULL || tag2 == JS_TAG_FLOAT64)) {
         /* fast path for float64/int */
         goto float64_compare;
+    } else if ((tag1 <= JS_TAG_NULL || tag1 == JS_CUSTOM_TAG_FLOAT32) &&
+               (tag2 <= JS_TAG_NULL || tag2 == JS_CUSTOM_TAG_FLOAT32)) {
+        float f1, f2;
+        if (tag1 == JS_CUSTOM_TAG_FLOAT32) {
+            f1 = JS_VALUE_GET_FLOAT32(op1);
+        } else {
+            f1 = JS_VALUE_GET_INT(op1);
+        }
+        if (tag2 == JS_CUSTOM_TAG_FLOAT32) {
+            f2 = JS_VALUE_GET_FLOAT32(op2);
+        } else {
+            f2 = JS_VALUE_GET_INT(op2);
+        }
+        switch(op) {
+            case OP_lt:
+                res = (f1 < f2); /* if NaN return false */
+                break;
+            case OP_lte:
+                res = (f1 <= f2); /* if NaN return false */
+                break;
+            case OP_gt:
+                res = (f1 > f2); /* if NaN return false */
+                break;
+            default:
+            case OP_gte:
+                res = (f1 >= f2); /* if NaN return false */
+                break;
+        }
+
+        goto done;
     } else {
         if (((tag1 == JS_TAG_BIG_INT && tag2 == JS_TAG_STRING) ||
              (tag2 == JS_TAG_BIG_INT && tag1 == JS_TAG_STRING)) &&
@@ -14070,17 +14187,25 @@ static no_inline __exception int js_eq_slow(JSContext *ctx, JSValue *sp,
         if (tag1 == JS_TAG_INT && tag2 == JS_TAG_INT) {
             res = JS_VALUE_GET_INT(op1) == JS_VALUE_GET_INT(op2);
         } else if ((tag1 == JS_TAG_FLOAT64 &&
-                    (tag2 == JS_TAG_INT || tag2 == JS_TAG_FLOAT64)) ||
+                    (tag2 == JS_TAG_INT || tag2 == JS_TAG_FLOAT64 || tag2 == JS_CUSTOM_TAG_FLOAT32)) ||
                    (tag2 == JS_TAG_FLOAT64 &&
-                    (tag1 == JS_TAG_INT || tag1 == JS_TAG_FLOAT64))) {
+                    (tag1 == JS_TAG_INT || tag1 == JS_TAG_FLOAT64 || tag1 == JS_CUSTOM_TAG_FLOAT32)) ||
+                   (tag1 == JS_CUSTOM_TAG_FLOAT32 &&
+                    (tag2 == JS_TAG_INT || tag2 == JS_TAG_FLOAT64 || tag2 == JS_CUSTOM_TAG_FLOAT32)) ||
+                   (tag2 == JS_CUSTOM_TAG_FLOAT32 &&
+                    (tag1 == JS_TAG_INT || tag1 == JS_TAG_FLOAT64 || tag1 == JS_CUSTOM_TAG_FLOAT32))) {
             double d1, d2;
             if (tag1 == JS_TAG_FLOAT64) {
                 d1 = JS_VALUE_GET_FLOAT64(op1);
+            } else if (tag1 == JS_CUSTOM_TAG_FLOAT32) {
+                d1 = JS_VALUE_GET_FLOAT32(op1);
             } else {
                 d1 = JS_VALUE_GET_INT(op1);
             }
             if (tag2 == JS_TAG_FLOAT64) {
                 d2 = JS_VALUE_GET_FLOAT64(op2);
+            } else if (tag2 == JS_CUSTOM_TAG_FLOAT32) {
+                d2 = JS_VALUE_GET_FLOAT32(op2);
             } else {
                 d2 = JS_VALUE_GET_INT(op2);
             }

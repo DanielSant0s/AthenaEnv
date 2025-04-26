@@ -36,23 +36,24 @@ static JSValue athena_image_isloaded(JSContext *ctx, JSValue this_val, int argc,
 	
 }
 
-static void athena_image_dtor(JSRuntime *rt, JSValue val){
-		JSImageData *image = JS_GetOpaque(val, js_image_class_id);
+static void athena_image_dtor(JSRuntime *rt, JSValue val) {
+	JSImageData *image = JS_GetOpaque(val, js_image_class_id);
 
-		texture_manager_free(image->tex);
+	texture_manager_free(image->tex);
 
+	if(image->tex->Mem) {
 		free(image->tex->Mem);
 		image->tex->Mem = NULL;
-
-		if(image->tex->Clut != NULL)
-		{
-			free(image->tex->Clut);
-			image->tex->Clut = NULL;
-		}
-
-		js_free_rt(rt, image->tex);
-		js_free_rt(rt, image);
 	}
+
+	if(image->tex->Clut) {
+		free(image->tex->Clut);
+		image->tex->Clut = NULL;
+	}
+
+	js_free_rt(rt, image->tex);
+	js_free_rt(rt, image);
+}
 
 static JSValue athena_image_ctor(JSContext *ctx, JSValueConst new_target, int argc, JSValueConst *argv) {
 	if (argc != 1 && argc != 2 && argc != 3) return JS_ThrowSyntaxError(ctx, "Image takes 1, 2 or 3 arguments");

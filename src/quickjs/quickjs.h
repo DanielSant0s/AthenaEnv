@@ -228,6 +228,7 @@ static inline JS_BOOL JS_VALUE_IS_NAN(JSValue v)
 
 typedef union JSValueUnion {
     int32_t int32;
+    float float32;
     double float64;
     void *ptr;
 } JSValueUnion;
@@ -244,6 +245,7 @@ typedef struct JSValue {
 #define JS_VALUE_GET_NORM_TAG(v) JS_VALUE_GET_TAG(v)
 #define JS_VALUE_GET_INT(v) ((v).u.int32)
 #define JS_VALUE_GET_BOOL(v) ((v).u.int32)
+#define JS_VALUE_GET_FLOAT32(v) ((v).u.float32)
 #define JS_VALUE_GET_FLOAT64(v) ((v).u.float64)
 #define JS_VALUE_GET_PTR(v) ((v).u.ptr)
 
