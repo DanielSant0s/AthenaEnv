@@ -35,14 +35,11 @@ function drawCell(coords, radius, color, hollow){
 }
 
 function circleCircleColl(c1, c2) {
-    let distX = c1.x - c2.x;
-    let distY = c1.y - c2.y;
-    let dist = Math.sqrtf( (distX*distX) + (distY*distY) );
+    const distX = c1.x - c2.x;
+    const distY = c1.y - c2.y;
+    const dist = Math.sqrtf( (distX*distX) + (distY*distY) );
 
-    if (dist <= c1.r + c2.r) {
-        return true;
-    }
-    return false;
+    return dist <= c1.r + c2.r;
 }
 
 let main_menu_ptr = 0;
