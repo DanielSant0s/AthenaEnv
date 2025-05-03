@@ -680,7 +680,6 @@ Asynchronous functions:
 * Sound.repeat(false)  *Doesn't apply for ADPCM
 * Sound.pause(audio)  *Doesn't apply for ADPCM
 * Sound.resume(audio)  *Doesn't apply for ADPCM
-* Sound.deinit()
 
 ### Archive module
 
