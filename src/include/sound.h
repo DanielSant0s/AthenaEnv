@@ -6,9 +6,6 @@
 #define OGG_AUDIO 1
 #define ADPCM_AUDIO 2
 
-#define STREAM_THREAD_BASE_PRIO  0x10
-#define STREAM_THREAD_STACK_SIZE 0x1000
-
 #define STREAM_RING_BUFFER_COUNT 16
 #define STREAM_RING_BUFFER_SIZE  4096
 
@@ -44,7 +41,6 @@ void set_sound_repeat(bool repeat);
 void sound_pause(void);
 void sound_resume(Sound* snd);
 void sound_free(Sound* snd);
-void sound_deinit(void);
 void sound_restart(void);
 void sound_set_position(Sound* snd, int ms);
 int sound_get_position(Sound* snd);

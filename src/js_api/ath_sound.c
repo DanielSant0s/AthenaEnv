@@ -74,11 +74,6 @@ static JSValue athena_free(JSContext *ctx, JSValue this_val, int argc, JSValueCo
 	return JS_UNDEFINED;
 }
 
-static JSValue athena_deinit(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-	sound_deinit();
-	return JS_UNDEFINED;
-}
-
 static JSValue athena_isplaying(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	return JS_NewBool(ctx, is_sound_playing());
 }
@@ -136,7 +131,6 @@ static const JSCFunctionListEntry module_funcs[] = {
 	JS_CFUNC_DEF("load", 1, athena_load),
 	JS_CFUNC_DEF("play", 2, athena_play),
 	JS_CFUNC_DEF("free", 1, athena_free),
-	JS_CFUNC_DEF("deinit", 0, athena_deinit),
 	JS_CFUNC_DEF("isPlaying", 0, athena_isplaying),
 	JS_CFUNC_DEF("getDuration", 1, athena_get_duration),
 	JS_CFUNC_DEF("repeat", 1, athena_repeat),
