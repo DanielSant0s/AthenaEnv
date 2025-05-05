@@ -123,9 +123,9 @@ endif
 
 ifeq ($(AUDIO),1)
   EE_CFLAGS += -DATHENA_AUDIO
-  APP_CORE += sound.o audsrv.o
+  APP_CORE += sound.o
   ATHENA_MODULES += ath_sound.o
-  IOP_MODULES += libsd.o
+  IOP_MODULES += libsd.o audsrv.o
 
   EE_LIBS += -laudsrv -lvorbisfile -lvorbis -logg
 endif
