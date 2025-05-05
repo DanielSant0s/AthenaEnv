@@ -50,8 +50,6 @@ icons.back.color = purple;
 icons.back.width /= 3;
 icons.back.height /= 3;
 
-let playing = true;
-
 let cur_duration = 0.0f;
 
 let text_size = null;
@@ -80,10 +78,8 @@ while(true){
     if(pad.justPressed(Pads.START)) {
         if(Sound.isPlaying()) {
             Sound.pause(track);
-            playing = false;
         } else {
             Sound.resume(track);
-            playing = true;
         }
     }
 
@@ -120,7 +116,7 @@ while(true){
     }
 
     if(pad.justPressed(Pads.TRIANGLE)) {
-        Sound.restart(track);
+        Sound.restart();
     }
     
     if(Sound.isPlaying()) {

@@ -9,8 +9,6 @@
 #include <sound.h>
 #include <dbgprintf.h>
 
-extern void *_gp;
-
 static int master_volume;
 
 static bool stream_playing = false;
@@ -18,23 +16,21 @@ static bool stream_playing = false;
 static bool adpcm_started = false;
 
 static bool stream_repeat = false;
-static bool stream_restart = false;
 
-static char soundBuffer[STREAM_RING_BUFFER_COUNT][STREAM_RING_BUFFER_SIZE];
+static char soundBuffer[AUDIO_STREAM_BUFFER_SIZE];
 
 static Sound *cur_snd;
 
 static void sound_wav_fillbuf_handler(void *arg) {
     int ret = -1;
 
-    ret = fread(soundBuffer[0], 1, sizeof(soundBuffer[0]), cur_snd->fp);
+    ret = fread(soundBuffer, 1, sizeof(soundBuffer), cur_snd->fp);
 
     if (ret > 0) {
-        audsrv_play_audio(soundBuffer[0], ret);
+        audsrv_play_audio(soundBuffer, ret);
     }
-        
 
-    if (ret < sizeof(soundBuffer[0]))
+    if (ret < sizeof(soundBuffer))
 	{
         fseek(cur_snd->fp, 0x30, SEEK_SET);
 
@@ -42,25 +38,16 @@ static void sound_wav_fillbuf_handler(void *arg) {
             sound_pause();
 		}
 	}
-
-    if(stream_restart) {
-        audsrv_wait_audio(STREAM_RING_BUFFER_SIZE);
-        audsrv_stop_audio();
-
-        fseek(cur_snd->fp, 0x30, SEEK_SET);
-
-        stream_restart = false;
-    }
 }
 
 static void sound_ogg_fillbuf_handler(void *arg) {
     int ret = -1;
     int bitStream = 0;
-    int decodeTotal = STREAM_RING_BUFFER_SIZE;
+    int decodeTotal = AUDIO_STREAM_BUFFER_SIZE;
     int bufferPtr = 0;
 
     do {
-        ret = ov_read(cur_snd->fp, soundBuffer[0] + bufferPtr, decodeTotal, 0, 2, 1, &bitStream);
+        ret = ov_read(cur_snd->fp, soundBuffer + bufferPtr, decodeTotal, 0, 2, 1, &bitStream);
         
         if (ret > 0) {
             bufferPtr += ret;
@@ -78,16 +65,7 @@ static void sound_ogg_fillbuf_handler(void *arg) {
         }
     } while (decodeTotal > 0);
 
-    audsrv_play_audio(soundBuffer[0], STREAM_RING_BUFFER_SIZE);
-
-    if (stream_restart) {
-        audsrv_wait_audio(STREAM_RING_BUFFER_SIZE);
-        audsrv_stop_audio();
-        
-        ov_pcm_seek(cur_snd->fp, 0);
-        
-        stream_restart = false;
-    }
+    audsrv_play_audio(soundBuffer, AUDIO_STREAM_BUFFER_SIZE);
 }
 
 Sound * load_wav(const char* path) {
@@ -118,7 +96,7 @@ void play_wav(Sound * wav) {
 
         audsrv_set_format(&(cur_snd->fmt));
 
-        audsrv_on_fillbuf(STREAM_RING_BUFFER_SIZE, sound_wav_fillbuf_handler, NULL);
+        audsrv_on_fillbuf(AUDIO_STREAM_BUFFER_SIZE, sound_wav_fillbuf_handler, NULL);
 
         sound_wav_fillbuf_handler(NULL); // Kick the first chunk
     } 
@@ -136,7 +114,7 @@ void sound_pause() {
 	if(stream_playing) {
 		stream_playing = false;
 
-        audsrv_wait_audio(STREAM_RING_BUFFER_SIZE);
+        audsrv_wait_audio(AUDIO_STREAM_BUFFER_SIZE);
         audsrv_stop_audio();
 	}
 }
@@ -185,7 +163,16 @@ void sound_setadpcmvolume(int slot, int volume) {
 }
 
 void sound_restart() {
-    stream_restart = true;
+    switch (cur_snd->type) {
+        case OGG_AUDIO:
+            ov_pcm_seek(cur_snd->fp, 0);
+            play_ogg(cur_snd);
+            return;
+        case WAV_AUDIO:
+            fseek(cur_snd->fp, 0x30, SEEK_SET);
+            play_wav(cur_snd);
+            return;
+    }
 }
 
 audsrv_adpcm_t* sound_loadadpcm(const char* path){
@@ -279,7 +266,7 @@ void sound_set_position(Sound* snd, int ms) {
 
             f_pos = (ms / 1000 * snd->fmt.freq) * (snd->fmt.bits / 16);
 
-            ov_pcm_seek(cur_snd->fp, round(f_pos / STREAM_RING_BUFFER_SIZE) * STREAM_RING_BUFFER_SIZE);
+            ov_pcm_seek(cur_snd->fp, round(f_pos / AUDIO_STREAM_BUFFER_SIZE) * AUDIO_STREAM_BUFFER_SIZE);
 
             if (snd == cur_snd)
                 sound_resume(snd);
@@ -362,7 +349,7 @@ void play_ogg(Sound* ogg) {
 
         audsrv_set_format(&cur_snd->fmt);
 
-        audsrv_on_fillbuf(STREAM_RING_BUFFER_SIZE, sound_ogg_fillbuf_handler, NULL);
+        audsrv_on_fillbuf(AUDIO_STREAM_BUFFER_SIZE, sound_ogg_fillbuf_handler, NULL);
 
         sound_ogg_fillbuf_handler(NULL); // Kick the first chunk
     } 
