@@ -6,8 +6,7 @@
 #define OGG_AUDIO 1
 #define ADPCM_AUDIO 2
 
-#define STREAM_RING_BUFFER_COUNT 16
-#define STREAM_RING_BUFFER_SIZE  4096
+#define AUDIO_STREAM_BUFFER_SIZE  4096
 
 typedef struct _wave
 {
