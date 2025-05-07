@@ -123,7 +123,7 @@ endif
 
 ifeq ($(AUDIO),1)
   EE_CFLAGS += -DATHENA_AUDIO
-  APP_CORE += sound.o
+  APP_CORE += sound_sfx.o sound_stream.o
   ATHENA_MODULES += ath_sound.o
   IOP_MODULES += libsd.o audsrv.o
 

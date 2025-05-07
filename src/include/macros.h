@@ -7,6 +7,11 @@
           __fn__; \
 })
 
+#define in ,
+
+#define fixed_each(type, ep, arr)  ((type ep) = (arr); (ep) < (arr) + (arr##_size); (ep)++)
+#define autotype_each(ep, arr, size)  (typeof(&*(arr)) (ep) = (arr); (ep) < (arr) + (size); (ep)++)
+
 #define clamp(x, minv, maxv) ((x) < (minv) ? (minv) : ((x) > (maxv) ? (maxv) : (x)))
 
 #define xstringify(s) stringify(s)

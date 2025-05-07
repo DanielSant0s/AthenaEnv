@@ -671,16 +671,30 @@ Asynchronous functions:
 
 ### Sound module
 
-* Sound.setVolume(volume, *slot*) *If slot is specified, it will change ADPCM slot volume, else it will change master volume.
-* let audio = Sound.load(path)
-* Sound.play(audio, *slot*) *ADPCM: If slot isn't specified, it will use 0.
-* Sound.free(audio)
-* let playing = Sound.isPlaying() *Doesn't apply for ADPCM
-* let msec = Sound.duration()
-* Sound.repeat(false)  *Doesn't apply for ADPCM
-* Sound.pause(audio)  *Doesn't apply for ADPCM
-* Sound.resume(audio)  *Doesn't apply for ADPCM
+* Sound.setVolume(volume) - Set master volume.
+* Sound.findChannel() - Returns the first free channel found to be used on sound effect playback.
+* const bgm = Sound.Stream(path) - Loads a audio stream file(WAV, OGG)  
+**Methods:**  
+  • play() - Play(or resume) audio stream.  
+  • free() - Free audio stream from memory.  
+  • pause() - Pause audio stream.  
+  • playing() - Check if the audio stream is being played.  
+  • repeat(value) - Set if the audio stream should be repeated (loop).  
+  • restart() - Restart audio to it's beginning (should call play() again if it's not the current track).  
+**Properties:**  
+  • position - Current track playtime in msec, you can get or change.  
+  • length - Current track duration in msec, read-only property.  
 
+* const shoot_sfx = Sound.Sfx(path) - Loads a sound effect(ADPCM)  
+**Methods:**  
+  • play(*channel*) - Play sound effect. P.S.: If channel isn't specified, it will automatically use a free channel(and return the channel index, otherwhise it returns undefined).  
+  • free() - Free sound effect from memory.  
+  • playing(channel) - Check if the sound effect is being played on the specified channel.  
+**Properties:**  
+  • volume - Current sound effect volume, you can get or change from 0 to 100.  
+  • pan - Sound effect spatial setting, you can get or change from -100(left) to 100(right), 0 is the center.  
+  • loop - If the sample is played in a loop, you can get or change.  
+  
 ### Archive module
 
 * let zip = Archive.open(fname)

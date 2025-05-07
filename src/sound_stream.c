@@ -9,17 +9,15 @@
 #include <sound.h>
 #include <dbgprintf.h>
 
-static int master_volume;
+static int master_volume = 0;
 
 static bool stream_playing = false;
-
-static bool adpcm_started = false;
 
 static bool stream_repeat = false;
 
 static char soundBuffer[AUDIO_STREAM_BUFFER_SIZE];
 
-static Sound *cur_snd;
+static SoundStream *cur_snd = NULL;
 
 static void sound_wav_fillbuf_handler(void *arg) {
     int ret = -1;
@@ -68,8 +66,8 @@ static void sound_ogg_fillbuf_handler(void *arg) {
     audsrv_play_audio(soundBuffer, AUDIO_STREAM_BUFFER_SIZE);
 }
 
-Sound * load_wav(const char* path) {
-    Sound *wav = malloc(sizeof(Sound));
+SoundStream * load_wav(const char* path) {
+    SoundStream *wav = malloc(sizeof(SoundStream));
     t_wave header;
 
     int ret;
@@ -88,7 +86,7 @@ Sound * load_wav(const char* path) {
     return wav;
 }
 
-void play_wav(Sound * wav) {
+void play_wav(SoundStream * wav) {
     if(!stream_playing) {
 
         stream_playing = true;
@@ -119,7 +117,7 @@ void sound_pause() {
 	}
 }
 
-void sound_resume(Sound* snd) {
+void sound_resume(SoundStream* snd) {
     if (cur_snd->type == WAV_AUDIO) {
         play_wav(snd);
     } else {
@@ -127,7 +125,7 @@ void sound_resume(Sound* snd) {
     }
 }
 
-void sound_free(Sound* snd) {
+void sound_free(SoundStream* snd) {
     if (snd == cur_snd) {
         sound_pause();
     }
@@ -137,12 +135,8 @@ void sound_free(Sound* snd) {
         free(snd->fp);
     } else if (snd->type == WAV_AUDIO) {
         fclose(snd->fp);
-    } else if (snd->type == ADPCM_AUDIO) {
-        audsrv_adpcm_t* sample = snd->fp;
-        free(sample->buffer);
-	    sample->buffer = NULL;
-	    free(sample);
-    }
+    } 
+    
     snd->fp = NULL;
     free(snd);
     snd = NULL;
@@ -151,15 +145,6 @@ void sound_free(Sound* snd) {
 void sound_setvolume(int volume) {
 	audsrv_set_volume(volume);
     master_volume = volume;
-}
-
-void sound_setadpcmvolume(int slot, int volume) {
-    if(!adpcm_started) {
-        audsrv_adpcm_init();
-        adpcm_started = true;
-    }
-
-    audsrv_adpcm_set_volume_and_pan(slot, volume, 0);
 }
 
 void sound_restart() {
@@ -175,57 +160,7 @@ void sound_restart() {
     }
 }
 
-audsrv_adpcm_t* sound_loadadpcm(const char* path){
-    if(!adpcm_started) {
-        audsrv_adpcm_init();
-        adpcm_started = true;
-    }
-
-	FILE* adpcm;
-	audsrv_adpcm_t *sample = malloc(sizeof(audsrv_adpcm_t));
-	int size;
-	u8* buffer;
-
-	adpcm = fopen(path, "rb");
-
-	fseek(adpcm, 0, SEEK_END);
-	size = ftell(adpcm);
-	fseek(adpcm, 0, SEEK_SET);
-
-	buffer = (u8*)malloc(size);
-
-	fread(buffer, 1, size, adpcm);
-	fclose(adpcm);
-
-	audsrv_load_adpcm(sample, buffer, size);
-
-	return sample;
-}
-
-void sound_playadpcm(int slot, audsrv_adpcm_t *sample) {
-	audsrv_ch_play_adpcm(slot, sample);
-}
-
-static int get_sample_qt_duration(int nSamples)
-{
-    float sampleRate = 44100; // 44.1kHz
-
-    // Return duration in milliseconds
-    return (nSamples / sampleRate) * 1000;
-}
-
-static int sound_get_adpcm_duration(audsrv_adpcm_t *sample)
-{
-    // Calculate duration based on number of samples
-    int duration_ms = get_sample_qt_duration(((u32 *)sample->buffer)[3]);
-    // Estimate duration based on filesize, if the ADPCM header was 0
-    if (duration_ms == 0)
-        duration_ms = sample->size / 47;
-
-    return duration_ms;
-}
-
-int sound_get_duration(Sound* snd) {
+int sound_get_duration(SoundStream* snd) {
     uint32_t f_pos, f_sz;
 
     if (snd->type == OGG_AUDIO) {
@@ -247,14 +182,12 @@ int sound_get_duration(Sound* snd) {
             sound_resume(snd);
 
         return (f_sz/tmp_header.w_navgbytespersec)*1000;
-    } else if (snd->type == ADPCM_AUDIO) {
-        return sound_get_adpcm_duration(snd->fp);
-    }
+    } 
 
     return -1;
 }
 
-void sound_set_position(Sound* snd, int ms) {
+void sound_set_position(SoundStream* snd, int ms) {
     uint32_t f_pos, n_samples;
 
     if (snd->type == OGG_AUDIO) {
@@ -287,12 +220,10 @@ void sound_set_position(Sound* snd, int ms) {
                 sound_resume(snd);
         }
 
-    } else if (snd->type == ADPCM_AUDIO) {
-        return -1;
-    }
+    } 
 }
 
-int sound_get_position(Sound* snd) {
+int sound_get_position(SoundStream* snd) {
     uint32_t f_pos, ms;
 
     if (snd->type == OGG_AUDIO) {
@@ -307,17 +238,17 @@ int sound_get_position(Sound* snd) {
         ms = round(f_pos / (snd->fmt.freq / 1000 * (snd->fmt.bits / 4)));
 
         return ms;
-    } else if (snd->type == ADPCM_AUDIO) {
-        return -1;
-    }
+    } 
+
+    return -1;
 }
 
 // OGG Support
-Sound* load_ogg(const char* path) {
+SoundStream* load_ogg(const char* path) {
     FILE *oggFile;
-    Sound* ogg;
+    SoundStream* ogg;
 
-    ogg = malloc(sizeof(Sound));
+    ogg = malloc(sizeof(SoundStream));
     ogg->fp = calloc(1, sizeof(OggVorbis_File));
 
     oggFile = fopen(path, "rb");
@@ -342,7 +273,7 @@ Sound* load_ogg(const char* path) {
     return ogg;
 }
 
-void play_ogg(Sound* ogg) {
+void play_ogg(SoundStream* ogg) {
     if(!stream_playing) {
         stream_playing = true;
         cur_snd = ogg;
