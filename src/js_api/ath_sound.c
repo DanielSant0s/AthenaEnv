@@ -249,6 +249,8 @@ static JSValue athena_sound_sfx_get_prop(JSContext *ctx, JSValueConst this_val, 
 			return JS_NewUint32(ctx, snd->sound->pan);
 		case 2:
 			return JS_NewBool(ctx, snd->sound->sound.loop);
+		case 3:
+			return JS_NewInt32(ctx, sound_sfx_get_pitch(snd->sound));
 	}
 
 	return JS_UNDEFINED;
@@ -260,9 +262,9 @@ static JSValue athena_sound_sfx_set_prop(JSContext *ctx, JSValueConst this_val, 
     if (!snd)
         return JS_EXCEPTION;
 
-    uint32_t value = 0;
+    int value = 0;
 
-    if (JS_ToUint32(ctx, &value, val))
+    if (JS_ToInt32(ctx, &value, val))
         return JS_EXCEPTION;
 
 	switch (magic) {
@@ -274,6 +276,9 @@ static JSValue athena_sound_sfx_set_prop(JSContext *ctx, JSValueConst this_val, 
 			break;
 		case 2:
 			snd->sound->sound.loop = value;
+			break;
+		case 3:
+			sound_sfx_set_pitch(snd->sound, value);
 			break;
 	}
 
@@ -291,6 +296,7 @@ static const JSCFunctionListEntry js_sound_sfx_proto_funcs[] = {
 	JS_CGETSET_MAGIC_DEF("volume", athena_sound_sfx_get_prop, athena_sound_sfx_set_prop, 0),
 	JS_CGETSET_MAGIC_DEF("pan",    athena_sound_sfx_get_prop, athena_sound_sfx_set_prop, 1),
 	JS_CGETSET_MAGIC_DEF("loop",   athena_sound_sfx_get_prop, athena_sound_sfx_set_prop, 2),
+	JS_CGETSET_MAGIC_DEF("pitch",  athena_sound_sfx_get_prop, athena_sound_sfx_set_prop, 3),
 };
 
 static JSClassDef js_sound_sfx_class = {
