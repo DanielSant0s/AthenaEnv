@@ -8,6 +8,18 @@
 
 #include <sound.h>
 
+typedef struct {
+	char magic[4];	//"APCM"
+	unsigned char version;
+	unsigned char channels;
+	unsigned char loop;
+	unsigned char reserved;
+	unsigned int pitch;
+	unsigned int samples;
+} adpcm_header_t;
+
+#define adpcm_header(snd) ((adpcm_header_t *)(snd->sound.buffer))
+
 static bool adpcm_started = false;
 
 #define sfx_channels_size 24
@@ -77,7 +89,7 @@ void sound_sfx_channel_volume(int channel, int volume, int pan) {
 }
 
 static int sound_get_adpcm_duration(Sfx *snd) {
-    return (((uint32_t *)snd->sound.buffer)[3] / snd->sample_rate) * 1000;
+    return (adpcm_header(snd)->samples / snd->sample_rate) * 1000;
 }
 
 int sound_sfx_length(Sfx *snd) {
