@@ -46,21 +46,7 @@ static JSValue athena_sound_stream_load(JSContext *ctx, JSValue this_val, int ar
 
 	const char* path = JS_ToCString(ctx, argv[0]);
 
-	FILE* f = fopen(path, "rb");
-	uint32_t magic;
-	fread(&magic, 1, 4, f);	
-	fclose(f);
-
-	switch (magic) {
-		case 0x5367674F: /* OGG */
-			snd->sound = load_ogg(path);
-			break;
-		case 0x46464952: /* WAV */
-			snd->sound = load_wav(path);
-			break;
-		default:
-			goto stream_fail;
-	}
+	snd->sound = sound_load(path);
 
     JS_SetOpaque(obj, snd);
     return obj;
@@ -73,14 +59,7 @@ static JSValue athena_sound_stream_load(JSContext *ctx, JSValue this_val, int ar
 static JSValue athena_sound_stream_play(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
 	JSSoundStream* snd = JS_GetOpaque2(ctx, this_val, js_sound_stream_class_id);
 
-	switch (snd->sound->type) {
-		case WAV_AUDIO:
-			play_wav(snd->sound);
-			break;
-		case OGG_AUDIO:
-			play_ogg(snd->sound);
-			break;
-	}
+	sound_play(snd->sound);
 	
 	return JS_UNDEFINED;
 }
@@ -92,18 +71,14 @@ static JSValue athena_sound_stream_free(JSContext *ctx, JSValue this_val, int ar
 }
 
 static JSValue athena_is_playing(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-	return JS_NewBool(ctx, is_sound_playing());
+	JSSoundStream* snd = JS_GetOpaque2(ctx, this_val, js_sound_stream_class_id);
+	return JS_NewBool(ctx, is_sound_playing(snd->sound));
 }
 
 static JSValue athena_get_duration(JSContext *ctx, JSValueConst this_val){
 	JSSoundStream* snd = JS_GetOpaque2(ctx, this_val, js_sound_stream_class_id);
 
 	return JS_NewInt32(ctx, sound_get_duration(snd->sound));
-}
-
-static JSValue athena_repeat(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-	set_sound_repeat(JS_ToBool(ctx, argv[0]));
-	return JS_UNDEFINED;
 }
 
 static JSValue athena_sound_stream_pause(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
@@ -113,15 +88,10 @@ static JSValue athena_sound_stream_pause(JSContext *ctx, JSValue this_val, int a
 	return JS_UNDEFINED;
 }
 
-static JSValue athena_sound_stream_resume(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+static JSValue athena_rewind(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	JSSoundStream* snd = JS_GetOpaque2(ctx, this_val, js_sound_stream_class_id);
 
-	sound_resume(snd->sound);
-	return JS_UNDEFINED;
-}
-
-static JSValue athena_restart(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-	sound_restart();
+	sound_rewind(snd->sound);
 	return JS_UNDEFINED;
 }
 
@@ -140,21 +110,30 @@ static JSValue athena_get_position(JSContext *ctx, JSValueConst this_val){
     return JS_NewInt32(ctx, sound_get_position(snd->sound));
 }
 
+static JSValue athena_set_loop(JSContext *ctx, JSValueConst this_val, JSValue val){
+    JSSoundStream* snd = JS_GetOpaque2(ctx, this_val, js_sound_stream_class_id);
+    uint32_t position;
+
+    snd->sound->loop = JS_ToBool(ctx, val);
+    return JS_UNDEFINED;
+}
+
+static JSValue athena_get_loop(JSContext *ctx, JSValueConst this_val){
+    JSSoundStream* snd = JS_GetOpaque2(ctx, this_val, js_sound_stream_class_id);
+
+    return JS_NewBool(ctx, snd->sound->loop);
+}
+
 static const JSCFunctionListEntry js_sound_stream_proto_funcs[] = {
 	JS_CFUNC_DEF("play", 0, athena_sound_stream_play),
 	JS_CFUNC_DEF("free", 0, athena_sound_stream_free),
 	JS_CFUNC_DEF("pause", 0, athena_sound_stream_pause),
-	JS_CFUNC_DEF("resume", 0, athena_sound_stream_resume),
-
-	JS_CGETSET_DEF("position", athena_get_position, athena_set_position),
-
-	JS_CGETSET_DEF("length", athena_get_duration, NULL),
-
 	JS_CFUNC_DEF("playing", 0, athena_is_playing),
-	
-	JS_CFUNC_DEF("repeat", 1, athena_repeat),
+	JS_CFUNC_DEF("rewind", 0, athena_rewind),
 
-	JS_CFUNC_DEF("restart", 0, athena_restart),
+	JS_CGETSET_DEF("loop", athena_get_loop, athena_set_loop),
+	JS_CGETSET_DEF("position", athena_get_position, athena_set_position),
+	JS_CGETSET_DEF("length", athena_get_duration, NULL),
 };
 
 static JSClassDef js_sound_stream_class = {

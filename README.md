@@ -679,11 +679,11 @@ Asynchronous functions:
   • free() - Free audio stream from memory.  
   • pause() - Pause audio stream.  
   • playing() - Check if the audio stream is being played.  
-  • repeat(value) - Set if the audio stream should be repeated (loop).  
-  • restart() - Restart audio to it's beginning (should call play() again if it's not the current track).  
+  • rewind() - Restart audio to it's beginning (should call play() again if it's not the current track).  
 **Properties:**  
   • position - Current track playtime in msec, you can get or change.  
   • length - Current track duration in msec, read-only property.  
+  • loop - If the track is played in a loop, you can get or change.  
 
 * const shoot_sfx = Sound.Sfx(path) - Loads a sound effect(ADPCM)  
 **Methods:**  
