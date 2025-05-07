@@ -4,7 +4,7 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <stdbool.h>
-#include <errno.h>
+#include <macros.h>
 
 #include <sound.h>
 
@@ -41,11 +41,13 @@ Sfx* sound_sfx_load(const char* path) {
 
 	audsrv_load_adpcm(&snd->sound, buffer, size);
 
+    snd->sample_rate = (snd->sound.pitch * 48000) / 4096;
     snd->volume = 100;
     snd->pan = 0;
 
 	return snd;
 }
+
 void sound_sfx_free(Sfx* snd) {
     free(snd->sound.buffer);
     snd->sound.buffer = NULL;
@@ -74,19 +76,8 @@ void sound_sfx_channel_volume(int channel, int volume, int pan) {
     sfx_channel_pans[channel] = pan;
 }
 
-static int get_sample_qt_duration(int nSamples) {
-    float sampleRate = 44100;
-
-    return (nSamples / sampleRate) * 1000;
-}
-
-static int sound_get_adpcm_duration(audsrv_adpcm_t *sample) {
-    int duration_ms = get_sample_qt_duration(((u32 *)sample->buffer)[3]);
-
-    if (duration_ms == 0)
-        duration_ms = sample->size / 47;
-
-    return duration_ms;
+static int sound_get_adpcm_duration(Sfx *snd) {
+    return (((uint32_t *)snd->sound.buffer)[3] / snd->sample_rate) * 1000;
 }
 
 int sound_sfx_length(Sfx *snd) {
@@ -109,4 +100,22 @@ int sound_sfx_find_channel() {
     }
 
     return -1;
+}
+
+inline float map_pitch_range(int value) {
+    return (float)((clamp(value, -100, 100) + 100) / 100.0f);
+}
+
+inline int unmap_pitch_range(float value) {
+    return clamp((int)((value * 100.0f) - 100), -100, 100);
+}
+
+int sound_sfx_get_pitch(Sfx *snd) {
+    float mapped_pitch = ((float)snd->sound.pitch * 48000) / (snd->sample_rate * 4096);
+
+    return unmap_pitch_range(mapped_pitch);
+}
+
+void sound_sfx_set_pitch(Sfx *snd, int pitch) {
+    snd->sound.pitch = (snd->sample_rate * (4096 * map_pitch_range(pitch))) / 48000;
 }

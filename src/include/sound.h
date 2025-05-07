@@ -49,6 +49,7 @@ int sound_get_position(SoundStream* snd);
 
 typedef struct {
     audsrv_adpcm_t sound;
+    int sample_rate;
     int volume;
     int pan;
 } Sfx;
@@ -60,3 +61,5 @@ void sound_sfx_channel_volume(int channel, int volume, int pan);
 int sound_sfx_length(Sfx *snd);
 int sound_sfx_find_channel();
 bool sound_sfx_is_playing(Sfx *snd, int channel);
+int sound_sfx_get_pitch(Sfx *snd);
+void sound_sfx_set_pitch(Sfx *snd, int pitch);
