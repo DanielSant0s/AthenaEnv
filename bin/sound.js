@@ -107,17 +107,17 @@ while(true){
 
     position = track.position;
 
-    if(pad.justPressed(Pads.RIGHT) && track.isPlaying()) {
+    if(pad.justPressed(Pads.RIGHT) && track.playing()) {
         track.position = track.position + 5000;
-    } else if(pad.justPressed(Pads.LEFT) && track.isPlaying()) {
+    } else if(pad.justPressed(Pads.LEFT) && track.playing()) {
         track.position = track.position - 5000;
     }
 
     if(pad.justPressed(Pads.TRIANGLE)) {
-        track.restart();
+        track.rewind();
     }
     
-    if(track.isPlaying()) {
+    if(track.playing()) {
         icons.pause.draw(320 - icons.play.width/2, 224 - icons.play.height/2 + 100);
     } else {
         icons.play.draw(320 - icons.play.width/2, 224 - icons.play.height/2 + 100);

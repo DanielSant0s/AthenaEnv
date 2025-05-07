@@ -1,6 +1,7 @@
 
 #include <audsrv.h>
 #include <vorbis/vorbisfile.h>
+#include <stdbool.h>
 
 #define WAV_AUDIO 0
 #define OGG_AUDIO 1
@@ -28,22 +29,19 @@ typedef struct {
     void* fp;
     struct audsrv_fmt_t fmt;
     int type;
+    bool loop;
 } SoundStream;
 
-SoundStream* load_wav(const char* path);
-void play_wav(SoundStream* wav);
+SoundStream *sound_load(const char* path);
 
-SoundStream* load_ogg(const char* path);
-void play_ogg(SoundStream* ogg);
+void sound_play(SoundStream * snd);
 
 void sound_setvolume(int volume);
-int is_sound_playing(void);
+int is_sound_playing(SoundStream* snd);
 int sound_get_duration(SoundStream* snd);
-void set_sound_repeat(bool repeat);
 void sound_pause(void);
-void sound_resume(SoundStream* snd);
 void sound_free(SoundStream* snd);
-void sound_restart(void);
+void sound_rewind(SoundStream* snd);
 void sound_set_position(SoundStream* snd, int ms);
 int sound_get_position(SoundStream* snd);
 
