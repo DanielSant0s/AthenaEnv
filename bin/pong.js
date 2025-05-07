@@ -1,11 +1,10 @@
 // {"name": "Pong", "author": "Daniel Santos", "version": "04252023","file": "pong.js"}
 Sound.setVolume(100);
-Sound.setVolume(100, 0);
 
 let sounds = {
-    unpause:Sound.load("pong/unpause.adp"),
-    score:Sound.load("pong/score.adp"),
-    over:Sound.load("pong/over.adp")
+    unpause:Sound.Sfx("pong/unpause.adp"),
+    score:Sound.Sfx("pong/score.adp"),
+    over:Sound.Sfx("pong/over.adp")
 }
 
 const screen = Screen.getMode();
@@ -176,7 +175,7 @@ while(true) {
         }
         game_over = false;
 
-        Sound.play(sounds.unpause);
+        sounds.unpause.play(0);
     }
 
     if(!paused) {
@@ -190,7 +189,7 @@ while(true) {
 
         if (ball.collide(player)) {
             score++;
-            Sound.play(sounds.score);
+            sounds.score.play(0);
             if(score > score_threshold) {
                 score_threshold *= 2;
                 ball.speed++;
@@ -201,7 +200,7 @@ while(true) {
         if(ball.escape()) {
             game_over = true;
             paused = true;
-            Sound.play(sounds.over);
+            sounds.over.play(0);
         }
 
         ball.move();
