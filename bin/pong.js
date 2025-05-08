@@ -1,5 +1,6 @@
 // {"name": "Pong", "author": "Daniel Santos", "version": "04252023","file": "pong.js"}
 Sound.setVolume(100);
+const main_sfx_channel = Sound.findChannel();
 
 let sounds = {
     unpause:Sound.Sfx("pong/unpause.adp"),
@@ -175,7 +176,7 @@ while(true) {
         }
         game_over = false;
 
-        sounds.unpause.play(0);
+        sounds.unpause.play(main_sfx_channel);
     }
 
     if(!paused) {
@@ -189,7 +190,7 @@ while(true) {
 
         if (ball.collide(player)) {
             score++;
-            sounds.score.play(0);
+            sounds.score.play(main_sfx_channel);
             if(score > score_threshold) {
                 score_threshold *= 2;
                 ball.speed++;
@@ -200,7 +201,7 @@ while(true) {
         if(ball.escape()) {
             game_over = true;
             paused = true;
-            sounds.over.play(0);
+            sounds.over.play(main_sfx_channel);
         }
 
         ball.move();
