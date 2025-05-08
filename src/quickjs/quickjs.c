@@ -333,9 +333,10 @@ struct JSClass {
     const JSClassExoticMethods *exotic;
 };
 
-#define JS_MODE_STRICT (1 << 0)
-#define JS_MODE_STRIP  (1 << 1)
-#define JS_MODE_MATH   (1 << 2)
+#define JS_MODE_STRICT  (1 << 0)
+#define JS_MODE_STRIP   (1 << 1)
+#define JS_MODE_MATH    (1 << 2)
+#define JS_MODE_FLOAT32 (1 << 3)
 
 typedef struct JSStackFrame {
     struct JSStackFrame *prev_frame; /* NULL if first stack frame */
@@ -2346,6 +2347,12 @@ static inline BOOL is_math_mode(JSContext *ctx)
     return (sf && (sf->js_mode & JS_MODE_MATH));
 }
 #endif
+
+static inline BOOL is_float32_mode(JSContext *ctx)
+{
+    JSStackFrame *sf = ctx->rt->current_stack_frame;
+    return (sf && (sf->js_mode & JS_MODE_FLOAT32));
+}
 
 /* JSAtom support */
 
@@ -33258,6 +33265,9 @@ static __exception int js_parse_directives(JSParseState *s)
             s->cur_func->js_mode |= JS_MODE_MATH;
         }
 #endif
+        else if (!strcmp(str, "use float32")) {
+            s->cur_func->js_mode |= JS_MODE_FLOAT32;
+        }
     }
     return js_parse_seek_token(s, &pos);
 }
