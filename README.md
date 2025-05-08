@@ -694,7 +694,7 @@ Asynchronous functions:
   • volume - Current sound effect volume, you can get or change from 0 to 100.  
   • pan - Sound effect spatial setting, you can get or change from -100(left) to 100(right), 0 is the center.  
   • loop - If the sample is played in a loop, you can get or change.  
-  • pitch - Sound effect pitch, you can get or change.  
+  • pitch - Sound effect pitch, you can get or change from -100 to 100, 0 is the default value.  
   
 ### Archive module
 
