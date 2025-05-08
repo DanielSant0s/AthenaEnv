@@ -11012,6 +11012,7 @@ static int JS_ToInt32Free(JSContext *ctx, int32_t *pres, JSValue val)
             }
 
         }
+        break;
 #ifdef CONFIG_BIGNUM
     case JS_TAG_BIG_FLOAT:
         {
