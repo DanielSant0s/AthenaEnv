@@ -533,6 +533,16 @@ Properties:
 * outline - Outline size, default: 0.0f
 * dropshadow_color - Define dropshadow tinting, default value is Color.new(0, 0, 0, 128).
 * dropshadow - Shadow drop position, default: 0.0f
+* align - Font alignment, default value is FontAlign.NONE. Avaliable options below:  
+  • FontAlign.NONE  
+  • FontAlign.TOP  
+  • FontAlign.BOTTOM  
+  • FontAlign.LEFT  
+  • FontAlign.RIGHT  
+  • FontAlign.VCENTER  
+  • FontAlign.HCENTER  
+  • FontAlign.CENTER  
+  
 
 P.S.: outline and drop shadow do not coexist, so one of them must be 0.0f.
 
