@@ -303,7 +303,7 @@ Constants to interpret the mode property returned by stat(). They have the same 
 * os.clearTimeout(handle) - Cancel a timer.
 * os.clearInterval(handle) - Cancel a interval.
 * os.clearImmediate(handle) - Cancel a immediate execution.
-* os.platform - Return a string representing the platform: "linux", "darwin", "win32", "ps2" or "js".
+* os.platform - Return a string representing the platform: "ps2".
     
 ### Color module
 * let col = Color.new(r, g, b, *a*) - Returns a color object from the specified RGB(A) parameters.
