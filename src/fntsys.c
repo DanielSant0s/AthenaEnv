@@ -514,7 +514,7 @@ void fntSetCharSize(int fontid, int width, int height)
     FT_Set_Char_Size(fonts[fontid].face, width, height, fDPI, fDPI);
 }
 
-const float XYUV_MAX_FLOAT[4] __attribute__((aligned(16))) = { 4095.75f, 4095.75f, 1024.0f, 1024.0f };
+const float XYUV_MAX_FLOAT[4] qw_aligned = { 4095.75f, 4095.75f, 1024.0f, 1024.0f };
 
 void fntRenderGlyph(fnt_glyph_cache_entry_t *glyph, owl_packet *packet, int pen_x, int pen_y, float scale)
 {

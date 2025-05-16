@@ -14,11 +14,11 @@
 
 #include <owl_packet.h>
 
-const int16_t OWL_XYOFFSET[8] __attribute__((aligned(16))) = { 2048, 2048, 0, 0, 2048, 2048, 0, 0 };
-const uint16_t OWL_XYMAX[8] __attribute__((aligned(16))) =   { 4095, 4095, 0, 0, 4095, 4095, 0, 0 };
+const int16_t OWL_XYOFFSET[8] qw_aligned = { 2048, 2048, 0, 0, 2048, 2048, 0, 0 };
+const uint16_t OWL_XYMAX[8] qw_aligned =   { 4095, 4095, 0, 0, 4095, 4095, 0, 0 };
 
-const int16_t OWL_XYOFFSET_FIXED[8] __attribute__((aligned(16))) = { 2048 << 4, 2048 << 4, 0, 0, 2048 << 4, 2048 << 4, 0, 0 };
-const uint16_t OWL_XYMAX_FIXED[8] __attribute__((aligned(16))) =   { 4095 << 4, 4095 << 4, 0, 0, 4095 << 4, 4095 << 4, 0, 0 };
+const int16_t OWL_XYOFFSET_FIXED[8] qw_aligned = { ftoi4(int, 2048), ftoi4(int, 2048), 0, 0, ftoi4(int, 2048), ftoi4(int, 2048), 0, 0 };
+const uint16_t OWL_XYMAX_FIXED[8] qw_aligned =   { ftoi4(int, 4095), ftoi4(int, 4095), 0, 0, ftoi4(int, 4095), ftoi4(int, 4095), 0, 0 };
 
 void draw_point_list(float x, float y, prim_point *list, int list_size)
 {

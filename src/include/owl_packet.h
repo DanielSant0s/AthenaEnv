@@ -10,6 +10,9 @@
 
 #include <vif.h>
 
+#define qw_aligned __attribute__((aligned(16)))
+#define dma_aligned qw_aligned
+
 typedef enum {
     CHANNEL_VIF0,
     CHANNEL_VIF1,
@@ -61,7 +64,7 @@ typedef struct {
     owl_qword *ptr;
     bool unpack_opened; // true when under a unpack list
     unpack_list list;
-} owl_packet __attribute__((aligned(16)));
+} owl_packet qw_aligned;
 
 void owl_init(void *ptr, size_t size);
 
@@ -216,12 +219,17 @@ typedef struct {
     owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0)); \
     owl_add_uint(packet, VIF_CODE(size, 0, VIF_DIRECT, 0)) 
 
-// Too much specific stuff
-extern const int16_t OWL_XYOFFSET[8] __attribute__((aligned(16)));
-extern const uint16_t OWL_XYMAX[8] __attribute__((aligned(16)));
+#define int_to_12_4_fixed(val) ((uint16_t)(((int)val) << 4))
+#define float_to_12_4_fixed(val) ((uint16_t)(((float)val) * 16.0f))
 
-extern const int16_t OWL_XYOFFSET_FIXED[8] __attribute__((aligned(16)));
-extern const uint16_t OWL_XYMAX_FIXED[8] __attribute__((aligned(16)));
+#define ftoi4(type, val) type ## _to_12_4_fixed(val)
+
+// Too much specific stuff
+extern const int16_t OWL_XYOFFSET[8] qw_aligned;
+extern const uint16_t OWL_XYMAX[8] qw_aligned;
+
+extern const int16_t OWL_XYOFFSET_FIXED[8] qw_aligned;
+extern const uint16_t OWL_XYMAX_FIXED[8] qw_aligned;
 
 inline void owl_add_uv(owl_packet *packet, int u, int v) { // each call increases 8 bytes in pointer
 	asm volatile ( 	

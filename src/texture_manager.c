@@ -49,7 +49,7 @@ GSTEXTURE *texture_upload_queue[TEXTURE_UPLOAD_QUEUE_SIZE] = { NULL };
 
 owl_packet* async_upload_packet = NULL;
 
-owl_qword async_upload_packet_buffer[owl_packet_size(MAX_TEXTURE_PACKET_SIZE)] __attribute__((aligned(16)));
+owl_qword async_upload_packet_buffer[owl_packet_size(MAX_TEXTURE_PACKET_SIZE)] qw_aligned;
 
 uint32_t *VIF1_MARK = (uint32_t *)(0x10003C30);
 

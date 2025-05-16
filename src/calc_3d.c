@@ -104,8 +104,8 @@ int draw_convert_xyz(xyz_t *output, float x, float y, int z, int count, vertex_f
 
 	unsigned int max_z;
 
-	center_x = ftoi4(x);
-	center_y = ftoi4(y);
+	center_x = ftoi4(float, x);
+	center_y = ftoi4(float, y);
 
 	max_z = 1 << (z - 1);
 

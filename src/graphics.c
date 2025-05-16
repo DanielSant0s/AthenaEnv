@@ -37,7 +37,7 @@ static int frame_interval = -1;
 
 #define OWL_PACKET_BUFFER_SIZE 1024
 
-static owl_qword owl_packet_buffer[OWL_PACKET_BUFFER_SIZE] __attribute__((aligned(16))) = { 0 };
+static owl_qword owl_packet_buffer[OWL_PACKET_BUFFER_SIZE] qw_aligned = { 0 };
 
 void set_finish()
 {
