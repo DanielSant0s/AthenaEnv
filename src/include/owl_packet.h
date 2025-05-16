@@ -138,9 +138,8 @@ inline void owl_add_unpack_data(owl_packet *packet, uint32_t t_dest_address, voi
 
 inline void owl_align_packet(owl_packet *packet) {
     uint32_t ptr = (uint32_t)packet->ptr;
-    while (ptr & 15) ptr++;
 
-    packet->ptr = (owl_qword*)ptr;
+    packet->ptr = (owl_qword*)(ptr + (0x10 - (ptr & 15)));
 }
 
 #define owl_add_cnt_tag_fill(packet, count) \
