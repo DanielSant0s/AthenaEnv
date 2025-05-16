@@ -51,16 +51,6 @@ DUMMY_XGKICK_BUF    .assign 1023
 
 --enter
 --endenter
-    ilw.w       renderFlags,    RENDER_FLAGS(vi00)
-    ibgtz renderFlags, scissor_init
-
-cull_init:
-    loi 0.5
-    add.xy     clip_scale, vf00, i
-    loi 1.0
-    add.z      clip_scale,  vf00, i
-    mul.w      clip_scale, vf00, vf00
-
     ;//////////// --- Load data 1 --- /////////////
     ; Updated once per mesh
     MatrixLoad	ObjectToScreen, SCREEN_MATRIX, vi00 ; load view-projection matrix
@@ -77,6 +67,16 @@ cull_init:
 
 	fcset   0x000000	; VCL won't let us use CLIP without first zeroing
 				; the clip flags
+
+    ilw.w       renderFlags,    RENDER_FLAGS(vi00)
+    ibgtz renderFlags, scissor_init
+
+cull_init:
+    loi 0.5
+    add.xy     clip_scale, vf00, i
+    loi 1.0
+    add.z      clip_scale,  vf00, i
+    mul.w      clip_scale, vf00, vf00
 
     ;//////////// --- Load data 2 --- /////////////
     ; Updated dynamically
@@ -175,22 +175,6 @@ culled_init:
 
 scissor_init:
     iaddiu               StackPtr, vi00, STACK_OFFSET
-
-    ;//////////// --- Load data 1 --- /////////////
-    ; Updated once per mesh
-    MatrixLoad	ObjectToScreen, SCREEN_MATRIX, vi00 ; load view-projection matrix
-
-    lq    scale, SCREEN_SCALE(vi00)
-
-    loi            2048.0
-    addi.xy        offset, vf00, i
-    add.zw          offset, vf00, vf00
-
-    add.xyz offset, scale, offset
-
-	fcset   0x000000	; VCL won't let us use CLIP without first zeroing
-				; the clip flags
-
 
     lq                   ClipTag, CLIPFAN_OFFSET(vi00)      ; load Triangle Fan Tag
  
