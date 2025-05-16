@@ -12,13 +12,8 @@
 
 #define DEG2RAD(deg) ((deg) * (M_PI / 180.0f))
 
-register_vu_program(VU1Draw3DColors);
 register_vu_program(VU1Draw3DCS);
-
-register_vu_program(VU1Draw3DLightsColors);
 register_vu_program(VU1Draw3DLCS);
-
-register_vu_program(VU1Draw3DSpec);
 register_vu_program(VU1Draw3DLCSS);
 
 MATRIX view_screen;
@@ -198,13 +193,8 @@ void draw_vu1_with_colors(athena_object_data *obj) {
 
 	int batch_size = BATCH_SIZE;
 
-	if (data->attributes.accurate_clipping) {
-		update_vu_program(VU1Draw3DCS);
-	} else {
-		update_vu_program(VU1Draw3DColors);
-		batch_size = BATCH_SIZE_NO_CLIPPING;
-	}
-		
+	update_vu_program(VU1Draw3DCS);
+	
 	gsGlobal->PrimAAEnable = GS_SETTING_ON;
 
 
@@ -215,6 +205,7 @@ void draw_vu1_with_colors(athena_object_data *obj) {
 
 	unpack_list_open(packet, 0, false);
 	{
+		screen_scale.w = data->attributes.accurate_clipping;
 		unpack_list_append(packet, &screen_scale,       1);
 
 		unpack_list_append(packet, obj->local_screen,       4);
@@ -315,12 +306,12 @@ void draw_vu1_with_lights(athena_object_data *obj) {
 
 	int batch_size = BATCH_SIZE;
 
-	if (data->attributes.accurate_clipping) {
+	//if (data->attributes.accurate_clipping) {
 		update_vu_program(VU1Draw3DLCS);
-	} else {
-		update_vu_program(VU1Draw3DLightsColors);
-		batch_size = BATCH_SIZE_NO_CLIPPING;
-	}
+	//} else {
+		//update_vu_program(VU1Draw3DLightsColors);
+		//batch_size = BATCH_SIZE_NO_CLIPPING;
+	//}
 		
 	gsGlobal->PrimAAEnable = GS_SETTING_ON;
 
@@ -347,6 +338,7 @@ void draw_vu1_with_lights(athena_object_data *obj) {
 
 	unpack_list_open(packet, 0, false);
 	{
+		screen_scale.w = data->attributes.accurate_clipping;
 		unpack_list_append(packet, &screen_scale,       1); 
 
 		unpack_list_append(packet, obj->local_screen,       4);
@@ -461,12 +453,8 @@ void draw_vu1_with_spec_lights(athena_object_data *obj) {
 
 	int batch_size = BATCH_SIZE;
 
-	if (data->attributes.accurate_clipping) {
-		update_vu_program(VU1Draw3DLCSS);
-	} else {
-		update_vu_program(VU1Draw3DSpec);
-		batch_size = BATCH_SIZE_NO_CLIPPING;
-	}
+	update_vu_program(VU1Draw3DLCSS);
+
 
 	gsGlobal->PrimAAEnable = GS_SETTING_ON;
 
@@ -495,6 +483,7 @@ void draw_vu1_with_spec_lights(athena_object_data *obj) {
 
 	unpack_list_open(packet, 0, false);
 	{
+		screen_scale.w = data->attributes.accurate_clipping;
 		unpack_list_append(packet, &screen_scale,       1);
 
 		unpack_list_append(packet, obj->local_screen,       4);

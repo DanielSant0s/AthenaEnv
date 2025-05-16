@@ -69,9 +69,9 @@ endif
 JS_CORE = quickjs/cutils.o quickjs/libbf.o quickjs/libregexp.o quickjs/libunicode.o \
 				 quickjs/realpath.o quickjs/quickjs.o quickjs/quickjs-libc.o
 
-VU1_MPGS = draw_3D_colors.o draw_3D_colors_scissor.o \
-           draw_3D_lights.o draw_3D_lights_scissor.o \
-           draw_3D_spec.o   draw_3D_spec_scissor.o
+VU1_MPGS = draw_3D_colors_scissor.o \
+           draw_3D_lights_scissor.o \
+           draw_3D_spec_scissor.o
 
 APP_CORE = main.o bootlogo.o texture_manager.o owl_packet.o vif.o athena_math.o memory.o ee_tools.o module_system.o iop_manager.o taskman.o pad.o system.o strUtils.o
 
@@ -204,7 +204,7 @@ all: $(DIR_GUARD) $(EXT_LIBS) $(EE_OBJS)
 	
 	ps2-packer $(EE_BIN) $(EE_BIN_PKD) > /dev/null
 
-# mpgs: src/vu1/draw_3D_colors.vsm src/vu1/draw_3D_colors_scissor.vsm src/vu1/draw_3D_lights.vsm src/vu1/draw_3D_lights_scissor.vsm src/vu1/draw_3D_spec.vsm src/vu1/draw_3D_spec_scissor.vsm
+# mpgs: src/vu1/draw_3D_colors_scissor.vsm src/vu1/draw_3D_lights_scissor.vsm src/vu1/draw_3D_spec_scissor.vsm
 
 debug: $(DIR_GUARD) $(EXT_LIBS) $(EE_OBJS) 
 	$(MAKE) -f Makefile.dl KEYBOARD=$(DYNAMIC_KEYBOARD)
