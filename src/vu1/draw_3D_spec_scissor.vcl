@@ -22,30 +22,7 @@
 .init_vf_all
 .init_vi_all
 
-
-STACK_OFFSET        .assign  1023        ; (This was 1024 before, which was conflicting with the dummy XGKick...)
-
-SCREEN_SCALE        .assign  0
-RENDER_FLAGS        .assign  0
-
-SCREEN_MATRIX       .assign  1
-LIGHT_MATRIX        .assign  5
-
-CAMERA_POSITION     .assign  9
-NUM_DIR_LIGHTS      .assign  9
-
-LIGHT_DIRECTION_PTR .assign 10
-LIGHT_AMBIENT_PTR   .assign 14
-LIGHT_DIFFUSE_PTR   .assign 18
-LIGHT_SPECULAR_PTR  .assign 22
-
-CLIPFAN_OFFSET      .assign 26
-
-CLIP_WORK_BUF_0     .assign 61
-CLIP_WORK_BUF_1     .assign 101
-
-INBUF_SIZE          .assign 204         ; Max NbrVerts (51 * 4)
-DUMMY_XGKICK_BUF    .assign 1023
+.include "vu1/mem_layout.i"
 
 .include "vu1/vcl_sml.i"
 
