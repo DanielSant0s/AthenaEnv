@@ -1,9 +1,6 @@
 ; 2024 - Daniel Santos
 ; AthenaEnv Renderer
 ;
-; 
-;
-; 
 ;---------------------------------------------------------------
 ; draw_3D_lights.vcl                                           |
 ;---------------------------------------------------------------
@@ -23,8 +20,10 @@
 .init_vi_all
 
 .include "vu1/mem_layout.i"
-
+.include "vu1/athena_consts.i"
+.include "vu1/athena_macros.i"
 .include "vu1/vcl_sml.i"
+
 
 --enter
 --endenter
@@ -34,11 +33,7 @@
 
     lq scale, SCREEN_SCALE(vi00)
 
-    loi            2048.0
-    addi.xy        offset, vf00, i
-    add.zw          offset, vf00, vf00
-
-    add.xyz offset, scale, offset
+    AddScreenOffset scale
 
     ;/////////////////////////////////////////////
 
@@ -49,11 +44,7 @@
     ibgtz renderFlags, scissor_init
 
 cull_init:
-    loi 0.5
-    add.xy     clip_scale, vf00, i
-    loi 1.0
-    add.z      clip_scale,  vf00, i
-    mul.w      clip_scale, vf00, vf00
+    LoadCullScale 0.5
 
     ;//////////// --- Load data 2 --- /////////////
     ; Updated dynamically
@@ -101,7 +92,7 @@ culled_init:
         fcand		VI01,   0x3FFFF  
         iaddiu		iADC,   VI01,       0x7FFF 
 
-        isw.w		iADC,   2(destAddress)
+        isw.w		iADC,   XYZ2(destAddress)
         
         div         q,      vf00[w],    vertex[w]   ; perspective divide (1/vert[w]):
         mul.xyz     vertex, vertex,     q
@@ -127,9 +118,9 @@ culled_init:
 
 
         ;//////////// --- Store data --- ////////////
-        sq modStq,      0(destAddress)      ; STQ
-        sq intColor,    1(destAddress)      ; RGBA ; q is grabbed from stq
-        sq.xyz vertex,  2(destAddress)      ; XYZ2
+        sq modStq,      STQ(destAddress)      
+        sq intColor,    RGBA(destAddress)      ; q is grabbed from stq
+        sq.xyz vertex,  XYZ2(destAddress)     
         ;////////////////////////////////////////////
 
         iaddiu          vertexData,     vertexData,     1    
@@ -247,9 +238,9 @@ init:
 
 
         ;//////////// --- Store data --- ////////////
-        sq modStq,      0(outputAddress)      ; STQ
-        sq intColor,    1(outputAddress)      ; RGBA ; q is grabbed from stq
-        sq vertex,  2(outputAddress)      ; XYZ2
+        sq modStq,      STQ(outputAddress)      
+        sq intColor,    RGBA(outputAddress)     ; q is grabbed from stq
+        sq vertex,      XYZ2(outputAddress)     
         ;////////////////////////////////////////////
 
         ;=====================================================================================
@@ -780,13 +771,13 @@ init:
 ; add first element to end of the list for triangle fan
 ;--------------------------------------------------------------
 SAVE_LAST_LOOP:
-   VertexLoad           TempVertex, 2, ClipWorkBuf0
-   VectorLoad           TempColor,  1, ClipWorkBuf0
-   VectorLoad           TempSTQ,    0, ClipWorkBuf0
+   VertexLoad           TempVertex, XYZ2, ClipWorkBuf0
+   VectorLoad           TempColor,  RGBA, ClipWorkBuf0
+   VectorLoad           TempSTQ,    STQ,  ClipWorkBuf0
 
-   VertexSave           TempVertex, 2, ClipWorkBuf1
-   VectorSave           TempColor,  1, ClipWorkBuf1
-   VectorSave           TempSTQ,    0, ClipWorkBuf1
+   VertexSave           TempVertex, XYZ2, ClipWorkBuf1
+   VectorSave           TempColor,  RGBA, ClipWorkBuf1
+   VectorSave           TempSTQ,    STQ,  ClipWorkBuf1
    iaddiu               ClipWorkBuf1, ClipWorkBuf1, 3
 
    jr                   RetAddr2
