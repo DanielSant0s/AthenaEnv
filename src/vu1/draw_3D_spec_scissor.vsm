@@ -23,7 +23,7 @@ __v_src_vu1_draw_3D_spec_scissor_vcl_4:
          NOP                                                        lq            VF09,6(VI00)                        
          NOP                                                        lq            VF10,7(VI00)                        
          NOP                                                        lq            VF11,8(VI00)                        
-         NOP                                                        ilw.w         VI02,9(VI00)                        
+         NOP                                                        ilw.w         VI02,14(VI00)                       
          NOP                                                        lq.xyz        VF12,9(VI00)                        
          NOP                                                        iaddiu        VI03,VI00,0x0000000a                
          NOP                                                        iaddiu        VI04,VI00,0x0000000e                
@@ -153,7 +153,7 @@ init:
          max           VF09,VF00,VF00                               isubiu        VI12,VI00,2                         
 loop:
 ; _LNOPT_w=[ normal2 ] 19 [31 0] 32   [loop]
-         max           VF15,VF00,VF00                               lq            VF10,0(VI05)                        
+         NOP                                                        lq            VF10,0(VI05)                        
          mulax         ACC,VF01,VF10x                               lq            VF13,5(VI00)                               ;	STALL_LATENCY ?3
          madday        ACC,VF02,VF10y                               lq            VF14,0(VI06)                        
          maddaz        ACC,VF03,VF10z                               lq            VF17,6(VI00)                        
@@ -168,18 +168,18 @@ loop:
          mul.xyz       VF13,VF13,VF05                               div           Q,VF00w,VF14w                              ;	STALL_LATENCY ?1
          add.xyz       VF13,VF13,VF06                               NOP                                                      ;	STALL_LATENCY ?3
          NOP                                                        NOP                                               
-         NOP                                                        NOP                                               
+         max           VF15,VF00,VF00                               lq            VF11,0(VI07)                        
          mulq.xyz      VF14,VF14,Q                                  mfir.w        VF13,VI00                           
-         ftoi4.xy      VF13,VF13                                    lq            VF11,0(VI07)                        
-         ftoi0.z       VF13,VF13                                    iaddiu        VI01,VI00,0                         
+         ftoi4.xy      VF13,VF13                                    iaddiu        VI01,VI00,0                         
+         ftoi0.z       VF13,VF13                                    ilw.w         VI13,14(VI00)                       
 directionaLightsLoop:
-; _LNOPT_w=[ another ] 34 [88 27] 89   [directionaLightsLoop]
-         NOP                                                        iaddiu        VI13,VI00,0x0000000a                
-         NOP                                                        iadd          VI13,VI13,VI01                      
-         NOP                                                        lq.xyz        VF16,0(VI13)                        
-         NOP                                                        lq.xyz        VF18,9(VI00)                        
-         mul.xyz       VF17,VF14,VF16                               iaddiu        VI13,VI00,0x00000012                       ;	STALL_LATENCY ?2
-         add.xyz       VF16,VF16,VF18                               NOP                                               
+; _LNOPT_w=[ vuta1 ] 33 [88 27] 89   [directionaLightsLoop]
+         NOP                                                        iaddiu        VI14,VI00,0x0000000a                
+         NOP                                                        iadd          VI14,VI14,VI01                      
+         NOP                                                        lq.xyz        VF16,0(VI14)                        
+         NOP                                                        lq.xyz        VF19,9(VI00)                        
+         mul.xyz       VF17,VF14,VF16                               NOP                                                      ;	STALL_LATENCY ?2
+         add.xyz       VF16,VF16,VF19                               NOP                                               
          addy.x        VF17,VF17,VF17y                              NOP                                                      ;	STALL_LATENCY ?2
          NOP                                                        esadd         P,VF16                              
          addz.x        VF17,VF17,VF17z                              NOP                                                      ;	STALL_LATENCY ?2
@@ -193,18 +193,17 @@ directionaLightsLoop:
          addy.x        VF16,VF16,VF16y                              NOP                                                      ;	STALL_LATENCY ?3
          addz.x        VF16,VF16,VF16z                              NOP                                                      ;	STALL_LATENCY ?3
          maxx.x        VF16,VF16,VF00x                              iaddiu        VI14,VI00,0x0000000e                       ;	STALL_LATENCY ?3
-         NOP                                                        iadd          VI15,VI14,VI01                      
-         NOP                                                        lq.xyz        VF18,0(VI15)                        
-         mul.x         VF16,VF16,VF16                               NOP                                                      ;	STALL_LATENCY ?1
-         add.xyz       VF15,VF15,VF18                               iadd          VI14,VI13,VI01                             ;	STALL_LATENCY ?1
-         maxx.x        VF18,VF17,VF00x                              lq.xyz        VF17,0(VI14)                        
-         mul.x         VF16,VF16,VF16                               iaddiu        VI13,VI00,0x00000016                
+         NOP                                                        iadd          VI14,VI14,VI01                      
+         NOP                                                        lq.xyz        VF18,0(VI14)                        
+         mul.x         VF16,VF16,VF16                               iaddiu        VI14,VI00,0x00000012                       ;	STALL_LATENCY ?1
+         add.xyz       VF15,VF15,VF18                               iadd          VI15,VI14,VI01                             ;	STALL_LATENCY ?1
+         maxx.x        VF18,VF17,VF00x                              lq.xyz        VF17,0(VI15)                        
+         mul.x         VF16,VF16,VF16                               iaddiu        VI14,VI00,0x00000016                
          mulx.xyz      VF17,VF17,VF18x                              NOP                                                      ;	STALL_LATENCY ?2
          mul.x         VF16,VF16,VF16                               NOP                                               
-         add.xyz       VF15,VF15,VF17                               iadd          VI13,VI13,VI01                             ;	STALL_LATENCY ?2
-         mul.x         VF17,VF16,VF16                               lq.xyz        VF16,0(VI13)                        
-         NOP                                                        ilw.w         VI13,9(VI00)                        
-         mulx.xyz      VF16,VF16,VF17x                              iaddiu        VI01,VI01,0x00000001                       ;	STALL_LATENCY ?2
+         add.xyz       VF15,VF15,VF17                               iadd          VI14,VI14,VI01                             ;	STALL_LATENCY ?2
+         mul.x         VF17,VF16,VF16                               lq.xyz        VF16,0(VI14)                        
+         mulx.xyz      VF16,VF16,VF17x                              iaddiu        VI01,VI01,0x00000001                       ;	STALL_LATENCY ?3
          NOP                                                        NOP                                               
          NOP                                                        ibne          VI13,VI01,directionaLightsLoop      
          add.xyz       VF15,VF15,VF16                               NOP                                                      ;	STALL_LATENCY ?1
@@ -645,7 +644,7 @@ LOOP_ROT_END:
          add           VF16,VF16,VF15                               NOP                                               
 		.align 4
 VU1Draw3DLCSS_CodeEnd:
-;	iCount=528
+;	iCount=527
 ; register stats:
 ;  16 VU User integer
 ;  22 VU User floating point

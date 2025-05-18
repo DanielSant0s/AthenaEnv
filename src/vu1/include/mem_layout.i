@@ -7,10 +7,10 @@ SCREEN_MATRIX       .assign  1
 LIGHT_MATRIX        .assign  5
 
 CAMERA_POSITION     .assign  9 ; xyz
-NUM_DIR_LIGHTS      .assign  9 ; w
 
 LIGHT_DIRECTION_PTR .assign 10
-LIGHT_AMBIENT_PTR   .assign 14
+LIGHT_AMBIENT_PTR   .assign 14 ; xyz[4]
+NUM_DIR_LIGHTS      .assign 14 ; w[1]
 LIGHT_DIFFUSE_PTR   .assign 18
 LIGHT_SPECULAR_PTR  .assign 22
 

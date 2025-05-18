@@ -22,7 +22,7 @@ typedef struct {
 
 typedef struct {
 	VECTOR direction[4];
-	VECTOR ambient[4];
+	FIVECTOR ambient[4];
 	VECTOR diffuse[4];
 	VECTOR specular[4];
 } LightData;

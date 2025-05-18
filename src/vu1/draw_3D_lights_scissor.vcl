@@ -234,7 +234,7 @@ init:
         ;////////////////////////////////////////////
 
         ;//////////////// - NORMALS - /////////////////
-        MatrixLoad	LocalLight,     LIGHT_MATRIX, vi00     ; load local light matrix
+        MatrixLoad	LocalLight,     LIGHT_MATRIX, vi00     ; load local light matrix 
 
         MatrixMultiplyVertex	normal,    LocalLight, inNorm ; transform each normal by the matrix
         div         q,      vf00[w],    normal[w]   ; perspective divide (1/vert[w]):
@@ -244,8 +244,10 @@ init:
         move intensity, vf00
 
         iadd  currDirLight, vi00, vi00
+
+        ilw.w       dirLightQnt,    NUM_DIR_LIGHTS(vi00) ; load active directional lights
+
         directionaLightsLoop:
-            ilw.w       dirLightQnt,    NUM_DIR_LIGHTS(vi00) ; load active directional lights
             iaddiu      lightDirs,      vi00,    LIGHT_DIRECTION_PTR      
             iaddiu      lightAmbs,      vi00,    LIGHT_AMBIENT_PTR  
             iaddiu      lightDiffs,     vi00,    LIGHT_DIFFUSE_PTR      

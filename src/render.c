@@ -59,9 +59,11 @@ static int active_dir_lights = 0;
 static LightData dir_lights;
 
 int NewLight() {
-	if (active_dir_lights < 4)
+	if (active_dir_lights < 4) {
+		dir_lights.ambient[0].w = active_dir_lights+1;
 		return active_dir_lights++;
-
+	}
+		
 	return -1;
 }
  
@@ -76,9 +78,9 @@ void SetLightAttribute(int id, float x, float y, float z, int attr) {
 			dir_lights.direction[id][2] = z;
 			break;
 		case ATHENA_LIGHT_AMBIENT:
-			dir_lights.ambient[id][0] = x;
-			dir_lights.ambient[id][1] = y;
-			dir_lights.ambient[id][2] = z;
+			dir_lights.ambient[id].x = x;
+			dir_lights.ambient[id].y = y;
+			dir_lights.ambient[id].z = z;
 			break;
 		case ATHENA_LIGHT_DIFFUSE:
 			dir_lights.diffuse[id][0] = x;
@@ -338,12 +340,7 @@ void draw_vu1_with_lights(athena_object_data *obj) {
 		unpack_list_append(packet, obj->local_screen,       4);
 		unpack_list_append(packet, obj->local_light,        4);
 
-		static FIVECTOR camera_pos_light_qt; // xyz for camera position and w for directional light quantity
-
-		memcpy(&camera_pos_light_qt, getCameraPosition(), sizeof(FIVECTOR));
-		camera_pos_light_qt.w = active_dir_lights;
-
-		unpack_list_append(packet, &camera_pos_light_qt, 1);
+		unpack_list_append(packet, getCameraPosition(), 1);
 		unpack_list_append(packet, &dir_lights,        16);
 	}
 	unpack_list_close(packet);
@@ -482,12 +479,7 @@ void draw_vu1_with_spec_lights(athena_object_data *obj) {
 		unpack_list_append(packet, obj->local_screen,       4);
 		unpack_list_append(packet, obj->local_light,        4);
 
-		static FIVECTOR camera_pos_light_qt; // xyz for camera position and w for directional light quantity
-
-		memcpy(&camera_pos_light_qt, getCameraPosition(), sizeof(FIVECTOR));
-		camera_pos_light_qt.w = active_dir_lights;
-
-		unpack_list_append(packet, &camera_pos_light_qt, 1);
+		unpack_list_append(packet, getCameraPosition(), 1);
 		unpack_list_append(packet, &dir_lights,         16);
 	}
 	unpack_list_close(packet);

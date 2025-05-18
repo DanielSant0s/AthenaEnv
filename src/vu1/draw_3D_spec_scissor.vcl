@@ -278,8 +278,9 @@ init:
         move intensity, vf00
 
         iadd  currDirLight, vi00, vi00
+        ilw.w       dirLightQnt,    NUM_DIR_LIGHTS(vi00) ; load active directional lights 
         directionaLightsLoop:
-            ilw.w       dirLightQnt,    NUM_DIR_LIGHTS(vi00) ; load active directional lights
+            
             lq.xyz      CamPos,         CAMERA_POSITION(vi00) ; load program params
             iaddiu      lightDirs,      vi00,    LIGHT_DIRECTION_PTR      
             iaddiu      lightAmbs,      vi00,    LIGHT_AMBIENT_PTR  
