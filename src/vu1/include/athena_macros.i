@@ -20,11 +20,11 @@
 ;//--------------------------------------------------------------------
 ;// LoadCullScale
 ;//--------------------------------------------------------------------
-   .macro   LoadCullScale scale
+   .macro   LoadCullScale ret_scale, scale
    loi \scale
-   add.xy     clip_scale, vf00, i
+   add.xy     \ret_scale, vf00, i
    loi 1.0
-   add.z      clip_scale,  vf00, i
-   mul.w      clip_scale, vf00, vf00
+   add.z      \ret_scale,  vf00, i
+   mul.w      \ret_scale, vf00, vf00
    .endm
 
