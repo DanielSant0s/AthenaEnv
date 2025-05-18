@@ -1,13 +1,13 @@
 STACK_OFFSET        .assign  1023        ; (This was 1024 before, which was conflicting with the dummy XGKick...)
 
-SCREEN_SCALE        .assign  0
-RENDER_FLAGS        .assign  0
+SCREEN_SCALE        .assign  0 ; xyz
+RENDER_FLAGS        .assign  0 ; w
 
 SCREEN_MATRIX       .assign  1
 LIGHT_MATRIX        .assign  5
 
-CAMERA_POSITION     .assign  9
-NUM_DIR_LIGHTS      .assign  9
+CAMERA_POSITION     .assign  9 ; xyz
+NUM_DIR_LIGHTS      .assign  9 ; w
 
 LIGHT_DIRECTION_PTR .assign 10
 LIGHT_AMBIENT_PTR   .assign 14

@@ -106,7 +106,7 @@ culled_init:
 
 
         ;//////////// --- Store data --- ////////////
-        sq modStq,      STQ(destAddress)      
+        sq.xyz modStq,      STQ(destAddress)      
         sq intColor,    RGBA(destAddress)      ; q is grabbed from stq
         sq.xyz vertex,  XYZ2(destAddress)     
         ;////////////////////////////////////////////
@@ -194,7 +194,7 @@ init:
 
 
         ;//////////// --- Store data --- ////////////
-        sq modStq,      STQ(outputAddress)      
+        sq.xyz modStq,      STQ(outputAddress)      
         sq intColor,    RGBA(outputAddress)     ; q is grabbed from stq
         sq vertex,      XYZ2(outputAddress)     
         ;////////////////////////////////////////////

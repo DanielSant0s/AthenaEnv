@@ -113,8 +113,8 @@ culled_init:
         div         q,      vf00[w],    normal[w]   ; perspective divide (1/vert[w]):
         mul.xyz     normal, normal,     q
         
-        add light, vf00, vf00
-        add intensity, vf00, vf00
+        move light, vf00
+        move intensity, vf00
 
         iadd  currDirLight, vi00, vi00
         culled_directionaLightsLoop:
@@ -122,7 +122,7 @@ culled_init:
             lq LightAmbient, 0(currLightPtr)
 
             ; Ambient lighting
-            add light, light, LightAmbient
+            add.xyz light, light, LightAmbient
 
             iadd  currLightPtr, lightDirs, currDirLight
             lq LightDirection, 0(currLightPtr)
@@ -136,7 +136,7 @@ culled_init:
             lq LightDiffuse, 0(currLightPtr)
 
             mul diffuse, LightDiffuse, intensity[x]
-            add light, light, diffuse
+            add.xyz light, light, diffuse
 
             iaddiu   currDirLight,  currDirLight,  1; increment the loop counter 
             ibne    dirLightQnt,  currDirLight,  culled_directionaLightsLoop	; and repeat if needed
@@ -152,7 +152,7 @@ culled_init:
 
 
         ;//////////// --- Store data --- ////////////
-        sq modStq,      STQ(destAddress)     
+        sq.xyz modStq,      STQ(destAddress)     
         sq intColor,    RGBA(destAddress)     ; q is grabbed from stq
         sq.xyz vertex,  XYZ2(destAddress)    
         ;////////////////////////////////////////////
@@ -240,8 +240,8 @@ init:
         div         q,      vf00[w],    normal[w]   ; perspective divide (1/vert[w]):
         mul.xyz     normal, normal,     q
         
-        add light, vf00, vf00
-        add intensity, vf00, vf00
+        move light, vf00
+        move intensity, vf00
 
         iadd  currDirLight, vi00, vi00
         directionaLightsLoop:
@@ -254,7 +254,7 @@ init:
             lq LightAmbient, 0(currLightPtr)
 
             ; Ambient lighting
-            add light, light, LightAmbient
+            add.xyz light, light, LightAmbient
 
             iadd  currLightPtr, lightDirs, currDirLight
             lq LightDirection, 0(currLightPtr)
@@ -268,7 +268,7 @@ init:
             lq LightDiffuse, 0(currLightPtr)
 
             mul diffuse, LightDiffuse, intensity[x]
-            add light, light, diffuse
+            add.xyz light, light, diffuse
 
             iaddiu   currDirLight,  currDirLight,  1; increment the loop counter 
             ibne    dirLightQnt,  currDirLight,  directionaLightsLoop	; and repeat if needed
@@ -283,7 +283,7 @@ init:
 
 
         ;//////////// --- Store data --- ////////////
-        sq modStq,      STQ(outputAddress)       
+        sq.xyz modStq,      STQ(outputAddress)       
         sq intColor,    RGBA(outputAddress)      ; q is grabbed from stq
         sq vertex,      XYZ2(outputAddress)      
         ;////////////////////////////////////////////

@@ -74,25 +74,21 @@ void SetLightAttribute(int id, float x, float y, float z, int attr) {
 			dir_lights.direction[id][0] = x;
 			dir_lights.direction[id][1] = y;
 			dir_lights.direction[id][2] = z;
-			dir_lights.direction[id][3] = 1.00f;
 			break;
 		case ATHENA_LIGHT_AMBIENT:
 			dir_lights.ambient[id][0] = x;
 			dir_lights.ambient[id][1] = y;
 			dir_lights.ambient[id][2] = z;
-			dir_lights.ambient[id][3] = 1.00f;
 			break;
 		case ATHENA_LIGHT_DIFFUSE:
 			dir_lights.diffuse[id][0] = x;
 			dir_lights.diffuse[id][1] = y;
 			dir_lights.diffuse[id][2] = z;
-			dir_lights.diffuse[id][3] = 1.00f;
 			break;
 		case ATHENA_LIGHT_SPECULAR:
 			dir_lights.specular[id][0] = x;
 			dir_lights.specular[id][1] = y;
 			dir_lights.specular[id][2] = z;
-			dir_lights.specular[id][3] = 1.00f;
 			break;
 	}
 }

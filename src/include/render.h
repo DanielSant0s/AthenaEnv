@@ -14,6 +14,13 @@ typedef struct {
 } FIVECTOR;
 
 typedef struct {
+	float    x;
+	float    y;
+	float    z;
+	uint32_t w;
+} VUVECTOR;
+
+typedef struct {
 	VECTOR direction[4];
 	VECTOR ambient[4];
 	VECTOR diffuse[4];
