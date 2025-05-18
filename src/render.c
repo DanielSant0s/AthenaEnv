@@ -193,7 +193,6 @@ void draw_vu1_with_colors(athena_object_data *obj) {
 	
 	gsGlobal->PrimAAEnable = GS_SETTING_ON;
 
-
 	create_local_world(local_world, obj->position, obj->rotation);
 	create_local_screen(obj->local_screen, local_world, world_view, view_screen);
 
@@ -317,11 +316,10 @@ void draw_vu1_with_lights(athena_object_data *obj) {
   	// Create the local_world matrix.
   	matrix_unit(local_world);
   	matrix_rotate(local_world, local_world, obj->rotation);
-  	matrix_translate(local_world, local_world, obj->position);
 
-  	// Create the local_light matrix.
-  	matrix_unit(obj->local_light);
-  	matrix_rotate(obj->local_light, obj->local_light, obj->rotation);
+	matrix_copy(obj->local_light, local_world);
+
+  	matrix_translate(local_world, local_world, obj->position);
 
   	// Create the local_screen matrix.
   	matrix_unit(obj->local_screen);
@@ -460,11 +458,10 @@ void draw_vu1_with_spec_lights(athena_object_data *obj) {
   	// Create the local_world matrix.
   	matrix_unit(local_world);
   	matrix_rotate(local_world, local_world, obj->rotation);
-  	matrix_translate(local_world, local_world, obj->position);
 
-  	// Create the local_light matrix.
-  	matrix_unit(obj->local_light);
-  	matrix_rotate(obj->local_light, obj->local_light, obj->rotation);
+	matrix_copy(obj->local_light, local_world);
+
+  	matrix_translate(local_world, local_world, obj->position);
 
   	// Create the local_screen matrix.
   	matrix_unit(obj->local_screen);
