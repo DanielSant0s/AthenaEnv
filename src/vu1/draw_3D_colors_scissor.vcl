@@ -1,17 +1,5 @@
 ; 2024 - Daniel Santos
 ; AthenaEnv Renderer
-;
-;---------------------------------------------------------------
-; draw_3D_lights.vcl                                           |
-;---------------------------------------------------------------
-; A VU1 microprogram to draw 3D object using XYZ2, RGBAQ and ST|
-; This program uses double buffering (xtop)                    |
-;                                                              |
-; Many thanks to:                                              |
-; - Dr Henry Fortuna                                           |
-; - Jesper Svennevid, Daniel Collin                            |
-; - Guilherme Lampert                                          |
-;---------------------------------------------------------------
 
 .syntax new
 .name VU1Draw3DCS
