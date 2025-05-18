@@ -28,3 +28,15 @@
    mul.w      \ret_scale, vf00, vf00
    .endm
 
+;//--------------------------------------------------------------------
+;// VectorNormalizeClamp - Clamp vector to a [0.0, 1.0]
+;//
+;// Note:
+;//--------------------------------------------------------------------
+
+   .macro   VectorNormalizeClamp output, input
+   max            Vector1111,  vf00,        vf00[w]
+   sub            Vector0000,  vf00, vf00
+   maxx.xyzw      \output, \input,  Vector0000              ;//
+   minix.xyzw     \output, \output, Vector1111              ;//
+   .endm

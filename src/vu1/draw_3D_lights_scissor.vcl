@@ -144,7 +144,7 @@ culled_init:
         add.xyzw   color, matDiffuse, inColor
         mul    color, color,      light       ; color = color * light
 
-        VectorClamp color, color 0.0 1.0
+        VectorNormalizeClamp color, color
         loi 128.0
         mul color, color, i                        ; normalize RGBA
         ColorFPtoGsRGBAQ intColor, color           ; convert to int
@@ -275,7 +275,7 @@ init:
 
         add.xyzw   color, matDiffuse, inColor
         mul    color, color,      light       ; color = color * light
-        VectorClamp color, color 0.0 1.0
+        VectorNormalizeClamp color, color
         loi 128.0
         mul color, color, i                        ; normalize RGBA
         ColorFPtoGsRGBAQ intColor, color           ; convert to int

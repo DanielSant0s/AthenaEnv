@@ -12,6 +12,20 @@
 .include "vu1/include/athena_macros.i"
 .include "vu1/include/vcl_sml.i"
 
+.macro SpecularPowerScale 
+    add specAngle, vf00, vf00
+    VectorDotProduct specAngle, normal, halfDir
+    maxx		specAngle, specAngle, vf00			; Clamp to > 0
+    mul  		specAngle, specAngle, specAngle	; Square it
+    mul  		specAngle, specAngle, specAngle	; 4th power
+    mul  		specAngle, specAngle, specAngle	; 8th power
+    mul  		specAngle, specAngle, specAngle	; 16th power
+    ;mul 		specAngle, specAngle, specAngle	; 32nd power
+    ;mul 		specAngle, specAngle, specAngle	; 64nd power
+    mul         specAngle, LightSpecular, specAngle[x]
+    add         light, light, specAngle 
+.endm
+
 --enter
 --endenter
     ;//////////// --- Load data 1 --- /////////////
@@ -156,17 +170,7 @@ culled_init:
             iadd  currLightPtr, lightSpecs, currDirLight
             lq LightSpecular, 0(currLightPtr)
 
-            add specAngle, vf00, vf00
-            VectorDotProduct specAngle, normal, halfDir
-            maxx		specAngle, specAngle, vf00			; Clamp to > 0
-            mul  		specAngle, specAngle, specAngle	; Square it
-	        mul  		specAngle, specAngle, specAngle	; 4th power
-	        mul  		specAngle, specAngle, specAngle	; 8th power
-	        mul  		specAngle, specAngle, specAngle	; 16th power
-	        ;mul 		specAngle, specAngle, specAngle	; 32nd power
-            ;mul 		specAngle, specAngle, specAngle	; 64nd power
-            mul         specAngle, LightSpecular, specAngle[x]
-            add         light, light, specAngle 
+            SpecularPowerScale
 
             iaddiu   currDirLight,  currDirLight,  1; increment the loop counter 
             ibne    dirLightQnt,  currDirLight,  culled_directionaLightsLoop	; and repeat if needed
@@ -174,7 +178,7 @@ culled_init:
         add.xyzw   color, matDiffuse, inColor
         mul    color, color,      light       ; color = color * light
 
-        VectorClamp color, color 0.0 1.0
+        VectorNormalizeClamp color, color
         loi 128.0
         mul color, color, i                     ; normalize RGBA
         ColorFPtoGsRGBAQ intColor, color           ; convert to int
@@ -317,17 +321,7 @@ init:
             iadd  currLightPtr, lightSpecs, currDirLight
             lq LightSpecular, 0(currLightPtr)
 
-            add specAngle, vf00, vf00
-            VectorDotProduct specAngle, normal, halfDir
-            maxx		specAngle, specAngle, vf00			; Clamp to > 0
-            mul  		specAngle, specAngle, specAngle	; Square it
-	        mul  		specAngle, specAngle, specAngle	; 4th power
-	        mul  		specAngle, specAngle, specAngle	; 8th power
-	        mul  		specAngle, specAngle, specAngle	; 16th power
-	        ;mul 		specAngle, specAngle, specAngle	; 32nd power
-            ;mul 		specAngle, specAngle, specAngle	; 64nd power
-            mul         specAngle, LightSpecular, specAngle[x]
-            add         light, light, specAngle 
+            SpecularPowerScale
 
             iaddiu   currDirLight,  currDirLight,  1; increment the loop counter 
             ibne    dirLightQnt,  currDirLight,  directionaLightsLoop	; and repeat if needed
@@ -335,7 +329,7 @@ init:
         add.xyzw   color, matDiffuse, inColor
         mul    color, color,      light       ; color = color * light
 
-        VectorClamp color, color 0.0 1.0
+        VectorNormalizeClamp color, color
         loi 128.0
         mul color, color, i                        ; normalize RGBA
         ColorFPtoGsRGBAQ intColor, color           ; convert to int
