@@ -41,8 +41,8 @@
 	fcset   0x000000	; VCL won't let us use CLIP without first zeroing
 				; the clip flags
 
-    ilw.w       renderFlags,    RENDER_FLAGS(vi00)
-    ibgtz renderFlags, scissor_init
+    ilw.y       accurateClipping,    CLIPFAN_OFFSET(vi00)
+    ibne vi00, accurateClipping, scissor_init
 
 cull_init:
     LoadCullScale clip_scale, 0.5

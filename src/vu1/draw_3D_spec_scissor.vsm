@@ -10,11 +10,11 @@ __v_src_vu1_draw_3D_spec_scissor_vcl_4:
          NOP                                                        lq.xyz        VF05,0(VI00)                        
          max.z         VF01,VF00,VF00                               loi           0x45000000                          
          addi.xy       VF01,VF00,I                                  lq            VF04,4(VI00)                        
-         NOP                                                        ilw.w         VI01,0(VI00)                        
+         NOP                                                        ilw.y         VI01,26(VI00)                       
          NOP                                                        lq            VF03,3(VI00)                        
          NOP                                                        lq            VF02,2(VI00)                        
          add.xyz       VF06,VF05,VF01                               lq            VF01,1(VI00)                        
-         NOP                                                        ibgtz         VI01,scissor_init                   
+         NOP                                                        ibne          VI00,VI01,scissor_init              
          NOP                                                        fcset         0                                   
 ; _LNOPT_w=[ normal2 ] 12 [12 0] 12   [cull_init]
          NOP                                                        loi           0x3f000000                          
