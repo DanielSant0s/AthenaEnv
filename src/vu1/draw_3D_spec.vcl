@@ -32,6 +32,9 @@
     ; Updated once per mesh
     MatrixLoad	ObjectToScreen, SCREEN_MATRIX, vi00 ; load view-projection matrix
 
+    iaddiu z_sign_mask, vi00, 0x20
+    lq.w           bfc_multiplier, CLIPFAN_OFFSET(vi00)
+
     lq scale, SCREEN_SCALE(vi00)
 
     AddScreenOffset scale
@@ -42,7 +45,7 @@
 				; the clip flags
 
     ilw.y       accurateClipping,    CLIPFAN_OFFSET(vi00)
-    ibne vi00, accurateClipping, scissor_init
+    ibne vi00,  accurateClipping, scissor_init
 
 cull_init:
     LoadCullScale clip_scale, 0.5
@@ -259,10 +262,17 @@ init:
 
         ;////////////// --- Vertex --- //////////////
         MatrixMultiplyVertex	vertex, ObjectToScreen, inVert ; transform each vertex by the matrix
+        move formVertex, vertex
+         
         VertexPersCorrST vertex, modStq, vertex, stq
 
         mul.xyz    vertex, vertex,     scale
         add.xyz    vertex, vertex,     offset
+
+        move vertex1, vertex2
+        move vertex2, vertex3       
+
+        move vertex3, vertex 
 
         VertexFpToGsXYZ2  vertex,vertex
         ;////////////////////////////////////////////

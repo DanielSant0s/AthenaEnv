@@ -10,7 +10,7 @@
 .include "vu1/include/mem_layout.i"
 .include "vu1/include/athena_consts.i"
 .include "vu1/include/athena_macros.i"
-.include "vu1/include/vcl_sml.i"
+.include "vu1/include/vcl_sml.i"  
 
 --enter
 --endenter
@@ -18,7 +18,11 @@
     ; Updated once per mesh
     MatrixLoad	ObjectToScreen, SCREEN_MATRIX, vi00 ; load view-projection matrix
 
-    lq scale, SCREEN_SCALE(vi00)
+    ;ilw.w          z_sign_mask, CLIPFAN_OFFSET(vi00)
+    iaddiu z_sign_mask, vi00, 0x20
+    lq.w           bfc_multiplier, CLIPFAN_OFFSET(vi00) 
+
+    lq scale, SCREEN_SCALE(vi00) 
 
     AddScreenOffset scale
 
@@ -28,7 +32,7 @@
 				; the clip flags
 
     ilw.y       accurateClipping,    CLIPFAN_OFFSET(vi00)
-    ibne vi00, accurateClipping, scissor_init
+    ibne vi00,  accurateClipping, scissor_init
 
 cull_init:
     LoadCullScale clip_scale, 0.5
@@ -204,7 +208,7 @@ init:
     iaddiu               Mask, vertCount, 0x7fff
     iaddiu               Mask, Mask, 0x01
     isw.x                Mask, 0(kickAddress)
-    ;////////////////////////////////////////////
+    ;//////////////////////////////////////////// 
 
     iaddiu    outputAddress,    kickAddress,  1       ; helper pointer for data inserting
 
@@ -224,14 +228,20 @@ init:
 
         ;////////////// --- Vertex --- //////////////
         MatrixMultiplyVertex	vertex, ObjectToScreen, inVert ; transform each vertex by the matrix
+        move formVertex, vertex
         
-        VertexPersCorrST vertex, modStq, vertex, stq
-
+        VertexPersCorrST vertex, modStq, vertex, stq 
+ 
         mul.xyz    vertex, vertex,     scale
         add.xyz    vertex, vertex,     offset
 
+        move vertex1, vertex2
+        move vertex2, vertex3       
+
+        move vertex3, vertex
+
         VertexFpToGsXYZ2  vertex,vertex
-        ;////////////////////////////////////////////
+        ;//////////////////////////////////////////// 
 
         ;//////////////// - NORMALS - /////////////////
         MatrixLoad	LocalLight,     LIGHT_MATRIX, vi00     ; load local light matrix 
@@ -239,7 +249,7 @@ init:
         MatrixMultiplyVertex	normal,    LocalLight, inNorm ; transform each normal by the matrix
         div         q,      vf00[w],    normal[w]   ; perspective divide (1/vert[w]):
         mul.xyz     normal, normal,     q
-        
+    
         move light, vf00 
         move intensity, vf00
 
@@ -298,7 +308,7 @@ init:
         iaddiu          colorData,      colorData,      1
 
         iaddiu          outputAddress,  outputAddress,  3
-
+ 
         iaddi   vertCount,  vertCount,  -1	; decrement the loop counter 
         ibne    vertCount,  vi00,   loop	; and repeat if needed
 

@@ -1094,10 +1094,11 @@ typedef struct JSCFunctionListEntry {
 #define JS_DEF_PROP_STRING    3
 #define JS_DEF_PROP_INT32     4
 #define JS_DEF_PROP_INT64     5
-#define JS_DEF_PROP_DOUBLE    6
-#define JS_DEF_PROP_UNDEFINED 7
-#define JS_DEF_OBJECT         8
-#define JS_DEF_ALIAS          9
+#define JS_DEF_PROP_FLOAT     6
+#define JS_DEF_PROP_DOUBLE    7
+#define JS_DEF_PROP_UNDEFINED 8
+#define JS_DEF_OBJECT         9
+#define JS_DEF_ALIAS          10
 
 /* Note: c++ does not like nested designators */
 #define JS_CFUNC_DEF(name, length, func1) { name, JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE, JS_DEF_CFUNC, 0, .u = { .func = { length, JS_CFUNC_generic, { .generic = func1 } } } }
@@ -1109,6 +1110,7 @@ typedef struct JSCFunctionListEntry {
 #define JS_PROP_STRING_DEF(name, cstr, prop_flags) { name, prop_flags, JS_DEF_PROP_STRING, 0, .u = { .str = cstr } }
 #define JS_PROP_INT32_DEF(name, val, prop_flags) { name, prop_flags, JS_DEF_PROP_INT32, 0, .u = { .i32 = val } }
 #define JS_PROP_INT64_DEF(name, val, prop_flags) { name, prop_flags, JS_DEF_PROP_INT64, 0, .u = { .i64 = val } }
+#define JS_PROP_FLOAT_DEF(name, val, prop_flags) { name, prop_flags, JS_DEF_PROP_FLOAT, 0, .u = { .f32 = val } }
 #define JS_PROP_DOUBLE_DEF(name, val, prop_flags) { name, prop_flags, JS_DEF_PROP_DOUBLE, 0, .u = { .f64 = val } }
 #define JS_PROP_UNDEFINED_DEF(name, prop_flags) { name, prop_flags, JS_DEF_PROP_UNDEFINED, 0, .u = { .i32 = 0 } }
 #define JS_OBJECT_DEF(name, tab, len, prop_flags) { name, prop_flags, JS_DEF_OBJECT, 0, .u = { .prop_list = { tab, len } } }

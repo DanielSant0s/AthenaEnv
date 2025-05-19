@@ -27,6 +27,10 @@ typedef struct {
 	VECTOR specular[4];
 } LightData;
 
+#define CULL_FACE_NONE 0.0f
+#define CULL_FACE_FRONT -1.0f
+#define CULL_FACE_BACK 1.0f
+
 typedef enum {
 	ATHENA_LIGHT_DIRECTION,
 	ATHENA_LIGHT_AMBIENT,
@@ -48,7 +52,7 @@ typedef enum {
 
 typedef struct {
 	int accurate_clipping; 
-	int backface_culling; 
+	float face_culling; 
 	int texture_mapping;
 	int shade_model; // 0 = flat, 1 = gouraud
 } RenderAttributes;

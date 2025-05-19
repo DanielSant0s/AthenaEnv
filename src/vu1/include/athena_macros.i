@@ -40,3 +40,21 @@
    maxx.xyzw      \output, \input,  Vector0000              ;//
    minix.xyzw     \output, \output, Vector1111              ;//
    .endm
+
+;//--------------------------------------------------------------------
+;// BackfaceCull
+;//--------------------------------------------------------------------
+
+   .macro BackfaceCull v1, v2, v3
+   ; this screen triangle's normal
+   sub.xyz        delta_1\@, \v1, \v2
+   sub.xyz        delta_2\@, \v3, \v2
+
+   ; bfc_multiplier is 1 to cull back-facing polys, -1 for front
+   mulw.xyz       delta_1\@, delta_1\@, bfc_multiplier
+   opmula.xyz     acc, delta_1\@, delta_2\@
+   opmsub.xyz     bfc_normal\@, delta_2\@, delta_1\@
+
+   ; get sign of normal
+   fmand          z_sign, z_sign_mask
+   .endm

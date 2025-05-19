@@ -296,6 +296,7 @@ void draw_vu1_with_colors(athena_object_data *obj) {
 			data->materials[data->material_indices[i].index].prim_tag.dword[1] = DRAW_STQ2_REGLIST;
 			data->materials[data->material_indices[i].index].prim_tag.dword[0] = prim_tag.raw;
 
+			data->materials[data->material_indices[i].index].clip_prim_tag.f[3] = data->attributes.face_culling;
 			data->materials[data->material_indices[i].index].clip_prim_tag.sword[2] = data->tristrip;
 			data->materials[data->material_indices[i].index].clip_prim_tag.sword[1] = data->attributes.accurate_clipping? (clip_tag.raw >> 32) : 0;
 
@@ -469,6 +470,7 @@ void draw_vu1_with_lights(athena_object_data *obj) {
 			data->materials[data->material_indices[i].index].prim_tag.dword[1] = DRAW_STQ2_REGLIST;
 			data->materials[data->material_indices[i].index].prim_tag.dword[0] = prim_tag.raw;
 
+			data->materials[data->material_indices[i].index].clip_prim_tag.f[3] = data->attributes.face_culling;
 			data->materials[data->material_indices[i].index].clip_prim_tag.sword[2] = data->tristrip;
 			data->materials[data->material_indices[i].index].clip_prim_tag.sword[1] = (data->attributes.accurate_clipping? (clip_tag.raw >> 32) : 0);
 
@@ -643,6 +645,7 @@ void draw_vu1_with_spec_lights(athena_object_data *obj) {
 			data->materials[data->material_indices[i].index].prim_tag.dword[1] = DRAW_STQ2_REGLIST;
 			data->materials[data->material_indices[i].index].prim_tag.dword[0] = prim_tag.raw;
 
+			data->materials[data->material_indices[i].index].clip_prim_tag.f[3] = data->attributes.face_culling;
 			data->materials[data->material_indices[i].index].clip_prim_tag.sword[2] = data->tristrip;
 			data->materials[data->material_indices[i].index].clip_prim_tag.sword[1] = data->attributes.accurate_clipping? (clip_tag.raw >> 32) : 0;
 

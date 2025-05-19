@@ -213,7 +213,7 @@ register_3d_render_data:
     obj = JS_NewObjectProtoClass(ctx, proto, js_render_data_class_id);
 
 	ro->m.attributes.accurate_clipping = 1;
-	ro->m.attributes.backface_culling = 0;
+	ro->m.attributes.face_culling = CULL_FACE_BACK;
 	ro->m.attributes.texture_mapping = 1;
 	ro->m.attributes.shade_model = 1;
 
@@ -415,7 +415,7 @@ static JSValue js_render_data_get(JSContext *ctx, JSValueConst this_val, int mag
 		case 3:
 			return JS_NewBool(ctx,   ro->m.attributes.accurate_clipping);
 		case 4:
-			return JS_NewBool(ctx,   ro->m.attributes.backface_culling);
+			return JS_NewFloat32(ctx,   ro->m.attributes.face_culling);
 		case 5:
 			return JS_NewBool(ctx,   ro->m.attributes.texture_mapping);
 		case 6:
@@ -540,7 +540,7 @@ static JSValue js_render_data_set(JSContext *ctx, JSValueConst this_val, JSValue
 			ro->m.attributes.accurate_clipping = JS_ToBool(ctx, val);
 			break;
 		case 4:
-			ro->m.attributes.backface_culling = JS_ToBool(ctx, val);
+			JS_ToFloat32(ctx, &ro->m.attributes.face_culling, val);
 			break;
 		case 5:
 			ro->m.attributes.texture_mapping = JS_ToBool(ctx, val);
@@ -582,7 +582,7 @@ static const JSCFunctionListEntry js_render_data_proto_funcs[] = {
 	JS_CGETSET_MAGIC_DEF("materials",         js_render_data_get, js_render_data_set, 1),
 	JS_CGETSET_MAGIC_DEF("material_indices",  js_render_data_get, js_render_data_set, 2),
 	JS_CGETSET_MAGIC_DEF("accurate_clipping", js_render_data_get, js_render_data_set, 3),
-	JS_CGETSET_MAGIC_DEF("backface_culling",  js_render_data_get, js_render_data_set, 4),
+	JS_CGETSET_MAGIC_DEF("face_culling",      js_render_data_get, js_render_data_set, 4),
 	JS_CGETSET_MAGIC_DEF("texture_mapping",   js_render_data_get, js_render_data_set, 5),
 	JS_CGETSET_MAGIC_DEF("shade_model",       js_render_data_get, js_render_data_set, 6),
 	JS_CGETSET_MAGIC_DEF("size",              js_render_data_get, js_render_data_set, 7),
@@ -812,6 +812,9 @@ static const JSCFunctionListEntry render_funcs[] = {
 	JS_PROP_INT32_DEF("PL_NO_LIGHTS",                       PL_NO_LIGHTS, JS_PROP_CONFIGURABLE),
 	JS_PROP_INT32_DEF("PL_DEFAULT",                           PL_DEFAULT, JS_PROP_CONFIGURABLE),
 	JS_PROP_INT32_DEF("PL_SPECULAR",                         PL_SPECULAR, JS_PROP_CONFIGURABLE),
+	JS_PROP_FLOAT_DEF("CULL_FACE_NONE",                   CULL_FACE_NONE, JS_PROP_CONFIGURABLE),
+	JS_PROP_FLOAT_DEF("CULL_FACE_BACK",                   CULL_FACE_BACK, JS_PROP_CONFIGURABLE),
+	JS_PROP_FLOAT_DEF("CULL_FACE_FRONT",                 CULL_FACE_FRONT, JS_PROP_CONFIGURABLE),
 };
 
 static int render_init(JSContext *ctx, JSModuleDef *m)

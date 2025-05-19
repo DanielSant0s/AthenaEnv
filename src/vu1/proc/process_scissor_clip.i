@@ -7,8 +7,8 @@
         ;=====================================================================================
         ; Apply the world to clip matrix to the vertex (push onto above stack)
         ;=====================================================================================
-        MatrixMultiplyVertex CSVertex3, ObjectToScreen, inVert
-
+        move CSVertex3, formVertex
+        
         ;=====================================================================================
         ; Perform clipping judgement on the the previous 3 vertices.  sets the clipping flags
         ;=====================================================================================
@@ -58,10 +58,14 @@
         ; If all 3 verts are inside (i.e., All clip results = 0), we don't need to perform
         ; scissoring.
         ;=====================================================================================
+        BackfaceCull         vertex1, vertex2, vertex3
+        mtir                 cull_face_toggle, bfc_multiplier[w]
+        ibne                 cull_face_toggle, vi00, triangle_outside
+        ibne                 z_sign, vi00, triangle_outside
+        
         iadd                 ClipFlag1, ClipFlag1, ClipFlag2
         iadd                 ClipFlag1, ClipFlag1, ClipFlag3
         iblez                ClipFlag1, after_scissoring
-
 
     cull_vertex:
         ;=====================================================================================

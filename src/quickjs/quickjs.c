@@ -36546,6 +36546,9 @@ static int JS_InstantiateFunctionListItem(JSContext *ctx, JSValueConst obj,
     case JS_DEF_PROP_INT64:
         val = JS_NewInt64(ctx, e->u.i64);
         break;
+    case JS_DEF_PROP_FLOAT:
+        val = custom_JS_NewFloat32(ctx, e->u.f32);
+        break;
     case JS_DEF_PROP_DOUBLE:
         val = __JS_NewFloat64(ctx, e->u.f64);
         break;
@@ -36609,6 +36612,9 @@ int JS_SetModuleExportList(JSContext *ctx, JSModuleDef *m,
             break;
         case JS_DEF_PROP_INT64:
             val = JS_NewInt64(ctx, e->u.i64);
+            break;
+        case JS_DEF_PROP_FLOAT:
+            val = custom_JS_NewFloat32(ctx, e->u.f32);
             break;
         case JS_DEF_PROP_DOUBLE:
             val = __JS_NewFloat64(ctx, e->u.f64);
