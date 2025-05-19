@@ -241,29 +241,65 @@ void draw_vu1_with_colors(athena_object_data *obj) {
 				count = idxs_to_draw;
 			}
 
-			data->materials[data->material_indices[i].index].clip_prim_tag.dword[1] = DRAW_STQ2_REGLIST;
-			data->materials[data->material_indices[i].index].clip_prim_tag.dword[0] = VU_GS_GIFTAG(data->tristrip? 5 : 11, 
-							                							1, NO_CUSTOM_DATA, 1, 
-																		VU_GS_PRIM(GS_PRIM_PRIM_TRIFAN, 
-																				   data->attributes.shade_model, texture_mapping, 
-																				   gsGlobal->PrimFogEnable, 
-																				   gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 0, 0, 0),
-    		    														0, 3);
-
-			owl_add_unpack_data(packet, 26, (void*)&data->materials[data->material_indices[i].index].clip_prim_tag, 1, 0);
-
-			data->materials[data->material_indices[i].index].prim_tag.dword[1] = DRAW_STQ2_REGLIST;
-			data->materials[data->material_indices[i].index].prim_tag.dword[0] = VU_GS_GIFTAG(0, 
-							                							1, NO_CUSTOM_DATA, 1, 
-																		VU_GS_PRIM(data->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE, 
-																				   data->attributes.shade_model, texture_mapping, 
-																				   gsGlobal->PrimFogEnable, 
-																				   gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 0, 0, 0),
-    		    														0, 3);
-
 			if (texture_mapping) {
 				append_texture_tags(packet, tex, texture_id, COLOR_MODULATE);
 			}
+
+			giftag_t clip_tag = {
+				.data = {
+					.NLOOP = 0,
+					.EOP = 1,
+					.PRE = 1,
+					.PRIM = (prim_reg_t) {
+						.data = { 
+							.PRIM = GS_PRIM_PRIM_TRIFAN,
+							.IIP = data->attributes.shade_model,
+							.TME = texture_mapping,
+							.FGE = gsGlobal->PrimFogEnable,
+							.ABE = gsGlobal->PrimAlphaEnable,
+							.AA1 = gsGlobal->PrimAAEnable,
+							.FST = 0,
+							.CTXT = 0,
+							.FIX = 0
+						}
+					}.raw,
+					.FLG = 0,
+					.NREG = 3
+
+				}
+			};
+
+			giftag_t prim_tag = {
+				.data = {
+					.NLOOP = 0,
+					.EOP = 1,
+					.PRE = 1,
+					.PRIM = (prim_reg_t) {
+						.data = { 
+							.PRIM = (data->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE),
+							.IIP = data->attributes.shade_model,
+							.TME = texture_mapping,
+							.FGE = gsGlobal->PrimFogEnable,
+							.ABE = gsGlobal->PrimAlphaEnable,
+							.AA1 = gsGlobal->PrimAAEnable,
+							.FST = 0,
+							.CTXT = 0,
+							.FIX = 0
+						}
+					}.raw,
+					.FLG = 0,
+					.NREG = 3
+
+				}
+			};
+
+			data->materials[data->material_indices[i].index].prim_tag.dword[1] = DRAW_STQ2_REGLIST;
+			data->materials[data->material_indices[i].index].prim_tag.dword[0] = prim_tag.raw;
+
+			data->materials[data->material_indices[i].index].clip_prim_tag.sword[2] = data->tristrip;
+			data->materials[data->material_indices[i].index].clip_prim_tag.sword[1] = clip_tag.raw >> 32;
+
+			owl_add_unpack_data(packet, 26, (void*)&data->materials[data->material_indices[i].index].clip_prim_tag, 1, 0);
 
 			unpack_list_open(packet, 0, true);
 			{
@@ -382,25 +418,61 @@ void draw_vu1_with_lights(athena_object_data *obj) {
 				append_texture_tags(packet, tex, texture_id, COLOR_MODULATE);
 			}
 
-			data->materials[data->material_indices[i].index].clip_prim_tag.dword[1] = DRAW_STQ2_REGLIST;
-			data->materials[data->material_indices[i].index].clip_prim_tag.dword[0] = VU_GS_GIFTAG(data->tristrip? 5 : 11, 
-							                							1, NO_CUSTOM_DATA, 1, 
-																		VU_GS_PRIM(GS_PRIM_PRIM_TRIFAN, 
-																				   data->attributes.shade_model, texture_mapping, 
-																				   gsGlobal->PrimFogEnable, 
-																				   gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 0, 0, 0),
-    		    														0, 3);
+			giftag_t clip_tag = {
+				.data = {
+					.NLOOP = 0,
+					.EOP = 1,
+					.PRE = 1,
+					.PRIM = (prim_reg_t) {
+						.data = { 
+							.PRIM = GS_PRIM_PRIM_TRIFAN,
+							.IIP = data->attributes.shade_model,
+							.TME = texture_mapping,
+							.FGE = gsGlobal->PrimFogEnable,
+							.ABE = gsGlobal->PrimAlphaEnable,
+							.AA1 = gsGlobal->PrimAAEnable,
+							.FST = 0,
+							.CTXT = 0,
+							.FIX = 0
+						}
+					}.raw,
+					.FLG = 0,
+					.NREG = 3
 
-			owl_add_unpack_data(packet, 26, (void*)&data->materials[data->material_indices[i].index].clip_prim_tag, 1, 0);
+				}
+			};
+
+			giftag_t prim_tag = {
+				.data = {
+					.NLOOP = 0,
+					.EOP = 1,
+					.PRE = 1,
+					.PRIM = (prim_reg_t) {
+						.data = { 
+							.PRIM = (data->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE),
+							.IIP = data->attributes.shade_model,
+							.TME = texture_mapping,
+							.FGE = gsGlobal->PrimFogEnable,
+							.ABE = gsGlobal->PrimAlphaEnable,
+							.AA1 = gsGlobal->PrimAAEnable,
+							.FST = 0,
+							.CTXT = 0,
+							.FIX = 0
+						}
+					}.raw,
+					.FLG = 0,
+					.NREG = 3
+
+				}
+			};
 
 			data->materials[data->material_indices[i].index].prim_tag.dword[1] = DRAW_STQ2_REGLIST;
-			data->materials[data->material_indices[i].index].prim_tag.dword[0] = VU_GS_GIFTAG(0, 
-							                							1, NO_CUSTOM_DATA, 1, 
-																		VU_GS_PRIM(data->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE, 
-																				   data->attributes.shade_model, texture_mapping, 
-																				   gsGlobal->PrimFogEnable, 
-																				   gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 0, 0, 0),
-    		    														0, 3);
+			data->materials[data->material_indices[i].index].prim_tag.dword[0] = prim_tag.raw;
+
+			data->materials[data->material_indices[i].index].clip_prim_tag.sword[2] = data->tristrip;
+			data->materials[data->material_indices[i].index].clip_prim_tag.sword[1] = clip_tag.raw >> 32;
+
+			owl_add_unpack_data(packet, 26, (void*)&data->materials[data->material_indices[i].index].clip_prim_tag, 1, 0);
 
 			unpack_list_open(packet, 0, true);
 			{
@@ -520,25 +592,61 @@ void draw_vu1_with_spec_lights(athena_object_data *obj) {
 				append_texture_tags(packet, tex, texture_id, COLOR_MODULATE);
 			}
 
-			data->materials[data->material_indices[i].index].clip_prim_tag.dword[1] = DRAW_STQ2_REGLIST;
-			data->materials[data->material_indices[i].index].clip_prim_tag.dword[0] = VU_GS_GIFTAG(data->tristrip? 5 : 11, 
-							                							1, NO_CUSTOM_DATA, 1, 
-																		VU_GS_PRIM(GS_PRIM_PRIM_TRIFAN, 
-																				   data->attributes.shade_model, texture_mapping, 
-																				   gsGlobal->PrimFogEnable, 
-																				   gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 0, 0, 0),
-    		    														0, 3);
+			giftag_t clip_tag = {
+				.data = {
+					.NLOOP = 0,
+					.EOP = 1,
+					.PRE = 1,
+					.PRIM = (prim_reg_t) {
+						.data = { 
+							.PRIM = GS_PRIM_PRIM_TRIFAN,
+							.IIP = data->attributes.shade_model,
+							.TME = texture_mapping,
+							.FGE = gsGlobal->PrimFogEnable,
+							.ABE = gsGlobal->PrimAlphaEnable,
+							.AA1 = gsGlobal->PrimAAEnable,
+							.FST = 0,
+							.CTXT = 0,
+							.FIX = 0
+						}
+					}.raw,
+					.FLG = 0,
+					.NREG = 3
 
-			owl_add_unpack_data(packet, 26, (void*)&data->materials[data->material_indices[i].index].clip_prim_tag, 1, 0);
+				}
+			};
+
+			giftag_t prim_tag = {
+				.data = {
+					.NLOOP = 0,
+					.EOP = 1,
+					.PRE = 1,
+					.PRIM = (prim_reg_t) {
+						.data = { 
+							.PRIM = (data->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE),
+							.IIP = data->attributes.shade_model,
+							.TME = texture_mapping,
+							.FGE = gsGlobal->PrimFogEnable,
+							.ABE = gsGlobal->PrimAlphaEnable,
+							.AA1 = gsGlobal->PrimAAEnable,
+							.FST = 0,
+							.CTXT = 0,
+							.FIX = 0
+						}
+					}.raw,
+					.FLG = 0,
+					.NREG = 3
+
+				}
+			};
 
 			data->materials[data->material_indices[i].index].prim_tag.dword[1] = DRAW_STQ2_REGLIST;
-			data->materials[data->material_indices[i].index].prim_tag.dword[0] = VU_GS_GIFTAG(0, 
-							                							1, NO_CUSTOM_DATA, 1, 
-																		VU_GS_PRIM(data->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE, 
-																				   data->attributes.shade_model, texture_mapping, 
-																				   gsGlobal->PrimFogEnable, 
-																				   gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 0, 0, 0),
-    		    														0, 3);
+			data->materials[data->material_indices[i].index].prim_tag.dword[0] = prim_tag.raw;
+
+			data->materials[data->material_indices[i].index].clip_prim_tag.sword[2] = data->tristrip;
+			data->materials[data->material_indices[i].index].clip_prim_tag.sword[1] = clip_tag.raw >> 32;
+
+			owl_add_unpack_data(packet, 26, (void*)&data->materials[data->material_indices[i].index].clip_prim_tag, 1, 0);
 
 			unpack_list_open(packet, 0, true);
 			{

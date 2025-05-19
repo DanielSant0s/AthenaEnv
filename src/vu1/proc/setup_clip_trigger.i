@@ -4,13 +4,11 @@
     ; If the result of ANDing 3 with the giftag's NLOOP (number of verts) is 3, the model
     ; is assumed to be a collection of triangles. Otherwise it's assumed it's a strip (-1)
     ;=====================================================================================
-    mtir                 PrimitiveType, ClipTag[x]
-    iaddi                Mask, vi00, 3
-    iand                 PrimitiveType, PrimitiveType, Mask
- 
+    mtir                 PrimitiveType, ClipTag[z]
+    
     iaddi                ClipTrigger, vi00, -1
  
-    ibne                 Mask, PrimitiveType, done
+    ibne                 vi00, PrimitiveType, done
  
 triangle:
     iaddiu               ClipTrigger, vi00, 3

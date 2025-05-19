@@ -186,6 +186,7 @@ inline void unpack_list_close(owl_packet *packet) {
     packet->list.top = false;
 }
 
+
 typedef struct {
     uint64_t NLOOP : 15;  
     uint64_t EOP   : 1;   
@@ -194,6 +195,29 @@ typedef struct {
     uint64_t PRIM  : 11;  
     uint64_t FLG   : 2;   
     uint64_t NREG  : 4;   
+} giftag_data_t;
+
+typedef struct {
+    uint16_t PRIM : 3;         
+    uint16_t IIP : 1;  
+    uint16_t TME : 1;  
+    uint16_t FGE : 1;              
+    uint16_t ABE : 1;   
+    uint16_t AA1 : 1;     
+    uint16_t FST : 1;           
+    uint16_t CTXT : 1;     
+    uint16_t FIX : 1;     
+    uint16_t     : 5;           
+} prim_data_t;
+
+typedef union {
+    prim_data_t data;
+    uint16_t raw;
+} prim_reg_t;
+
+typedef union {
+    giftag_data_t data;
+    uint64_t raw;
 } giftag_t;
 
 typedef struct {

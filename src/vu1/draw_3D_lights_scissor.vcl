@@ -240,7 +240,7 @@ init:
         div         q,      vf00[w],    normal[w]   ; perspective divide (1/vert[w]):
         mul.xyz     normal, normal,     q
         
-        move light, vf00
+        move light, vf00 
         move intensity, vf00
 
         iadd  currDirLight, vi00, vi00
@@ -286,7 +286,7 @@ init:
 
         ;//////////// --- Store data --- ////////////
         sq.xyz modStq,      STQ(outputAddress)       
-        sq intColor,    RGBA(outputAddress)      ; q is grabbed from stq
+        sq intColor,    RGBA(outputAddress)     ; q is grabbed from stq
         sq vertex,      XYZ2(outputAddress)      
         ;////////////////////////////////////////////
 

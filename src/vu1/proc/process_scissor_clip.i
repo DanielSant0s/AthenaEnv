@@ -422,7 +422,10 @@
         iaddiu               DummyXGKickPtr, vi00, DUMMY_XGKICK_BUF
         iaddiu               kickAddress, vi00, CLIPFAN_OFFSET
 
-        lq                   ClipTag,    0(kickAddress)
+        lq                   Uniqueflags,    0(kickAddress) 
+
+        move                 ClipTag, primTag
+        move.y               ClipTag, UniqueFlags
 
         iaddiu               kickAddress, kickAddress, 1
 

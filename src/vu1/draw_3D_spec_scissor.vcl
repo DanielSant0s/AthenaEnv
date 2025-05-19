@@ -339,7 +339,7 @@ init:
  
         ;//////////// --- Store data --- ////////////
         sq.xyz modStq,      STQ(outputAddress)     
-        sq intColor,    RGBA(outputAddress)   ; q is grabbed from stq
+        sq intColor,    RGBA(outputAddress)     ; q is grabbed from stq
         sq vertex,      XYZ2(outputAddress)   
         ;////////////////////////////////////////////
 
