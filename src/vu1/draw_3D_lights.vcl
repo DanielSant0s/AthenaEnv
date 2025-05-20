@@ -19,17 +19,23 @@
     MatrixLoad	ObjectToScreen, SCREEN_MATRIX, vi00 ; load view-projection matrix
 
     lq.w           bfc_multiplier, CLIPFAN_OFFSET(vi00)
-    mtir           z_sign_mask, bfc_multiplier[w]
-    ibne           z_sign_mask, vi00, ignore_face_culling 
+
+    ftoi0.w        bfc_sign_mask, bfc_multiplier
+    mtir           z_sign_mask, bfc_sign_mask[w]
+
+    ibeq           z_sign_mask, vi00, ignore_face_culling 
 
     iaddiu          z_sign_mask, vi00, 0x20
-
 ignore_face_culling:
-    iaddiu          z_sign_mask, vi00, 0
 
     lq scale, SCREEN_SCALE(vi00) 
 
     AddScreenOffset scale
+
+    move vector, vf00
+    move oldvector, vf00
+    move vertex2, vf00
+    move vertex3, vf00
 
     ;/////////////////////////////////////////////
 
@@ -46,9 +52,6 @@ cull_init:
     ; Updated once per mesh
     MatrixLoad	LocalLight,     LIGHT_MATRIX, vi00     ; load local light matrix
     ilw.w       dirLightQnt,    NUM_DIR_LIGHTS(vi00) ; load active directional lights
-    iaddiu      lightDirs,      vi00,    LIGHT_DIRECTION_PTR       
-    iaddiu      lightAmbs,      vi00,    LIGHT_AMBIENT_PTR
-    iaddiu      lightDiffs,     vi00,    LIGHT_DIFFUSE_PTR    
 
     ;//////////// --- Load data 2 --- /////////////
     ; Updated dynamically
@@ -99,8 +102,6 @@ culled_init:
         clipw.xyz	clip_vertex, clip_vertex	
         fcand		VI01,   0x3FFFF  
         iaddiu		iADC,   VI01,       0x7FFF 
-
-        isw.w		iADC,   XYZ2(destAddress)
         
         div         q,      vf00[w],    vertex[w]   ; perspective divide (1/vert[w]):
 
@@ -109,9 +110,25 @@ culled_init:
         mul.xyz    vertex, vertex,     scale
         add.xyz    vertex, vertex,     offset
 
-        VertexFpToGsXYZ2  vertex,vertex
-        ;////////////////////////////////////////////
+        move vertex2, vertex3       
+        move vertex3, vertex
 
+        move.xyz	oldvector, vector
+
+	    sub.xyz		vector, vertex3, vertex2
+
+        mulw.xyz       vector, vector, bfc_multiplier
+	    opmula.xyz	acc, vector, oldvector
+	    opmsub.xyz	crossproduct, oldvector, vector
+
+	    fmand		z_sign, z_sign_mask
+        iaddiu		z_sign, z_sign, 0xFFE0
+        ior        iADC, iADC, z_sign
+        
+        mfir.w		vertex, iADC
+        ftoi4.xy    vertex, vertex
+        ftoi0.z     vertex, vertex
+        ;////////////////////////////////////////////
 
         ;//////////////// --- ST --- ////////////////
         mulq modStq, stq, q
@@ -127,22 +144,19 @@ culled_init:
 
         iadd  currDirLight, vi00, vi00
         culled_directionaLightsLoop:
-            iadd  currLightPtr, lightAmbs, currDirLight
-            lq LightAmbient, 0(currLightPtr)
+            lq LightAmbient, LIGHT_AMBIENT_PTR(currDirLight)
 
             ; Ambient lighting
             add.xyz light, light, LightAmbient
 
-            iadd  currLightPtr, lightDirs, currDirLight
-            lq LightDirection, 0(currLightPtr)
+            lq LightDirection, LIGHT_DIRECTION_PTR(currDirLight)
             
             ; Diffuse lighting
             VectorDotProduct intensity, normal, LightDirection
 
             maxx.xyzw  intensity, intensity, vf00
 
-            iadd  currLightPtr, lightDiffs, currDirLight
-            lq LightDiffuse, 0(currLightPtr)
+            lq LightDiffuse, LIGHT_DIFFUSE_PTR(currDirLight)
 
             mul diffuse, LightDiffuse, intensity[x]
             add.xyz light, light, diffuse
@@ -163,14 +177,16 @@ culled_init:
         ;//////////// --- Store data --- ////////////
         sq.xyz modStq,      STQ(destAddress)     
         sq intColor,    RGBA(destAddress)     ; q is grabbed from stq
-        sq.xyz vertex,  XYZ2(destAddress)    
+        sq vertex,  XYZ2(destAddress)    
         ;////////////////////////////////////////////
 
+        iaddiu          destAddress,    destAddress,    3
+
+    skip_rendering:
         iaddiu          vertexData,     vertexData,     1                         
         iaddiu          stqData,        stqData,        1   
         iaddiu          normalData,     normalData,     1
         iaddiu          colorData,      colorData,      1
-        iaddiu          destAddress,    destAddress,    3
 
         iaddi   vertexCounter,  vertexCounter,  -1	; decrement the loop counter 
         ibne    vertexCounter,  iBase,   vertexLoop	; and repeat if needed
@@ -262,27 +278,20 @@ init:
 
         ilw.w       dirLightQnt,    NUM_DIR_LIGHTS(vi00) ; load active directional lights
 
-        directionaLightsLoop:
-            iaddiu      lightDirs,      vi00,    LIGHT_DIRECTION_PTR      
-            iaddiu      lightAmbs,      vi00,    LIGHT_AMBIENT_PTR  
-            iaddiu      lightDiffs,     vi00,    LIGHT_DIFFUSE_PTR      
-
-            iadd  currLightPtr, lightAmbs, currDirLight
-            lq LightAmbient, 0(currLightPtr)
+        directionaLightsLoop: 
+            lq LightAmbient, LIGHT_AMBIENT_PTR(currDirLight)
 
             ; Ambient lighting
             add.xyz light, light, LightAmbient
 
-            iadd  currLightPtr, lightDirs, currDirLight
-            lq LightDirection, 0(currLightPtr)
+            lq LightDirection, LIGHT_DIRECTION_PTR(currDirLight)
             
             ; Diffuse lighting
             VectorDotProduct intensity, normal, LightDirection
 
             maxx.xyzw  intensity, intensity, vf00
 
-            iadd  currLightPtr, lightDiffs, currDirLight
-            lq LightDiffuse, 0(currLightPtr)
+            lq LightDiffuse, LIGHT_DIFFUSE_PTR(currDirLight)
 
             mul diffuse, LightDiffuse, intensity[x]
             add.xyz light, light, diffuse
