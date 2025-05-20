@@ -19,8 +19,14 @@
     ; Updated once per mesh
     MatrixLoad	ObjectToScreen, SCREEN_MATRIX, vi00 ; load view-projection matrix
 
-    iaddiu z_sign_mask, vi00, 0x20
     lq.w           bfc_multiplier, CLIPFAN_OFFSET(vi00)
+    mtir           z_sign_mask, bfc_multiplier[w]
+    ibne           z_sign_mask, vi00, ignore_face_culling 
+
+    iaddiu          z_sign_mask, vi00, 0x20
+
+ignore_face_culling:
+    iaddiu          z_sign_mask, vi00, 0
 
     lq scale, SCREEN_SCALE(vi00)
 

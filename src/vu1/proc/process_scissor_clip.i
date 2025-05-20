@@ -59,8 +59,6 @@
         ; scissoring.
         ;=====================================================================================
         BackfaceCull         vertex1, vertex2, vertex3
-        mtir                 cull_face_toggle, bfc_multiplier[w]
-        ibne                 cull_face_toggle, vi00, triangle_outside
         ibne                 z_sign, vi00, triangle_outside
         
         iadd                 ClipFlag1, ClipFlag1, ClipFlag2
