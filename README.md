@@ -48,7 +48,17 @@ AthenaEnv is a complete JavaScript Runtime Environment for the PlayStation 2. It
 * Image: Image drawing.
 * ImageList: Load and manage multiple images while your code is running, multithreaded loading!
 * Draw: Shape drawing, triangles, circles etc.
-* Render: Advanced 3D support powered by a VU1 renderer and VU0 matrix processor.
+* Render: High performance 3D renderer  
+  • VU1 vertex transformer  
+  • VU0 matrix processor  
+  • LookAt camera system  
+  • Ambient lighting  
+  • Diffuse lighting  
+  • Specular lighting  
+  • Polygon clipping  
+  • (Back/Front)face culling  
+  • Per-vertex colors  
+
 * Screen: The entire screen of your project (2D and 3D), being able to change the resolution, enable or disable parameters.
 * Font: Functions that control the texts that appear on the screen, loading texts, drawing and unloading from memory.
 * Pads: Above being able to draw and everything else, A human interface is important. Supports rumble and pressure sensitivity.
@@ -506,7 +516,7 @@ You have 4 lights to use in 3D scenes, use set to configure them.
 * Screen.setFrameCounter(bool) - Toggles frame counting and FPS collecting.  
 * Screen.waitVblankStart() - Waits for a vertical sync.  
 * let fps = Screen.getFPS(frame_interval) - Get Frames per second measure within the specified frame_interval in msec. Dependant on Screen.setFrameCounter(true) to work.
-* const canvas = Screen.getMode() - Get actual video mode parameters. Returns an object.
+* const canvas = Screen.getMode() - Get actual video mode parameters. Returns an object.  
   • canvas.mode - Available modes: Screen.NTSC, Screen.DTV_480p, Screen.PAL, Screen.DTV_576p, Screen.DTV_720p, Screen.DTV_1080i.  
   • canvas.width - Screen width. Default: 640.  
   • canvas.height - Screen height. Default: 448 on NTSC consoles, 512 on PAL consoles.  
@@ -517,6 +527,26 @@ You have 4 lights to use in 3D scenes, use set to configure them.
   • canvas.zbuffering - Enable or disable Z buffering (3D buffering)(bool).  
   • canvas.psmz - ZBuffering color mode. Available zbuffer colormodes: Screen.Z16, Screen.Z16S, Screen.Z24, Screen.Z32.  
 * Screen.setMode(canvas) - Set the current video mode, get an video mode object as an argument.  
+* Screen.blendEquation(preset) - Set alpha blending mode based on presets  
+  • Screen.BLEND_DEFAULT  
+  • Screen.BLEND_ADD  
+  • Screen.BLEND_ADD_NOALPHA  
+* Screen.blendEquation(a, b, c, d, fix) - Set alpha blending mode based on a fixed coefficient equation.  
+  • Screen.SRC_RGB - Source RGB  
+  • Screen.DST_RGB - Framebuffer RGB  
+  • Screen.ZERO_RGB - Zero RGB  
+  • Screen.SRC_ALPHA - Source alpha  
+  • Screen.DST_ALPHA - Framebuffer alpha  
+  • Screen.ALPHA_FIX - C = Fix argument  
+  
+```The GS's alpha blending formula is fixed but it contains four variables that can be reconfigured:
+Output = (((A - B) * C) >> 7) + D
+A, B, and D are colors and C is an alpha value. Their specific values come from the ALPHA register:
+      A                B                C                   D
+  0   Source RGB       Source RGB       Source alpha        Source RGB
+  1   Framebuffer RGB  Framebuffer RGB  Framebuffer alpha   Framebuffer RGB
+  2   Zero RGB         Zero RGB         Fix argument        Zero RGB
+```
 
 ### Font module
 

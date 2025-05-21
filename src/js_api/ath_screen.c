@@ -201,7 +201,7 @@ static JSValue athena_cls(JSContext *ctx, JSValue this_val, int argc, JSValueCon
 static const JSCFunctionListEntry module_funcs[] = {
     JS_CFUNC_DEF("flip", 0, athena_flip),
     JS_CFUNC_DEF("clear", 1, athena_clear),
-	JS_CFUNC_DEF("alphaBlendMode", 5, athena_alphablendmode),
+	JS_CFUNC_DEF("blendEquation", 5, athena_alphablendmode),
 	JS_CFUNC_DEF("getFreeVRAM", 0, athena_getFreeVRAM),
 	JS_CFUNC_DEF("getFPS", 1, athena_getFPS),
     JS_CFUNC_DEF("waitVblankStart", 0, athena_vblank),
