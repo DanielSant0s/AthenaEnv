@@ -444,7 +444,11 @@ Properties:
 * bounds - Mesh bounding box.
 
 * accurate_clipping - Toggle accurate clipping.
-* backface_culling - Toggle backface culling. (Not implemented yet)
+* face_culling - Face culling mode. Default: Render.CULL_FACE_BACK. Avaliable modes below:  
+  • Render.CULL_FACE_NONE  
+  • Render.CULL_FACE_FRONT  
+  • Render.CULL_FACE_BACK  
+
 * texture_mapping - Toggle texture mapping. (it can be used to disable texturing on a whole textured model)
 * shade_model - Flat = 0, Gouraud = 1.
 
