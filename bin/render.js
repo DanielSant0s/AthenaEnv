@@ -218,8 +218,8 @@ while(true) {
         render_data[modeltodisplay].accurate_clipping ^= 1;
     }
 
-    dragon_object.render();
-    monkey_object.render();
+    //dragon_object.render();
+    //monkey_object.render();
 
     render_object[modeltodisplay].rotation = {x:savedly, y:savedlx, z:0.0f};
     render_object[modeltodisplay].render();

@@ -217,6 +217,8 @@ register_3d_render_data:
 	ro->m.attributes.texture_mapping = 1;
 	ro->m.attributes.shade_model = 1;
 
+	FlushCache(WRITEBACK_DCACHE);
+
 	if (ro->m.texture_count > 0) {
 		JSValue tex_arr = JS_NewArray(ctx);
 		for (int i = 0; i < ro->m.texture_count; i++) {
@@ -330,7 +332,7 @@ inline void JS_ToVector(JSContext *ctx, VECTOR v, JSValue vec) {
 	JS_FreeValue(ctx, vec);
 }
 
-inline JSValue JS_NewMaterial(JSContext *ctx, VECTOR v) {
+static JSValue JS_NewMaterial(JSContext *ctx, VECTOR v) {
 	JSValue vec = JS_NewObject(ctx);
 	JS_DefinePropertyValueStr(ctx, vec, "r", JS_NewFloat32(ctx, v[0]), JS_PROP_C_W_E);
 	JS_DefinePropertyValueStr(ctx, vec, "g", JS_NewFloat32(ctx, v[1]), JS_PROP_C_W_E);
@@ -339,7 +341,7 @@ inline JSValue JS_NewMaterial(JSContext *ctx, VECTOR v) {
 	return vec;
 }
 
-inline void JS_ToMaterial(JSContext *ctx, VECTOR v, JSValue vec) {
+static void JS_ToMaterial(JSContext *ctx, VECTOR v, JSValue vec) {
 	JS_ToFloat32(ctx, &v[0], JS_GetPropertyStr(ctx, vec, "r"));
 	JS_ToFloat32(ctx, &v[1], JS_GetPropertyStr(ctx, vec, "g"));
 	JS_ToFloat32(ctx, &v[2], JS_GetPropertyStr(ctx, vec, "b"));
@@ -348,8 +350,7 @@ inline void JS_ToMaterial(JSContext *ctx, VECTOR v, JSValue vec) {
 	JS_FreeValue(ctx, vec);
 }
 
-static JSValue js_render_data_get(JSContext *ctx, JSValueConst this_val, int magic)
-{
+static JSValue js_render_data_get(JSContext *ctx, JSValueConst this_val, int magic) {
     JSRenderData* ro = JS_GetOpaque2(ctx, this_val, js_render_data_class_id);
     if (!ro)
         return JS_EXCEPTION;
@@ -443,8 +444,7 @@ static JSValue js_render_data_get(JSContext *ctx, JSValueConst this_val, int mag
 	return JS_UNDEFINED;
 }
 
-static JSValue js_render_data_set(JSContext *ctx, JSValueConst this_val, JSValue val, int magic)
-{
+static JSValue js_render_data_set(JSContext *ctx, JSValueConst this_val, JSValue val, int magic) {
     JSRenderData* ro = JS_GetOpaque2(ctx, this_val, js_render_data_class_id);
     if (!ro)
         return JS_EXCEPTION;
@@ -481,6 +481,8 @@ static JSValue js_render_data_set(JSContext *ctx, JSValueConst this_val, JSValue
 						memcpy(*attributes_ptr[i], tmp_vert_ptr, size);
 					}			
 				}
+
+				FlushCache(WRITEBACK_DCACHE);
 			}
 			break;
 		case 1:
@@ -493,12 +495,14 @@ static JSValue js_render_data_set(JSContext *ctx, JSValueConst this_val, JSValue
 					ro->m.materials = realloc(ro->m.materials, material_count);
 				}
 
+				
+
 				for (int i = 0; i < material_count; i++) {
 					JSValue obj = JS_GetPropertyUint32(ctx, val, i);
 
 					JS_ToMaterial(ctx, &ro->m.materials[i].ambient,             JS_GetPropertyStr(ctx, obj, "ambient"));
 					JS_ToMaterial(ctx, &ro->m.materials[i].diffuse,             JS_GetPropertyStr(ctx, obj, "diffuse"));
-					JS_ToMaterial(ctx, &ro->m.materials[i].specular,            JS_GetPropertyStr(ctx, obj, "specular"));
+					//JS_ToMaterial(ctx, &ro->m.materials[i].specular,            JS_GetPropertyStr(ctx, obj, "specular"));
 					JS_ToMaterial(ctx, &ro->m.materials[i].emission,            JS_GetPropertyStr(ctx, obj, "emission"));
 					JS_ToMaterial(ctx, &ro->m.materials[i].transmittance,       JS_GetPropertyStr(ctx, obj, "transmittance"));
 					JS_ToFloat32(ctx,  &ro->m.materials[i].shininess,           JS_GetPropertyStr(ctx, obj, "shininess"));
@@ -512,6 +516,8 @@ static JSValue js_render_data_set(JSContext *ctx, JSValueConst this_val, JSValue
 				}
 
 				ro->m.material_count = material_count;
+
+				FlushCache(WRITEBACK_DCACHE);
 			}
 			break;
 		case 2:
@@ -534,6 +540,8 @@ static JSValue js_render_data_set(JSContext *ctx, JSValueConst this_val, JSValue
 				}
 
 				ro->m.material_index_count = material_index_count;
+
+				FlushCache(WRITEBACK_DCACHE);
 			}
 			break;
 		case 3:
@@ -566,6 +574,9 @@ static JSValue js_render_data_set(JSContext *ctx, JSValueConst this_val, JSValue
 
 				JS_FreeValue(ctx, vertex);
 			}
+
+			FlushCache(WRITEBACK_DCACHE);
+
 			break;
 	}
 
