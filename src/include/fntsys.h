@@ -37,9 +37,6 @@ void fntEnd();
  * @return font slot id (negative value means error happened) */
 int fntLoadFile(const char *path);
 
-/** Reloads the default font */
-int fntLoadDefault(const char *path);
-
 /** Releases a font slot */
 void fntRelease(int id);
 

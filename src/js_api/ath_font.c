@@ -65,10 +65,9 @@ static JSValue athena_font_ctor(JSContext *ctx, JSValueConst new_target, int arg
         const char* path = JS_ToCString(ctx, argv[0]);
 
         if (strcmp(path, "default") == 0) {
-            font->id = 0;
             font->type = truetype_font;
             if (!truetypefnt_loaded) {
-                fntLoadDefault(NULL);
+                font->id = fntLoadFile(NULL);
                 fntSetCharSize(font->id, FNTSYS_CHAR_SIZE*64, FNTSYS_CHAR_SIZE*64);
                 truetypefnt_loaded = true;
             }

@@ -248,14 +248,13 @@ void athena_error_screen(const char* errMsg, bool dark_mode) {
             color2 = GS_SETREG_RGBAQ(0x80,0x80,0x80,0x80,0x00);
         }
 
-		fntLoadDefault(NULL);
-		fntSetCharSize(0, FNTSYS_CHAR_SIZE*64, FNTSYS_CHAR_SIZE*64);
+		int slot = fntLoadFile(NULL);
 
     	while (!isButtonPressed(PAD_START)) {
 			clearScreen(color);
-			fntRenderString(0, 15, 15, 0, 625, 448, "AthenaEnv ERROR!", 0.8f, color2);
-			fntRenderString(0, 15, 80, 0, 625, 448, errMsg, 0.8f, color2);
-			fntRenderString(0, 15, 400, 0, 625, 448, "Press [start] to restart", 0.8f, color2);
+			fntRenderString(slot, 15, 15, 0, 625, 448, "AthenaEnv ERROR!", 0.8f, color2);
+			fntRenderString(slot, 15, 80, 0, 625, 448, errMsg, 0.8f, color2);
+			fntRenderString(slot, 15, 400, 0, 625, 448, "Press [start] to restart", 0.8f, color2);
 			flipScreen();
 		} 
     }

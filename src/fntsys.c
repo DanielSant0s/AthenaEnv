@@ -320,8 +320,6 @@ void fntInit()
     for (; i < FNT_MAX_COUNT; ++i)
         fntInitSlot(&fonts[i]);
 
-    //fntLoadDefault(NULL);
-
     fntUpdateAspectRatio();
 }
 
@@ -339,28 +337,6 @@ int fntLoadFile(const char* path)
     }
 
     return FNT_ERROR;
-}
-
-int fntLoadDefault(const char* path)
-{
-    font_t newFont, oldFont;
-
-    if (fntLoadSlot(&newFont, path) != FNT_ERROR) {
-        // copy over the new font definition
-        // we have to lock this phase, as the old font may still be used
-        // Note: No check for concurrency is done here, which is kinda funky!
-        WaitSema(gFontSemaId);
-        memcpy(&oldFont, &fonts[FNT_DEFAULT], sizeof(font_t));
-        memcpy(&fonts[FNT_DEFAULT], &newFont, sizeof(font_t));
-        SignalSema(gFontSemaId);
-
-        // delete the old font
-        fntDeleteSlot(&oldFont);
-
-        return 0;
-    }
-
-    return -1;
 }
 
 void fntEnd()
