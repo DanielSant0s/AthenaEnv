@@ -281,7 +281,7 @@ static int fntLoadSlot(font_t *font, const char* path)
         }
         font->dataPtr = buffer;
     } else {
-        buffer = &quicksand_regular;
+        buffer = quicksand_regular;
         bufferSize = size_quicksand_regular;
     }
 
