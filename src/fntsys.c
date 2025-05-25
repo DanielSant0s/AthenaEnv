@@ -25,7 +25,7 @@
 
 #include FT_FREETYPE_H
 
-extern void *quicksand_regular;
+extern unsigned char quicksand_regular[] __attribute__((aligned(16)));
 extern int size_quicksand_regular;
 
 // freetype vars
