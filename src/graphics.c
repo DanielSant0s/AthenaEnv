@@ -249,6 +249,7 @@ void athena_error_screen(const char* errMsg, bool dark_mode) {
         }
 
 		int slot = fntLoadFile(NULL);
+		fntSetCharSize(slot, FNTSYS_CHAR_SIZE*64, FNTSYS_CHAR_SIZE*64);
 
     	while (!isButtonPressed(PAD_START)) {
 			clearScreen(color);
