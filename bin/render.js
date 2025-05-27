@@ -23,6 +23,10 @@ canvas.psmz = Screen.Z16S;
 
 Screen.setMode(canvas);
 
+Screen.clear();
+font.print(0, 0, "Loading assets...");
+Screen.flip();
+
 Render.setView(60.0, 5.0, 4000.0);
 
 // Change your root folder to "render" so we can work with file path magic :p
@@ -62,6 +66,7 @@ const vertList = Render.vertexList(triPositions,
                                    triColors);
 
 const listtest = new RenderData(vertList);
+listtest.face_culling = Render.CULL_FACE_NONE;
 
 const trilist_materials = listtest.materials;
 

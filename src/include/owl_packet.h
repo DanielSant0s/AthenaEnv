@@ -171,7 +171,7 @@ inline void unpack_list_open(owl_packet *packet, uint32_t vu_base, bool top) {
     packet->list.top = top;
 }
 
-inline void *unpack_list_append(owl_packet *packet, void *t_data, uint32_t t_size) {
+inline void unpack_list_append(owl_packet *packet, void *t_data, uint32_t t_size) {
     owl_add_tag(packet, (VIF_CODE(0x0101 | (0 << 8), 0, VIF_STCYCL, 0) | (uint64_t)
 	                    VIF_CODE(packet->list.vu_addr | ((uint32_t)1 << 14) | ((uint32_t)packet->list.top << 15), ((t_size == 256) ? 0 : t_size), UNPACK_V4_32 | ((uint32_t)0 << 4) | 0x60, 0) << 32 ),
                         DMA_TAG(t_size, 0, DMA_REF, 0, t_data, 0)
