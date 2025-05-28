@@ -349,19 +349,132 @@ void gltf_transfer_vertex(athena_render_data* m, uint32_t dst_idx, float* positi
     }
 }
 
+void load_gltf_skinning_data(athena_render_data* res_m, float* joints, float* weights, uint32_t dst_idx, uint32_t src_idx) {
+    if (!(joints && weights)) return;
+
+    vertex_skin_data* skin = &res_m->skin_data[dst_idx];
+    for (int j = 0; j < 4; j++) {
+        skin->bone_indices[j] = (uint32_t)joints[src_idx * 4 + j];
+        skin->bone_weights[j] = weights[src_idx * 4 + j];
+    }
+
+    float total_weight = skin->bone_weights[0] + skin->bone_weights[1] + 
+                       skin->bone_weights[2] + skin->bone_weights[3];
+    if (total_weight > 0.0f) {
+        for (int j = 0; j < 4; j++) {
+            skin->bone_weights[j] /= total_weight;
+        }
+    }
+}
+
+athena_skeleton* load_gltf_skeleton(cgltf_data* data, cgltf_skin* skin) {
+    if (!skin || !skin->joints || skin->joints_count == 0) {
+        return NULL;
+    }
+    
+    athena_skeleton* skeleton = (athena_skeleton*)malloc(sizeof(athena_skeleton));
+    skeleton->bone_count = skin->joints_count;
+    skeleton->bones = (athena_bone*)malloc(skeleton->bone_count * sizeof(athena_bone));
+    skeleton->bone_matrices = (MATRIX*)malloc(skeleton->bone_count * sizeof(MATRIX));
+
+    float* inverse_bind_matrices = NULL;
+    if (skin->inverse_bind_matrices) {
+        cgltf_size float_count = cgltf_accessor_unpack_floats(skin->inverse_bind_matrices, NULL, 0);
+        inverse_bind_matrices = (float*)malloc(float_count * sizeof(float));
+        cgltf_accessor_unpack_floats(skin->inverse_bind_matrices, inverse_bind_matrices, float_count);
+    }
+
+    for (cgltf_size i = 0; i < skin->joints_count; i++) {
+        cgltf_node* joint_node = skin->joints[i];
+        athena_bone* bone = &skeleton->bones[i];
+        
+        bone->id = (uint32_t)i;
+
+        if (joint_node->name) {
+            strncpy(bone->name, joint_node->name, sizeof(bone->name) - 1);
+            bone->name[sizeof(bone->name) - 1] = '\0';
+        } else {
+            snprintf(bone->name, sizeof(bone->name), "Bone_%u", (uint32_t)i);
+        }
+
+        bone->parent_id = -1;
+        for (cgltf_size node_idx = 0; node_idx < data->nodes_count; node_idx++) {
+            cgltf_node* node = &data->nodes[node_idx];
+            for (cgltf_size child_idx = 0; child_idx < node->children_count; child_idx++) {
+                if (node->children[child_idx] == joint_node) {
+                    for (cgltf_size parent_joint_idx = 0; parent_joint_idx < skin->joints_count; parent_joint_idx++) {
+                        if (skin->joints[parent_joint_idx] == node) {
+                            bone->parent_id = (int32_t)parent_joint_idx;
+                            break;
+                        }
+                    }
+                    break;
+                }
+            }
+            if (bone->parent_id != -1) break;
+        }
+
+        if (joint_node->has_translation) {
+            bone->position[0] = joint_node->translation[0];
+            bone->position[1] = joint_node->translation[1];
+            bone->position[2] = joint_node->translation[2];
+            bone->position[3] = 1.0f;
+        } else {
+            bone->position[0] = bone->position[1] = bone->position[2] = 0.0f;
+            bone->position[3] = 1.0f;
+        }
+        
+        if (joint_node->has_rotation) {
+            bone->rotation[0] = joint_node->rotation[0];
+            bone->rotation[1] = joint_node->rotation[1];
+            bone->rotation[2] = joint_node->rotation[2];
+            bone->rotation[3] = joint_node->rotation[3];
+        } else {
+            bone->rotation[0] = bone->rotation[1] = bone->rotation[2] = 0.0f;
+            bone->rotation[3] = 1.0f;
+        }
+        
+        if (joint_node->has_scale) {
+            bone->scale[0] = joint_node->scale[0];
+            bone->scale[1] = joint_node->scale[1];
+            bone->scale[2] = joint_node->scale[2];
+            bone->scale[3] = 1.0f;
+        } else {
+            bone->scale[0] = bone->scale[1] = bone->scale[2] = 1.0f;
+            bone->scale[3] = 1.0f;
+        }
+
+        if (inverse_bind_matrices) {
+            memcpy(&bone->inverse_bind, &inverse_bind_matrices[i * 16], sizeof(MATRIX));
+        } else {
+            matrix_unit(bone->inverse_bind);
+        }
+
+        matrix_unit(bone->bind_pose);
+        matrix_unit(bone->current_transform);
+        matrix_unit(skeleton->bone_matrices[i]);
+    }
+    
+    if (inverse_bind_matrices) {
+        free(inverse_bind_matrices);
+    }
+    
+    return skeleton;
+}
+
 void loadGLTF(athena_render_data* res_m, const char* path, GSTEXTURE* text) {
     cgltf_options options = {0};
     cgltf_data* data = NULL;
     cgltf_result result = cgltf_parse_file(&options, path, &data);
 
     if (result != cgltf_result_success) {
-        printf("Erro: Falha ao parsear o arquivo glTF\n");
+        printf("Error: Fail while parsing glTF\n");
         return;
     }
 
     result = cgltf_load_buffers(&options, data, path);
     if (result != cgltf_result_success) {
-        printf("Erro: Falha ao carregar buffers do glTF\n");
+        printf("Error: Fail while loading glTF buffers\n");
         cgltf_free(data);
         return;
     }
@@ -410,6 +523,10 @@ void loadGLTF(athena_render_data* res_m, const char* path, GSTEXTURE* text) {
     res_m->normals = alloc_vectors(res_m->index_count);
     res_m->colours = alloc_vectors(res_m->index_count);
 
+    if (data->skins_count > 0) {
+        res_m->skin_data = (vertex_skin_data*)malloc(res_m->index_count * sizeof(vertex_skin_data));
+    }
+
     res_m->material_indices = (material_index*)malloc(data->meshes_count * sizeof(material_index));
     res_m->material_index_count = 0;
 
@@ -420,10 +537,15 @@ void loadGLTF(athena_render_data* res_m, const char* path, GSTEXTURE* text) {
 
         for (cgltf_size prim_idx = 0; prim_idx < mesh->primitives_count; ++prim_idx) {
             cgltf_primitive* primitive = &mesh->primitives[prim_idx];
+
             float* positions = NULL;
             float* texcoords = NULL;
             float* normals = NULL;
             float* colors = NULL;
+
+            float* joints = NULL;
+            float* weights = NULL;
+
             uint32_t vertex_count = 0;
 
             for (cgltf_size attr_idx = 0; attr_idx < primitive->attributes_count; ++attr_idx) {
@@ -446,6 +568,12 @@ void loadGLTF(athena_render_data* res_m, const char* path, GSTEXTURE* text) {
                 }
                 else if (attribute->type == cgltf_attribute_type_color && attribute->index == 0) {
                     colors = accessor_data;
+                } 
+                else if (attribute->type == cgltf_attribute_type_joints && attribute->index == 0) {
+                    joints = accessor_data;
+                }
+                else if (attribute->type == cgltf_attribute_type_weights && attribute->index == 0) {
+                    weights = accessor_data;
                 }
                 else {
                     free(accessor_data); 
@@ -457,12 +585,14 @@ void loadGLTF(athena_render_data* res_m, const char* path, GSTEXTURE* text) {
 
                 for (cgltf_size i = 0; i < indices_accessor->count; ++i) {
                     uint32_t index = cgltf_accessor_read_index(indices_accessor, i);
+                    load_gltf_skinning_data(res_m, joints, weights, current_vertex, index);
                     gltf_transfer_vertex(res_m, current_vertex, positions, texcoords, normals, colors, index);
                     current_vertex++;
                 }
             }
             else {
                 for (uint32_t i = 0; i < vertex_count; ++i) {
+                    load_gltf_skinning_data(res_m, joints, weights, current_vertex, i);
                     gltf_transfer_vertex(res_m, current_vertex, positions, texcoords, normals, colors, i);
                     current_vertex++;
                 }
@@ -479,6 +609,9 @@ void loadGLTF(athena_render_data* res_m, const char* path, GSTEXTURE* text) {
             if (texcoords) free(texcoords);
             if (normals) free(normals);
             if (colors) free(colors);
+
+            if (joints) free(joints);
+            if (weights) free(weights);
         }
     }
 
@@ -486,7 +619,25 @@ void loadGLTF(athena_render_data* res_m, const char* path, GSTEXTURE* text) {
 
     res_m->pipeline = PL_DEFAULT;
 
+    if (data->skins_count > 0) {
+        res_m->skeleton = load_gltf_skeleton(data, &data->skins[0]);
+    }
+
     cgltf_free(data);
+}
+
+void update_bone_matrices(athena_render_data* render_data) {
+    if (!render_data->skeleton) return;
+    
+    athena_skeleton* skeleton = render_data->skeleton;
+
+    for (uint32_t i = 0; i < skeleton->bone_count; i++) {
+        athena_bone* bone = &skeleton->bones[i];
+
+        matrix_multiply(skeleton->bone_matrices[i], 
+                       bone->current_transform, 
+                       bone->inverse_bind);
+    }
 }
 
 void loadModel(athena_render_data* res_m, const char* path, GSTEXTURE* text) {

@@ -57,6 +57,33 @@ typedef struct {
 	int shade_model; // 0 = flat, 1 = gouraud
 } RenderAttributes;
 
+#define ROOT_BONE -1
+
+typedef struct athena_bone {
+    uint32_t id;
+    char name[64];
+    int32_t parent_id;
+    
+    MATRIX bind_pose;    
+    MATRIX inverse_bind;   
+    MATRIX current_transform; 
+    
+    VECTOR position;
+    VECTOR rotation;
+    VECTOR scale;
+} athena_bone;
+
+typedef struct athena_skeleton {
+    athena_bone* bones;
+    uint32_t bone_count;
+    
+    MATRIX* bone_matrices;  
+} athena_skeleton;
+
+typedef struct vertex_skin_data {
+    uint32_t bone_indices[4];  
+    float bone_weights[4];    
+} vertex_skin_data;
 
 typedef struct
 {
@@ -89,6 +116,9 @@ typedef struct athena_render_data {
 	VECTOR* normals;
     VECTOR* colours;
 
+    vertex_skin_data* skin_data;    
+	athena_skeleton* skeleton;         
+
     VECTOR bounding_box[8];
 
     eRenderPipelines pipeline;
@@ -116,6 +146,41 @@ typedef struct athena_object_data {
 	MATRIX local_light;
 	MATRIX local_screen;
 } athena_object_data;
+
+typedef struct athena_keyframe {
+    float time;
+    VECTOR position;
+    VECTOR rotation;
+    VECTOR scale;
+} athena_keyframe;
+
+typedef struct athena_bone_animation {
+    uint32_t bone_id;
+    athena_keyframe* position_keys;
+    athena_keyframe* rotation_keys;
+    athena_keyframe* scale_keys;
+    uint32_t position_key_count;
+    uint32_t rotation_key_count;
+    uint32_t scale_key_count;
+} athena_bone_animation;
+
+typedef struct athena_animation {
+    char name[64];
+    float duration;
+    float ticks_per_second;
+    athena_bone_animation* bone_animations;
+    uint32_t bone_animation_count;
+} athena_animation;
+
+typedef struct athena_animation_controller {
+    athena_animation* animations;
+    uint32_t animation_count;
+    
+    uint32_t current_animation;
+    float current_time;
+    bool is_playing;
+    bool loop;
+} athena_animation_controller;
 
 typedef enum {
 	CAMERA_DEFAULT,
