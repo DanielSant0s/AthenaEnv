@@ -170,10 +170,10 @@ static JSValue athena_render_data_ctor(JSContext *ctx, JSValueConst new_target, 
 
 		image->tex->Filter = GS_FILTER_LINEAR;
 
-		loadOBJ(&ro->m, file_tbo, image->tex);
+		loadModel(&ro->m, file_tbo, image->tex);
 
 	} else if (argc > 0) {
-		loadOBJ(&ro->m, file_tbo, NULL);
+		loadModel(&ro->m, file_tbo, NULL);
 
 		ro->textures = malloc(sizeof(JSValue)*ro->m.texture_count);
 

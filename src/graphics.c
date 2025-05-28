@@ -940,8 +940,8 @@ GSGLOBAL *temp_init_global()
 	gsGlobal->Test->ZTE = GS_SETTING_ON;
 	gsGlobal->Test->ZTST = 2;
 
-	gsGlobal->Clamp->WMS = GS_CMODE_CLAMP;
-	gsGlobal->Clamp->WMT = GS_CMODE_CLAMP;
+	gsGlobal->Clamp->WMS = GS_CMODE_REPEAT;
+	gsGlobal->Clamp->WMT = GS_CMODE_REPEAT;
 	gsGlobal->Clamp->MINU = 0;
 	gsGlobal->Clamp->MAXU = 0;
 	gsGlobal->Clamp->MINV = 0;

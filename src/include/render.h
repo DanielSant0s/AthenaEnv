@@ -167,7 +167,7 @@ void panCamera(float x, float y);
 int NewLight();
 void SetLightAttribute(int id, float x, float y, float z, int attr);
 
-void loadOBJ(athena_render_data* res_m, const char* path, GSTEXTURE* text);
+void loadModel(athena_render_data* res_m, const char* path, GSTEXTURE* text);
 void draw_bbox(athena_object_data *obj, Color color);
 
 void render_object(athena_object_data *obj);

@@ -77,13 +77,15 @@ trilist_materials[0].diffuse.b = 0.0;
 
 listtest.materials = trilist_materials;
 
-let dragontex = new Image("dragon.png");
+const gltf_box = new RenderData("Cube.gltf");
+
+const dragontex = new Image("dragon.png");
 const dragonmesh = new RenderData("dragon.obj", dragontex);
 
-let monkeytex = new Image("monkey.png");
+const monkeytex = new Image("monkey.png");
 const monkeymesh = new RenderData("monkey.obj", monkeytex);
 
-let moontex = new Image("moon.png");
+const moontex = new Image("moon.png");
 
 const car = new RenderData("Car.obj");
 
@@ -110,7 +112,7 @@ mill.setTexture(1, moontex);
 const boombox = new RenderData("Boombox.obj");
 boombox.getTexture(0).filter = LINEAR;
 
-const render_data = [dragonmesh, monkeymesh, car, listtest, boombox, mill];
+const render_data = [dragonmesh, gltf_box, monkeymesh, car, listtest, boombox, mill];
 
 const dragon_object = new RenderObject(dragonmesh);
 dragon_object.position = {x:0.0f, y:4.0f, z:0.0f};
@@ -119,6 +121,7 @@ const monkey_object = new RenderObject(dragonmesh);
 monkey_object.position = {x:4.0f, y:4.0f, z:0.0f};
 
 const render_object = [ new RenderObject(dragonmesh), 
+                        new RenderObject(gltf_box),
                         new RenderObject(monkeymesh), 
                         new RenderObject(car), 
                         new RenderObject(listtest), 

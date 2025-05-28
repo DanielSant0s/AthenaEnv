@@ -5,7 +5,9 @@
 #include <math.h>
 #include <fcntl.h>
 
+#define CGLTF_IMPLEMENTATION
 #include "fast_obj/fast_obj.h"
+#include "cgltf/cgltf.h"
 
 #include <render.h>
 #include <dbgprintf.h>
@@ -233,4 +235,272 @@ void loadOBJ(athena_render_data* res_m, const char* path, GSTEXTURE* text) {
 	res_m->pipeline = PL_DEFAULT;
 
 	fast_obj_destroy(m);
+}
+
+void load_gltf_material(ath_mat* mat, const cgltf_material* gltf_mat, athena_render_data* res_m) {
+    init_vector(mat->ambient);
+    init_vector(mat->diffuse);
+    init_vector(mat->specular);
+    init_vector(mat->emission);
+    init_vector(mat->transmittance);
+    init_vector(mat->transmission_filter);
+    
+    mat->shininess = 1.0f;
+    mat->refraction = 1.0f;
+    mat->disolve = 1.0f;
+    mat->texture_id = -1;
+    
+    if (!gltf_mat) return;
+    
+    if (gltf_mat->has_pbr_metallic_roughness) {
+        const cgltf_pbr_metallic_roughness* pbr = &gltf_mat->pbr_metallic_roughness;
+
+        mat->diffuse[0] = pbr->base_color_factor[0];
+        mat->diffuse[1] = pbr->base_color_factor[1];
+        mat->diffuse[2] = pbr->base_color_factor[2];
+        mat->diffuse[3] = pbr->base_color_factor[3];
+
+        float metallic = pbr->metallic_factor;
+        mat->specular[0] = metallic;
+        mat->specular[1] = metallic;
+        mat->specular[2] = metallic;
+        mat->specular[3] = 1.0f;
+        
+        // Roughness affects shininess (inverse relationship)
+        float roughness = pbr->roughness_factor;
+        mat->shininess = (1.0f - roughness) * 128.0f;
+
+        if (pbr->base_color_texture.texture) {
+            const cgltf_texture* tex = pbr->base_color_texture.texture;
+            if (tex->image && tex->image->uri) {
+                mat->texture_id = res_m->texture_count;
+                GSTEXTURE* texture = malloc(sizeof(GSTEXTURE));
+                load_image(texture, tex->image->uri, true);
+                append_texture(res_m, texture);
+            }
+        }
+    }
+    
+    if (gltf_mat->has_emissive_strength) {
+        mat->emission[0] = gltf_mat->emissive_factor[0];
+        mat->emission[1] = gltf_mat->emissive_factor[1];
+        mat->emission[2] = gltf_mat->emissive_factor[2];
+        mat->emission[3] = 1.0f;
+    }
+
+    if (gltf_mat->alpha_mode == cgltf_alpha_mode_blend) {
+        mat->disolve = gltf_mat->alpha_cutoff;
+    }
+}
+
+void gltfReadFloat(const float* _accessorData, cgltf_size _accessorNumComponents, cgltf_size _index, float* _out, cgltf_size _outElementSize)
+{
+    const float* input = &_accessorData[_accessorNumComponents * _index];
+
+    for (cgltf_size ii = 0; ii < _outElementSize; ++ii)
+    {
+        _out[ii] = (ii < _accessorNumComponents) ? input[ii] : 0.0f;
+    }
+}
+
+void gltf_transfer_vertex(athena_render_data* m, uint32_t dst_idx, float* positions, float* texcoords, float* normals, float* colors, uint32_t src_idx)
+{
+    if (positions) {
+        m->positions[dst_idx][0] = positions[src_idx * 3 + 0];
+        m->positions[dst_idx][1] = positions[src_idx * 3 + 1];
+        m->positions[dst_idx][2] = positions[src_idx * 3 + 2];
+        m->positions[dst_idx][3] = 1.0f;
+    }
+
+    if (texcoords) {
+        m->texcoords[dst_idx][0] = texcoords[src_idx * 2 + 0];
+        m->texcoords[dst_idx][1] = 1.0f - texcoords[src_idx * 2 + 1]; // Inverter Y como no OBJ
+        m->texcoords[dst_idx][2] = 1.0f;
+        m->texcoords[dst_idx][3] = 1.0f;
+    } else {
+        m->texcoords[dst_idx][0] = 0.0f;
+        m->texcoords[dst_idx][1] = 0.0f;
+        m->texcoords[dst_idx][2] = 1.0f;
+        m->texcoords[dst_idx][3] = 1.0f;
+    }
+
+    if (normals) {
+        m->normals[dst_idx][0] = normals[src_idx * 3 + 0];
+        m->normals[dst_idx][1] = normals[src_idx * 3 + 1];
+        m->normals[dst_idx][2] = normals[src_idx * 3 + 2];
+        m->normals[dst_idx][3] = 1.0f;
+    } else {
+        m->normals[dst_idx][0] = 0.0f;
+        m->normals[dst_idx][1] = 1.0f;
+        m->normals[dst_idx][2] = 0.0f;
+        m->normals[dst_idx][3] = 1.0f;
+    }
+
+    if (colors) {
+        m->colours[dst_idx][0] = colors[src_idx * 3 + 0];
+        m->colours[dst_idx][1] = colors[src_idx * 3 + 1];
+        m->colours[dst_idx][2] = colors[src_idx * 3 + 2];
+        m->colours[dst_idx][3] = 1.0f;
+    } else {
+        m->colours[dst_idx][0] = 1.0f;
+        m->colours[dst_idx][1] = 1.0f;
+        m->colours[dst_idx][2] = 1.0f;
+        m->colours[dst_idx][3] = 1.0f;
+    }
+}
+
+void loadGLTF(athena_render_data* res_m, const char* path, GSTEXTURE* text) {
+    cgltf_options options = {0};
+    cgltf_data* data = NULL;
+    cgltf_result result = cgltf_parse_file(&options, path, &data);
+
+    if (result != cgltf_result_success) {
+        printf("Erro: Falha ao parsear o arquivo glTF\n");
+        return;
+    }
+
+    result = cgltf_load_buffers(&options, data, path);
+    if (result != cgltf_result_success) {
+        printf("Erro: Falha ao carregar buffers do glTF\n");
+        cgltf_free(data);
+        return;
+    }
+
+    res_m->tristrip = false; 
+
+    res_m->texture_count = 0;
+    res_m->textures = NULL;
+
+    if (data->materials_count > 0) {
+        res_m->materials = (ath_mat*)malloc(data->materials_count * sizeof(ath_mat));
+        res_m->material_count = data->materials_count;
+        
+        for (size_t i = 0; i < data->materials_count; i++) {
+            load_gltf_material(&res_m->materials[i], &data->materials[i], res_m);
+        }
+    } else {
+        res_m->materials = (ath_mat*)malloc(sizeof(ath_mat));
+        res_m->material_count = 1;
+        
+        load_gltf_material(&res_m->materials[0], NULL, res_m);
+        
+        if (text) {
+            res_m->materials[0].texture_id = 0;
+            append_texture(res_m, text);
+        }
+    }
+
+    uint32_t total_vertices = 0;
+    for (cgltf_size mesh_idx = 0; mesh_idx < data->meshes_count; ++mesh_idx) {
+        cgltf_mesh* mesh = &data->meshes[mesh_idx];
+        for (cgltf_size prim_idx = 0; prim_idx < mesh->primitives_count; ++prim_idx) {
+            cgltf_primitive* primitive = &mesh->primitives[prim_idx];
+            if (primitive->indices) {
+                total_vertices += primitive->indices->count;
+            } else if (primitive->attributes_count > 0) {
+                total_vertices += primitive->attributes[0].data->count;
+            }
+        }
+    }
+
+    res_m->index_count = total_vertices;
+
+    res_m->positions = alloc_vectors(res_m->index_count);
+    res_m->texcoords = alloc_vectors(res_m->index_count);
+    res_m->normals = alloc_vectors(res_m->index_count);
+    res_m->colours = alloc_vectors(res_m->index_count);
+
+    res_m->material_indices = (material_index*)malloc(data->meshes_count * sizeof(material_index));
+    res_m->material_index_count = 0;
+
+    uint32_t current_vertex = 0;
+
+    for (cgltf_size mesh_idx = 0; mesh_idx < data->meshes_count; ++mesh_idx) {
+        cgltf_mesh* mesh = &data->meshes[mesh_idx];
+
+        for (cgltf_size prim_idx = 0; prim_idx < mesh->primitives_count; ++prim_idx) {
+            cgltf_primitive* primitive = &mesh->primitives[prim_idx];
+            float* positions = NULL;
+            float* texcoords = NULL;
+            float* normals = NULL;
+            float* colors = NULL;
+            uint32_t vertex_count = 0;
+
+            for (cgltf_size attr_idx = 0; attr_idx < primitive->attributes_count; ++attr_idx) {
+                cgltf_attribute* attribute = &primitive->attributes[attr_idx];
+                cgltf_accessor* accessor = attribute->data;
+
+                cgltf_size float_count = cgltf_accessor_unpack_floats(accessor, NULL, 0);
+                float* accessor_data = (float*)malloc(float_count * sizeof(float));
+                cgltf_accessor_unpack_floats(accessor, accessor_data, float_count);
+
+                if (attribute->type == cgltf_attribute_type_position && attribute->index == 0) {
+                    positions = accessor_data;
+                    vertex_count = accessor->count;
+                }
+                else if (attribute->type == cgltf_attribute_type_texcoord && attribute->index == 0) {
+                    texcoords = accessor_data;
+                }
+                else if (attribute->type == cgltf_attribute_type_normal && attribute->index == 0) {
+                    normals = accessor_data;
+                }
+                else if (attribute->type == cgltf_attribute_type_color && attribute->index == 0) {
+                    colors = accessor_data;
+                }
+                else {
+                    free(accessor_data); 
+                }
+            }
+
+            if (primitive->indices) {
+                cgltf_accessor* indices_accessor = primitive->indices;
+
+                for (cgltf_size i = 0; i < indices_accessor->count; ++i) {
+                    uint32_t index = cgltf_accessor_read_index(indices_accessor, i);
+                    gltf_transfer_vertex(res_m, current_vertex, positions, texcoords, normals, colors, index);
+                    current_vertex++;
+                }
+            }
+            else {
+                for (uint32_t i = 0; i < vertex_count; ++i) {
+                    gltf_transfer_vertex(res_m, current_vertex, positions, texcoords, normals, colors, i);
+                    current_vertex++;
+                }
+            }
+
+            if (res_m->material_index_count < data->meshes_count) {
+                res_m->material_indices[res_m->material_index_count].index = 
+                    primitive->material ? (primitive->material - data->materials) : 0;
+                res_m->material_indices[res_m->material_index_count].end = current_vertex-1;
+                res_m->material_index_count++;
+            }
+
+            if (positions) free(positions);
+            if (texcoords) free(texcoords);
+            if (normals) free(normals);
+            if (colors) free(colors);
+        }
+    }
+
+    calculate_bbox(res_m);
+
+    res_m->pipeline = PL_DEFAULT;
+
+    cgltf_free(data);
+}
+
+void loadModel(athena_render_data* res_m, const char* path, GSTEXTURE* text) {
+    const char* ext = strrchr(path, '.');
+    if (!ext) {
+        printf("Unknown file format: %s\n", path);
+        return;
+    }
+    
+    if (strcmp(ext, ".gltf") == 0 || strcmp(ext, ".glb") == 0) {
+        loadGLTF(res_m, path, text);
+    } else if (strcmp(ext, ".obj") == 0 || strcmp(ext, ".objf") == 0) {
+        loadOBJ(res_m, path, text);
+    } else {
+        printf("Unsupported file format: %s\n", ext);
+    }
 }
