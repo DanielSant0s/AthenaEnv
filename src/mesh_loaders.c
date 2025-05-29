@@ -314,7 +314,7 @@ void gltf_transfer_vertex(athena_render_data* m, uint32_t dst_idx, float* positi
 
     if (texcoords) {
         m->texcoords[dst_idx][0] = texcoords[src_idx * 2 + 0];
-        m->texcoords[dst_idx][1] = 1.0f - texcoords[src_idx * 2 + 1]; // Inverter Y como no OBJ
+        m->texcoords[dst_idx][1] = 1.0f - texcoords[src_idx * 2 + 1]; 
         m->texcoords[dst_idx][2] = 1.0f;
         m->texcoords[dst_idx][3] = 1.0f;
     } else {
@@ -621,22 +621,128 @@ void loadGLTF(athena_render_data* res_m, const char* path, GSTEXTURE* text) {
 
     if (data->skins_count > 0) {
         res_m->skeleton = load_gltf_skeleton(data, &data->skins[0]);
+        load_gltf_animations(res_m, data);
     }
 
     cgltf_free(data);
 }
 
-void update_bone_matrices(athena_render_data* render_data) {
-    if (!render_data->skeleton) return;
+void load_gltf_animations(athena_render_data* res_m, cgltf_data* data) {
+    if (!data->animations_count || !res_m->skeleton) {
+        res_m->anim_controller.animations = NULL;
+        res_m->anim_controller.count = 0;
+        return;
+    }
     
-    athena_skeleton* skeleton = render_data->skeleton;
+    res_m->anim_controller.count = data->animations_count;
+    res_m->anim_controller.animations = (athena_animation*)malloc(res_m->anim_controller.count * sizeof(athena_animation));
+    
+    for (cgltf_size anim_idx = 0; anim_idx < data->animations_count; anim_idx++) {
+        cgltf_animation* gltf_anim = &data->animations[anim_idx];
+        athena_animation* anim = &res_m->anim_controller.animations[anim_idx];
 
-    for (uint32_t i = 0; i < skeleton->bone_count; i++) {
-        athena_bone* bone = &skeleton->bones[i];
+        if (gltf_anim->name) {
+            strncpy(anim->name, gltf_anim->name, sizeof(anim->name) - 1);
+            anim->name[sizeof(anim->name) - 1] = '\0';
+        } else {
+            snprintf(anim->name, sizeof(anim->name), "Animation_%u", (uint32_t)anim_idx);
+        }
 
-        matrix_multiply(skeleton->bone_matrices[i], 
-                       bone->current_transform, 
-                       bone->inverse_bind);
+        anim->duration = 0.0f;
+        anim->ticks_per_second = 1.0f;
+        anim->bone_animation_count = gltf_anim->channels_count;
+        anim->bone_animations = (athena_bone_animation*)malloc(anim->bone_animation_count * sizeof(athena_bone_animation));
+
+        for (cgltf_size channel_idx = 0; channel_idx < gltf_anim->channels_count; channel_idx++) {
+            cgltf_animation_channel* channel = &gltf_anim->channels[channel_idx];
+            cgltf_animation_sampler* sampler = channel->sampler;
+            athena_bone_animation* bone_anim = &anim->bone_animations[channel_idx];
+
+            bone_anim->bone_id = UINT32_MAX;
+            for (uint32_t bone_idx = 0; bone_idx < res_m->skeleton->bone_count; bone_idx++) {
+                if (channel->target_node == data->skins[0].joints[bone_idx]) {
+                    bone_anim->bone_id = bone_idx;
+                    break;
+                }
+            }
+            
+            if (bone_anim->bone_id == UINT32_MAX) {
+                bone_anim->position_keys = NULL;
+                bone_anim->rotation_keys = NULL;
+                bone_anim->scale_keys = NULL;
+                bone_anim->position_key_count = 0;
+                bone_anim->rotation_key_count = 0;
+                bone_anim->scale_key_count = 0;
+                continue;
+            }
+
+            cgltf_size input_count = cgltf_accessor_unpack_floats(sampler->input, NULL, 0);
+            float* input_times = (float*)malloc(input_count * sizeof(float));
+            cgltf_accessor_unpack_floats(sampler->input, input_times, input_count);
+            
+            cgltf_size output_count = cgltf_accessor_unpack_floats(sampler->output, NULL, 0);
+            float* output_values = (float*)malloc(output_count * sizeof(float));
+            cgltf_accessor_unpack_floats(sampler->output, output_values, output_count);
+            
+            for (cgltf_size i = 0; i < input_count; i++) {
+                if (input_times[i] > anim->duration) {
+                    anim->duration = input_times[i];
+                }
+            }
+            
+            if (channel->target_path == cgltf_animation_path_type_translation) {
+                bone_anim->position_key_count = (uint32_t)input_count;
+                bone_anim->position_keys = (athena_keyframe*)malloc(bone_anim->position_key_count * sizeof(athena_keyframe));
+                
+                for (uint32_t i = 0; i < bone_anim->position_key_count; i++) {
+                    bone_anim->position_keys[i].time = input_times[i];
+                    bone_anim->position_keys[i].position[0] = output_values[i * 3 + 0];
+                    bone_anim->position_keys[i].position[1] = output_values[i * 3 + 1];
+                    bone_anim->position_keys[i].position[2] = output_values[i * 3 + 2];
+                    bone_anim->position_keys[i].position[3] = 1.0f;
+                }
+            }
+            else if (channel->target_path == cgltf_animation_path_type_rotation) {
+                bone_anim->rotation_key_count = (uint32_t)input_count;
+                bone_anim->rotation_keys = (athena_keyframe*)malloc(bone_anim->rotation_key_count * sizeof(athena_keyframe));
+                
+                for (uint32_t i = 0; i < bone_anim->rotation_key_count; i++) {
+                    bone_anim->rotation_keys[i].time = input_times[i];
+                    bone_anim->rotation_keys[i].rotation[0] = output_values[i * 4 + 0]; // x
+                    bone_anim->rotation_keys[i].rotation[1] = output_values[i * 4 + 1]; // y
+                    bone_anim->rotation_keys[i].rotation[2] = output_values[i * 4 + 2]; // z
+                    bone_anim->rotation_keys[i].rotation[3] = output_values[i * 4 + 3]; // w
+                }
+            }
+            else if (channel->target_path == cgltf_animation_path_type_scale) {
+                bone_anim->scale_key_count = (uint32_t)input_count;
+                bone_anim->scale_keys = (athena_keyframe*)malloc(bone_anim->scale_key_count * sizeof(athena_keyframe));
+                
+                for (uint32_t i = 0; i < bone_anim->scale_key_count; i++) {
+                    bone_anim->scale_keys[i].time = input_times[i];
+                    bone_anim->scale_keys[i].scale[0] = output_values[i * 3 + 0];
+                    bone_anim->scale_keys[i].scale[1] = output_values[i * 3 + 1];
+                    bone_anim->scale_keys[i].scale[2] = output_values[i * 3 + 2];
+                    bone_anim->scale_keys[i].scale[3] = 1.0f;
+                }
+            }
+            
+            if (channel->target_path != cgltf_animation_path_type_translation) {
+                bone_anim->position_keys = NULL;
+                bone_anim->position_key_count = 0;
+            }
+            if (channel->target_path != cgltf_animation_path_type_rotation) {
+                bone_anim->rotation_keys = NULL;
+                bone_anim->rotation_key_count = 0;
+            }
+            if (channel->target_path != cgltf_animation_path_type_scale) {
+                bone_anim->scale_keys = NULL;
+                bone_anim->scale_key_count = 0;
+            }
+            
+            free(input_times);
+            free(output_values);
+        }
     }
 }
 

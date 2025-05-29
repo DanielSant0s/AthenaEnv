@@ -57,6 +57,42 @@ typedef struct {
 	int shade_model; // 0 = flat, 1 = gouraud
 } RenderAttributes;
 
+
+typedef struct athena_keyframe {
+    float time;
+    VECTOR position;
+    VECTOR rotation;
+    VECTOR scale;
+} athena_keyframe;
+
+typedef struct athena_bone_animation {
+    uint32_t bone_id;
+    athena_keyframe* position_keys;
+    athena_keyframe* rotation_keys;
+    athena_keyframe* scale_keys;
+    uint32_t position_key_count;
+    uint32_t rotation_key_count;
+    uint32_t scale_key_count;
+} athena_bone_animation;
+
+typedef struct athena_animation {
+    char name[64];
+    float duration;
+    float ticks_per_second;
+    athena_bone_animation* bone_animations;
+    uint32_t bone_animation_count;
+} athena_animation;
+
+typedef struct athena_animation_controller {
+    athena_animation* animations;
+    uint32_t count;
+    
+    uint32_t current;
+    float current_time;
+    bool is_playing;
+    bool loop;
+} athena_animation_controller;
+
 #define ROOT_BONE -1
 
 typedef struct athena_bone {
@@ -117,7 +153,9 @@ typedef struct athena_render_data {
     VECTOR* colours;
 
     vertex_skin_data* skin_data;    
-	athena_skeleton* skeleton;         
+	athena_skeleton* skeleton;        
+	
+    athena_animation_controller anim_controller; 
 
     VECTOR bounding_box[8];
 
@@ -147,41 +185,6 @@ typedef struct athena_object_data {
 	MATRIX local_screen;
 } athena_object_data;
 
-typedef struct athena_keyframe {
-    float time;
-    VECTOR position;
-    VECTOR rotation;
-    VECTOR scale;
-} athena_keyframe;
-
-typedef struct athena_bone_animation {
-    uint32_t bone_id;
-    athena_keyframe* position_keys;
-    athena_keyframe* rotation_keys;
-    athena_keyframe* scale_keys;
-    uint32_t position_key_count;
-    uint32_t rotation_key_count;
-    uint32_t scale_key_count;
-} athena_bone_animation;
-
-typedef struct athena_animation {
-    char name[64];
-    float duration;
-    float ticks_per_second;
-    athena_bone_animation* bone_animations;
-    uint32_t bone_animation_count;
-} athena_animation;
-
-typedef struct athena_animation_controller {
-    athena_animation* animations;
-    uint32_t animation_count;
-    
-    uint32_t current_animation;
-    float current_time;
-    bool is_playing;
-    bool loop;
-} athena_animation_controller;
-
 typedef enum {
 	CAMERA_DEFAULT,
 	CAMERA_LOOKAT,
@@ -194,7 +197,7 @@ void setCameraType(eCameraTypes type);
 void cameraUpdate();
 
 #define BATCH_SIZE 51
-#define BATCH_SIZE_NO_CLIPPING 60
+#define BATCH_SIZE_SKINNED 51
 
 int clip_bounding_box(MATRIX local_clip, VECTOR *bounding_box);
 void calculate_vertices_clipped(VECTOR *output,  int count, VECTOR *vertices, MATRIX local_screen);

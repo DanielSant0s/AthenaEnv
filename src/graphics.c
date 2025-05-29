@@ -338,17 +338,21 @@ static void flipScreenDoubleBuffering()
 
 static void flipScreenDoubleBufferingPerf()
 {	
-	owl_flush_packet();
-
-	//gsKit_set_finish(gsGlobal);
-
 	sync_screen(gsGlobal);
 
-	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
-
 	dmaKit_wait(DMA_CHANNEL_GIF, 0);
+	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
+	
+	set_finish();
 
-	gsKit_finish();
+	owl_flush_packet();
+
+	if(!gsGlobal->FirstFrame)
+		while(!(GS_CSR_FINISH));
+
+	GS_SETREG_CSR_FINISH(1);
+
+	gsGlobal->FirstFrame = GS_SETTING_OFF;
 
 	flip_screen(gsGlobal);
 	//gsKit_queue_exec(gsGlobal);
@@ -356,7 +360,6 @@ static void flipScreenDoubleBufferingPerf()
 	texture_manager_nextFrame(gsGlobal);
 
 	processFrameCounter();
-
 	
 }
 
