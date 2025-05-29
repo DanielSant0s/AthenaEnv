@@ -41,7 +41,8 @@ void init3D(float fov, float near, float far)
 
 	initCamera(&world_view);
 	create_view(view_screen, DEG2RAD(fov), near, far, gsGlobal->Width, gsGlobal->Height);
-	vu1_set_double_buffer_settings(141, 400);
+	vu1_set_double_buffer_settings(269, 357); // Skinned layout
+	// vu1_set_double_buffer_settings(141, 400);
 	owl_flush_packet();
 
 	screen_scale.x = gsGlobal->Width/2;
