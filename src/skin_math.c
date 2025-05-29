@@ -1,0 +1,280 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <malloc.h>
+#include <math.h>
+#include <fcntl.h>
+
+#include <render.h>
+#include <dbgprintf.h>
+
+#include <owl_packet.h>
+
+void lerp_vector(VECTOR result, VECTOR a, VECTOR b, float t) {
+    result[0] = a[0] + (b[0] - a[0]) * t;
+    result[1] = a[1] + (b[1] - a[1]) * t;
+    result[2] = a[2] + (b[2] - a[2]) * t;
+    result[3] = a[3] + (b[3] - a[3]) * t;
+    return result;
+}
+
+void slerp_quaternion(VECTOR result, VECTOR q1, VECTOR q2, float t) {
+    float dot = q1[0] * q2[0] + q1[1] * q2[1] + q1[2] * q2[2] + q1[3] * q2[3];
+
+    if (dot < 0.0f) {
+        q2[0] = -q2[0];
+        q2[1] = -q2[1];
+        q2[2] = -q2[2];
+        q2[3] = -q2[3];
+        dot = -dot;
+    }
+
+    if (dot > 0.9995f) {
+        result[0] = q1[0] + (q2[0] - q1[0]) * t;
+        result[1] = q1[1] + (q2[1] - q1[1]) * t;
+        result[2] = q1[2] + (q2[2] - q1[2]) * t;
+        result[3] = q1[3] + (q2[3] - q1[3]) * t;
+    } else {
+        float theta_0 = acosf(dot);
+        float theta = theta_0 * t;
+        float sin_theta = sinf(theta);
+        float sin_theta_0 = sinf(theta_0);
+        
+        float s0 = cosf(theta) - dot * sin_theta / sin_theta_0;
+        float s1 = sin_theta / sin_theta_0;
+        
+        result[0] = s0 * q1[0] + s1 * q2[0];
+        result[1] = s0 * q1[1] + s1 * q2[1];
+        result[2] = s0 * q1[2] + s1 * q2[2];
+        result[3] = s0 * q1[3] + s1 * q2[3];
+    }
+
+    float length = sqrtf(result[0] * result[0] + result[1] * result[1] + 
+                        result[2] * result[2] + result[3] * result[3]);
+    if (length > 0.0f) {
+        result[0] /= length;
+        result[1] /= length;
+        result[2] /= length;
+        result[3] /= length;
+    }
+}
+
+void find_keyframe_indices(athena_keyframe* keys, uint32_t key_count, float time, 
+                          uint32_t* prev_idx, uint32_t* next_idx, float* t) {
+    if (key_count == 0) {
+        *prev_idx = *next_idx = 0;
+        *t = 0.0f;
+        return;
+    }
+    
+    if (time <= keys[0].time) {
+        *prev_idx = *next_idx = 0;
+        *t = 0.0f;
+        return;
+    }
+    
+    if (time >= keys[key_count - 1].time) {
+        *prev_idx = *next_idx = key_count - 1;
+        *t = 0.0f;
+        return;
+    }
+
+    for (uint32_t i = 0; i < key_count - 1; i++) {
+        if (time >= keys[i].time && time <= keys[i + 1].time) {
+            *prev_idx = i;
+            *next_idx = i + 1;
+            
+            float duration = keys[i + 1].time - keys[i].time;
+            *t = (duration > 0.0f) ? (time - keys[i].time) / duration : 0.0f;
+            return;
+        }
+    }
+
+    *prev_idx = *next_idx = key_count - 1;
+    *t = 0.0f;
+}
+
+void apply_animation(athena_render_data* render_data, uint32_t animation_index, float time) {
+    if (!render_data->skeleton || !render_data->anim_controller.animations || 
+        animation_index >= render_data->anim_controller.count) {
+        return;
+    }
+    
+    athena_animation* anim = &render_data->anim_controller.animations[animation_index];
+    athena_skeleton* skeleton = render_data->skeleton;
+
+    float normalized_time = fmodf(time, anim->duration);
+
+    for (uint32_t bone_anim_idx = 0; bone_anim_idx < anim->bone_animation_count; bone_anim_idx++) {
+        athena_bone_animation* bone_anim = &anim->bone_animations[bone_anim_idx];
+        
+        if (bone_anim->bone_id >= skeleton->bone_count) {
+            continue; 
+        }
+        
+        athena_bone* bone = &skeleton->bones[bone_anim->bone_id];
+
+        if (bone_anim->position_keys && bone_anim->position_key_count > 0) {
+            uint32_t prev_idx, next_idx;
+            float t;
+            find_keyframe_indices(bone_anim->position_keys, bone_anim->position_key_count, 
+                                normalized_time, &prev_idx, &next_idx, &t);
+            
+            if (prev_idx == next_idx) {
+                bone->position[0] = bone_anim->position_keys[prev_idx].position[0];
+                bone->position[1] = bone_anim->position_keys[prev_idx].position[1];
+                bone->position[2] = bone_anim->position_keys[prev_idx].position[2];
+            } else {
+                VECTOR pos;
+                lerp_vector(pos, bone_anim->position_keys[prev_idx].position,
+                                       bone_anim->position_keys[next_idx].position, t);
+                bone->position[0] = pos[0];
+                bone->position[1] = pos[1];
+                bone->position[2] = pos[2];
+            }
+        }
+
+        if (bone_anim->rotation_keys && bone_anim->rotation_key_count > 0) {
+            uint32_t prev_idx, next_idx;
+            float t;
+            find_keyframe_indices(bone_anim->rotation_keys, bone_anim->rotation_key_count, 
+                                normalized_time, &prev_idx, &next_idx, &t);
+            
+            if (prev_idx == next_idx) {
+                bone->rotation[0] = bone_anim->rotation_keys[prev_idx].rotation[0];
+                bone->rotation[1] = bone_anim->rotation_keys[prev_idx].rotation[1];
+                bone->rotation[2] = bone_anim->rotation_keys[prev_idx].rotation[2];
+                bone->rotation[3] = bone_anim->rotation_keys[prev_idx].rotation[3];
+            } else {
+                VECTOR rot;
+                slerp_quaternion(rot, bone_anim->rotation_keys[prev_idx].rotation,
+                                            bone_anim->rotation_keys[next_idx].rotation, t);
+                bone->rotation[0] = rot[0];
+                bone->rotation[1] = rot[1];
+                bone->rotation[2] = rot[2];
+                bone->rotation[3] = rot[3];
+            }
+        }
+
+        if (bone_anim->scale_keys && bone_anim->scale_key_count > 0) {
+            uint32_t prev_idx, next_idx;
+            float t;
+            find_keyframe_indices(bone_anim->scale_keys, bone_anim->scale_key_count, 
+                                normalized_time, &prev_idx, &next_idx, &t);
+            
+            if (prev_idx == next_idx) {
+                bone->scale[0] = bone_anim->scale_keys[prev_idx].scale[0];
+                bone->scale[1] = bone_anim->scale_keys[prev_idx].scale[1];
+                bone->scale[2] = bone_anim->scale_keys[prev_idx].scale[2];
+            } else {
+                VECTOR scale;
+                lerp_vector(scale, bone_anim->scale_keys[prev_idx].scale,
+                                         bone_anim->scale_keys[next_idx].scale, t);
+                bone->scale[0] = scale[0];
+                bone->scale[1] = scale[1];
+                bone->scale[2] = scale[2];
+            }
+        }
+    }
+
+    update_bone_transforms(skeleton);
+}
+
+void update_bone_transforms(athena_skeleton* skeleton) {
+    if (!skeleton || !skeleton->bones) {
+        return;
+    }
+
+    for (uint32_t i = 0; i < skeleton->bone_count; i++) {
+        athena_bone* bone = &skeleton->bones[i];
+
+        MATRIX local_transform;
+        create_transform_matrix(local_transform, 
+                              bone->position, 
+                              bone->rotation, 
+                              bone->scale);
+
+        if (bone->parent_id == -1 || bone->parent_id >= (int32_t)skeleton->bone_count) {
+            memcpy(bone->current_transform, local_transform, sizeof(MATRIX));
+        } else {
+            athena_bone* parent = &skeleton->bones[bone->parent_id];
+            matrix_multiply(bone->current_transform, parent->current_transform, local_transform);
+        }
+        
+        if (skeleton->bone_matrices) {
+            matrix_multiply(skeleton->bone_matrices[i], bone->current_transform, bone->inverse_bind);
+        }
+    }
+}
+
+void create_transform_matrix(MATRIX result, const VECTOR position, 
+                           const VECTOR rotation, const VECTOR scale) {
+
+    MATRIX scale_matrix;
+    matrix_unit(scale_matrix);
+    scale_matrix[0] = scale[0];
+    scale_matrix[5] = scale[1];
+    scale_matrix[10] = scale[2];
+
+    MATRIX rotation_matrix;
+    quaternion_to_matrix(rotation_matrix, rotation);
+
+    MATRIX translation_matrix;
+    matrix_unit(translation_matrix);
+    translation_matrix[3] = position[0];
+    translation_matrix[7] = position[1];
+    translation_matrix[11] = position[2];
+
+    MATRIX temp;
+    matrix_multiply(temp, rotation_matrix, scale_matrix);
+    matrix_multiply(result, translation_matrix, temp);
+}
+
+void quaternion_to_matrix(MATRIX result, const VECTOR quaternion) {
+    float x = quaternion[0];
+    float y = quaternion[1];
+    float z = quaternion[2];
+    float w = quaternion[3];
+    
+    float x2 = x * 2.0f;
+    float y2 = y * 2.0f;
+    float z2 = z * 2.0f;
+    float xx = x * x2;
+    float xy = x * y2;
+    float xz = x * z2;
+    float yy = y * y2;
+    float yz = y * z2;
+    float zz = z * z2;
+    float wx = w * x2;
+    float wy = w * y2;
+    float wz = w * z2;
+    
+    matrix_unit(result);
+    
+    result[0] = 1.0f - (yy + zz);
+    result[1] = xy - wz;
+    result[2] = xz + wy;
+    
+    result[4] = xy + wz;
+    result[5] = 1.0f - (xx + zz);
+    result[6] = yz - wx;
+    
+    result[8] = xz - wy;
+    result[9] = yz + wx;
+    result[10] = 1.0f - (xx + yy);
+}
+
+void update_bone_matrices(athena_render_data* render_data) {
+    if (!render_data->skeleton) return;
+    
+    athena_skeleton* skeleton = render_data->skeleton;
+
+    for (uint32_t i = 0; i < skeleton->bone_count; i++) {
+        athena_bone* bone = &skeleton->bones[i];
+
+        matrix_multiply(skeleton->bone_matrices[i], 
+                       bone->current_transform, 
+                       bone->inverse_bind);
+    }
+}
+

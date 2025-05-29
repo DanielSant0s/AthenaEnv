@@ -83,7 +83,7 @@ culled_init:
     ;////////////////////////////////////////////
 
     ;/////////////// --- Loop --- ///////////////
-    iadd vertexCounter, iBase, vertCount ; loop vertCount times
+    iadd vertexCounter, vi00, vertCount ; loop vertCount times
     vertexLoop:
 
         ;////////// --- Load loop data --- //////////
@@ -189,7 +189,7 @@ culled_init:
         iaddiu          colorData,      colorData,      1
 
         iaddi   vertexCounter,  vertexCounter,  -1	; decrement the loop counter 
-        ibne    vertexCounter,  iBase,   vertexLoop	; and repeat if needed
+        ibgtz    vertexCounter,  vertexLoop	; and repeat if needed
 
     ;//////////////////////////////////////////// 
 

@@ -533,11 +533,8 @@ void draw_vu1_with_spec_lights(athena_object_data *obj) {
 
 	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 7);
 
-	screen_scale.w = *((uint32_t*)&data->attributes);
-
 	unpack_list_open(packet, 0, false);
 	{
-		screen_scale.w = data->attributes.accurate_clipping;
 		unpack_list_append(packet, &screen_scale,       1);
 
 		unpack_list_append(packet, obj->local_screen,       4);
