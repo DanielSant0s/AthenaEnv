@@ -40,50 +40,6 @@
 
 extern GSGLOBAL *gsGlobal;
 
-struct gsBitMapFileHeader
-{
-	u16	Type;
-	u32	Size;
-	u16 Reserved1;
-	u16 Reserved2;
-	u32 Offset;
-} __attribute__ ((packed));
-typedef struct gsBitMapFileHeader GSBMFHDR;
-
-struct gsBitMapInfoHeader
-{
-	u32	Size;
-	u32	Width;
-	u32	Height;
-	u16	Planes;
-	u16 BitCount;
-	u32 Compression;
-	u32 SizeImage;
-	u32 XPelsPerMeter;
-	u32 YPelsPerMeter;
-	u32 ColorUsed;
-	u32 ColorImportant;
-} __attribute__ ((packed));
-typedef struct gsBitMapInfoHeader GSBMIHDR;
-
-struct gsBitMapClut
-{
-	u8 Blue;
-	u8 Green;
-	u8 Red;
-	u8 Alpha;
-} __attribute__ ((packed));
-typedef struct gsBitMapClut GSBMCLUT;
-
-struct gsBitmap
-{
-	GSBMFHDR FileHeader;
-	GSBMIHDR InfoHeader;
-	char *Texture;
-	GSBMCLUT *Clut;
-};
-typedef struct gsBitmap GSBITMAP;
-
 //remove fontm specific things here
 typedef enum {
     FONT_TYPE_FNT,
