@@ -88,6 +88,7 @@ typedef struct athena_animation_controller {
     uint32_t count;
     
     uint32_t current;
+	float initial_time;
     float current_time;
     bool is_playing;
     bool loop;
@@ -99,6 +100,8 @@ typedef struct athena_bone {
     uint32_t id;
     char name[64];
     int32_t parent_id;
+
+	MATRIX world_matrix; 
     
     MATRIX bind_pose;    
     MATRIX inverse_bind;   
@@ -197,7 +200,7 @@ void setCameraType(eCameraTypes type);
 void cameraUpdate();
 
 #define BATCH_SIZE 51
-#define BATCH_SIZE_SKINNED 51
+#define BATCH_SIZE_SKINNED 33
 
 int clip_bounding_box(MATRIX local_clip, VECTOR *bounding_box);
 void calculate_vertices_clipped(VECTOR *output,  int count, VECTOR *vertices, MATRIX local_screen);
@@ -271,5 +274,20 @@ do { \
 	m->textures = realloc(m->textures, sizeof(GSTEXTURE*)*m->texture_count); \
 	m->textures[m->texture_count-1] = tex; \
 } while (0)
+
+void lerp_vector(VECTOR result, VECTOR a, VECTOR b, float t);
+void slerp_quaternion(VECTOR result, VECTOR q1, VECTOR q2, float t);
+void find_keyframe_indices(athena_keyframe* keys, uint32_t key_count, float time, 
+                          uint32_t* prev_idx, uint32_t* next_idx, float* t);
+
+void apply_animation(athena_render_data* render_data, uint32_t animation_index, float anim_time) ;					  
+
+void update_bone_transforms(athena_skeleton* skeleton);
+
+void create_transform_matrix(MATRIX result, const VECTOR position, 
+                           const VECTOR rotation, const VECTOR scale);
+
+void decompose_transform_matrix(const MATRIX matrix, VECTOR position, 
+                              VECTOR rotation, VECTOR scale);
 
 #endif

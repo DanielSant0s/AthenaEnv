@@ -293,59 +293,56 @@ void load_gltf_material(ath_mat* mat, const cgltf_material* gltf_mat, athena_ren
     }
 }
 
-void gltfReadFloat(const float* _accessorData, cgltf_size _accessorNumComponents, cgltf_size _index, float* _out, cgltf_size _outElementSize)
+void VectorTransform(VECTOR ret, VECTOR v, MATRIX m)
 {
-    const float* input = &_accessorData[_accessorNumComponents * _index];
+    float x = v[0];
+    float y = v[1];
+    float z = v[2];
 
-    for (cgltf_size ii = 0; ii < _outElementSize; ++ii)
-    {
-        _out[ii] = (ii < _accessorNumComponents) ? input[ii] : 0.0f;
-    }
+    ret[0] = v[0]; //m[0]*x + m[4]*y + m[8]*z +  m[12];
+    ret[1] = v[1]; //m[1]*x + m[5]*y + m[9]*z +  m[13];
+    ret[2] = v[2]; //m[2]*x + m[6]*y + m[10]*z + m[14];
 }
 
-void gltf_transfer_vertex(athena_render_data* m, uint32_t dst_idx, float* positions, float* texcoords, float* normals, float* colors, uint32_t src_idx)
+void gltf_transfer_vertex(athena_render_data* res_m, uint32_t dst_idx, float* positions, float* texcoords, float* normals, float* colors, uint32_t src_idx, MATRIX m, MATRIX mn)
 {
     if (positions) {
-        m->positions[dst_idx][0] = positions[src_idx * 3 + 0];
-        m->positions[dst_idx][1] = positions[src_idx * 3 + 1];
-        m->positions[dst_idx][2] = positions[src_idx * 3 + 2];
-        m->positions[dst_idx][3] = 1.0f;
+        VectorTransform(res_m->positions[dst_idx], &positions[src_idx * 3], m);
+        res_m->positions[dst_idx][3] = 1.0f;
     }
 
     if (texcoords) {
-        m->texcoords[dst_idx][0] = texcoords[src_idx * 2 + 0];
-        m->texcoords[dst_idx][1] = 1.0f - texcoords[src_idx * 2 + 1]; 
-        m->texcoords[dst_idx][2] = 1.0f;
-        m->texcoords[dst_idx][3] = 1.0f;
+        res_m->texcoords[dst_idx][0] = texcoords[src_idx * 2 + 0];
+        res_m->texcoords[dst_idx][1] = texcoords[src_idx * 2 + 1]; 
+        res_m->texcoords[dst_idx][2] = 1.0f;
+        res_m->texcoords[dst_idx][3] = 1.0f;
     } else {
-        m->texcoords[dst_idx][0] = 0.0f;
-        m->texcoords[dst_idx][1] = 0.0f;
-        m->texcoords[dst_idx][2] = 1.0f;
-        m->texcoords[dst_idx][3] = 1.0f;
+        res_m->texcoords[dst_idx][0] = 0.0f;
+        res_m->texcoords[dst_idx][1] = 0.0f;
+        res_m->texcoords[dst_idx][2] = 1.0f;
+        res_m->texcoords[dst_idx][3] = 1.0f;
     }
 
     if (normals) {
-        m->normals[dst_idx][0] = normals[src_idx * 3 + 0];
-        m->normals[dst_idx][1] = normals[src_idx * 3 + 1];
-        m->normals[dst_idx][2] = normals[src_idx * 3 + 2];
-        m->normals[dst_idx][3] = 1.0f;
+        VectorTransform(res_m->normals[dst_idx], &normals[src_idx * 3], mn);
+        res_m->normals[dst_idx][3] = 1.0f;
     } else {
-        m->normals[dst_idx][0] = 0.0f;
-        m->normals[dst_idx][1] = 1.0f;
-        m->normals[dst_idx][2] = 0.0f;
-        m->normals[dst_idx][3] = 1.0f;
+        res_m->normals[dst_idx][0] = 0.0f;
+        res_m->normals[dst_idx][1] = 1.0f;
+        res_m->normals[dst_idx][2] = 0.0f;
+        res_m->normals[dst_idx][3] = 1.0f;
     }
 
     if (colors) {
-        m->colours[dst_idx][0] = colors[src_idx * 3 + 0];
-        m->colours[dst_idx][1] = colors[src_idx * 3 + 1];
-        m->colours[dst_idx][2] = colors[src_idx * 3 + 2];
-        m->colours[dst_idx][3] = 1.0f;
+        res_m->colours[dst_idx][0] = colors[src_idx * 3 + 0];
+        res_m->colours[dst_idx][1] = colors[src_idx * 3 + 1];
+        res_m->colours[dst_idx][2] = colors[src_idx * 3 + 2];
+        res_m->colours[dst_idx][3] = 1.0f;
     } else {
-        m->colours[dst_idx][0] = 1.0f;
-        m->colours[dst_idx][1] = 1.0f;
-        m->colours[dst_idx][2] = 1.0f;
-        m->colours[dst_idx][3] = 1.0f;
+        res_m->colours[dst_idx][0] = 1.0f;
+        res_m->colours[dst_idx][1] = 1.0f;
+        res_m->colours[dst_idx][2] = 1.0f;
+        res_m->colours[dst_idx][3] = 1.0f;
     }
 }
 
@@ -354,7 +351,7 @@ void load_gltf_skinning_data(athena_render_data* res_m, float* joints, float* we
 
     vertex_skin_data* skin = &res_m->skin_data[dst_idx];
     for (int j = 0; j < 4; j++) {
-        skin->bone_indices[j] = (uint32_t)joints[src_idx * 4 + j];
+        skin->bone_indices[j] = (uint32_t)joints[src_idx * 4 + j] * 4; // we are multiplying by 4 because it is actually a matrix index acessor, so we can save some for VU1
         skin->bone_weights[j] = weights[src_idx * 4 + j];
     }
 
@@ -414,6 +411,8 @@ athena_skeleton* load_gltf_skeleton(cgltf_data* data, cgltf_skin* skin) {
             if (bone->parent_id != -1) break;
         }
 
+        cgltf_node_transform_world(joint_node, bone->world_matrix); 
+
         if (joint_node->has_translation) {
             bone->position[0] = joint_node->translation[0];
             bone->position[1] = joint_node->translation[1];
@@ -450,7 +449,9 @@ athena_skeleton* load_gltf_skeleton(cgltf_data* data, cgltf_skin* skin) {
             matrix_unit(bone->inverse_bind);
         }
 
-        matrix_unit(bone->bind_pose);
+        create_transform_matrix(bone->bind_pose, joint_node->translation, joint_node->rotation, joint_node->scale);
+        
+
         matrix_unit(bone->current_transform);
         matrix_unit(skeleton->bone_matrices[i]);
     }
@@ -461,6 +462,8 @@ athena_skeleton* load_gltf_skeleton(cgltf_data* data, cgltf_skin* skin) {
     
     return skeleton;
 }
+
+void load_gltf_animations(athena_render_data* res_m, cgltf_data* data);
 
 void loadGLTF(athena_render_data* res_m, const char* path, GSTEXTURE* text) {
     cgltf_options options = {0};
@@ -532,8 +535,26 @@ void loadGLTF(athena_render_data* res_m, const char* path, GSTEXTURE* text) {
 
     uint32_t current_vertex = 0;
 
-    for (cgltf_size mesh_idx = 0; mesh_idx < data->meshes_count; ++mesh_idx) {
-        cgltf_mesh* mesh = &data->meshes[mesh_idx];
+    for (cgltf_size node_idx = 0; node_idx < data->nodes_count; ++node_idx) {
+        cgltf_node *node = &data->nodes[node_idx];
+
+        cgltf_mesh *mesh = node->mesh;
+
+        if (!mesh)
+            continue;
+
+        cgltf_float worldTransform[16];
+        cgltf_node_transform_world(node, worldTransform); 
+
+	    printf("World matrix %d:\n", node_idx);
+	    printf("%f %f %f %f\n", worldTransform[0], worldTransform[1], worldTransform[2], worldTransform[3]);
+	    printf("%f %f %f %f\n", worldTransform[4], worldTransform[5], worldTransform[6], worldTransform[7]);
+	    printf("%f %f %f %f\n", worldTransform[8], worldTransform[9], worldTransform[10], worldTransform[11]);
+	    printf("%f %f %f %f\n", worldTransform[12], worldTransform[13], worldTransform[14], worldTransform[15]);
+
+        MATRIX worldMatrixNormals;
+        matrix_inverse(worldMatrixNormals, worldTransform);
+        matrix_transpose(worldMatrixNormals, worldMatrixNormals);
 
         for (cgltf_size prim_idx = 0; prim_idx < mesh->primitives_count; ++prim_idx) {
             cgltf_primitive* primitive = &mesh->primitives[prim_idx];
@@ -586,14 +607,14 @@ void loadGLTF(athena_render_data* res_m, const char* path, GSTEXTURE* text) {
                 for (cgltf_size i = 0; i < indices_accessor->count; ++i) {
                     uint32_t index = cgltf_accessor_read_index(indices_accessor, i);
                     load_gltf_skinning_data(res_m, joints, weights, current_vertex, index);
-                    gltf_transfer_vertex(res_m, current_vertex, positions, texcoords, normals, colors, index);
+                    gltf_transfer_vertex(res_m, current_vertex, positions, texcoords, normals, colors, index, worldTransform, worldMatrixNormals);
                     current_vertex++;
                 }
             }
             else {
                 for (uint32_t i = 0; i < vertex_count; ++i) {
                     load_gltf_skinning_data(res_m, joints, weights, current_vertex, i);
-                    gltf_transfer_vertex(res_m, current_vertex, positions, texcoords, normals, colors, i);
+                    gltf_transfer_vertex(res_m, current_vertex, positions, texcoords, normals, colors, i, worldTransform, worldMatrixNormals);
                     current_vertex++;
                 }
             }
@@ -622,6 +643,7 @@ void loadGLTF(athena_render_data* res_m, const char* path, GSTEXTURE* text) {
     if (data->skins_count > 0) {
         res_m->skeleton = load_gltf_skeleton(data, &data->skins[0]);
         load_gltf_animations(res_m, data);
+        update_bone_transforms(res_m->skeleton);
     }
 
     cgltf_free(data);

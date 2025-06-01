@@ -15,7 +15,6 @@ void lerp_vector(VECTOR result, VECTOR a, VECTOR b, float t) {
     result[1] = a[1] + (b[1] - a[1]) * t;
     result[2] = a[2] + (b[2] - a[2]) * t;
     result[3] = a[3] + (b[3] - a[3]) * t;
-    return result;
 }
 
 void slerp_quaternion(VECTOR result, VECTOR q1, VECTOR q2, float t) {
@@ -95,11 +94,6 @@ void find_keyframe_indices(athena_keyframe* keys, uint32_t key_count, float time
 }
 
 void apply_animation(athena_render_data* render_data, uint32_t animation_index, float time) {
-    if (!render_data->skeleton || !render_data->anim_controller.animations || 
-        animation_index >= render_data->anim_controller.count) {
-        return;
-    }
-    
     athena_animation* anim = &render_data->anim_controller.animations[animation_index];
     athena_skeleton* skeleton = render_data->skeleton;
 
@@ -149,6 +143,8 @@ void apply_animation(athena_render_data* render_data, uint32_t animation_index, 
                 VECTOR rot;
                 slerp_quaternion(rot, bone_anim->rotation_keys[prev_idx].rotation,
                                             bone_anim->rotation_keys[next_idx].rotation, t);
+
+                
                 bone->rotation[0] = rot[0];
                 bone->rotation[1] = rot[1];
                 bone->rotation[2] = rot[2];
@@ -194,16 +190,103 @@ void update_bone_transforms(athena_skeleton* skeleton) {
                               bone->rotation, 
                               bone->scale);
 
+        memcpy(bone->current_transform, local_transform, sizeof(MATRIX));
+
         if (bone->parent_id == -1 || bone->parent_id >= (int32_t)skeleton->bone_count) {
-            memcpy(bone->current_transform, local_transform, sizeof(MATRIX));
+            
         } else {
             athena_bone* parent = &skeleton->bones[bone->parent_id];
-            matrix_multiply(bone->current_transform, parent->current_transform, local_transform);
+            athena_bone* old_parent = NULL;
+            
+            do {
+                old_parent = parent;
+                matrix_multiply(bone->current_transform, parent->current_transform, bone->current_transform);
+                parent = &skeleton->bones[parent->parent_id];
+            } while (old_parent->parent_id != -1 && old_parent->parent_id >= (int32_t)skeleton->bone_count);
+            
         }
+
+        MATRIX trans_inv;
+        matrix_transpose(trans_inv, bone->inverse_bind);
+        matrix_multiply(skeleton->bone_matrices[i], bone->current_transform, trans_inv);
         
-        if (skeleton->bone_matrices) {
-            matrix_multiply(skeleton->bone_matrices[i], bone->current_transform, bone->inverse_bind);
-        }
+        matrix_transpose(skeleton->bone_matrices[i], skeleton->bone_matrices[i]);
+    }
+}
+
+void decompose_transform_matrix(const MATRIX matrix, VECTOR position, 
+                              VECTOR rotation, VECTOR scale) {
+    position[0] = matrix[3];
+    position[1] = matrix[7];
+    position[2] = matrix[11];
+
+    VECTOR col1 = {matrix[0], matrix[4], matrix[8], 0.0f};
+    VECTOR col2 = {matrix[1], matrix[5], matrix[9], 0.0f};
+    VECTOR col3 = {matrix[2], matrix[6], matrix[10], 0.0f};
+
+    scale[0] = sqrtf(col1[0] * col1[0] + col1[1] * col1[1] + col1[2] * col1[2]);
+    scale[1] = sqrtf(col2[0] * col2[0] + col2[1] * col2[1] + col2[2] * col2[2]);
+    scale[2] = sqrtf(col3[0] * col3[0] + col3[1] * col3[1] + col3[2] * col3[2]);
+
+    float det = matrix[0] * (matrix[5] * matrix[10] - matrix[9] * matrix[6]) -
+                matrix[1] * (matrix[4] * matrix[10] - matrix[8] * matrix[6]) +
+                matrix[2] * (matrix[4] * matrix[9] - matrix[8] * matrix[5]);
+    
+    if (det < 0.0f) {
+        scale[0] = -scale[0];
+    }
+
+    MATRIX rotation_matrix;
+    matrix_unit(rotation_matrix);
+    
+    if (scale[0] != 0.0f) {
+        rotation_matrix[0] = col1[0] / scale[0];
+        rotation_matrix[4] = col1[1] / scale[0];
+        rotation_matrix[8] = col1[2] / scale[0];
+    }
+    
+    if (scale[1] != 0.0f) {
+        rotation_matrix[1] = col2[0] / scale[1];
+        rotation_matrix[5] = col2[1] / scale[1];
+        rotation_matrix[9] = col2[2] / scale[1];
+    }
+    
+    if (scale[2] != 0.0f) {
+        rotation_matrix[2] = col3[0] / scale[2];
+        rotation_matrix[6] = col3[1] / scale[2];
+        rotation_matrix[10] = col3[2] / scale[2];
+    }
+
+    matrix_to_quaternion(rotation, rotation_matrix);
+}
+
+void matrix_to_quaternion(VECTOR quaternion, const MATRIX rotation_matrix) {
+    float trace = rotation_matrix[0] + rotation_matrix[5] + rotation_matrix[10];
+    
+    if (trace > 0.0f) {
+        float s = sqrtf(trace + 1.0f) * 2.0f; // s = 4 * qw
+        quaternion[3] = 0.25f * s;
+        quaternion[0] = (rotation_matrix[9] - rotation_matrix[6]) / s;
+        quaternion[1] = (rotation_matrix[2] - rotation_matrix[8]) / s;
+        quaternion[2] = (rotation_matrix[4] - rotation_matrix[1]) / s;
+    } else if ((rotation_matrix[0] > rotation_matrix[5]) && (rotation_matrix[0] > rotation_matrix[10])) {
+        float s = sqrtf(1.0f + rotation_matrix[0] - rotation_matrix[5] - rotation_matrix[10]) * 2.0f; // s = 4 * qx
+        quaternion[3] = (rotation_matrix[9] - rotation_matrix[6]) / s;
+        quaternion[0] = 0.25f * s;
+        quaternion[1] = (rotation_matrix[1] + rotation_matrix[4]) / s;
+        quaternion[2] = (rotation_matrix[2] + rotation_matrix[8]) / s;
+    } else if (rotation_matrix[5] > rotation_matrix[10]) {
+        float s = sqrtf(1.0f + rotation_matrix[5] - rotation_matrix[0] - rotation_matrix[10]) * 2.0f; // s = 4 * qy
+        quaternion[3] = (rotation_matrix[2] - rotation_matrix[8]) / s;
+        quaternion[0] = (rotation_matrix[1] + rotation_matrix[4]) / s;
+        quaternion[1] = 0.25f * s;
+        quaternion[2] = (rotation_matrix[6] + rotation_matrix[9]) / s;
+    } else {
+        float s = sqrtf(1.0f + rotation_matrix[10] - rotation_matrix[0] - rotation_matrix[5]) * 2.0f; // s = 4 * qz
+        quaternion[3] = (rotation_matrix[4] - rotation_matrix[1]) / s;
+        quaternion[0] = (rotation_matrix[2] + rotation_matrix[8]) / s;
+        quaternion[1] = (rotation_matrix[6] + rotation_matrix[9]) / s;
+        quaternion[2] = 0.25f * s;
     }
 }
 
@@ -212,9 +295,9 @@ void create_transform_matrix(MATRIX result, const VECTOR position,
 
     MATRIX scale_matrix;
     matrix_unit(scale_matrix);
-    scale_matrix[0] = scale[0];
-    scale_matrix[5] = scale[1];
-    scale_matrix[10] = scale[2];
+    scale_matrix[0] =  scale[0] * 1.0f;
+    scale_matrix[5] =  scale[1] * 1.0f;
+    scale_matrix[10] = scale[2] * 1.0f;
 
     MATRIX rotation_matrix;
     quaternion_to_matrix(rotation_matrix, rotation);
@@ -264,17 +347,4 @@ void quaternion_to_matrix(MATRIX result, const VECTOR quaternion) {
     result[10] = 1.0f - (xx + yy);
 }
 
-void update_bone_matrices(athena_render_data* render_data) {
-    if (!render_data->skeleton) return;
-    
-    athena_skeleton* skeleton = render_data->skeleton;
-
-    for (uint32_t i = 0; i < skeleton->bone_count; i++) {
-        athena_bone* bone = &skeleton->bones[i];
-
-        matrix_multiply(skeleton->bone_matrices[i], 
-                       bone->current_transform, 
-                       bone->inverse_bind);
-    }
-}
 
