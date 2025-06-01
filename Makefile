@@ -71,7 +71,8 @@ JS_CORE = quickjs/cutils.o quickjs/libbf.o quickjs/libregexp.o quickjs/libunicod
 
 VU1_MPGS = draw_3D_colors.o \
            draw_3D_lights.o \
-           draw_3D_spec.o
+           draw_3D_spec.o \
+           draw_3D_colors_skin.o
 
 APP_CORE = main.o bootlogo.o texture_manager.o owl_packet.o vif.o athena_math.o memory.o ee_tools.o module_system.o iop_manager.o taskman.o pad.o system.o strUtils.o
 
