@@ -15,6 +15,135 @@
 
 #include <texture_manager.h>
 
+typedef enum {
+	ALPHA_TEST_ENABLE,
+	ALPHA_TEST_METHOD,
+	ALPHA_TEST_REF,
+	ALPHA_TEST_FAIL,
+
+	DST_ALPHA_TEST_ENABLE,
+	DST_ALPHA_TEST_METHOD,
+
+	DEPTH_TEST_ENABLE,
+	DEPTH_TEST_METHOD,
+
+	ALPHA_BLEND_EQUATION,
+	SCISSOR_BOUNDS,
+	PIXEL_ALPHA_BLEND_ENABLE,
+	COLOR_CLAMP_MODE,
+} eScreenParams;
+
+typedef struct {
+    uint64_t alpha_test_enabled     : 1;   
+    uint64_t alpha_test_method      : 3;   
+    uint64_t alpha_test_ref         : 8;   
+    uint64_t alpha_fail_processing  : 2;   
+    uint64_t dest_alpha_test_enabled: 1;   
+    uint64_t dest_alpha_test_method : 1;   
+    uint64_t depth_test_enabled     : 1;   
+    uint64_t depth_test_method      : 2;   
+    uint64_t                        : 45;  
+} test_reg_fields;
+
+typedef union {
+	uint64_t data;
+	test_reg_fields fields;
+} test_reg;
+
+typedef struct {
+    uint64_t x0        : 11;
+    uint64_t 		   : 5; 
+    uint64_t x1        : 11;
+    uint64_t 		   : 5; 
+    uint64_t y0        : 11;
+    uint64_t 	       : 5; 
+    uint64_t y1        : 11;
+    uint64_t 	       : 5; 
+} scissor_reg_fields;
+
+typedef union {
+	uint64_t data;
+	scissor_reg_fields fields;
+} scissor_reg;
+
+typedef struct {
+    uint64_t a    : 2;  
+    uint64_t b    : 2;  
+    uint64_t c    : 2;  
+    uint64_t d    : 2;  
+    uint64_t fix  : 8;  
+    uint64_t      : 48; 
+} alpha_reg_fields;
+
+typedef union {
+	uint64_t data;
+	alpha_reg_fields fields;
+} alpha_reg;
+
+typedef enum {
+    ALPHA_NEVER,  
+    ALPHA_ALWAYS, 
+    ALPHA_LESS,   
+    ALPHA_LEQUAL, 
+    ALPHA_EQUAL,  
+    ALPHA_GEQUAL, 
+    ALPHA_GREATER,
+    ALPHA_NEQUAL  
+} alpha_test_methods;
+
+typedef enum {
+    ALPHA_FAIL_NO_UPDATE = 0,    
+    ALPHA_FAIL_FB_ONLY = 1,      
+    ALPHA_FAIL_ZB_ONLY = 2,      
+    ALPHA_FAIL_RGB_ONLY = 3      
+} alpha_fail_processing;
+
+typedef enum {
+    DEST_ALPHA_ZERO = 0,   
+    DEST_ALPHA_ONE = 1     
+} dest_alpha_test_method;
+
+typedef enum {
+    DEPTH_NEVER = 0,   
+    DEPTH_ALWAYS = 1,  
+    DEPTH_GEQUAL = 2,  
+    DEPTH_GREATER = 3  
+} depth_test_method;
+
+typedef enum {
+	GS_CACHE_TEX0,
+	GS_CACHE_CLAMP,
+	GS_CACHE_TEX1,
+	GS_CACHE_TEX2,
+	GS_CACHE_XYOFFSET,
+	GS_CACHE_PRMODECONT,
+	GS_CACHE_PRMODE,
+	GS_CACHE_TEXCLUT,
+	GS_CACHE_MIPTBP1,
+	GS_CACHE_MIPTBP2,
+	GS_CACHE_TEXA,
+	GS_CACHE_SCISSOR,
+	GS_CACHE_ALPHA,
+	GS_CACHE_DIMX,
+	GS_CACHE_DTHE,
+	GS_CACHE_COLCLAMP,
+	GS_CACHE_TEST,
+	GS_CACHE_PABE,
+	GS_CACHE_FBA,
+	GS_CACHE_FRAME,
+	GS_CACHE_ZBUF,
+
+	GS_CACHE_SIZE
+} eGSRegCacheEntries;
+
+uint64_t get_register(int reg_id);
+
+void set_register(int reg_id, uint64_t data);
+
+uint64_t get_screen_param(uint8_t param);
+
+void set_screen_param(uint8_t param, uint64_t value);
+
 // The GS's alpha blending formula is fixed but it contains four variables that can be reconfigured:
 // Output = (((A - B) * C) >> 7) + D
 // A, B, and D are colors and C is an alpha value. Their specific values come from the ALPHA register:

@@ -617,9 +617,9 @@ int fntRenderString(int id, int x, int y, short aligned, size_t width, size_t he
                 if (text_to_render != string) {
                     int last_size = (((uint32_t)after_draw)-((uint32_t)before_first_draw))/16;
 
-                    last_cnt->dword[0] = DMA_TAG((texture_id != -1? 12 : 8)+last_size, 0, DMA_CNT, 0, 0, 0);
+                    last_cnt->dword[0] = DMA_TAG((texture_id != -1? 11 : 7)+last_size, 0, DMA_CNT, 0, 0, 0);
             
-                    last_direct->sword[3] = VIF_CODE(7+last_size, 0, VIF_DIRECT, 0);
+                    last_direct->sword[3] = VIF_CODE(6+last_size, 0, VIF_DIRECT, 0);
 
                     last_prim->dword[0] = VU_GS_GIFTAG(last_size/2, 
 				                            			1, NO_CUSTOM_DATA, 1, 
@@ -636,10 +636,10 @@ int fntRenderString(int id, int x, int y, short aligned, size_t width, size_t he
 
                 texture_id = texture_manager_bind(gsGlobal, tex, true);
 
-	            packet = owl_query_packet(CHANNEL_VIF1, (texture_id != -1? 13 : 9)+text_vert_size);
+	            packet = owl_query_packet(CHANNEL_VIF1, (texture_id != -1? 12 : 8)+text_vert_size);
 
                 last_cnt = packet->ptr;
-	            owl_add_cnt_tag(packet, (texture_id != -1? 12 : 8)+text_vert_size, 0); // 4 quadwords for vif
+	            owl_add_cnt_tag(packet, (texture_id != -1? 11 : 7)+text_vert_size, 0); // 4 quadwords for vif
 
 	            if (texture_id != -1) {
 	            	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0)); 
@@ -660,11 +660,9 @@ int fntRenderString(int id, int x, int y, short aligned, size_t width, size_t he
 	            owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
 	            owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
 	            owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));
-	            owl_add_uint(packet, VIF_CODE(7+(text_size*2), 0, VIF_DIRECT, 0)); // 3 giftags
+	            owl_add_uint(packet, VIF_CODE(6+(text_size*2), 0, VIF_DIRECT, 0)); // 3 giftags
 
-	            owl_add_tag(packet, GIF_AD, GIFTAG(5, 1, 0, 0, 0, 1));
-
-	            owl_add_tag(packet, GS_TEST_1, GS_SETREG_TEST_1(0, 0, 0, 0, 0, 0, 1, 1));
+	            owl_add_tag(packet, GIF_AD, GIFTAG(4, 1, 0, 0, 0, 1));
 
 	            int tw, th;
 	            athena_set_tw_th(tex, &tw, &th);

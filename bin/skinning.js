@@ -70,6 +70,13 @@ let free_vram = Screen.getFreeVRAM();
 
 const gray = Color.new(180, 180, 220, 128);
 
+Screen.setParam(Screen.ALPHA_TEST_ENABLE, true);
+Screen.setParam(Screen.ALPHA_TEST_METHOD, Screen.ALPHA_LESS);
+Screen.setParam(Screen.ALPHA_TEST_REF, 0x80);
+
+Screen.setParam(Screen.DEPTH_TEST_ENABLE, true);
+Screen.setParam(Screen.DEPTH_TEST_METHOD, Screen.DEPTH_GEQUAL);
+
 while(true) {
     Screen.clear(gray);
     Camera.update();
@@ -101,7 +108,7 @@ while(true) {
         std.reload("main.js");
     }
 
-    //sky.draw(0, 0);
+    sky.draw(0, 0);
 
     scene_object.render();
     skin_object.render();

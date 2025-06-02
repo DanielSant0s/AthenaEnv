@@ -39,6 +39,114 @@ static int frame_interval = -1;
 
 static owl_qword owl_packet_buffer[OWL_PACKET_BUFFER_SIZE] qw_aligned = { 0 };
 
+uint64_t gs_reg_cache[GS_CACHE_SIZE];
+
+const uint8_t gs_reg_map[] = {
+	GS_REG_TEX0,
+	GS_REG_CLAMP,
+	GS_REG_TEX1,
+	GS_REG_TEX2,
+	GS_REG_XYOFFSET,
+	GS_REG_PRMODECONT,
+	GS_REG_PRMODE,
+	GS_REG_TEXCLUT,
+	GS_REG_MIPTBP1,
+	GS_REG_MIPTBP2,
+	GS_REG_TEXA,
+	GS_REG_SCISSOR,
+	GS_REG_ALPHA,
+	GS_REG_DIMX,
+	GS_REG_DTHE,
+	GS_REG_COLCLAMP,
+	GS_REG_TEST,
+	GS_REG_PABE,
+	GS_REG_FBA,
+	GS_REG_FRAME,
+	GS_REG_ZBUF
+};
+
+void set_screen_param(uint8_t param, uint64_t value) {
+	test_reg test = { .data = get_register(GS_CACHE_TEST) };
+
+	switch (param) {
+		case ALPHA_TEST_ENABLE:
+			test.fields.alpha_test_enabled = (bool)value;
+			break;
+		case ALPHA_TEST_METHOD:
+			test.fields.alpha_test_method = (int)value;
+			break;
+		case ALPHA_TEST_REF:
+			test.fields.alpha_test_ref = (uint8_t)value;
+			break;
+		case ALPHA_TEST_FAIL:
+			test.fields.alpha_fail_processing = (int)value;
+			break;
+		case DST_ALPHA_TEST_ENABLE:
+			test.fields.dest_alpha_test_enabled = (bool)value;
+			break;
+		case DST_ALPHA_TEST_METHOD:
+			test.fields.dest_alpha_test_method = (int)value;
+			break;
+		case DEPTH_TEST_ENABLE:
+			if (value) {
+				test.fields.depth_test_enabled = (bool)value;
+			} else {
+				test.fields.depth_test_enabled = true;
+				test.fields.depth_test_method = DEPTH_ALWAYS;
+			}
+			
+			break;
+		case DEPTH_TEST_METHOD:
+			test.fields.depth_test_method = (int)value;
+			break;
+		case ALPHA_BLEND_EQUATION: 
+			set_register(GS_CACHE_ALPHA, value);
+			return;
+		case SCISSOR_BOUNDS:
+			set_register(GS_CACHE_SCISSOR, value);
+			return;
+		case PIXEL_ALPHA_BLEND_ENABLE:
+			set_register(GS_CACHE_PABE, value);
+			return;
+		case COLOR_CLAMP_MODE:
+			set_register(GS_CACHE_COLCLAMP, value);
+			return;
+	}
+
+	set_register(GS_CACHE_TEST, test.data);
+}
+
+uint64_t get_screen_param(uint8_t param) {
+	test_reg test = { .data = get_register(GS_CACHE_TEST) };
+
+	switch (param) {
+		case ALPHA_TEST_ENABLE:
+			return test.fields.alpha_test_enabled;
+		case ALPHA_TEST_METHOD:
+			return test.fields.alpha_test_method;
+		case ALPHA_TEST_REF:
+			return test.fields.alpha_test_ref;
+		case ALPHA_TEST_FAIL:
+			return test.fields.alpha_fail_processing;
+		case DST_ALPHA_TEST_ENABLE:
+			return test.fields.dest_alpha_test_enabled;
+		case DST_ALPHA_TEST_METHOD:
+			return test.fields.dest_alpha_test_method;
+		case DEPTH_TEST_ENABLE:
+			return test.fields.depth_test_enabled;
+		case DEPTH_TEST_METHOD:
+			return test.fields.depth_test_method;
+		case ALPHA_BLEND_EQUATION:
+			return get_register(GS_CACHE_ALPHA);
+		case SCISSOR_BOUNDS:
+			return get_register(GS_CACHE_SCISSOR);
+		case PIXEL_ALPHA_BLEND_ENABLE:
+			return get_register(GS_CACHE_PABE);
+		case COLOR_CLAMP_MODE:
+			return get_register(GS_CACHE_COLCLAMP);
+	}
+}
+
 void set_finish()
 {
 	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 4);
@@ -53,6 +161,29 @@ void set_finish()
 	owl_add_tag(packet, GIF_AD, VU_GS_GIFTAG(1, 1, NULL, 0, 0, 0, 1));
 
 	owl_add_tag(packet, GS_FINISH, 0);
+}
+
+void set_register(int reg_id, uint64_t data) {
+	if (gs_reg_cache[reg_id] == data) return;
+
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 4);
+ 
+	owl_add_cnt_tag(packet, 3, 0);
+
+	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+	owl_add_uint(packet, VIF_CODE(2, 0, VIF_DIRECT, 0)); 
+
+	owl_add_tag(packet, GIF_AD, VU_GS_GIFTAG(1, 1, NULL, 0, 0, 0, 1));
+
+	owl_add_tag(packet, gs_reg_map[reg_id], data);
+
+	gs_reg_cache[reg_id] = data;
+}
+
+uint64_t get_register(int reg_id) {
+	return gs_reg_cache[reg_id];
 }
 
 void set_alpha_blend_mode(uint64_t alpha_equation) {
@@ -84,7 +215,7 @@ void page_clear(Color color) {
 
 	owl_add_tag(packet, GIF_AD, VU_GS_GIFTAG(4, 1, NULL, 1, 0, 0, 1));
 
-	owl_add_tag(packet, GS_TEST_1, GS_SETREG_TEST(0, 0, 0, 0, 0, 0, 1, 1));
+	owl_add_tag(packet, GS_TEST_1, GS_SETREG_TEST(0, 0, 0, 0, 0, 0, 1, 1)); // Ignore cache because it is a single operation
 	//owl_add_tag(packet, GS_SCISSOR_1, GS_SETREG_SCISSOR(0, 64 - 1, 0, 2048 - 1));
 	owl_add_tag(packet, GS_XYOFFSET_1, GS_SETREG_XYOFFSET(0, 0));
 
@@ -113,7 +244,7 @@ void page_clear(Color color) {
 
 	owl_add_tag(packet, GIF_AD, VU_GS_GIFTAG(2, 1, NULL, 0, 0, 0, 1));
 	
-	owl_add_tag(packet, GS_TEST_1, GS_SETREG_TEST(0, 1, 0x80, 0, 0, 0, 1, 2));
+	owl_add_tag(packet, GS_TEST_1, get_register(GS_CACHE_TEST));
 	owl_add_tag(packet, GS_XYOFFSET_1, GS_SETREG_XYOFFSET(gsGlobal->OffsetX, gsGlobal->OffsetY));
 }
 
@@ -286,8 +417,6 @@ static void flipScreenSingleBuffering()
 	dmaKit_wait(DMA_CHANNEL_GIF, 0);
 
 	texture_manager_nextFrame(gsGlobal);
-
-	
 }
 
 static void flipScreenSingleBufferingPerf()
@@ -306,8 +435,6 @@ static void flipScreenSingleBufferingPerf()
 	texture_manager_nextFrame(gsGlobal);
 
 	processFrameCounter();
-
-	
 }
 
 static void flipScreenDoubleBuffering()
@@ -332,8 +459,6 @@ static void flipScreenDoubleBuffering()
 	//gsKit_queue_exec(gsGlobal);
 	
 	texture_manager_nextFrame(gsGlobal);
-
-	
 }
 
 static void flipScreenDoubleBufferingPerf()
@@ -360,7 +485,6 @@ static void flipScreenDoubleBufferingPerf()
 	texture_manager_nextFrame(gsGlobal);
 
 	processFrameCounter();
-	
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////
@@ -376,8 +500,6 @@ static void flipScreenSingleBufferingNoVSync()
 	dmaKit_wait(DMA_CHANNEL_GIF, 0);
 
 	texture_manager_nextFrame(gsGlobal);
-
-	
 }
 
 static void flipScreenSingleBufferingPerfNoVSync()
@@ -392,8 +514,6 @@ static void flipScreenSingleBufferingPerfNoVSync()
 	texture_manager_nextFrame(gsGlobal);
 
 	processFrameCounter();
-
-	
 }
 
 static void flipScreenDoubleBufferingNoVSync()
@@ -410,8 +530,6 @@ static void flipScreenDoubleBufferingNoVSync()
 	//gsKit_queue_exec(gsGlobal);	
 
 	texture_manager_nextFrame(gsGlobal);
-
-	
 }
 
 static void flipScreenDoubleBufferingPerfNoVSync()
@@ -819,10 +937,10 @@ void init_screen(GSGLOBAL *gsGlobal)
 					  gsGlobal->OffsetY);
 	*p_data++ = GS_XYOFFSET_2;
 
-	*p_data++ = GS_SETREG_SCISSOR_1( 0, gsGlobal->Width - 1, 0, gsGlobal->Height - 1);
+	*p_data++ = gs_reg_cache[GS_CACHE_SCISSOR] = GS_SETREG_SCISSOR_1( 0, gsGlobal->Width - 1, 0, gsGlobal->Height - 1);
 	*p_data++ = GS_SCISSOR_2;
 
-	*p_data++ = GS_SETREG_TEST( gsGlobal->Test->ATE, gsGlobal->Test->ATST,
+	*p_data++ = gs_reg_cache[GS_CACHE_TEST] = GS_SETREG_TEST( gsGlobal->Test->ATE, gsGlobal->Test->ATST,
 				gsGlobal->Test->AREF, gsGlobal->Test->AFAIL,
 				gsGlobal->Test->DATE, gsGlobal->Test->DATM,
 				gsGlobal->Test->ZTE, gsGlobal->Test->ZTST );
@@ -846,7 +964,7 @@ void init_screen(GSGLOBAL *gsGlobal)
 		*p_data++ = GS_ZBUF_2;
 	}
 
-	*p_data++ = GS_ALPHA_BLEND_NORMAL;
+	*p_data++ = gs_reg_cache[GS_CACHE_ALPHA] = GS_ALPHA_BLEND_NORMAL;
 	*p_data++ = GS_ALPHA_1;
 
 	*p_data++ = GS_ALPHA_BLEND_NORMAL;
@@ -1073,7 +1191,5 @@ void init_graphics()
 }
 
 void graphicWaitVblankStart(){
-
 	gsKit_vsync_wait();
-
 }

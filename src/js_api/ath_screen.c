@@ -32,26 +32,6 @@ static JSValue athena_clear(JSContext *ctx, JSValue this_val, int argc, JSValueC
 	return JS_UNDEFINED;
 }
 
-static JSValue athena_alphablendmode(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-  	if (argc > 1) {
-		uint32_t a, b, c, d, fix;
-		JS_ToUint32(ctx, &a,   argv[0]);
-		JS_ToUint32(ctx, &b,   argv[1]);
-		JS_ToUint32(ctx, &c,   argv[2]);
-		JS_ToUint32(ctx, &d,   argv[3]);
-		JS_ToUint32(ctx, &fix, argv[4]);
-
-		set_alpha_blend_mode(ALPHA_EQUATION(a, b, c, d, fix));
-	} else {
-		uint64_t preset;
-		JS_ToInt64(ctx, &preset, argv[0]);
-		set_alpha_blend_mode(preset);
-	}
-
-	return JS_UNDEFINED;
-}
-
-
 static JSValue athena_vblank(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	graphicWaitVblankStart();
 	return JS_UNDEFINED;
@@ -145,10 +125,110 @@ static JSValue athena_setvmode(JSContext *ctx, JSValue this_val, int argc, JSVal
 	return JS_UNDEFINED;
 }
 
+static JSValue athena_set_param(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	int param;
+	uint64_t value;
+	JS_ToInt32(ctx, &param, argv[0]);
+
+	switch (param) {
+		case ALPHA_TEST_ENABLE:
+		case ALPHA_TEST_METHOD:
+		case ALPHA_TEST_REF:
+		case ALPHA_TEST_FAIL:
+		case DST_ALPHA_TEST_ENABLE:
+		case DST_ALPHA_TEST_METHOD:
+		case DEPTH_TEST_ENABLE:
+		case DEPTH_TEST_METHOD:
+		case PIXEL_ALPHA_BLEND_ENABLE:
+		case COLOR_CLAMP_MODE:
+			JS_ToInt32(ctx, &value, argv[1]);
+			break;
+		case ALPHA_BLEND_EQUATION:
+			{
+				int a, b, c, d, fix;
+				JS_ToInt32(ctx, &a, JS_GetPropertyStr(ctx, argv[1], "a"));
+				JS_ToInt32(ctx, &b, JS_GetPropertyStr(ctx, argv[1], "b"));
+				JS_ToInt32(ctx, &c, JS_GetPropertyStr(ctx, argv[1], "c"));
+				JS_ToInt32(ctx, &d, JS_GetPropertyStr(ctx, argv[1], "d"));
+				JS_ToInt32(ctx, &fix, JS_GetPropertyStr(ctx, argv[1], "fix"));
+
+				value = ALPHA_EQUATION(a, b, c, d, fix);
+			}
+			break;
+		case SCISSOR_BOUNDS:
+			if (JS_IsNumber(argv[1])) {
+				JS_ToInt64(ctx, &value, argv[1]);
+			} else {
+				int x0, x1, y0, y1;
+				JS_ToInt32(ctx, &x0, JS_GetPropertyStr(ctx, argv[1], "x1"));
+				JS_ToInt32(ctx, &y0, JS_GetPropertyStr(ctx, argv[1], "y1"));
+				JS_ToInt32(ctx, &x1, JS_GetPropertyStr(ctx, argv[1], "x2"));
+				JS_ToInt32(ctx, &y1, JS_GetPropertyStr(ctx, argv[1], "y2"));
+
+				value = GS_SETREG_SCISSOR_1(x0, x1, y0, y1);
+			}
+			break;
+
+	}
+
+	set_screen_param(param, value);
+
+	return JS_UNDEFINED;
+}
+
+static JSValue athena_get_param(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	int param;
+	JS_ToInt32(ctx, &param, argv[0]);
+
+	uint64_t value = get_screen_param(param);
+
+	switch (param) {
+		case ALPHA_TEST_ENABLE:
+		case ALPHA_TEST_METHOD:
+		case ALPHA_TEST_REF:
+		case ALPHA_TEST_FAIL:
+		case DST_ALPHA_TEST_ENABLE:
+		case DST_ALPHA_TEST_METHOD:
+		case DEPTH_TEST_ENABLE:
+		case DEPTH_TEST_METHOD:
+		case PIXEL_ALPHA_BLEND_ENABLE:
+		case COLOR_CLAMP_MODE:
+			return JS_NewInt32(ctx, value);
+		case ALPHA_BLEND_EQUATION:
+			{
+				JSValue obj = JS_NewObject(ctx);
+
+				alpha_reg alpha = { .data = value };
+				JS_DefinePropertyValueStr(ctx, obj, "a", JS_NewInt32(ctx, alpha.fields.a), JS_PROP_C_W_E);
+				JS_DefinePropertyValueStr(ctx, obj, "b", JS_NewInt32(ctx, alpha.fields.b), JS_PROP_C_W_E);
+				JS_DefinePropertyValueStr(ctx, obj, "c", JS_NewInt32(ctx, alpha.fields.c), JS_PROP_C_W_E);
+				JS_DefinePropertyValueStr(ctx, obj, "d", JS_NewInt32(ctx, alpha.fields.d), JS_PROP_C_W_E);
+				JS_DefinePropertyValueStr(ctx, obj, "fix", JS_NewInt32(ctx, alpha.fields.fix), JS_PROP_C_W_E);
+
+				return obj;
+			}
+			break;
+		case SCISSOR_BOUNDS:
+			{
+				JSValue obj = JS_NewObject(ctx);
+
+				scissor_reg scissor = { .data = value };
+				JS_DefinePropertyValueStr(ctx, obj, "x1", JS_NewInt32(ctx, scissor.fields.x0), JS_PROP_C_W_E);
+				JS_DefinePropertyValueStr(ctx, obj, "y1", JS_NewInt32(ctx, scissor.fields.y0), JS_PROP_C_W_E);
+				JS_DefinePropertyValueStr(ctx, obj, "x2", JS_NewInt32(ctx, scissor.fields.x1), JS_PROP_C_W_E);
+				JS_DefinePropertyValueStr(ctx, obj, "y2", JS_NewInt32(ctx, scissor.fields.y1), JS_PROP_C_W_E);
+
+				return obj;
+			}
+			break;
+	}
+
+	return JS_UNDEFINED;
+}
+
 static const JSCFunctionListEntry module_funcs[] = {
     JS_CFUNC_DEF("flip", 0, athena_flip),
     JS_CFUNC_DEF("clear", 1, athena_clear),
-	JS_CFUNC_DEF("blendEquation", 5, athena_alphablendmode),
 	JS_CFUNC_DEF("getFreeVRAM", 0, athena_getFreeVRAM),
 	JS_CFUNC_DEF("getFPS", 1, athena_getFPS),
     JS_CFUNC_DEF("waitVblankStart", 0, athena_vblank),
@@ -159,6 +239,44 @@ static const JSCFunctionListEntry module_funcs[] = {
 
 	JS_CFUNC_DEF("clearColor", 1, athena_set_clear_color),
 	JS_CFUNC_DEF("display", 1, athena_displayfunc),
+
+	JS_CFUNC_DEF("getParam", 1, athena_get_param),
+	JS_CFUNC_DEF("setParam", 2, athena_set_param),
+
+	JS_PROP_INT32_DEF("ALPHA_TEST_ENABLE", ALPHA_TEST_ENABLE, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("ALPHA_TEST_METHOD", ALPHA_TEST_METHOD, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("ALPHA_TEST_REF", ALPHA_TEST_REF, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("ALPHA_TEST_FAIL", ALPHA_TEST_FAIL, JS_PROP_CONFIGURABLE),
+
+	JS_PROP_INT32_DEF("ALPHA_NEVER", ALPHA_NEVER, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("ALPHA_ALWAYS", ALPHA_ALWAYS, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("ALPHA_LESS", ALPHA_LESS, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("ALPHA_LEQUAL", ALPHA_LEQUAL, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("ALPHA_EQUAL", ALPHA_EQUAL, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("ALPHA_GEQUAL", ALPHA_GEQUAL, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("ALPHA_GREATER", ALPHA_GREATER, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("ALPHA_NEQUAL", ALPHA_NEQUAL, JS_PROP_CONFIGURABLE),
+
+	JS_PROP_INT32_DEF("ALPHA_FAIL_NO_UPDATE", ALPHA_FAIL_NO_UPDATE, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("ALPHA_FAIL_FB_ONLY", ALPHA_FAIL_FB_ONLY, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("ALPHA_FAIL_ZB_ONLY", ALPHA_FAIL_ZB_ONLY, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("ALPHA_FAIL_RGB_ONLY", ALPHA_FAIL_RGB_ONLY, JS_PROP_CONFIGURABLE),
+
+	JS_PROP_INT32_DEF("DST_ALPHA_TEST_ENABLE", DST_ALPHA_TEST_ENABLE, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("DST_ALPHA_TEST_METHOD", DST_ALPHA_TEST_METHOD, JS_PROP_CONFIGURABLE),
+
+	JS_PROP_INT32_DEF("DST_ALPHA_ZERO", DEST_ALPHA_ZERO, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("DST_ALPHA_ONE",  DEST_ALPHA_ONE, JS_PROP_CONFIGURABLE),
+
+	JS_PROP_INT32_DEF("DEPTH_TEST_ENABLE", DEPTH_TEST_ENABLE, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("DEPTH_TEST_METHOD", DEPTH_TEST_METHOD, JS_PROP_CONFIGURABLE),
+
+	JS_PROP_INT32_DEF("DEPTH_NEVER", DEPTH_NEVER, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("DEPTH_ALWAYS", DEPTH_ALWAYS, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("DEPTH_GEQUAL", DEPTH_GEQUAL, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("DEPTH_GREATER", DEPTH_GREATER, JS_PROP_CONFIGURABLE),
+
+	JS_PROP_INT32_DEF("ALPHA_BLEND_EQUATION", ALPHA_BLEND_EQUATION, JS_PROP_CONFIGURABLE),
 
 	JS_PROP_INT32_DEF("SRC_RGB", SRC_RGB, JS_PROP_CONFIGURABLE),
 	JS_PROP_INT32_DEF("DST_RGB", DST_RGB, JS_PROP_CONFIGURABLE),
@@ -171,6 +289,11 @@ static const JSCFunctionListEntry module_funcs[] = {
 	JS_PROP_INT64_DEF("BLEND_DEFAULT", GS_ALPHA_BLEND_NORMAL, JS_PROP_CONFIGURABLE),
 	JS_PROP_INT64_DEF("BLEND_ADD_NOALPHA", GS_ALPHA_BLEND_ADD_NOALPHA, JS_PROP_CONFIGURABLE),
 	JS_PROP_INT64_DEF("BLEND_ADD", GS_ALPHA_BLEND_ADD, JS_PROP_CONFIGURABLE),
+
+	JS_PROP_INT32_DEF("SCISSOR_BOUNDS", SCISSOR_BOUNDS, JS_PROP_CONFIGURABLE),
+
+	JS_PROP_INT32_DEF("PIXEL_ALPHA_BLEND_ENABLE", PIXEL_ALPHA_BLEND_ENABLE, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("COLOR_CLAMP_MODE", COLOR_CLAMP_MODE, JS_PROP_CONFIGURABLE),
 
 	JS_PROP_INT32_DEF("NTSC", GS_MODE_NTSC, JS_PROP_CONFIGURABLE),
 	JS_PROP_INT32_DEF("DTV_480p", GS_MODE_DTV_480P, JS_PROP_CONFIGURABLE),
