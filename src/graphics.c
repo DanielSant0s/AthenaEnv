@@ -812,12 +812,6 @@ void init_screen(GSGLOBAL *gsGlobal)
 
 	gsGlobal->FirstFrame = GS_SETTING_ON;
 
-	if(gsGlobal->ZBuffering == GS_SETTING_OFF)
-	{
-		gsGlobal->Test->ZTE = GS_SETTING_ON;
-		gsGlobal->Test->ZTST = 1;
-	}
-
 	DIntr(); // disable interrupts
 
 	GS_SET_PMODE(	0,		// Read Circuit 1
@@ -895,13 +889,10 @@ void init_screen(GSGLOBAL *gsGlobal)
 					  gsGlobal->OffsetY);
 	*p_data++ = GS_XYOFFSET_1;
 
-	*p_data++ = GS_SETREG_SCISSOR_1( 0, gsGlobal->Width - 1, 0, gsGlobal->Height - 1 );
+	*p_data++ = gs_reg_cache[GS_CACHE_SCISSOR] = GS_SETREG_SCISSOR_1( 0, gsGlobal->Width - 1, 0, gsGlobal->Height - 1 );
 	*p_data++ = GS_SCISSOR_1;
 
-	*p_data++ = GS_SETREG_TEST( gsGlobal->Test->ATE, gsGlobal->Test->ATST,
-				gsGlobal->Test->AREF, gsGlobal->Test->AFAIL,
-				gsGlobal->Test->DATE, gsGlobal->Test->DATM,
-				gsGlobal->Test->ZTE, gsGlobal->Test->ZTST );
+	*p_data++ = gs_reg_cache[GS_CACHE_TEST] = GS_SETREG_TEST(0, 1, 0x80, 0, 0, 0, 1, 2);
 
 	*p_data++ = GS_TEST_1;
 
@@ -937,13 +928,10 @@ void init_screen(GSGLOBAL *gsGlobal)
 					  gsGlobal->OffsetY);
 	*p_data++ = GS_XYOFFSET_2;
 
-	*p_data++ = gs_reg_cache[GS_CACHE_SCISSOR] = GS_SETREG_SCISSOR_1( 0, gsGlobal->Width - 1, 0, gsGlobal->Height - 1);
+	*p_data++ = gs_reg_cache[GS_CACHE_SCISSOR];
 	*p_data++ = GS_SCISSOR_2;
 
-	*p_data++ = gs_reg_cache[GS_CACHE_TEST] = GS_SETREG_TEST( gsGlobal->Test->ATE, gsGlobal->Test->ATST,
-				gsGlobal->Test->AREF, gsGlobal->Test->AFAIL,
-				gsGlobal->Test->DATE, gsGlobal->Test->DATM,
-				gsGlobal->Test->ZTE, gsGlobal->Test->ZTST );
+	*p_data++ = gs_reg_cache[GS_CACHE_TEST];
 
 	*p_data++ = GS_TEST_2;
 
@@ -967,7 +955,7 @@ void init_screen(GSGLOBAL *gsGlobal)
 	*p_data++ = gs_reg_cache[GS_CACHE_ALPHA] = GS_ALPHA_BLEND_NORMAL;
 	*p_data++ = GS_ALPHA_1;
 
-	*p_data++ = GS_ALPHA_BLEND_NORMAL;
+	*p_data++ = gs_reg_cache[GS_CACHE_ALPHA];
 	*p_data++ = GS_ALPHA_2;
 
 	*p_data++ = GS_SETREG_DIMX(gsGlobal->DitherMatrix[0],gsGlobal->DitherMatrix[1],
@@ -999,7 +987,6 @@ GSGLOBAL *temp_init_global()
 
 	GSGLOBAL *gsGlobal = calloc(1,sizeof(GSGLOBAL));
 	gsGlobal->BGColor = calloc(1,sizeof(GSBGCOLOR));
-	gsGlobal->Test = calloc(1,sizeof(GSTEST));
 	gsGlobal->Clamp = calloc(1,sizeof(GSCLAMP));
 	gsGlobal->dma_misc = gsKit_alloc_ucab(512);
 
@@ -1037,8 +1024,6 @@ GSGLOBAL *temp_init_global()
     gsGlobal->LockBuffer = GS_SETTING_OFF;
 	gsGlobal->PrimFogEnable = GS_SETTING_OFF;
 	gsGlobal->PrimAAEnable = GS_SETTING_OFF;
-	gsGlobal->PrimAlphaEnable = GS_SETTING_OFF;
-	gsGlobal->PrimAlpha = GS_ALPHA_BLEND_NORMAL;
 	gsGlobal->PrimContext = 0;
 	gsGlobal->FirstFrame = GS_SETTING_ON;
 
@@ -1050,16 +1035,6 @@ GSGLOBAL *temp_init_global()
 	gsGlobal->BGColor->Red = 0x00;
 	gsGlobal->BGColor->Green = 0x00;
 	gsGlobal->BGColor->Blue = 0x00;
-
-	/* TEST Register Values */
-	gsGlobal->Test->ATE = GS_SETTING_OFF;
-	gsGlobal->Test->ATST = GS_SETTING_ON;
-	gsGlobal->Test->AREF = 0x80;
-	gsGlobal->Test->AFAIL = 0;
-	gsGlobal->Test->DATE = GS_SETTING_OFF;
-	gsGlobal->Test->DATM = 0;
-	gsGlobal->Test->ZTE = GS_SETTING_ON;
-	gsGlobal->Test->ZTST = 2;
 
 	gsGlobal->Clamp->WMS = GS_CMODE_REPEAT;
 	gsGlobal->Clamp->WMT = GS_CMODE_REPEAT;
@@ -1111,7 +1086,6 @@ void setVideoMode(s16 mode, int width, int height, int psm, s16 interlace, s16 f
 
 	gsGlobal->ZBuffering = zbuffering;
 	gsGlobal->DoubleBuffering = double_buffering;
-	gsGlobal->PrimAlphaEnable = GS_SETTING_ON;
 	gsGlobal->Dithering = GS_SETTING_OFF;
 
 	gsGlobal->Interlace = interlace;
