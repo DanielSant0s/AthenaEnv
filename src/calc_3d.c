@@ -827,3 +827,64 @@ void create_view(MATRIX view_screen, float fov, float near, float far, float w, 
 	view_screen[15] = 0.00f;
 }
 
+int matrix_equals(MATRIX m0, MATRIX m1)
+{
+    int result;
+    
+    __asm__ __volatile__(
+        "vsub.xyzw  $vf10, $vf0, $vf0\n"      
+
+        "lqc2       $vf1, 0x0(%1)\n"          
+        "lqc2       $vf2, 0x0(%2)\n"          
+        "vsub.xyzw  $vf3, $vf1, $vf2\n"       
+        "vabs.xyzw  $vf3, $vf3\n"             
+        "vadd.xyzw  $vf10, $vf10, $vf3\n"     
+
+        "lqc2       $vf1, 0x10(%1)\n"
+        "lqc2       $vf2, 0x10(%2)\n"
+        "vsub.xyzw  $vf3, $vf1, $vf2\n"
+        "vabs.xyzw  $vf3, $vf3\n"
+        "vadd.xyzw  $vf10, $vf10, $vf3\n"
+
+        "lqc2       $vf1, 0x20(%1)\n"
+        "lqc2       $vf2, 0x20(%2)\n"
+        "vsub.xyzw  $vf3, $vf1, $vf2\n"
+        "vabs.xyzw  $vf3, $vf3\n"
+        "vadd.xyzw  $vf10, $vf10, $vf3\n"
+
+        "lqc2       $vf1, 0x30(%1)\n"
+        "lqc2       $vf2, 0x30(%2)\n"
+        "vsub.xyzw  $vf3, $vf1, $vf2\n"
+        "vabs.xyzw  $vf3, $vf3\n"
+        "vadd.xyzw  $vf10, $vf10, $vf3\n"
+
+        "vaddy.x    $vf11, $vf10, $vf10\n"    
+        "vaddz.x    $vf11, $vf11, $vf10\n"    
+        "vaddw.x    $vf11, $vf11, $vf10\n"    
+
+        "qmfc2      %0, $vf11\n"
+        "sltiu      %0, %0, 1\n" // result = (sum == 0) ? 1 : 0
+        
+        : "=r" (result)
+        : "r" (m0), "r" (m1)
+        : "memory", "$f0"
+    );
+    
+    return result;
+}
+
+void matrix_clone(MATRIX m0, MATRIX m1) {
+    __asm__ __volatile__(
+        "lq       $2, 0x00(%0)\n"
+		"lq       $3, 0x10(%0)\n"
+		"lq       $4, 0x20(%0)\n"
+		"lq       $5, 0x30(%0)\n"
+
+        "sq       $2, 0x00(%1)\n"
+		"sq       $3, 0x10(%1)\n"
+		"sq       $4, 0x20(%1)\n"
+		"sq       $5, 0x30(%1)\n"
+        
+        : : "r" (m0), "r" (m1) : "memory", "$2", "$3", "$4", "$5"
+    );
+}
