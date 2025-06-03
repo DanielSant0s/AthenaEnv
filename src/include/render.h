@@ -251,6 +251,10 @@ void Normalize(VECTOR v0, VECTOR v1);
 void OuterProduct(VECTOR v0, VECTOR v1, VECTOR v2);
 void ScaleVector(VECTOR res, VECTOR v, float size);
 
+int matrix_equals(MATRIX m0, MATRIX m1);
+
+void matrix_clone(MATRIX m0, MATRIX m1);
+
 void create_view(MATRIX view_screen, float fov, float near, float far, float w, float h);
 
 #define alloc_vectors(cnt) (VECTOR*)malloc(cnt * sizeof(VECTOR))

@@ -23,6 +23,21 @@ for (let i = 0; i < test_matrix.length; i++) {
 
 let pad = Pads.get();
 
+const m1 = new Matrix4();
+
+if (m1 == test_matrix) {
+    console.log("Matrix equal check for equal matrix values");
+}
+
+for (let i = 0; i < test_matrix.length; i++) {
+    test_matrix[i] = Math.randomf(0.0f, 1.0f);
+}
+console.log(`Matrix4 ${test_matrix}`);
+
+if (m1 != test_matrix) {
+    console.log("Matrix equal check for different matrix values");
+}
+
 pad.setEventHandler();
 
 Pads.newEvent(Pads.LEFT, Pads.JUST_PRESSED, () => { 

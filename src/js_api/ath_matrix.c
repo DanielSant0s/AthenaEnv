@@ -62,15 +62,41 @@ static JSValue js_matrix4_tostring(JSContext *ctx, JSValueConst this_val,
     return JS_NewString(ctx, str);
 }
 
-static JSValue js_matrix4_mul(JSContext *ctx, JSValueConst new_target, int argc, JSValueConst *argv)
-{
+static JSValue js_matrix4_toarray(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    MATRIX *m = JS_GetOpaque2(ctx, this_val, js_matrix4_class_id);
+
+    if (!m)
+        return JS_EXCEPTION;
+
+    JSValue arr = JS_NewArray(ctx);
+
+    for (int i = 0; i < 16; i++) {
+        JS_DefinePropertyValueUint32(ctx, arr, i, JS_NewFloat32(ctx, (*m)[i]), JS_PROP_C_W_E);
+    }
+
+    return arr;
+}
+
+static JSValue js_matrix4_fromarray(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    MATRIX *m = JS_GetOpaque2(ctx, this_val, js_matrix4_class_id);
+
+    if (!m)
+        return JS_EXCEPTION;
+
+    for (int i = 0; i < 16; i++) {
+        JSValue val = JS_GetPropertyUint32(ctx, argv[0], i);
+        JS_ToFloat32(ctx, &(*m)[i], val);
+    }
+
+    return this_val;
+}
+
+static JSValue js_matrix4_mul(JSContext *ctx, JSValueConst new_target, int argc, JSValueConst *argv) {
     MATRIX *s;
     JSValue obj = JS_UNDEFINED;
 
     MATRIX *v1 = JS_GetOpaque2(ctx, argv[0], js_matrix4_class_id);
     MATRIX *v2 = JS_GetOpaque2(ctx, argv[1], js_matrix4_class_id);
-    if (!v1 || !v2)
-        return JS_EXCEPTION;
 
     obj = JS_NewObjectClass(ctx, js_matrix4_class_id);
     if (JS_IsException(obj))
@@ -81,6 +107,70 @@ static JSValue js_matrix4_mul(JSContext *ctx, JSValueConst new_target, int argc,
         return JS_EXCEPTION;
 
     matrix_multiply(s, v1, v2);
+
+    JS_SetOpaque(obj, s);
+    return obj;
+ fail:
+    js_free(ctx, s);
+    JS_FreeValue(ctx, obj);
+    return JS_EXCEPTION;
+}
+
+static JSValue js_matrix4_eq(JSContext *ctx, JSValueConst new_target, int argc, JSValueConst *argv) {
+    MATRIX *m1 = JS_GetOpaque2(ctx, argv[0], js_matrix4_class_id);
+    MATRIX *m2 = JS_GetOpaque2(ctx, argv[1], js_matrix4_class_id);
+
+    return JS_NewBool(ctx, matrix_equals(m1, m2));
+}
+
+static JSValue js_matrix4_copy(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    MATRIX *m1 = JS_GetOpaque2(ctx, this_val, js_matrix4_class_id);
+    MATRIX *m2 = JS_GetOpaque2(ctx, argv[0], js_matrix4_class_id);
+
+    matrix_clone(m1, m2);
+
+    return this_val;
+}
+
+static JSValue js_matrix4_identity(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    MATRIX *m1 = JS_GetOpaque2(ctx, this_val, js_matrix4_class_id);
+
+    UnitMatrix(m1);
+
+    return this_val;
+}
+
+static JSValue js_matrix4_transpose(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    MATRIX *m1 = JS_GetOpaque2(ctx, this_val, js_matrix4_class_id);
+
+    matrix_transpose(m1, m1);
+
+    return this_val;
+}
+
+static JSValue js_matrix4_invert(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    MATRIX *m1 = JS_GetOpaque2(ctx, this_val, js_matrix4_class_id);
+
+    matrix_inverse(m1, m1);
+
+    return this_val;
+}
+
+static JSValue js_matrix4_clone(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    MATRIX *s;
+    JSValue obj = JS_UNDEFINED;
+
+    MATRIX *m1 = JS_GetOpaque2(ctx, this_val, js_matrix4_class_id);
+
+    obj = JS_NewObjectClass(ctx, js_matrix4_class_id);
+    if (JS_IsException(obj))
+        goto fail;
+
+    s = js_mallocz(ctx, sizeof(*s));
+    if (!s)
+        return JS_EXCEPTION;
+
+    matrix_clone(s, m1);
 
     JS_SetOpaque(obj, s);
     return obj;
@@ -156,6 +246,15 @@ static JSClassDef js_matrix4_class = {
 
 static const JSCFunctionListEntry js_matrix4_proto_funcs[] = {
     JS_CFUNC_DEF("toString", 0, js_matrix4_tostring),
+    JS_CFUNC_DEF("toArray", 0, js_matrix4_toarray),
+    JS_CFUNC_DEF("fromArray", 1, js_matrix4_fromarray),
+
+    JS_CFUNC_DEF("clone",     0, js_matrix4_clone),
+    JS_CFUNC_DEF("copy",      1, js_matrix4_copy),
+    JS_CFUNC_DEF("transpose", 0, js_matrix4_transpose),
+    JS_CFUNC_DEF("invert",    0, js_matrix4_invert),
+    JS_CFUNC_DEF("identity",  0, js_matrix4_identity),
+
     JS_PROP_INT32_DEF("length", 16, JS_PROP_CONFIGURABLE),
 };
 
@@ -179,7 +278,8 @@ static void js_matrix4_init_operators(JSContext *ctx, JSValue proto)
     JSValue create_func = JS_GetPropertyStr(ctx, Operators, "create");
 
     obj = JS_NewObject(ctx);
-    JS_SetPropertyStr(ctx, obj, "*", JS_NewCFunction(ctx, js_matrix4_mul, "*", 2));
+    JS_SetPropertyStr(ctx, obj, "*",  JS_NewCFunction(ctx, js_matrix4_mul, "*", 2));
+    JS_SetPropertyStr(ctx, obj, "==", JS_NewCFunction(ctx, js_matrix4_eq, "==", 2));
 
     JSValueConst args[1] = { obj };
     operatorSet = JS_Call(ctx, create_func, Operators, 1, args);
