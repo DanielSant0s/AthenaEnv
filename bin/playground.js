@@ -15,6 +15,12 @@ console.log(`Vectors sub is ${v1 - v2}`);
 console.log(`Vectors mul is ${v1 * v2}`);
 console.log(`Vectors div is ${v1 / v2}`);
 
+const test_matrix = new Matrix4();
+console.log(`Matrix4 ${test_matrix}`);
+for (let i = 0; i < test_matrix.length; i++) {
+    console.log(`m[${i}] = ${test_matrix[i]}`);
+}
+
 let pad = Pads.get();
 
 pad.setEventHandler();

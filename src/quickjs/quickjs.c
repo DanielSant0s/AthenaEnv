@@ -7151,7 +7151,7 @@ JSValue JS_GetPropertyInternal(JSContext *ctx, JSValueConst obj,
                         obj1 = JS_DupValue(ctx, JS_MKPTR(JS_TAG_OBJECT, p));
                         retval = em->get_property(ctx, obj1, prop, this_obj);
                         JS_FreeValue(ctx, obj1);
-                        return retval;
+                        if (retval != JS_UNDEFINED) return retval;
                     }
                     if (em->get_own_property) {
                         JSPropertyDescriptor desc;
@@ -8302,7 +8302,7 @@ static int JS_SetPropertyGeneric(JSContext *ctx,
                                        val, this_obj, flags);
                 JS_FreeValue(ctx, obj1);
                 JS_FreeValue(ctx, val);
-                return ret;
+                if (ret != 2) return ret;
             }
         }
 
