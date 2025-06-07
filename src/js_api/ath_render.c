@@ -645,6 +645,8 @@ static JSValue athena_render_object_ctor(JSContext *ctx, JSValueConst new_target
 	ro->obj.rotation[2] = 0.0f;
 	ro->obj.rotation[3] = 1.0f;
 
+	update_object_space(&ro->obj);
+
 register_3d_object_data:
     proto = JS_GetPropertyStr(ctx, new_target, "prototype");
     obj = JS_NewObjectProtoClass(ctx, proto, js_render_object_class_id);
@@ -737,6 +739,8 @@ static JSValue js_render_object_set(JSContext *ctx, JSValueConst this_val, JSVal
 			JS_ToFloat32(ctx, &ro->obj.rotation[2], JS_GetPropertyStr(ctx, val, "z"));
 			break;
 	}
+
+	update_object_space(&ro->obj);
 
     return JS_UNDEFINED;
 }

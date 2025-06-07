@@ -6,14 +6,29 @@
 		.global	VU1Draw3DCS_CodeEnd
 VU1Draw3DCS_CodeStart:
 __v_src_vu1_draw_3D_colors_vcl_4:
-; _LNOPT_w=[ normal2 ] 7 [12 0] 12   [__v_src_vu1_draw_3D_colors_vcl_4]
+; _LNOPT_w=[ normal2 ] 22 [17 0] 22   [__v_src_vu1_draw_3D_colors_vcl_4]
+         NOP                                                        lq            VF01,141(VI00)                      
+         NOP                                                        lq            VF04,1(VI00)                        
          NOP                                                        lq.w          VF05,26(VI00)                       
-         ftoi0.w       VF06,VF05                                    lq            VF01,1(VI00)                               ;	STALL_LATENCY ?3
-         NOP                                                        lq            VF02,2(VI00)                        
-         NOP                                                        mtir          VI02,VF06w                                 ;	STALL_LATENCY ?2
-         NOP                                                        lq            VF03,3(VI00)                        
-         NOP                                                        ibeq          VI02,VI00,ignore_face_culling       
-         NOP                                                        lq            VF04,4(VI00)                        
+         NOP                                                        lq            VF08,2(VI00)                        
+         NOP                                                        lq            VF07,3(VI00)                        
+         mulax         ACC,VF04,VF01x                               lq            VF06,4(VI00)                        
+         ftoi0.w       VF09,VF05                                    lq            VF02,142(VI00)                      
+         madday        ACC,VF08,VF01y                               NOP                                               
+         maddaz        ACC,VF07,VF01z                               NOP                                               
+         maddw         VF01,VF06,VF01w                              NOP                                               
+         mulax         ACC,VF04,VF02x                               lq            VF03,143(VI00)                      
+         madday        ACC,VF08,VF02y                               NOP                                               
+         maddaz        ACC,VF07,VF02z                               NOP                                               
+         maddw         VF02,VF06,VF02w                              NOP                                               
+         mulax         ACC,VF04,VF03x                               lq            VF10,144(VI00)                      
+         madday        ACC,VF08,VF03y                               NOP                                               
+         maddaz        ACC,VF07,VF03z                               NOP                                               
+         maddw         VF03,VF06,VF03w                              NOP                                               
+         mulax         ACC,VF04,VF10x                               mtir          VI02,VF09w                          
+         madday        ACC,VF08,VF10y                               NOP                                               
+         maddaz        ACC,VF07,VF10z                               ibeq          VI02,VI00,ignore_face_culling       
+         maddw         VF04,VF06,VF10w                              NOP                                               
 ; _LNOPT_w=[ normal2 ] 1 [1 0] 1   [__v_src_vu1_draw_3D_colors_vcl_5]
          NOP                                                        iaddiu        VI02,VI00,0x00000020                
 ignore_face_culling:
@@ -568,7 +583,7 @@ LOOP_ROT_END:
          add           VF19,VF19,VF18                               NOP                                               
 		.align 4
 VU1Draw3DCS_CodeEnd:
-;	iCount=453
+;	iCount=468
 ; register stats:
 ;  15 VU User integer
 ;  24 VU User floating point

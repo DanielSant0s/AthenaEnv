@@ -5,6 +5,7 @@ EE_EMBED_DIR = embed/
 
 JS_API_DIR = js_api/
 VU1_MPGS_DIR = vu1/
+VU0_MPGS_DIR = vu0/
 
 BIN2S = $(PS2SDK)/bin/bin2c
 EE_DVP = dvp-as

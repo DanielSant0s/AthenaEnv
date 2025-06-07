@@ -18,9 +18,13 @@ VECTOR camera_rotation = { 0.00f, 0.00f, 0.00f, 0.00f };
 VECTOR local_up =        { 0.00f, 1.00f, 0.00f, 1.00f };
 
 static MATRIX *world_view;
+static MATRIX *world_screen;
+static MATRIX *view_screen;
 
-void initCamera(MATRIX* wv) {
+void initCamera(MATRIX *ws, MATRIX *wv, MATRIX *vs) {
+	world_screen = ws;
     world_view = wv;
+	view_screen = vs;
 }
 
 VECTOR* getCameraPosition() {
@@ -40,11 +44,8 @@ void cameraUpdate() {
 			LookAtCameraMatrix(world_view, camera_position, camera_target, camera_up);
 			break;
 	}
-	dbgprintf("Camera matrix:\n");
-	dbgprintf("%f %f %f %f\n", world_view[0], world_view[1], world_view[2], world_view[3]);
-	dbgprintf("%f %f %f %f\n", world_view[4], world_view[5], world_view[6], world_view[7]);
-	dbgprintf("%f %f %f %f\n", world_view[8], world_view[9], world_view[10], world_view[11]);
-	dbgprintf("%f %f %f %f\n", world_view[12], world_view[13], world_view[14], world_view[15]);
+
+	vu0_matrix_multiply(world_screen, world_view, view_screen);
 }
 
 void setCameraPosition(float x, float y, float z){

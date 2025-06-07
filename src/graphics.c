@@ -1134,8 +1134,10 @@ void init_graphics()
 
 	dmaKit_init(D_CTRL_RELE_OFF, D_CTRL_MFD_OFF, D_CTRL_STS_UNSPEC, D_CTRL_STD_OFF, D_CTRL_RCYC_8, 1 << DMA_CHANNEL_GIF);
 	dmaKit_chan_init(DMA_CHANNEL_GIF);
+	dmaKit_chan_init(DMA_CHANNEL_VIF0);
 	dmaKit_chan_init(DMA_CHANNEL_VIF1);
 	dmaKit_wait(DMA_CHANNEL_GIF, 0);
+	dmaKit_wait(DMA_CHANNEL_VIF0, 0);
 	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
 
 	flipScreen = flipScreenDoubleBuffering;

@@ -4,11 +4,13 @@
 #include <malloc.h>
 #include <math.h>
 #include <fcntl.h>
-
+#include <matrix.h>
 #include <render.h>
 #include <dbgprintf.h>
 
 #include <owl_packet.h>
+
+#include <mpg_manager.h>
 
 #define DEG2RAD(deg) ((deg) * (M_PI / 180.0f))
 
@@ -18,8 +20,15 @@ register_vu_program(VU1Draw3DLCSS);
 
 register_vu_program(VU1Draw3DCS_Skin);
 
+vu_mpg *vu1_colors = NULL;
+vu_mpg *vu1_lights = NULL;
+vu_mpg *vu1_specular = NULL;
+
+vu_mpg *vu1_colors_skinned = NULL;
+
 MATRIX view_screen;
 MATRIX world_view;
+MATRIX world_screen;
 
 FIVECTOR screen_scale;
 
@@ -50,13 +59,17 @@ void render_object(athena_object_data *obj) {
 	
 }
 
-void init3D(float fov, float near, float far)
-{
+void init3D(float fov, float near, float far) {
 	GSGLOBAL* gsGlobal = getGSGLOBAL();
 
-	initCamera(&world_view);
+	init_vu0_matrix();
+
+	initCamera(&world_screen, &world_view, &view_screen);
 	create_view(view_screen, DEG2RAD(fov), near, far, gsGlobal->Width, gsGlobal->Height);
-	vu1_set_double_buffer_settings(269, 357); // Skinned layout
+
+	vu0_matrix_multiply(world_screen, world_view, view_screen);
+
+	vu1_set_double_buffer_settings(273, 357); // Skinned layout
 	// vu1_set_double_buffer_settings(141, 400);
 	owl_flush_packet();
 
@@ -64,6 +77,12 @@ void init3D(float fov, float near, float far)
 	screen_scale.y = gsGlobal->Height/2;
 	screen_scale.z = ((float)get_max_z(gsGlobal));
 	screen_scale.w = 0; // athena_render_data attributes
+
+	vu1_colors   = vu_mpg_load_buffer(embed_vu_code_ptr(VU1Draw3DCS),   embed_vu_code_size(VU1Draw3DCS),   VECTOR_UNIT_1, false); 
+	vu1_lights   = vu_mpg_load_buffer(embed_vu_code_ptr(VU1Draw3DLCS),  embed_vu_code_size(VU1Draw3DLCS),  VECTOR_UNIT_1, false);
+	vu1_specular = vu_mpg_load_buffer(embed_vu_code_ptr(VU1Draw3DLCSS), embed_vu_code_size(VU1Draw3DLCSS), VECTOR_UNIT_1, false);
+
+	vu1_colors_skinned = vu_mpg_load_buffer(embed_vu_code_ptr(VU1Draw3DCS_Skin), embed_vu_code_size(VU1Draw3DCS_Skin), VECTOR_UNIT_1, false);
 
 }
 
@@ -144,16 +163,6 @@ void draw_bbox(athena_object_data* obj, Color color) {
 	free(xyz);*/
 }
 
-static uint32_t* last_mpg = NULL;
-
-#define update_vu_program(name) \
-	do { \
-		if (last_mpg != &name##_CodeStart) { \
-			vu1_upload_micro_program(&name##_CodeStart, &name##_CodeEnd); \
-			last_mpg = &name##_CodeStart; \
-		} \
-	} while (0)
-
 void append_texture_tags(owl_packet* packet, GSTEXTURE *texture, int texture_id, eColorFunctions func) {
 	if (texture_id != -1) {
 		owl_add_cnt_tag(packet, 8, 0); // 4 quadwords for vif
@@ -223,23 +232,22 @@ void draw_vu1_with_colors_skinned(athena_object_data *obj) {
 
 	int batch_size = BATCH_SIZE_SKINNED;
 
-	update_vu_program(VU1Draw3DCS_Skin);
+	int mpg_addr = vu_mpg_preload(vu1_colors_skinned, true);
 	
 	gsGlobal->PrimAAEnable = GS_SETTING_ON;
 
-	create_local_world(local_world, obj->position, obj->rotation);
-	create_local_screen(obj->local_screen, local_world, world_view, view_screen);
-
 	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 4);
 
-	owl_add_unpack_data(packet, 141, (void*)data->skeleton->bone_matrices, data->skeleton->bone_count*4, 0);
+	owl_add_unpack_data(packet, 141, (void*)obj->transform, 4, 0);
+
+	owl_add_unpack_data(packet, 145, (void*)data->skeleton->bone_matrices, data->skeleton->bone_count*4, 0);
 
 	unpack_list_open(packet, 0, false);
 	{
 		screen_scale.w = data->attributes.accurate_clipping;
 		unpack_list_append(packet, &screen_scale,       1);
 
-		unpack_list_append(packet, obj->local_screen,       4);
+		unpack_list_append(packet, world_screen,       4);
 	}
 	unpack_list_close(packet);
 
@@ -354,7 +362,7 @@ void draw_vu1_with_colors_skinned(athena_object_data *obj) {
 			owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
 			owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));
 			owl_add_uint(packet, VIF_CODE(count, 0, VIF_ITOP, 0));
-			owl_add_uint(packet, VIF_CODE(0, 0, (last_index == -1? VIF_MSCALF : VIF_MSCNT), 0)); 
+			owl_add_uint(packet, VIF_CODE(mpg_addr, 0, (last_index == -1? VIF_MSCALF : VIF_MSCNT), 0)); 
 
 			idxs_to_draw -= count;
 			idxs_drawn += count;
@@ -373,25 +381,23 @@ void draw_vu1_with_colors_skinned(athena_object_data *obj) {
 
 void draw_vu1_with_colors(athena_object_data *obj) {
 	athena_render_data *data = obj->data;
-	MATRIX local_world;
 
 	int batch_size = BATCH_SIZE;
 
-	update_vu_program(VU1Draw3DCS);
+	int mpg_addr = vu_mpg_preload(vu1_colors, true);
 	
 	gsGlobal->PrimAAEnable = GS_SETTING_ON;
 
-	create_local_world(local_world, obj->position, obj->rotation);
-	create_local_screen(obj->local_screen, local_world, world_view, view_screen);
-
 	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 4);
+
+	owl_add_unpack_data(packet, 141, (void*)obj->transform, 4, 0);
 
 	unpack_list_open(packet, 0, false);
 	{
 		screen_scale.w = data->attributes.accurate_clipping;
 		unpack_list_append(packet, &screen_scale,       1);
 
-		unpack_list_append(packet, obj->local_screen,       4);
+		unpack_list_append(packet, world_screen,       4);
 	}
 	unpack_list_close(packet);
 
@@ -504,7 +510,7 @@ void draw_vu1_with_colors(athena_object_data *obj) {
 			owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
 			owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));
 			owl_add_uint(packet, VIF_CODE(count, 0, VIF_ITOP, 0));
-			owl_add_uint(packet, VIF_CODE(0, 0, (last_index == -1? VIF_MSCALF : VIF_MSCNT), 0)); 
+			owl_add_uint(packet, VIF_CODE(mpg_addr, 0, (last_index == -1? VIF_MSCALF : VIF_MSCNT), 0)); 
 
 			idxs_to_draw -= count;
 			idxs_drawn += count;
@@ -521,39 +527,33 @@ void draw_vu1_with_colors(athena_object_data *obj) {
 	);
 }
 
+void update_object_space(athena_object_data *obj) {
+  	matrix_unit(obj->transform);
+  	matrix_rotate(obj->transform, obj->transform, obj->rotation);
+
+	matrix_copy(obj->local_light, obj->transform);
+
+  	matrix_translate(obj->transform, obj->transform, obj->position);
+}
+
 void draw_vu1_with_lights(athena_object_data *obj) {
 	athena_render_data *data = obj->data;
 
 	int batch_size = BATCH_SIZE;
 
-	update_vu_program(VU1Draw3DLCS);
+	int mpg_addr = vu_mpg_preload(vu1_lights, true);
 		
 	gsGlobal->PrimAAEnable = GS_SETTING_ON;
 
-	MATRIX local_world;
-
-  	// Create the local_world matrix.
-  	matrix_unit(local_world);
-  	matrix_rotate(local_world, local_world, obj->rotation);
-
-	matrix_copy(obj->local_light, local_world);
-
-  	matrix_translate(local_world, local_world, obj->position);
-
-  	// Create the local_screen matrix.
-  	matrix_unit(obj->local_screen);
-
-  	matrix_multiply(obj->local_screen, obj->local_screen, local_world);
-  	matrix_multiply(obj->local_screen, obj->local_screen, world_view);
-  	matrix_multiply(obj->local_screen, obj->local_screen, view_screen);
-
 	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 7); // 5 for unpack static data + 2 for flush with end
+
+	owl_add_unpack_data(packet, 141, (void*)obj->transform, 4, 0);
 
 	unpack_list_open(packet, 0, false);
 	{
 		unpack_list_append(packet, &screen_scale,       1); 
 
-		unpack_list_append(packet, obj->local_screen,       4);
+		unpack_list_append(packet, world_screen,       4);
 		unpack_list_append(packet, obj->local_light,        4);
 
 		unpack_list_append(packet, getCameraPosition(), 1);
@@ -673,7 +673,7 @@ void draw_vu1_with_lights(athena_object_data *obj) {
 			owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));
 			owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
 			owl_add_uint(packet, VIF_CODE(count, 0, VIF_ITOP, 0));
-			owl_add_uint(packet, VIF_CODE(0, 0, (last_index == -1? VIF_MSCALF : VIF_MSCNT), 0)); 
+			owl_add_uint(packet, VIF_CODE(mpg_addr, 0, (last_index == -1? VIF_MSCALF : VIF_MSCNT), 0)); 
 
 			idxs_to_draw -= count;
 			idxs_drawn += count;
@@ -696,34 +696,19 @@ void draw_vu1_with_spec_lights(athena_object_data *obj) {
 
 	int batch_size = BATCH_SIZE;
 
-	update_vu_program(VU1Draw3DLCSS);
+	int mpg_addr = vu_mpg_preload(vu1_specular, true);
 
 	gsGlobal->PrimAAEnable = GS_SETTING_ON;
 
-	MATRIX local_world;
-
-  	// Create the local_world matrix.
-  	matrix_unit(local_world);
-  	matrix_rotate(local_world, local_world, obj->rotation);
-
-	matrix_copy(obj->local_light, local_world);
-
-  	matrix_translate(local_world, local_world, obj->position);
-
-  	// Create the local_screen matrix.
-  	matrix_unit(obj->local_screen);
-
-  	matrix_multiply(obj->local_screen, obj->local_screen, local_world);
-  	matrix_multiply(obj->local_screen, obj->local_screen, world_view);
-  	matrix_multiply(obj->local_screen, obj->local_screen, view_screen);
-
 	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 7);
+
+	owl_add_unpack_data(packet, 141, (void*)obj->transform, 4, 0);
 
 	unpack_list_open(packet, 0, false);
 	{
 		unpack_list_append(packet, &screen_scale,       1);
 
-		unpack_list_append(packet, obj->local_screen,       4);
+		unpack_list_append(packet, world_screen,       4);
 		unpack_list_append(packet, obj->local_light,        4);
 
 		unpack_list_append(packet, getCameraPosition(), 1);
@@ -842,7 +827,7 @@ void draw_vu1_with_spec_lights(athena_object_data *obj) {
 			owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
 			owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
 			owl_add_uint(packet, VIF_CODE(count, 0, VIF_ITOP, 0));
-			owl_add_uint(packet, VIF_CODE(0, 0, (last_index == -1? VIF_MSCALF : VIF_MSCNT), 0)); 
+			owl_add_uint(packet, VIF_CODE(mpg_addr, 0, (last_index == -1? VIF_MSCALF : VIF_MSCNT), 0)); 
 
 			idxs_to_draw -= count;
 			idxs_drawn += count;
