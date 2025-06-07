@@ -186,6 +186,7 @@ typedef struct athena_object_data {
 
 	MATRIX local_light;
 	MATRIX local_screen;
+	MATRIX transform;
 } athena_object_data;
 
 typedef enum {
@@ -193,7 +194,7 @@ typedef enum {
 	CAMERA_LOOKAT,
 } eCameraTypes;
 
-void initCamera(MATRIX* wv);
+void initCamera(MATRIX *ws, MATRIX *wv, MATRIX *vs);
 
 void setCameraType(eCameraTypes type);
 
@@ -243,6 +244,8 @@ void draw_bbox(athena_object_data *obj, Color color);
 
 void render_object(athena_object_data *obj);
 
+void update_object_space(athena_object_data *obj);
+
 void SubVector(VECTOR v0, VECTOR v1, VECTOR v2);
 void AddVector(VECTOR res, VECTOR v1, VECTOR v2);
 float LenVector(VECTOR v);
@@ -254,6 +257,8 @@ void ScaleVector(VECTOR res, VECTOR v, float size);
 int matrix_equals(MATRIX m0, MATRIX m1);
 
 void matrix_clone(MATRIX m0, MATRIX m1);
+
+int vector_equals(VECTOR m0, VECTOR m1);
 
 void create_view(MATRIX view_screen, float fov, float near, float far, float w, float h);
 

@@ -17,7 +17,10 @@
 --endenter
     ;//////////// --- Load data 1 --- /////////////
     ; Updated once per mesh
-    MatrixLoad	ObjectToScreen, SCREEN_MATRIX, vi00 ; load view-projection matrix
+    MatrixLoad	ScreenMatrix, SCREEN_MATRIX, vi00 ; load view-projection matrix
+    MatrixLoad	ObjectMatrix, OBJECT_MATRIX, vi00 ; load object matrix
+
+    MatrixMultiply   ObjectToScreen, ObjectMatrix, ScreenMatrix
 
     lq.w           bfc_multiplier, CLIPFAN_OFFSET(vi00)
 

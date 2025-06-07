@@ -18,4 +18,13 @@
 #define max(a, b) (a > b ? a : b)
 #define min(a, b) (a < b ? a : b)
 
+#define xor_swap(a, b) \
+  do { \
+    if (a != b) { \
+      a ^= b; \
+      b ^= a; \
+      a ^= b; \
+    } \
+  } while(0)
+
 #endif

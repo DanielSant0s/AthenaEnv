@@ -229,7 +229,10 @@ while(true) {
     //dragon_object.render();
     //monkey_object.render();
 
-    render_object[modeltodisplay].rotation = {x:savedly, y:savedlx, z:0.0f};
+    if (lx || ly) {
+        render_object[modeltodisplay].rotation = {x:savedly, y:savedlx, z:0.0f};
+    }
+
     render_object[modeltodisplay].render();
 
     font.print(10, 10, Screen.getFPS(360) + " FPS | " + free_mem + " | Free VRAM: " + free_vram + "KB");

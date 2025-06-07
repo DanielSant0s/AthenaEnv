@@ -156,81 +156,6 @@ unsigned int get_max_z(GSGLOBAL* gsGlobal)
 
 }
 
-/*
-int athena_process_xyz_rgbaq(GSPRIMPOINT *output, GSGLOBAL* gsGlobal, int count, color_f_t *colours, vertex_f_t *vertices)
-{
-	float q = 1.00f;
-
-	int center_x = gsGlobal->Width/2;
-	int center_y = gsGlobal->Height/2;
-	unsigned int max_z = get_max_z(gsGlobal);
-
-	for (int i = 0; i < count; i++)
-	{
-		// Calculate the Q value.
-		if (vertices[i].w != 0)
-		{
-			q = 1 / vertices[i].w;
-		}
-
-		output[i].rgbaq.color.r = (int)(colours[i].r * 128.0f);
-		output[i].rgbaq.color.g = (int)(colours[i].g * 128.0f);
-		output[i].rgbaq.color.b = (int)(colours[i].b * 128.0f);
-		output[i].rgbaq.color.a = 0x80;
-		output[i].rgbaq.color.q = q;
-		output[i].rgbaq.tag = GS_RGBAQ;
-
-		output[i].xyz2.xyz.x = gsKit_float_to_int_x(gsGlobal, (vertices[i].x + 1.0f) * center_x);
-		output[i].xyz2.xyz.y = gsKit_float_to_int_y(gsGlobal, (vertices[i].y + 1.0f) * center_y);
-		output[i].xyz2.xyz.z = (unsigned int)((vertices[i].z + 1.0f) * max_z);
-		output[i].xyz2.tag = GS_XYZ2;
-
-	}
-
-	// End function.
-	return 0;
-
-}
-
-int athena_process_xyz_rgbaq_st(GSPRIMSTQPOINT *output, GSGLOBAL* gsGlobal, int count, color_f_t *colours, vertex_f_t *vertices, texel_f_t *coords)
-{
-	float q = 1.00f;
-
-	int center_x = 2048.0f+gsGlobal->Width/2;
-	int center_y = 2048.0f+gsGlobal->Height/2;
-	unsigned int max_z = get_max_z(gsGlobal);
-
-	for (int i = 0; i < count; i++)
-	{
-		// Calculate the Q value.
-		if (vertices[i].w != 0)
-		{
-			q = 1 / vertices[i].w;
-		}
-
-		output[i].rgbaq.color.r = (int)(colours[i].r * 128.0f);
-		output[i].rgbaq.color.g = (int)(colours[i].g * 128.0f);
-		output[i].rgbaq.color.b = (int)(colours[i].b * 128.0f);
-		output[i].rgbaq.color.a = 0x80;
-		output[i].rgbaq.color.q = q;
-		output[i].rgbaq.tag = GS_RGBAQ;
-
-		output[i].stq.st.s = coords[i].s * q;
-		output[i].stq.st.t = coords[i].t * q;
-		output[i].stq.tag = GS_ST;
-
-		output[i].xyz2.xyz.x = (int)(((vertices[i].x + 1.0f) * center_x) * 16.0f) ;
-		output[i].xyz2.xyz.y = (int)(((vertices[i].y + 1.0f) * center_y) * 16.0f) ;
-		output[i].xyz2.xyz.z = (unsigned int)((vertices[i].z + 1.0f) * max_z);
-		output[i].xyz2.tag = GS_XYZ2;
-
-	}
-
-	// End function.
-	return 0;
-
-}*/
-
 void athena_line_goraud_3d(GSGLOBAL *gsGlobal, float x1, float y1, int iz1, float x2, float y2, int iz2, u64 color1, u64 color2)
 {
 	u64* p_store;
@@ -313,100 +238,6 @@ float vu0_innerproduct(VECTOR v0, VECTOR v1)
 
     return ret;
 }
-/*
-void vu0_build_lights(VECTOR *output, int count, VECTOR *normals, LightData* lights) {	
-	float intensity;
-
-	for (int i = 0; i < count; i++) {
-		output[i][0] = 0.0f;
-		output[i][1] = 0.0f;
-		output[i][2] = 0.0f;
-		output[i][3] = 0.0f;
-		
-		for (int j = 0; j < 4; j++) {
-    		output[i][0] += lights->ambient[j][0];
-    		output[i][1] += lights->ambient[j][1];
-    		output[i][2] += lights->ambient[j][2];
-    		output[i][3] = 1.00f;
-
-    		intensity = -vu0_innerproduct(normals[i], lights->direction[j]);
-    		// Clamp the minimum intensity.
-    		if (intensity < 0.00f) { intensity = 0.00f; }
-
-   			// If the light has intensity...
-   			if (intensity > 0.00f) {
-    			// Add the light value.
-    			output[i][0] += (lights->diffuse[j][0] * intensity);
-    			output[i][1] += (lights->diffuse[j][1] * intensity);
-    			output[i][2] += (lights->diffuse[j][2] * intensity);
-    			output[i][3] = 1.00f;
-   			}
-  		}
- 	}
-}
-
-void vu0_calculate_lights(VECTOR *output, int count, VECTOR *normals, VECTOR *light_direction, VECTOR *light_colour, const int *light_type, int light_count) {	
-	float intensity;
-
-	for (int i = 0; i < count; i++) {
-		output[i][0] = 0.0f;
-		output[i][1] = 0.0f;
-		output[i][2] = 0.0f;
-		output[i][3] = 0.0f;
-		for (int j = 0; j < light_count; j++) {
-   			if (light_type[j] == LIGHT_AMBIENT)  {
-    			intensity = 1.00f;
-
-   			} else if (light_type[j] == LIGHT_DIRECTIONAL)  {
-    			intensity = -vu0_innerproduct(normals[i], light_direction[j]);
-    			// Clamp the minimum intensity.
-    			if (intensity < 0.00f) { intensity = 0.00f; }
-   				// Else, this is an invalid light type.
-
-   			} else { 
-				intensity = 0.00f; 
-			}
-
-   			// If the light has intensity...
-   			if (intensity > 0.00f) {
-    			// Add the light value.
-    			output[i][0] += (light_colour[j][0] * intensity);
-    			output[i][1] += (light_colour[j][1] * intensity);
-    			output[i][2] += (light_colour[j][2] * intensity);
-    			output[i][3] = 1.00f;
-   			}
-  		}
- 	}
-}*/
-
-void vu0_vector_clamp(VECTOR v0, VECTOR v1, float min, float max)
-{
-    __asm__ __volatile__(
-        "mfc1         $8,    %2\n"
-        "mfc1         $9,    %3\n"
-		"lqc2         $vf6,  0(%1)\n"
-        "qmtc2        $8,    $vf4\n"
-        "qmtc2        $9,    $vf5\n"
-		"vmaxx.xyzw   $vf6, $vf6, $vf4\n"
-		"vminix.xyzw  $vf6, $vf6, $vf5\n"
-		"sqc2         $vf6,  0(%0)\n"
-	: : "r" (v0) , "r" (v1), "f" (min), "f" (max):"$8","$9","memory");
-}
-
-/*void vu0_calculate_colours(VECTOR *output, int count, VECTOR *colours, VECTOR *lights) {
-  	for (int i = 0; i < count; i++) {
-   		// Apply the light value to the colour.
-		__asm__ __volatile__(
-			"lqc2     $vf4, 0(%1)\n"
-			"lqc2     $vf5, 0(%2)\n"
-			"vmul.xyz $vf6, $vf4,  $vf5\n"
-			"sqc2     $vf6, 0(%0)\n"
-		: :"r" (output[i]) , "r" (colours[i]) ,"r" (lights[i]) : "memory" );
-
-   		vu0_vector_clamp(output[i], output[i], 0.00f, 1.99f);
-	}
-
-}*/
 
 void UnitMatrix(MATRIX m0)
 {
@@ -825,6 +656,34 @@ void create_view(MATRIX view_screen, float fov, float near, float far, float w, 
 
 	view_screen[14] = (2 * far * near) / (far - near);
 	view_screen[15] = 0.00f;
+}
+
+int vector_equals(VECTOR m0, VECTOR m1)
+{
+    int result;
+    
+    __asm__ __volatile__(
+        "vsub.xyzw  $vf10, $vf0, $vf0\n"      
+
+        "lqc2       $vf1, 0x0(%1)\n"          
+        "lqc2       $vf2, 0x0(%2)\n"          
+        "vsub.xyzw  $vf3, $vf1, $vf2\n"       
+        "vabs.xyzw  $vf3, $vf3\n"             
+        "vadd.xyzw  $vf10, $vf10, $vf3\n"     
+
+        "vaddy.x    $vf11, $vf10, $vf10\n"    
+        "vaddz.x    $vf11, $vf11, $vf10\n"    
+        "vaddw.x    $vf11, $vf11, $vf10\n"    
+
+        "qmfc2      %0, $vf11\n"
+        "sltiu      %0, %0, 1\n" // result = (sum == 0) ? 1 : 0
+        
+        : "=r" (result)
+        : "r" (m0), "r" (m1)
+        : "memory"
+    );
+    
+    return result;
 }
 
 int matrix_equals(MATRIX m0, MATRIX m1)

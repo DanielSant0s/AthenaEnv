@@ -82,8 +82,6 @@ void owl_flush_packet();
 
 owl_controller *owl_get_controller();
 
-void vu1_upload_micro_program(uint32_t* start, uint32_t* end);
-
 void vu1_set_double_buffer_settings(uint32_t base, uint32_t offset);
 
 inline void owl_add_uint(owl_packet *packet, uint32_t a1) {

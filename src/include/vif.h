@@ -20,6 +20,10 @@
 	extern uint32_t name##_CodeStart __attribute__((section(".vudata"))); \
 	extern uint32_t name##_CodeEnd __attribute__((section(".vudata")))
 
+#define embed_vu_code_size(name) (&name##_CodeEnd-&name##_CodeStart)
+
+#define embed_vu_code_ptr(name) (void*)&name##_CodeStart
+
 typedef struct {
     uint32_t VPS : 2;   // VIF command status
     uint32_t VEW : 1;   // VU is executing microprogram

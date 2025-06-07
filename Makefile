@@ -74,7 +74,9 @@ VU1_MPGS = draw_3D_colors.o \
            draw_3D_spec.o \
            draw_3D_colors_skin.o
 
-APP_CORE = main.o bootlogo.o texture_manager.o owl_packet.o vif.o athena_math.o memory.o ee_tools.o module_system.o iop_manager.o taskman.o pad.o system.o strUtils.o
+VU0_MPGS = matrix_multiply.o
+
+APP_CORE = main.o bootlogo.o texture_manager.o owl_packet.o vif.o athena_math.o memory.o ee_tools.o module_system.o iop_manager.o taskman.o pad.o system.o strUtils.o mpg_manager.o matrix.o
 
 INI_READER = readini/src/readini.o
 
@@ -111,7 +113,7 @@ ifeq ($(GRAPHICS),1)
   APP_CORE += graphics.o image_font.o owl_draw.o image_loaders.o mesh_loaders.o atlas.o fntsys.o render.o camera.o skin_math.o calc_3d.o fast_obj/fast_obj.o
 
   ATHENA_MODULES += ath_color.o ath_font.o ath_render.o ath_lights.o ath_3dcamera.o ath_screen.o ath_image.o ath_imagelist.o ath_shape.o
-  EE_OBJS += $(VU1_MPGS)
+  EE_OBJS += $(VU1_MPGS) $(VU0_MPGS)
 endif
 
 ifeq ($(PADEMU),1)
@@ -180,8 +182,9 @@ endif
 
 ATHENA_MODULES := $(ATHENA_MODULES:%=$(JS_API_DIR)%) #prepend the modules folder
 VU1_MPGS := $(VU1_MPGS:%=$(VU1_MPGS_DIR)%) #prepend the microprograms folder
+VU0_MPGS := $(VU0_MPGS:%=$(VU0_MPGS_DIR)%) #prepend the microprograms folder
 
-EE_OBJS = $(APP_CORE) $(INI_READER) $(JS_CORE) $(ATHENA_MODULES) $(VU1_MPGS) $(IOP_MODULES) $(EMBEDDED_ASSETS) # group them all
+EE_OBJS = $(APP_CORE) $(INI_READER) $(JS_CORE) $(ATHENA_MODULES) $(VU1_MPGS) $(VU0_MPGS) $(IOP_MODULES) $(EMBEDDED_ASSETS) # group them all
 EE_OBJS := $(EE_OBJS:%=$(EE_OBJ_DIR)%) #prepend the object folder
 
 EE_BIN := $(EE_BIN_DIR)$(EE_BIN_PREF)$(EE_EXT)
@@ -205,7 +208,8 @@ all: $(DIR_GUARD) $(EXT_LIBS) $(EE_OBJS)
 	
 	ps2-packer $(EE_BIN) $(EE_BIN_PKD) > /dev/null
 
-# mpgs: src/vu1/draw_3D_colors.vsm src/vu1/draw_3D_lights.vsm src/vu1/draw_3D_spec.vsm
+vu1_mpgs: src/vu1/draw_3D_colors.vsm src/vu1/draw_3D_lights.vsm src/vu1/draw_3D_spec.vsm src/vu1/draw_3D_colors_skin.vsm
+vu0_mpgs: src/vu0/matrix_multiply.vsm
 
 debug: $(DIR_GUARD) $(EXT_LIBS) $(EE_OBJS) 
 	$(MAKE) -f Makefile.dl KEYBOARD=$(DYNAMIC_KEYBOARD)
