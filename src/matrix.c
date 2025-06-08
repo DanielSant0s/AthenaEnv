@@ -11,10 +11,9 @@ void init_vu0_matrix() {
 }
 
 void vu0_matrix_multiply(MATRIX output, MATRIX input0, MATRIX input1) {
-    int mpg_addr = vu_mpg_preload(vu0_mat_mul, false);
+    vu_mpg_preload(vu0_mat_mul, false); // since we are doing some "direct" micro mode usage, vu_mpg_preload loads the address inside CSMAR0(vi27)
 
     asm __volatile__ (
-        "ctc2       %3,	  $vi27	    \n"
         "lqc2		$vf1, 0x00(%1)	\n"
         "lqc2		$vf2, 0x10(%1)	\n"
         "lqc2		$vf3, 0x20(%1)	\n"
@@ -30,7 +29,7 @@ void vu0_matrix_multiply(MATRIX output, MATRIX input0, MATRIX input1) {
         "sqc2		$vf11, 0x10(%0)	\n"
         "sqc2		$vf12, 0x20(%0)	\n"
         "sqc2		$vf13, 0x30(%0)	\n"
-        : : "r" (output), "r" (input0), "r" (input1), "r" (mpg_addr)
-        : "memory", "$2", "$3", "$4", "$5"
+        : : "r" (output), "r" (input0), "r" (input1)
+        : "memory", "$2"
     );
  }
