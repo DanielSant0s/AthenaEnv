@@ -141,15 +141,21 @@ int vu_mpg_preload(vu_mpg *mpg, bool dma_transfer) {
     }
 
     mpg_cache[mpg->dst].entries[i] = mpg;
-    mpg_cache[mpg->dst].dests[i] = vu_code_qwc_used[mpg->dst];
+    int mpg_addr = mpg_cache[mpg->dst].dests[i] = vu_code_qwc_used[mpg->dst];
 
     vu_code_qwc_used[mpg->dst] += mpg->qwc;
 
     if (dma_transfer) {
         vu_mpg_upload(mpg->code, mpg_cache[mpg->dst].dests[i], mpg->size, mpg->qwc, mpg->dst);
     } else {
-        memcpy((void *)(vu_code_mem_map[mpg->dst]+(mpg_cache[mpg->dst].dests[i] << 4)), mpg->code, mpg->qwc << 4);
+        memcpy((void *)(vu_code_mem_map[mpg->dst]+(mpg_addr << 4)), mpg->code, mpg->qwc << 3);
+        asm __volatile__ ( // I should check if dst is VU0, but memcpy is almost never used for VU1
+            "ctc2       %0,	  $vi27	    \n" // preload it inside VU0 CMSAR0 register
+            : 
+            : "r" (mpg_addr)
+            : 
+        );
     }
 
-    return mpg_cache[mpg->dst].dests[i];
+    return mpg_addr;
 }
