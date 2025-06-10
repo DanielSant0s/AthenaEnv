@@ -246,7 +246,6 @@ init:
             mtir           boneIndex, boneIndices[x]
 
             MatrixLoad	BoneMatrix, BONE_MATRICES, boneIndex
-            ;MatrixTranspose BoneMatrix, BoneMatrix
   
             MatrixMultiplyVertex ts_vertex, BoneMatrix, inVert
 
