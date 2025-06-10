@@ -101,9 +101,6 @@ typedef struct athena_bone {
     char name[64];
     int32_t parent_id;
 
-	MATRIX world_matrix; 
-    
-    MATRIX bind_pose;    
     MATRIX inverse_bind;   
     MATRIX current_transform; 
     
