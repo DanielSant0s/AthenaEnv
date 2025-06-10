@@ -11,6 +11,10 @@ typedef struct {
 
 static JSClassID js_vector2_class_id;
 
+JSClassID get_vector2_class_id(){
+	return js_vector2_class_id;
+}
+
 static void js_vector2_finalizer(JSRuntime *rt, JSValue val)
 {
     Vector2 *s = JS_GetOpaque(val, js_vector2_class_id);
@@ -341,6 +345,10 @@ typedef struct {
 } Vector3;
 
 static JSClassID js_vector3_class_id;
+
+JSClassID get_matrix3_class_id(){
+	return js_vector3_class_id;
+}
 
 static void js_vector3_finalizer(JSRuntime *rt, JSValue val)
 {

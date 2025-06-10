@@ -175,7 +175,6 @@ typedef struct athena_render_data {
 
 typedef struct athena_object_data {
 	MATRIX local_light;
-	MATRIX local_screen;
 	MATRIX transform;
 
     VECTOR position;

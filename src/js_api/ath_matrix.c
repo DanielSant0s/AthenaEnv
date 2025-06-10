@@ -7,6 +7,11 @@
 
 static JSClassID js_matrix4_class_id;
 
+JSClassID get_matrix4_class_id(){
+	return js_matrix4_class_id;
+}
+
+
 static void js_matrix4_finalizer(JSRuntime *rt, JSValue val)
 {
     MATRIX *s = JS_GetOpaque(val, js_matrix4_class_id);

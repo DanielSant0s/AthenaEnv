@@ -529,6 +529,8 @@ void update_object_space(athena_object_data *obj) {
   	matrix_functions->identity(obj->transform);
   	matrix_functions->rotate(obj->transform, obj->transform, obj->rotation);
 
+	matrix_functions->scale(obj->transform, obj->transform, obj->scale);
+
 	matrix_functions->copy(obj->local_light, obj->transform);
 
   	matrix_functions->translate(obj->transform, obj->transform, obj->position);
