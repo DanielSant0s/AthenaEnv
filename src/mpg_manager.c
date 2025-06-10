@@ -150,7 +150,7 @@ int vu_mpg_preload(vu_mpg *mpg, bool dma_transfer) {
     } else {
         memcpy((void *)(vu_code_mem_map[mpg->dst]+(mpg_addr << 4)), mpg->code, mpg->qwc << 3);
         asm __volatile__ ( // I should check if dst is VU0, but memcpy is almost never used for VU1
-            "ctc2       %0,	  $vi27	    \n" // preload it inside VU0 CMSAR0 register
+            "ctc2.i       %0,	  $vi27	    \n" // preload it inside VU0 CMSAR0 register, interlock enabled because it is safer, right?
             : 
             : "r" (mpg_addr)
             : 

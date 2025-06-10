@@ -129,9 +129,7 @@ const render_object = [ new RenderObject(dragonmesh),
                         new RenderObject(mill)
                     ];
 
-Camera.type(Camera.LOOKAT)
 Camera.position(0.0f, 0.0f, 35.0f);
-Camera.rotation(0.0f, 0.0f,  0.0f);
 
 const light = Lights.new();
 Lights.set(light, Lights.DIRECTION, 0.0,  0.5, 1.0);
@@ -149,7 +147,7 @@ let rx = null;
 let ry = null;
 
 let savedlx = 0.0f;
-let savedly = 180.0f;
+let savedly = 0.0f;
 
 let savedrx = 0.0f;
 let savedry = 0.0f;
