@@ -109,8 +109,13 @@ while(true) {
 
     sky.draw(0, 0);
 
+    Screen.setParam(Screen.DEPTH_TEST_ENABLE, true);
+    Screen.setParam(Screen.DEPTH_TEST_METHOD, Screen.DEPTH_GEQUAL);
+
     scene_object.render();
     skin_object.render();
+
+    Screen.setParam(Screen.DEPTH_TEST_ENABLE, false);
 
     font.print(10, 10, Screen.getFPS(360) + " FPS | " + free_mem + " | Free VRAM: " + free_vram + "KB");
     font.print(10, 25, gltf_skin.size + " Vertices");

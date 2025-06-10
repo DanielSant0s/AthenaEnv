@@ -132,16 +132,18 @@ static JSValue athena_set_param(JSContext *ctx, JSValue this_val, int argc, JSVa
 
 	switch (param) {
 		case ALPHA_TEST_ENABLE:
+		case DST_ALPHA_TEST_ENABLE:
+		case DEPTH_TEST_ENABLE:
+		case PIXEL_ALPHA_BLEND_ENABLE:
+			value = (uint64_t)JS_ToBool(ctx, argv[1]);
+			break;
 		case ALPHA_TEST_METHOD:
 		case ALPHA_TEST_REF:
 		case ALPHA_TEST_FAIL:
-		case DST_ALPHA_TEST_ENABLE:
 		case DST_ALPHA_TEST_METHOD:
-		case DEPTH_TEST_ENABLE:
 		case DEPTH_TEST_METHOD:
-		case PIXEL_ALPHA_BLEND_ENABLE:
 		case COLOR_CLAMP_MODE:
-			JS_ToInt32(ctx, &value, argv[1]);
+			JS_ToInt64(ctx, &value, argv[1]);
 			break;
 		case ALPHA_BLEND_EQUATION:
 			{
