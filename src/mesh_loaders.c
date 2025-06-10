@@ -413,8 +413,6 @@ athena_skeleton* load_gltf_skeleton(cgltf_data* data, cgltf_skin* skin) {
             if (bone->parent_id != -1) break;
         }
 
-        cgltf_node_transform_world(joint_node, bone->world_matrix); 
-
         if (joint_node->has_translation) {
             bone->position[0] = joint_node->translation[0];
             bone->position[1] = joint_node->translation[1];
@@ -450,9 +448,6 @@ athena_skeleton* load_gltf_skeleton(cgltf_data* data, cgltf_skin* skin) {
         } else {
             matrix_unit(bone->inverse_bind);
         }
-
-        create_transform_matrix(bone->bind_pose, joint_node->translation, joint_node->rotation, joint_node->scale);
-        
 
         matrix_unit(bone->current_transform);
         matrix_unit(skeleton->bone_matrices[i]);
