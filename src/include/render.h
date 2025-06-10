@@ -94,8 +94,6 @@ typedef struct athena_animation_controller {
     bool loop;
 } athena_animation_controller;
 
-#define ROOT_BONE -1
-
 typedef struct athena_bone {
     uint32_t id;
     char name[64];
@@ -201,10 +199,6 @@ int draw_convert_xyz(xyz_t *output, float x, float y, int z, int count, vertex_f
 
 unsigned int get_max_z(GSGLOBAL* gsGlobal);
 
-void vu0_vector_clamp(VECTOR v0, VECTOR v1, float min, float max);
-
-float vu0_innerproduct(VECTOR v0, VECTOR v1);
-
 void athena_set_tw_th(const GSTEXTURE *Texture, int *tw, int *th);
 
 void athena_line_goraud_3d(GSGLOBAL *gsGlobal, float x1, float y1, int iz1, float x2, float y2, int iz2, u64 color1, u64 color2);
@@ -234,20 +228,6 @@ void render_object(athena_object_data *obj);
 
 void update_object_space(athena_object_data *obj);
 
-void SubVector(VECTOR v0, VECTOR v1, VECTOR v2);
-void AddVector(VECTOR res, VECTOR v1, VECTOR v2);
-float LenVector(VECTOR v);
-void SetLenVector(VECTOR v, float newLength);
-void Normalize(VECTOR v0, VECTOR v1);
-void OuterProduct(VECTOR v0, VECTOR v1, VECTOR v2);
-void ScaleVector(VECTOR res, VECTOR v, float size);
-
-int matrix_equals(MATRIX m0, MATRIX m1);
-
-void matrix_clone(MATRIX m0, MATRIX m1);
-
-int vector_equals(VECTOR m0, VECTOR m1);
-
 void create_view(MATRIX view_screen, float fov, float near, float far, float w, float h);
 
 #define alloc_vectors(cnt) (VECTOR*)malloc(cnt * sizeof(VECTOR))
@@ -272,7 +252,6 @@ do { \
 	m->textures[m->texture_count-1] = tex; \
 } while (0)
 
-void lerp_vector(VECTOR result, VECTOR a, VECTOR b, float t);
 void slerp_quaternion(VECTOR result, VECTOR q1, VECTOR q2, float t);
 void find_keyframe_indices(athena_keyframe* keys, uint32_t key_count, float time, 
                           uint32_t* prev_idx, uint32_t* next_idx, float* t);

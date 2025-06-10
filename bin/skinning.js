@@ -39,7 +39,6 @@ scene.getTexture(0).filter = LINEAR;
 
 const scene_object = new RenderObject(scene);
 
-Camera.type(Camera.LOOKAT)
 Camera.position(0.0f, 0.0f, 20.0f);
 
 Camera.target(0.0f, 1.0f, 0.0f);
