@@ -50,6 +50,10 @@ JSClassID get_img_class_id();
 JSClassID get_imglist_class_id();
 #endif
 
+JSClassID get_matrix4_class_id();
+JSClassID get_vector2_class_id();
+JSClassID get_vector3_class_id();
+
 #define countof(x) (sizeof(x) / sizeof((x)[0]))
 
 extern char boot_path[255];

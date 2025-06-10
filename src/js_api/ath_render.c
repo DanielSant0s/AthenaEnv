@@ -645,11 +645,27 @@ static JSValue athena_render_object_ctor(JSContext *ctx, JSValueConst new_target
 	ro->obj.rotation[2] = 0.0f;
 	ro->obj.rotation[3] = 1.0f;
 
+	ro->obj.scale[0] = 1.0f;
+	ro->obj.scale[1] = 1.0f;
+	ro->obj.scale[2] = 1.0f;
+	ro->obj.scale[3] = 1.0f;
+
 	update_object_space(&ro->obj);
+
+    JSValue transform_matrix = JS_UNDEFINED, local_light_matrix = JS_UNDEFINED;
+
+    transform_matrix = JS_NewObjectClass(ctx, get_matrix4_class_id());
+	local_light_matrix = JS_NewObjectClass(ctx, get_matrix4_class_id());
+
+    JS_SetOpaque(transform_matrix, &ro->obj.transform);
+	JS_SetOpaque(local_light_matrix, &ro->obj.local_light);
 
 register_3d_object_data:
     proto = JS_GetPropertyStr(ctx, new_target, "prototype");
     obj = JS_NewObjectProtoClass(ctx, proto, js_render_object_class_id);
+
+	JS_DefinePropertyValueStr(ctx, obj, "transform", transform_matrix, JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "local_light", local_light_matrix, JS_PROP_C_W_E);
 
     JS_FreeValue(ctx, proto);
     JS_SetOpaque(obj, ro);
@@ -716,6 +732,16 @@ static JSValue js_render_object_get(JSContext *ctx, JSValueConst this_val, int m
 				
 				return obj;
 			}
+		case 2:
+			{
+				JSValue obj = JS_NewObject(ctx);
+
+				JS_DefinePropertyValueStr(ctx, obj, "x", JS_NewFloat32(ctx, ro->obj.scale[0]), JS_PROP_C_W_E);
+				JS_DefinePropertyValueStr(ctx, obj, "y", JS_NewFloat32(ctx, ro->obj.scale[1]), JS_PROP_C_W_E);
+				JS_DefinePropertyValueStr(ctx, obj, "z", JS_NewFloat32(ctx, ro->obj.scale[2]), JS_PROP_C_W_E);
+				
+				return obj;
+			}
 	}
 
 	return JS_UNDEFINED;
@@ -738,6 +764,11 @@ static JSValue js_render_object_set(JSContext *ctx, JSValueConst this_val, JSVal
 			JS_ToFloat32(ctx, &ro->obj.rotation[1], JS_GetPropertyStr(ctx, val, "y"));
 			JS_ToFloat32(ctx, &ro->obj.rotation[2], JS_GetPropertyStr(ctx, val, "z"));
 			break;
+		case 2:
+			JS_ToFloat32(ctx, &ro->obj.scale[0], JS_GetPropertyStr(ctx, val, "x"));
+			JS_ToFloat32(ctx, &ro->obj.scale[1], JS_GetPropertyStr(ctx, val, "y"));
+			JS_ToFloat32(ctx, &ro->obj.scale[2], JS_GetPropertyStr(ctx, val, "z"));
+			break;
 	}
 
 	update_object_space(&ro->obj);
@@ -752,6 +783,7 @@ static const JSCFunctionListEntry js_render_object_proto_funcs[] = {
 
 	JS_CGETSET_MAGIC_DEF("position",          js_render_object_get, js_render_object_set, 0),
 	JS_CGETSET_MAGIC_DEF("rotation",          js_render_object_get, js_render_object_set, 1),
+	JS_CGETSET_MAGIC_DEF("scale",             js_render_object_get, js_render_object_set, 2),
 };
 
 static JSValue athena_initrender(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
