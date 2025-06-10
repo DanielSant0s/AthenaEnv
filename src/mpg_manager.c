@@ -109,21 +109,27 @@ void vu_mpg_unload(vu_mpg *mpg) {
     free(mpg);
 }
 
-int vu_mpg_cycle_cache(int idx, int dst) {
-    if (!idx) return 0;
+void vu_mpg_cycle_cache(int idx, int dst) {
+    if (!idx) return;
 
     vu_mpg *tmp = mpg_cache[dst].entries[idx-1];
     mpg_cache[dst].entries[idx-1] = mpg_cache[dst].entries[idx];
     mpg_cache[dst].entries[idx] = tmp;
 
-    return idx-1;
+    int tmp_dest = mpg_cache[dst].dests[idx-1];
+    mpg_cache[dst].dests[idx-1] = mpg_cache[dst].dests[idx];
+    mpg_cache[dst].dests[idx] = tmp_dest;
 }
 
 int vu_mpg_preload(vu_mpg *mpg, bool dma_transfer) {
+    int mpg_addr = 0;
+
     int i = 0;
     for (; i < MPG_CACHE_SIZE; i++) {
         if (mpg == mpg_cache[mpg->dst].entries[i]) {
-            return mpg_cache[mpg->dst].dests[vu_mpg_cycle_cache(i, mpg->dst)];
+            mpg_addr = mpg_cache[mpg->dst].dests[i];
+            vu_mpg_cycle_cache(i, mpg->dst);
+            return mpg_addr;
         }
         
         if (!mpg_cache[mpg->dst].entries[i]) {
@@ -141,7 +147,7 @@ int vu_mpg_preload(vu_mpg *mpg, bool dma_transfer) {
     }
 
     mpg_cache[mpg->dst].entries[i] = mpg;
-    int mpg_addr = mpg_cache[mpg->dst].dests[i] = vu_code_qwc_used[mpg->dst];
+    mpg_addr = mpg_cache[mpg->dst].dests[i] = vu_code_qwc_used[mpg->dst];
 
     vu_code_qwc_used[mpg->dst] += mpg->qwc;
 
