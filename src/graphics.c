@@ -94,7 +94,6 @@ void set_screen_param(uint8_t param, uint64_t value) {
 				test.fields.depth_test_enabled = true;
 				test.fields.depth_test_method = DEPTH_ALWAYS;
 			}
-			
 			break;
 		case DEPTH_TEST_METHOD:
 			test.fields.depth_test_method = (int)value;
@@ -133,6 +132,9 @@ uint64_t get_screen_param(uint8_t param) {
 		case DST_ALPHA_TEST_METHOD:
 			return test.fields.dest_alpha_test_method;
 		case DEPTH_TEST_ENABLE:
+			if (test.fields.depth_test_enabled && (test.fields.depth_test_method == DEPTH_ALWAYS)) {
+				return false;
+			}
 			return test.fields.depth_test_enabled;
 		case DEPTH_TEST_METHOD:
 			return test.fields.depth_test_method;
