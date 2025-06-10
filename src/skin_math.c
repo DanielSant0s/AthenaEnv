@@ -10,6 +10,8 @@
 
 #include <owl_packet.h>
 
+#include <matrix.h>
+
 void lerp_vector(VECTOR result, VECTOR a, VECTOR b, float t) {
     result[0] = a[0] + (b[0] - a[0]) * t;
     result[1] = a[1] + (b[1] - a[1]) * t;
@@ -200,17 +202,17 @@ void update_bone_transforms(athena_skeleton* skeleton) {
             
             do {
                 old_parent = parent;
-                matrix_multiply(bone->current_transform, parent->current_transform, bone->current_transform);
+                matrix_functions->multiply(bone->current_transform, parent->current_transform, bone->current_transform);
                 parent = &skeleton->bones[parent->parent_id];
             } while (old_parent->parent_id != -1 && old_parent->parent_id >= (int32_t)skeleton->bone_count);
             
         }
 
         MATRIX trans_inv;
-        matrix_transpose(trans_inv, bone->inverse_bind);
-        matrix_multiply(skeleton->bone_matrices[i], bone->current_transform, trans_inv);
+        matrix_functions->transpose(trans_inv, bone->inverse_bind);
+        matrix_functions->multiply(skeleton->bone_matrices[i], bone->current_transform, trans_inv);
         
-        matrix_transpose(skeleton->bone_matrices[i], skeleton->bone_matrices[i]);
+        matrix_functions->transpose(skeleton->bone_matrices[i], skeleton->bone_matrices[i]);
     }
 }
 
@@ -309,8 +311,8 @@ void create_transform_matrix(MATRIX result, const VECTOR position,
     translation_matrix[11] = position[2];
 
     MATRIX temp;
-    matrix_multiply(temp, rotation_matrix, scale_matrix);
-    matrix_multiply(result, translation_matrix, temp);
+    matrix_functions->multiply(temp, rotation_matrix, scale_matrix);
+    matrix_functions->multiply(result, translation_matrix, temp);
 }
 
 void quaternion_to_matrix(MATRIX result, const VECTOR quaternion) {

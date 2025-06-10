@@ -5,16 +5,15 @@
 #include <math.h>
 
 #include <render.h>
+#include <matrix.h>
+#include <vector.h>
 #include <dbgprintf.h>
-
-eCameraTypes camera_type = CAMERA_DEFAULT;
 
 VECTOR camera_position = { 0.00f, 0.00f, 0.00f, 0.00f };
 VECTOR camera_target =   { 0.00f, 0.00f, 0.00f, 0.00f };
 VECTOR camera_yd =       { 0.00f, 1.00f, 0.00f, 0.00f };
 VECTOR camera_zd =       { 0.00f, 0.00f, 1.00f, 0.00f };
 VECTOR camera_up =       { 0.00f, 1.00f, 0.00f, 0.00f };
-VECTOR camera_rotation = { 0.00f, 0.00f, 0.00f, 0.00f };
 VECTOR local_up =        { 0.00f, 1.00f, 0.00f, 1.00f };
 
 static MATRIX *world_view;
@@ -31,21 +30,10 @@ VECTOR* getCameraPosition() {
     return &camera_position;
 }
 
-void setCameraType(eCameraTypes type) {
-	camera_type = type;
-}
-
 void cameraUpdate() {
-	switch (camera_type) {
-		case CAMERA_DEFAULT:
-			RotCameraMatrix(world_view, camera_position, camera_zd, camera_yd, camera_rotation);
-			break;
-		case CAMERA_LOOKAT:
-			LookAtCameraMatrix(world_view, camera_position, camera_target, camera_up);
-			break;
-	}
+	LookAtCameraMatrix(world_view, camera_position, camera_target, camera_up);
 
-	vu0_matrix_multiply(world_screen, world_view, view_screen);
+	matrix_functions->multiply(world_screen, world_view, view_screen);
 }
 
 void setCameraPosition(float x, float y, float z){
@@ -58,20 +46,13 @@ void setCameraPosition(float x, float y, float z){
 void setCameraTarget(float x, float y, float z){
 	VECTOR tmp_target = { x, y, z, 0.0f };
 
-	SubVector(camera_target, camera_target, tmp_target);
-	SubVector(camera_position, camera_position, camera_target);
+	vector_functions->sub(camera_target, camera_target, tmp_target);
+	vector_functions->sub(camera_position, camera_position, camera_target);
 
 	camera_target[0] = x;
 	camera_target[1] = y;
 	camera_target[2] = z;
 	camera_target[3] = 0.00f;
-}
-
-void setCameraRotation(float x, float y, float z){
-	camera_rotation[0] = x;
-	camera_rotation[1] = y;
-	camera_rotation[2] = z;
-	camera_rotation[3] = 1.00f;
 }
 
 typedef struct {
@@ -81,7 +62,7 @@ typedef struct {
 static Quat Quat_rotation(float rotation, VECTOR axis) {
     Quat result;
 
-	Normalize(axis, axis);
+	vector_functions->normalize(axis, axis);
 
     float halfAngle = rotation * 0.5f;
     float sinHalfAngle = sinf(halfAngle);
@@ -114,7 +95,7 @@ static void rotate(VECTOR output, VECTOR input, Quat r) {
 void turnCamera(float yaw, float pitch)
 {
 	VECTOR dir;
-	SubVector(dir, camera_target, camera_position);
+	vector_functions->sub(dir, camera_target, camera_position);
 
 	VECTOR dy = {0.0f, 1.0f, 0.0f, 1.0f};
 
@@ -123,14 +104,14 @@ void turnCamera(float yaw, float pitch)
 	rotate(local_up, local_up, r);
 
 	VECTOR right;
-	OuterProduct(right, dir, local_up);
-	Normalize(right, right);
+	vector_functions->cross(right, dir, local_up);
+	vector_functions->normalize(right, right);
 
 	r = Quat_rotation(pitch, right);
 	rotate(dir, dir, r);
 
-	OuterProduct(local_up, right, dir);
-	Normalize(local_up, local_up);
+	vector_functions->cross(local_up, right, dir);
+	vector_functions->normalize(local_up, local_up);
 
 	if(local_up[1] >= 0.0f) {
 		camera_up[1] = 1.0f; 
@@ -138,13 +119,13 @@ void turnCamera(float yaw, float pitch)
 		camera_up[1] = -1.0f;
 	}
 
-	AddVector(camera_target, camera_position, dir);
+	vector_functions->add(camera_target, camera_position, dir);
 }
 
 void orbitCamera(float yaw, float pitch)
 {
 	VECTOR dir;
-	SubVector(dir, camera_target, camera_position);
+	vector_functions->sub(dir, camera_target, camera_position);
 
 	VECTOR dy = {0.0f, 1.0f, 0.0f, 1.0f};
 
@@ -153,14 +134,14 @@ void orbitCamera(float yaw, float pitch)
 	rotate(local_up, local_up, r);
 
 	VECTOR right;
-	OuterProduct(right, dir, local_up);
-	Normalize(right, right);
+	vector_functions->cross(right, dir, local_up);
+	vector_functions->normalize(right, right);
 
 	r = Quat_rotation(-pitch, right);
 	rotate(dir, dir, r);
 
-	OuterProduct(local_up, right, dir);
-	Normalize(local_up, local_up);
+	vector_functions->cross(local_up, right, dir);
+	vector_functions->normalize(local_up, local_up);
 
 	if(local_up[1] >= 0.0f) {
 		camera_up[1] = 1.0f; 
@@ -168,52 +149,52 @@ void orbitCamera(float yaw, float pitch)
 		camera_up[1] = -1.0f;
 	}
 
-	SubVector(camera_position, camera_target, dir);
+	vector_functions->sub(camera_position, camera_target, dir);
 }
 
 void dollyCamera(float dist)
 {
 	VECTOR dir;
-	SubVector(dir, camera_target, camera_position);
-	SetLenVector(dir, dist);
+	vector_functions->sub(dir, camera_target, camera_position);
+	vector_functions->set_length(dir, dist);
 
-	AddVector(camera_position, camera_position, dir);
-	AddVector(camera_target, camera_target, dir);
+	vector_functions->add(camera_position, camera_position, dir);
+	vector_functions->add(camera_target, camera_target, dir);
 }
 
 void zoomCamera(float dist)
 {
 	VECTOR dir;
-	SubVector(dir, camera_target, camera_position);
-	float curdist = LenVector(dir);
+	vector_functions->sub(dir, camera_target, camera_position);
+	float curdist = vector_functions->get_length(dir);
 
 	if(dist >= curdist)
 		dist = curdist - 0.01f;
 
-	SetLenVector(dir, dist);
+	vector_functions->set_length(dir, dist);
 
-	AddVector(camera_position, camera_position, dir);
+	vector_functions->add(camera_position, camera_position, dir);
 }
 
 void panCamera(float x, float y)
 {
 	VECTOR dir;
-	SubVector(dir, camera_target, camera_position);
-	Normalize(dir, dir);
+	vector_functions->sub(dir, camera_target, camera_position);
+	vector_functions->normalize(dir, dir);
 
 	VECTOR right;
-	OuterProduct(right, dir, camera_up);
-	Normalize(right, right);
+	vector_functions->cross(right, dir, camera_up);
+	vector_functions->normalize(right, right);
 	
-	OuterProduct(local_up, right, dir);
-	Normalize(local_up, local_up);
+	vector_functions->cross(local_up, right, dir);
+	vector_functions->normalize(local_up, local_up);
 
 	VECTOR work0, work1;
-	ScaleVector(work0, right, x);
-	ScaleVector(work1, local_up, y);
+	vector_functions->scale(work0, right, x);
+	vector_functions->scale(work1, local_up, y);
 
-	AddVector(dir, work0, work1);
+	vector_functions->add(dir, work0, work1);
 
-	AddVector(camera_position, camera_position, dir);
-	AddVector(camera_target, camera_target, dir);
+	vector_functions->add(camera_position, camera_position, dir);
+	vector_functions->add(camera_target, camera_target, dir);
 }

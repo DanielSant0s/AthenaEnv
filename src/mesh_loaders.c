@@ -14,6 +14,8 @@
 
 #include <owl_packet.h>
 
+#include <matrix.h>
+
 void calculate_bbox(athena_render_data* res_m) {
 	float lowX, lowY, lowZ, hiX, hiY, hiZ;
 
@@ -553,8 +555,8 @@ void loadGLTF(athena_render_data* res_m, const char* path, GSTEXTURE* text) {
 	    printf("%f %f %f %f\n", worldTransform[12], worldTransform[13], worldTransform[14], worldTransform[15]);
 
         MATRIX worldMatrixNormals;
-        matrix_inverse(worldMatrixNormals, worldTransform);
-        matrix_transpose(worldMatrixNormals, worldMatrixNormals);
+        matrix_functions->inverse(worldMatrixNormals, worldTransform);
+        matrix_functions->transpose(worldMatrixNormals, worldMatrixNormals);
 
         for (cgltf_size prim_idx = 0; prim_idx < mesh->primitives_count; ++prim_idx) {
             cgltf_primitive* primitive = &mesh->primitives[prim_idx];

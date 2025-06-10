@@ -62,12 +62,10 @@ void render_object(athena_object_data *obj) {
 void init3D(float fov, float near, float far) {
 	GSGLOBAL* gsGlobal = getGSGLOBAL();
 
-	init_vu0_matrix();
-
 	initCamera(&world_screen, &world_view, &view_screen);
 	create_view(view_screen, DEG2RAD(fov), near, far, gsGlobal->Width, gsGlobal->Height);
 
-	vu0_matrix_multiply(world_screen, world_view, view_screen);
+	matrix_functions->multiply(world_screen, world_view, view_screen);
 
 	vu1_set_double_buffer_settings(273, 357); // Skinned layout
 	// vu1_set_double_buffer_settings(141, 400);
@@ -528,12 +526,12 @@ void draw_vu1_with_colors(athena_object_data *obj) {
 }
 
 void update_object_space(athena_object_data *obj) {
-  	matrix_unit(obj->transform);
-  	matrix_rotate(obj->transform, obj->transform, obj->rotation);
+  	matrix_functions->identity(obj->transform);
+  	matrix_functions->rotate(obj->transform, obj->transform, obj->rotation);
 
-	matrix_copy(obj->local_light, obj->transform);
+	matrix_functions->copy(obj->local_light, obj->transform);
 
-  	matrix_translate(obj->transform, obj->transform, obj->position);
+  	matrix_functions->translate(obj->transform, obj->transform, obj->position);
 }
 
 void draw_vu1_with_lights(athena_object_data *obj) {

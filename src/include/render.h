@@ -179,24 +179,19 @@ typedef struct athena_render_data {
 } athena_render_data;
 
 typedef struct athena_object_data {
-	athena_render_data *data;
-
-	VECTOR position;
-	VECTOR rotation;
-
 	MATRIX local_light;
 	MATRIX local_screen;
 	MATRIX transform;
-} athena_object_data;
 
-typedef enum {
-	CAMERA_DEFAULT,
-	CAMERA_LOOKAT,
-} eCameraTypes;
+    VECTOR position;
+	VECTOR rotation;
+    VECTOR scale;
+
+    athena_render_data *data;
+
+} athena_object_data qw_aligned;
 
 void initCamera(MATRIX *ws, MATRIX *wv, MATRIX *vs);
-
-void setCameraType(eCameraTypes type);
 
 void cameraUpdate();
 
@@ -216,10 +211,6 @@ float vu0_innerproduct(VECTOR v0, VECTOR v1);
 void athena_set_tw_th(const GSTEXTURE *Texture, int *tw, int *th);
 
 void athena_line_goraud_3d(GSGLOBAL *gsGlobal, float x1, float y1, int iz1, float x2, float y2, int iz2, u64 color1, u64 color2);
-
-void CameraMatrix(MATRIX m, VECTOR p, VECTOR zd, VECTOR yd);
-
-void RotCameraMatrix(MATRIX m, VECTOR p, VECTOR zd, VECTOR yd, VECTOR rot);
 
 void LookAtCameraMatrix(MATRIX m, VECTOR position, VECTOR target, VECTOR up);
 

@@ -3,6 +3,7 @@
 #include <stdio.h>
 
 #include <render.h>
+#include <matrix.h>
 
 static JSClassID js_matrix4_class_id;
 
@@ -33,7 +34,7 @@ static JSValue js_matrix4_ctor(JSContext *ctx,
             JS_ToFloat32(ctx, &(*s[i]), argv[i]);
         }
     } else {
-        matrix_unit(s);
+        matrix_functions->identity(s);
     }
 
     /* using new_target to get the prototype is necessary when the
@@ -106,7 +107,7 @@ static JSValue js_matrix4_mul(JSContext *ctx, JSValueConst new_target, int argc,
     if (!s)
         return JS_EXCEPTION;
 
-    matrix_multiply(s, v1, v2);
+    matrix_functions->multiply(s, v1, v2);
 
     JS_SetOpaque(obj, s);
     return obj;
@@ -120,14 +121,14 @@ static JSValue js_matrix4_eq(JSContext *ctx, JSValueConst new_target, int argc, 
     MATRIX *m1 = JS_GetOpaque2(ctx, argv[0], js_matrix4_class_id);
     MATRIX *m2 = JS_GetOpaque2(ctx, argv[1], js_matrix4_class_id);
 
-    return JS_NewBool(ctx, matrix_equals(m1, m2));
+    return JS_NewBool(ctx, matrix_functions->equals(m1, m2));
 }
 
 static JSValue js_matrix4_copy(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     MATRIX *m1 = JS_GetOpaque2(ctx, this_val, js_matrix4_class_id);
     MATRIX *m2 = JS_GetOpaque2(ctx, argv[0], js_matrix4_class_id);
 
-    matrix_clone(m1, m2);
+    matrix_functions->copy(m1, m2);
 
     return this_val;
 }
@@ -135,7 +136,7 @@ static JSValue js_matrix4_copy(JSContext *ctx, JSValueConst this_val, int argc, 
 static JSValue js_matrix4_identity(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     MATRIX *m1 = JS_GetOpaque2(ctx, this_val, js_matrix4_class_id);
 
-    UnitMatrix(m1);
+    matrix_functions->identity(m1);
 
     return this_val;
 }
@@ -143,7 +144,7 @@ static JSValue js_matrix4_identity(JSContext *ctx, JSValueConst this_val, int ar
 static JSValue js_matrix4_transpose(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     MATRIX *m1 = JS_GetOpaque2(ctx, this_val, js_matrix4_class_id);
 
-    matrix_transpose(m1, m1);
+    matrix_functions->transpose(m1, m1);
 
     return this_val;
 }
@@ -151,7 +152,7 @@ static JSValue js_matrix4_transpose(JSContext *ctx, JSValueConst this_val, int a
 static JSValue js_matrix4_invert(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     MATRIX *m1 = JS_GetOpaque2(ctx, this_val, js_matrix4_class_id);
 
-    matrix_inverse(m1, m1);
+    matrix_functions->inverse(m1, m1);
 
     return this_val;
 }
@@ -170,7 +171,7 @@ static JSValue js_matrix4_clone(JSContext *ctx, JSValueConst this_val, int argc,
     if (!s)
         return JS_EXCEPTION;
 
-    matrix_clone(s, m1);
+    matrix_functions->copy(s, m1);
 
     JS_SetOpaque(obj, s);
     return obj;
