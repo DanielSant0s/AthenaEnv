@@ -373,8 +373,7 @@ athena_skeleton* load_gltf_skeleton(cgltf_data* data, cgltf_skin* skin) {
     
     athena_skeleton* skeleton = (athena_skeleton*)malloc(sizeof(athena_skeleton));
     skeleton->bone_count = skin->joints_count;
-    skeleton->bones = (athena_bone*)malloc(skeleton->bone_count * sizeof(athena_bone));
-    skeleton->bone_matrices = (MATRIX*)malloc(skeleton->bone_count * sizeof(MATRIX));
+    skeleton->bones = (athena_bone_data*)malloc(skeleton->bone_count * sizeof(athena_bone_data));
 
     float* inverse_bind_matrices = NULL;
     if (skin->inverse_bind_matrices) {
@@ -385,9 +384,7 @@ athena_skeleton* load_gltf_skeleton(cgltf_data* data, cgltf_skin* skin) {
 
     for (cgltf_size i = 0; i < skin->joints_count; i++) {
         cgltf_node* joint_node = skin->joints[i];
-        athena_bone* bone = &skeleton->bones[i];
-        
-        bone->id = (uint32_t)i;
+        athena_bone_data* bone = &skeleton->bones[i];
 
         if (joint_node->name) {
             strncpy(bone->name, joint_node->name, sizeof(bone->name) - 1);
@@ -446,11 +443,8 @@ athena_skeleton* load_gltf_skeleton(cgltf_data* data, cgltf_skin* skin) {
         if (inverse_bind_matrices) {
             memcpy(&bone->inverse_bind, &inverse_bind_matrices[i * 16], sizeof(MATRIX));
         } else {
-            matrix_unit(bone->inverse_bind);
+            matrix_functions->identity(bone->inverse_bind);
         }
-
-        matrix_unit(bone->current_transform);
-        matrix_unit(skeleton->bone_matrices[i]);
     }
     
     if (inverse_bind_matrices) {
@@ -543,12 +537,6 @@ void loadGLTF(athena_render_data* res_m, const char* path, GSTEXTURE* text) {
         cgltf_float worldTransform[16];
         cgltf_node_transform_world(node, worldTransform); 
 
-	    printf("World matrix %d:\n", node_idx);
-	    printf("%f %f %f %f\n", worldTransform[0], worldTransform[1], worldTransform[2], worldTransform[3]);
-	    printf("%f %f %f %f\n", worldTransform[4], worldTransform[5], worldTransform[6], worldTransform[7]);
-	    printf("%f %f %f %f\n", worldTransform[8], worldTransform[9], worldTransform[10], worldTransform[11]);
-	    printf("%f %f %f %f\n", worldTransform[12], worldTransform[13], worldTransform[14], worldTransform[15]);
-
         MATRIX worldMatrixNormals;
         matrix_functions->inverse(worldMatrixNormals, worldTransform);
         matrix_functions->transpose(worldMatrixNormals, worldMatrixNormals);
@@ -640,7 +628,6 @@ void loadGLTF(athena_render_data* res_m, const char* path, GSTEXTURE* text) {
     if (data->skins_count > 0) {
         res_m->skeleton = load_gltf_skeleton(data, &data->skins[0]);
         load_gltf_animations(res_m, data);
-        update_bone_transforms(res_m->skeleton);
     }
 
     cgltf_free(data);

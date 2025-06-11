@@ -95,9 +95,9 @@ void find_keyframe_indices(athena_keyframe* keys, uint32_t key_count, float time
     *t = 0.0f;
 }
 
-void apply_animation(athena_render_data* render_data, uint32_t animation_index, float time) {
-    athena_animation* anim = &render_data->anim_controller.animations[animation_index];
-    athena_skeleton* skeleton = render_data->skeleton;
+void apply_animation(athena_object_data* obj, uint32_t animation_index, float time) {
+    athena_animation* anim = &obj->data->anim_controller.animations[animation_index];
+    athena_skeleton* skeleton = obj->data->skeleton;
 
     float normalized_time = fmodf(time, anim->duration);
 
@@ -108,7 +108,7 @@ void apply_animation(athena_render_data* render_data, uint32_t animation_index, 
             continue; 
         }
         
-        athena_bone* bone = &skeleton->bones[bone_anim->bone_id];
+        athena_bone_transform* bone = &obj->bones[bone_anim->bone_id];
 
         if (bone_anim->position_keys && bone_anim->position_key_count > 0) {
             uint32_t prev_idx, next_idx;
@@ -175,44 +175,37 @@ void apply_animation(athena_render_data* render_data, uint32_t animation_index, 
         }
     }
 
-    update_bone_transforms(skeleton);
+    update_bone_transforms(skeleton, obj);
 }
 
-void update_bone_transforms(athena_skeleton* skeleton) {
+void update_bone_transforms(athena_skeleton* skeleton, athena_object_data* obj) {
     if (!skeleton || !skeleton->bones) {
         return;
     }
 
+    athena_bone_transform* bone_transforms = obj->bones;
+
     for (uint32_t i = 0; i < skeleton->bone_count; i++) {
-        athena_bone* bone = &skeleton->bones[i];
+        athena_bone_data* bone = &skeleton->bones[i];
+        athena_bone_transform* transform = &bone_transforms[i];
 
         MATRIX local_transform;
         create_transform_matrix(local_transform, 
-                              bone->position, 
-                              bone->rotation, 
-                              bone->scale);
+                              transform->position, 
+                              transform->rotation, 
+                              transform->scale);
 
-        memcpy(bone->current_transform, local_transform, sizeof(MATRIX));
+        memcpy(transform->transform, local_transform, sizeof(MATRIX));
 
-        if (bone->parent_id == -1 || bone->parent_id >= (int32_t)skeleton->bone_count) {
-            
-        } else {
-            athena_bone* parent = &skeleton->bones[bone->parent_id];
-            athena_bone* old_parent = NULL;
-            
-            do {
-                old_parent = parent;
-                matrix_functions->multiply(bone->current_transform, parent->current_transform, bone->current_transform);
-                parent = &skeleton->bones[parent->parent_id];
-            } while (old_parent->parent_id != -1 && old_parent->parent_id >= (int32_t)skeleton->bone_count);
-            
-        }
+        if (bone->parent_id > -1 && bone->parent_id < (int32_t)skeleton->bone_count) {
+            matrix_functions->multiply(transform->transform, bone_transforms[bone->parent_id].transform, transform->transform);
+        } 
 
         MATRIX trans_inv;
         matrix_functions->transpose(trans_inv, bone->inverse_bind);
-        matrix_functions->multiply(skeleton->bone_matrices[i], bone->current_transform, trans_inv);
+        matrix_functions->multiply(obj->bone_matrices[i], transform->transform, trans_inv);
         
-        matrix_functions->transpose(skeleton->bone_matrices[i], skeleton->bone_matrices[i]);
+        matrix_functions->transpose(obj->bone_matrices[i], obj->bone_matrices[i]);
     }
 }
 
