@@ -94,24 +94,28 @@ typedef struct athena_animation_controller {
     bool loop;
 } athena_animation_controller;
 
-typedef struct athena_bone {
-    uint32_t id;
+typedef struct athena_bone_data {
     char name[64];
     int32_t parent_id;
 
     MATRIX inverse_bind;   
-    MATRIX current_transform; 
     
     VECTOR position;
     VECTOR rotation;
     VECTOR scale;
-} athena_bone;
+} athena_bone_data;
+
+typedef struct athena_bone_transform {
+    MATRIX transform;
+    
+    VECTOR position;
+    VECTOR rotation;
+    VECTOR scale;
+} athena_bone_transform;
 
 typedef struct athena_skeleton {
-    athena_bone* bones;
+    athena_bone_data* bones;
     uint32_t bone_count;
-    
-    MATRIX* bone_matrices;  
 } athena_skeleton;
 
 typedef struct vertex_skin_data {
@@ -181,6 +185,9 @@ typedef struct athena_object_data {
 	VECTOR rotation;
     VECTOR scale;
 
+    athena_bone_transform *bones;
+    MATRIX *bone_matrices;
+
     athena_render_data *data;
 
 } athena_object_data qw_aligned;
@@ -225,6 +232,8 @@ void draw_bbox(athena_object_data *obj, Color color);
 
 void render_object(athena_object_data *obj);
 
+void new_render_object(athena_object_data *obj, athena_render_data *data);
+
 void update_object_space(athena_object_data *obj);
 
 void create_view(MATRIX view_screen, float fov, float near, float far, float w, float h);
@@ -255,9 +264,9 @@ void slerp_quaternion(VECTOR result, VECTOR q1, VECTOR q2, float t);
 void find_keyframe_indices(athena_keyframe* keys, uint32_t key_count, float time, 
                           uint32_t* prev_idx, uint32_t* next_idx, float* t);
 
-void apply_animation(athena_render_data* render_data, uint32_t animation_index, float anim_time) ;					  
+void apply_animation(athena_object_data* obj, uint32_t animation_index, float anim_time) ;					  
 
-void update_bone_transforms(athena_skeleton* skeleton);
+void update_bone_transforms(athena_skeleton* skeleton, athena_object_data* obj);
 
 void create_transform_matrix(MATRIX result, const VECTOR position, 
                            const VECTOR rotation, const VECTOR scale);

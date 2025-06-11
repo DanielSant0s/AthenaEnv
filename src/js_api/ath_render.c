@@ -615,6 +615,11 @@ static void athena_render_object_dtor(JSRuntime *rt, JSValue val){
     if (!ro)
         return;
 
+	if (ro->obj.bones) {
+		free(ro->obj.bones);
+		free(ro->obj.bone_matrices);
+	}
+
 	js_free_rt(rt, ro);
 	
 	JS_SetOpaque(val, NULL);
@@ -633,24 +638,7 @@ static JSValue athena_render_object_ctor(JSContext *ctx, JSValueConst new_target
     if (!rd)
         return JS_EXCEPTION;
 
-	ro->obj.data = &rd->m;
-
-	ro->obj.position[0] = 0.0f;
-	ro->obj.position[1] = 0.0f;
-	ro->obj.position[2] = 0.0f;
-	ro->obj.position[3] = 1.0f;
-
-	ro->obj.rotation[0] = 0.0f;
-	ro->obj.rotation[1] = 0.0f;
-	ro->obj.rotation[2] = 0.0f;
-	ro->obj.rotation[3] = 1.0f;
-
-	ro->obj.scale[0] = 1.0f;
-	ro->obj.scale[1] = 1.0f;
-	ro->obj.scale[2] = 1.0f;
-	ro->obj.scale[3] = 1.0f;
-
-	update_object_space(&ro->obj);
+	new_render_object(&ro->obj, &rd->m);
 
     JSValue transform_matrix = JS_UNDEFINED, local_light_matrix = JS_UNDEFINED;
 

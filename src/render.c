@@ -59,6 +59,40 @@ void render_object(athena_object_data *obj) {
 	
 }
 
+void new_render_object(athena_object_data *obj, athena_render_data *data) {
+	obj->data = data;
+
+	if (data->skin_data) {
+		obj->bones = (athena_bone_transform*)malloc(data->skeleton->bone_count * sizeof(athena_bone_transform));
+		obj->bone_matrices = (MATRIX*)malloc(data->skeleton->bone_count * sizeof(MATRIX));
+
+		for (int i = 0; i < data->skeleton->bone_count; i++) {
+			copy_vector(obj->bones[i].position, data->skeleton->bones[i].position);
+			copy_vector(obj->bones[i].rotation, data->skeleton->bones[i].rotation);
+			copy_vector(obj->bones[i].scale, data->skeleton->bones[i].scale);
+		}
+
+		update_bone_transforms(data->skeleton, obj);
+	}
+
+	obj->position[0] = 0.0f;
+	obj->position[1] = 0.0f;
+	obj->position[2] = 0.0f;
+	obj->position[3] = 1.0f;
+
+	obj->rotation[0] = 0.0f;
+	obj->rotation[1] = 0.0f;
+	obj->rotation[2] = 0.0f;
+	obj->rotation[3] = 1.0f;
+
+	obj->scale[0] = 1.0f;
+	obj->scale[1] = 1.0f;
+	obj->scale[2] = 1.0f;
+	obj->scale[3] = 1.0f;
+
+	update_object_space(obj);
+}
+
 void init3D(float fov, float near, float far) {
 	GSGLOBAL* gsGlobal = getGSGLOBAL();
 
@@ -226,7 +260,7 @@ void draw_vu1_with_colors_skinned(athena_object_data *obj) {
 
 	data->anim_controller.current_time = (clock() / (float)CLOCKS_PER_SEC) - data->anim_controller.initial_time;
 
-	apply_animation(data, 0, data->anim_controller.current_time); 
+	apply_animation(obj, 0, data->anim_controller.current_time); 
 
 	int batch_size = BATCH_SIZE_SKINNED;
 
@@ -238,7 +272,7 @@ void draw_vu1_with_colors_skinned(athena_object_data *obj) {
 
 	owl_add_unpack_data(packet, 141, (void*)obj->transform, 4, 0);
 
-	owl_add_unpack_data(packet, 145, (void*)data->skeleton->bone_matrices, data->skeleton->bone_count*4, 0);
+	owl_add_unpack_data(packet, 145, (void*)obj->bone_matrices, data->skeleton->bone_count*4, 0);
 
 	unpack_list_open(packet, 0, false);
 	{
