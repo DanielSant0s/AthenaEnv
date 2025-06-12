@@ -63,6 +63,8 @@ void new_render_object(athena_object_data *obj, athena_render_data *data) {
 	obj->data = data;
 
 	if (data->skin_data) {
+		obj->anim_controller.current = NULL;
+
 		obj->bones = (athena_bone_transform*)malloc(data->skeleton->bone_count * sizeof(athena_bone_transform));
 		obj->bone_matrices = (MATRIX*)malloc(data->skeleton->bone_count * sizeof(MATRIX));
 
@@ -244,23 +246,22 @@ void append_texture_tags(owl_packet* packet, GSTEXTURE *texture, int texture_id,
 
 void draw_vu1_with_colors_skinned(athena_object_data *obj) {
 	athena_render_data *data = obj->data;
-	MATRIX local_world;
 
-	if (!data->anim_controller.is_playing) {
-		data->anim_controller.initial_time = (clock()  / (float)CLOCKS_PER_SEC);
+	if (obj->anim_controller.current) {
+		if (!obj->anim_controller.is_playing) {
+			obj->anim_controller.initial_time = (clock()  / (float)CLOCKS_PER_SEC);
 
-		data->anim_controller.is_playing = true;
+			obj->anim_controller.is_playing = true;
+		}
 
-		printf("duration %g\n", data->anim_controller.animations[0].duration);
+		if (obj->anim_controller.current_time > obj->anim_controller.current->duration) {
+			obj->anim_controller.initial_time = (clock()  / (float)CLOCKS_PER_SEC);
+		}
+
+		obj->anim_controller.current_time = (clock() / (float)CLOCKS_PER_SEC) - obj->anim_controller.initial_time;
+
+		apply_animation(obj, obj->anim_controller.current_time); 
 	}
-
-	if (data->anim_controller.current_time > data->anim_controller.animations[0].duration) {
-		data->anim_controller.initial_time = (clock()  / (float)CLOCKS_PER_SEC);
-	}
-
-	data->anim_controller.current_time = (clock() / (float)CLOCKS_PER_SEC) - data->anim_controller.initial_time;
-
-	apply_animation(obj, 0, data->anim_controller.current_time); 
 
 	int batch_size = BATCH_SIZE_SKINNED;
 

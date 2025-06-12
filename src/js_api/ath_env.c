@@ -161,6 +161,7 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"import * as Render from 'Render';\n"
 				"import * as RenderData from 'RenderData';\n"
 				"import * as RenderObject from 'RenderObject';\n"
+				"import * as AnimCollection from 'AnimCollection';\n"
 				"import * as Lights from 'Lights';\n"
 				"import * as Camera from 'Camera';\n"
 				"globalThis.Color = Color;\n"
@@ -180,6 +181,8 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"globalThis.Render = Render;\n"
 				"globalThis.RenderData = RenderData.RenderData;\n"
 				"globalThis.RenderObject = RenderObject.RenderObject;\n"
+
+				"globalThis.AnimCollection = AnimCollection.AnimCollection;\n"
 
 				"globalThis.Lights = Lights;\n"
 
@@ -280,6 +283,7 @@ static JSContext *JS_NewCustomContext(JSRuntime *rt)
 	athena_render_init(ctx);
 	athena_lights_init(ctx);
 	athena_3dcamera_init(ctx);
+	athena_anim_3d_init(ctx);
 	#endif
 
 	#ifdef ATHENA_KEYBOARD
