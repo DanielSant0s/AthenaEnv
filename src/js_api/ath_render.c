@@ -219,6 +219,28 @@ register_3d_render_data:
 
 	FlushCache(WRITEBACK_DCACHE);
 
+	if (ro->m.skin_data) {
+		JSValue bones = JS_NewArray(ctx);
+
+		// TODO: create a class for bones so they can be passed by reference
+		for (int i = 0; i < ro->m.skeleton->bone_count; i++) {
+			JSValue bone = JS_NewObject(ctx);
+
+			JS_DefinePropertyValueStr(ctx, bone, "name",      JS_NewString(ctx, ro->m.skeleton->bones[i].name), JS_PROP_C_W_E);
+			JS_DefinePropertyValueStr(ctx, bone, "parent_id", JS_NewInt32(ctx, ro->m.skeleton->bones[i].parent_id), JS_PROP_C_W_E);
+
+    		JSValue bone_matrix = JS_NewObjectClass(ctx, get_matrix4_class_id());
+
+    		JS_SetOpaque(bone_matrix, &ro->m.skeleton->bones[i].inverse_bind);
+
+			JS_DefinePropertyValueStr(ctx, bone, "inverse_bind", bone_matrix, JS_PROP_C_W_E);
+
+			JS_DefinePropertyValueUint32(ctx, bones, i, bone, JS_PROP_C_W_E);
+		}
+
+		JS_DefinePropertyValueStr(ctx, obj, "bones", bones, JS_PROP_C_W_E);
+	}
+
 	if (ro->m.texture_count > 0) {
 		JSValue tex_arr = JS_NewArray(ctx);
 		for (int i = 0; i < ro->m.texture_count; i++) {
@@ -654,6 +676,33 @@ register_3d_object_data:
 
 	JS_DefinePropertyValueStr(ctx, obj, "transform", transform_matrix, JS_PROP_C_W_E);
 	JS_DefinePropertyValueStr(ctx, obj, "local_light", local_light_matrix, JS_PROP_C_W_E);
+
+	if (ro->obj.data->skin_data) {
+		JSValue bone_transforms = JS_NewArray(ctx);
+		JSValue bone_matrices = JS_NewArray(ctx);
+
+		// TODO: create a class for bones so they can be passed by reference
+		for (int i = 0; i < ro->obj.data->skeleton->bone_count; i++) {
+			JSValue bone = JS_NewObject(ctx);
+
+			JSValue bone_transform = JS_NewObjectClass(ctx, get_matrix4_class_id());
+
+			JS_SetOpaque(bone_transform, &ro->obj.bones[i].transform);
+
+			JS_DefinePropertyValueStr(ctx, bone, "transform", bone_transform, JS_PROP_C_W_E);
+
+			JS_DefinePropertyValueUint32(ctx, bone_transforms, i, bone, JS_PROP_C_W_E);
+
+    		JSValue bone_matrix = JS_NewObjectClass(ctx, get_matrix4_class_id());
+
+    		JS_SetOpaque(bone_matrix, &ro->obj.bone_matrices[i]);
+
+			JS_DefinePropertyValueUint32(ctx, bone_matrices, i, bone_matrix, JS_PROP_C_W_E);
+		}
+
+		JS_DefinePropertyValueStr(ctx, obj, "bone_matrices", bone_matrices, JS_PROP_C_W_E);
+		JS_DefinePropertyValueStr(ctx, obj, "bones", bone_transforms, JS_PROP_C_W_E);
+	}
 
     JS_FreeValue(ctx, proto);
     JS_SetOpaque(obj, ro);
