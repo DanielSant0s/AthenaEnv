@@ -654,6 +654,7 @@ static JSValue athena_play_anim(JSContext *ctx, JSValue this_val, int argc, JSVa
 	JS_ToUint32(ctx, &anim, argv[0]);
 
 	ro->obj.anim_controller.current = anim;
+	ro->obj.anim_controller.is_playing = false;
 	ro->obj.anim_controller.loop = JS_ToBool(ctx, argv[1]);
 
 	return JS_UNDEFINED;

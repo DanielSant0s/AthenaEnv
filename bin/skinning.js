@@ -33,7 +33,7 @@ gltf_skin.pipeline = Render.PL_NO_LIGHTS;
 const skin_object = new RenderObject(gltf_skin);
 skin_object.rotation = {x:Math.PI/2, y:0.0, z:0.0};
 
-skin_object.playAnim(skin_anims[4], true);
+skin_object.playAnim(skin_anims[4], false);
 
 const scene = new RenderData("scene.gltf");
 scene.face_culling = Render.CULL_FACE_NONE;

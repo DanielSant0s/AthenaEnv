@@ -254,13 +254,18 @@ void draw_vu1_with_colors_skinned(athena_object_data *obj) {
 			obj->anim_controller.is_playing = true;
 		}
 
-		if (obj->anim_controller.current_time > obj->anim_controller.current->duration) {
-			obj->anim_controller.initial_time = (clock()  / (float)CLOCKS_PER_SEC);
-		}
-
 		obj->anim_controller.current_time = (clock() / (float)CLOCKS_PER_SEC) - obj->anim_controller.initial_time;
 
 		apply_animation(obj, obj->anim_controller.current_time); 
+
+		if (obj->anim_controller.current_time > obj->anim_controller.current->duration) {
+			if (obj->anim_controller.loop) {
+				obj->anim_controller.initial_time = (clock()  / (float)CLOCKS_PER_SEC);
+			} else {
+				obj->anim_controller.is_playing = false;
+				obj->anim_controller.current = NULL;
+			}
+		}
 	}
 
 	int batch_size = BATCH_SIZE_SKINNED;
