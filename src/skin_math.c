@@ -95,8 +95,8 @@ void find_keyframe_indices(athena_keyframe* keys, uint32_t key_count, float time
     *t = 0.0f;
 }
 
-void apply_animation(athena_object_data* obj, uint32_t animation_index, float time) {
-    athena_animation* anim = &obj->data->anim_controller.animations[animation_index];
+void apply_animation(athena_object_data* obj, float time) {
+    athena_animation* anim = obj->anim_controller.current;
     athena_skeleton* skeleton = obj->data->skeleton;
 
     float normalized_time = fmodf(time, anim->duration);

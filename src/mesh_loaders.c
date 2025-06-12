@@ -454,8 +454,6 @@ athena_skeleton* load_gltf_skeleton(cgltf_data* data, cgltf_skin* skin) {
     return skeleton;
 }
 
-void load_gltf_animations(athena_render_data* res_m, cgltf_data* data);
-
 void loadGLTF(athena_render_data* res_m, const char* path, GSTEXTURE* text) {
     cgltf_options options = {0};
     cgltf_data* data = NULL;
@@ -627,25 +625,40 @@ void loadGLTF(athena_render_data* res_m, const char* path, GSTEXTURE* text) {
 
     if (data->skins_count > 0) {
         res_m->skeleton = load_gltf_skeleton(data, &data->skins[0]);
-        load_gltf_animations(res_m, data);
     }
 
     cgltf_free(data);
 }
 
-void load_gltf_animations(athena_render_data* res_m, cgltf_data* data) {
-    if (!data->animations_count || !res_m->skeleton) {
-        res_m->anim_controller.animations = NULL;
-        res_m->anim_controller.count = 0;
+void load_gltf_animations(char * path, athena_animation_collection* collection) {
+    cgltf_options options = {0};
+    cgltf_data* data = NULL;
+    cgltf_result result = cgltf_parse_file(&options, path, &data);
+
+    if (result != cgltf_result_success) {
+        printf("Error: Fail while parsing glTF\n");
+        return;
+    }
+
+    result = cgltf_load_buffers(&options, data, path);
+    if (result != cgltf_result_success) {
+        printf("Error: Fail while loading glTF buffers\n");
+        cgltf_free(data);
+        return;
+    }
+
+    if (!data->animations_count) {
+        collection->animations = NULL;
+        collection->count = 0;
         return;
     }
     
-    res_m->anim_controller.count = data->animations_count;
-    res_m->anim_controller.animations = (athena_animation*)malloc(res_m->anim_controller.count * sizeof(athena_animation));
+    collection->count = data->animations_count;
+    collection->animations = (athena_animation*)malloc(collection->count * sizeof(athena_animation));
     
     for (cgltf_size anim_idx = 0; anim_idx < data->animations_count; anim_idx++) {
         cgltf_animation* gltf_anim = &data->animations[anim_idx];
-        athena_animation* anim = &res_m->anim_controller.animations[anim_idx];
+        athena_animation* anim = &collection->animations[anim_idx];
 
         if (gltf_anim->name) {
             strncpy(anim->name, gltf_anim->name, sizeof(anim->name) - 1);
@@ -665,7 +678,7 @@ void load_gltf_animations(athena_render_data* res_m, cgltf_data* data) {
             athena_bone_animation* bone_anim = &anim->bone_animations[channel_idx];
 
             bone_anim->bone_id = UINT32_MAX;
-            for (uint32_t bone_idx = 0; bone_idx < res_m->skeleton->bone_count; bone_idx++) {
+            for (uint32_t bone_idx = 0; bone_idx < data->skins[0].joints_count; bone_idx++) {
                 if (channel->target_node == data->skins[0].joints[bone_idx]) {
                     bone_anim->bone_id = bone_idx;
                     break;
@@ -750,6 +763,8 @@ void load_gltf_animations(athena_render_data* res_m, cgltf_data* data) {
             free(output_values);
         }
     }
+
+    cgltf_free(data);
 }
 
 void loadModel(athena_render_data* res_m, const char* path, GSTEXTURE* text) {

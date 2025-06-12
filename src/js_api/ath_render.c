@@ -7,7 +7,6 @@
 #include <render.h>
 #include <ath_env.h>
 
-
 static JSClassID js_render_data_class_id;
 
 typedef struct {
@@ -647,6 +646,19 @@ static void athena_render_object_dtor(JSRuntime *rt, JSValue val){
 	JS_SetOpaque(val, NULL);
 }
 
+static JSValue athena_play_anim(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	JSRenderObject* ro = JS_GetOpaque2(ctx, this_val, js_render_object_class_id);
+
+	athena_animation *anim = NULL;
+
+	JS_ToUint32(ctx, &anim, argv[0]);
+
+	ro->obj.anim_controller.current = anim;
+	ro->obj.anim_controller.loop = JS_ToBool(ctx, argv[1]);
+
+	return JS_UNDEFINED;
+}
+
 static JSValue athena_render_object_ctor(JSContext *ctx, JSValueConst new_target, int argc, JSValueConst *argv) {
 	JSValue obj = JS_UNDEFINED;
     JSValue proto;
@@ -702,6 +714,8 @@ register_3d_object_data:
 
 		JS_DefinePropertyValueStr(ctx, obj, "bone_matrices", bone_matrices, JS_PROP_C_W_E);
 		JS_DefinePropertyValueStr(ctx, obj, "bones", bone_transforms, JS_PROP_C_W_E);
+
+		JS_DefinePropertyValueStr(ctx, obj, "playAnim", JS_NewCFunction2(ctx, athena_play_anim, "playAnim", 2, JS_CFUNC_generic, 0), JS_PROP_C_W_E);
 	}
 
     JS_FreeValue(ctx, proto);

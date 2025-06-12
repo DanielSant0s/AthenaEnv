@@ -83,11 +83,14 @@ typedef struct athena_animation {
     uint32_t bone_animation_count;
 } athena_animation;
 
-typedef struct athena_animation_controller {
+typedef struct athena_animation_collection {
     athena_animation* animations;
     uint32_t count;
-    
-    uint32_t current;
+} athena_animation_collection;
+
+typedef struct athena_animation_controller {
+    athena_animation* current;
+
 	float initial_time;
     float current_time;
     bool is_playing;
@@ -156,8 +159,6 @@ typedef struct athena_render_data {
 
     vertex_skin_data* skin_data;    
 	athena_skeleton* skeleton;        
-	
-    athena_animation_controller anim_controller; 
 
     VECTOR bounding_box[8];
 
@@ -185,6 +186,7 @@ typedef struct athena_object_data {
 	VECTOR rotation;
     VECTOR scale;
 
+    athena_animation_controller anim_controller; 
     athena_bone_transform *bones;
     MATRIX *bone_matrices;
 
@@ -264,7 +266,7 @@ void slerp_quaternion(VECTOR result, VECTOR q1, VECTOR q2, float t);
 void find_keyframe_indices(athena_keyframe* keys, uint32_t key_count, float time, 
                           uint32_t* prev_idx, uint32_t* next_idx, float* t);
 
-void apply_animation(athena_object_data* obj, uint32_t animation_index, float anim_time) ;					  
+void apply_animation(athena_object_data* obj, float anim_time);					  
 
 void update_bone_transforms(athena_skeleton* skeleton, athena_object_data* obj);
 
