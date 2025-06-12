@@ -174,16 +174,11 @@ void apply_animation(athena_object_data* obj, float time) {
             }
         }
     }
-
-    update_bone_transforms(skeleton, obj);
 }
 
-void update_bone_transforms(athena_skeleton* skeleton, athena_object_data* obj) {
-    if (!skeleton || !skeleton->bones) {
-        return;
-    }
-
+void update_bone_transforms(athena_object_data* obj) {
     athena_bone_transform* bone_transforms = obj->bones;
+    athena_skeleton* skeleton = obj->data->skeleton;
 
     for (uint32_t i = 0; i < skeleton->bone_count; i++) {
         athena_bone_data* bone = &skeleton->bones[i];

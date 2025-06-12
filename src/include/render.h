@@ -268,7 +268,7 @@ void find_keyframe_indices(athena_keyframe* keys, uint32_t key_count, float time
 
 void apply_animation(athena_object_data* obj, float anim_time);					  
 
-void update_bone_transforms(athena_skeleton* skeleton, athena_object_data* obj);
+void update_bone_transforms(athena_object_data* obj);
 
 void create_transform_matrix(MATRIX result, const VECTOR position, 
                            const VECTOR rotation, const VECTOR scale);

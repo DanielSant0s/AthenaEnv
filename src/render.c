@@ -36,27 +36,14 @@ void draw_vu1_with_colors(athena_object_data *obj);
 void draw_vu1_with_lights(athena_object_data *obj);
 void draw_vu1_with_spec_lights(athena_object_data *obj);
 
-void draw_vu1_with_colors_skinned(athena_object_data *obj);
-
 void (*render_funcs[3])(athena_object_data *obj) = {
 	draw_vu1_with_colors,
 	draw_vu1_with_lights,
 	draw_vu1_with_spec_lights
 };
 
-void (*skinned_render_funcs[3])(athena_object_data *obj) = {
-	draw_vu1_with_colors_skinned,
-	draw_vu1_with_lights,
-	draw_vu1_with_spec_lights
-};
-
 void render_object(athena_object_data *obj) {
-	if (obj->data->skin_data) {
-		skinned_render_funcs[obj->data->pipeline](obj);
-	} else {
-		render_funcs[obj->data->pipeline](obj);
-	}
-	
+	render_funcs[obj->data->pipeline](obj);
 }
 
 void new_render_object(athena_object_data *obj, athena_render_data *data) {
@@ -74,7 +61,7 @@ void new_render_object(athena_object_data *obj, athena_render_data *data) {
 			copy_vector(obj->bones[i].scale, data->skeleton->bones[i].scale);
 		}
 
-		update_bone_transforms(data->skeleton, obj);
+		update_bone_transforms(obj);
 	}
 
 	obj->position[0] = 0.0f;
@@ -244,9 +231,7 @@ void append_texture_tags(owl_packet* packet, GSTEXTURE *texture, int texture_id,
 	owl_add_tag(packet, GS_TEX1_1, GS_SETREG_TEX1(1, 0, texture->Filter, texture->Filter, 0, 0, 0));
 }
 
-void draw_vu1_with_colors_skinned(athena_object_data *obj) {
-	athena_render_data *data = obj->data;
-
+void process_animation(athena_object_data *obj) {
 	if (obj->anim_controller.current) {
 		if (!obj->anim_controller.is_playing) {
 			obj->anim_controller.initial_time = (clock()  / (float)CLOCKS_PER_SEC);
@@ -267,302 +252,6 @@ void draw_vu1_with_colors_skinned(athena_object_data *obj) {
 			}
 		}
 	}
-
-	int batch_size = BATCH_SIZE_SKINNED;
-
-	int mpg_addr = vu_mpg_preload(vu1_colors_skinned, true);
-	
-	gsGlobal->PrimAAEnable = GS_SETTING_ON;
-
-	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 4);
-
-	owl_add_unpack_data(packet, 141, (void*)obj->transform, 4, 0);
-
-	owl_add_unpack_data(packet, 145, (void*)obj->bone_matrices, data->skeleton->bone_count*4, 0);
-
-	unpack_list_open(packet, 0, false);
-	{
-		screen_scale.w = data->attributes.accurate_clipping;
-		unpack_list_append(packet, &screen_scale,       1);
-
-		unpack_list_append(packet, world_screen,       4);
-	}
-	unpack_list_close(packet);
-
-	//owl_add_end_tag(packet);
-
-	int last_index = -1;
-	GSTEXTURE* tex = NULL;
-	int texture_id;
-	for(int i = 0; i < data->material_index_count; i++) {
-		bool texture_mapping = ((data->materials[data->material_indices[i].index].texture_id != -1) && data->attributes.texture_mapping);
-
-		if (texture_mapping) {
-			GSTEXTURE *cur_tex = data->textures[data->materials[data->material_indices[i].index].texture_id];
-			if (cur_tex != tex) {
-				texture_id = texture_manager_bind(gsGlobal, cur_tex, true);
-				tex = cur_tex;
-			}
-		}
-
-		vertex_skin_data* skin_data = &data->skin_data[last_index+1];
-		VECTOR* positions = &data->positions[last_index+1];
-		VECTOR* colours = &data->colours[last_index+1];
-		VECTOR* texcoords = texture_mapping? &data->texcoords[last_index+1] : NULL;
-
-		int idxs_to_draw = (data->material_indices[i].end-last_index);
-		int idxs_drawn = 0;
-
-		while (idxs_to_draw > 0) {
-			owl_query_packet(CHANNEL_VIF1, texture_mapping? 18 : 8);    
-
-			int count = batch_size;
-			if (idxs_to_draw < batch_size)
-			{
-				count = idxs_to_draw;
-			}
-
-			if (texture_mapping) {
-				append_texture_tags(packet, tex, texture_id, COLOR_MODULATE);
-			}
-
-			giftag_t clip_tag = {
-				.data = {
-					.NLOOP = 0,
-					.EOP = 1,
-					.PRE = 1,
-					.PRIM = (prim_reg_t) {
-						.data = { 
-							.PRIM = GS_PRIM_PRIM_TRIFAN,
-							.IIP = data->attributes.shade_model,
-							.TME = texture_mapping,
-							.FGE = gsGlobal->PrimFogEnable,
-							.ABE = gsGlobal->PrimAlphaEnable,
-							.AA1 = gsGlobal->PrimAAEnable,
-							.FST = 0,
-							.CTXT = 0,
-							.FIX = 0
-						}
-					}.raw,
-					.FLG = 0,
-					.NREG = 3
-
-				}
-			};
-
-			giftag_t prim_tag = {
-				.data = {
-					.NLOOP = 0,
-					.EOP = 1,
-					.PRE = 1,
-					.PRIM = (prim_reg_t) {
-						.data = { 
-							.PRIM = (data->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE),
-							.IIP = data->attributes.shade_model,
-							.TME = texture_mapping,
-							.FGE = gsGlobal->PrimFogEnable,
-							.ABE = gsGlobal->PrimAlphaEnable,
-							.AA1 = gsGlobal->PrimAAEnable,
-							.FST = 0,
-							.CTXT = 0,
-							.FIX = 0
-						}
-					}.raw,
-					.FLG = 0,
-					.NREG = 3
-
-				}
-			};
-
-			data->materials[data->material_indices[i].index].prim_tag.dword[1] = DRAW_STQ2_REGLIST;
-			data->materials[data->material_indices[i].index].prim_tag.dword[0] = prim_tag.raw;
-
-			data->materials[data->material_indices[i].index].clip_prim_tag.f[3] = data->attributes.face_culling;
-			data->materials[data->material_indices[i].index].clip_prim_tag.sword[2] = data->tristrip;
-			data->materials[data->material_indices[i].index].clip_prim_tag.sword[1] = data->attributes.accurate_clipping? (clip_tag.raw >> 32) : 0;
-
-			owl_add_unpack_data(packet, 26, (void*)&data->materials[data->material_indices[i].index].clip_prim_tag, 1, 0);
-
-			unpack_list_open(packet, 0, true);
-			{
-				unpack_list_append(packet, (void*)&data->materials[data->material_indices[i].index].prim_tag, 1);
-				unpack_list_append(packet, (void*)&data->materials[data->material_indices[i].index].diffuse, 1);
-				unpack_list_append(packet, &skin_data[idxs_drawn], count*2);
-				unpack_list_append(packet, &positions[idxs_drawn], count);
-				unpack_list_append(packet, &colours[idxs_drawn], count);
-				if (texcoords) 
-					unpack_list_append(packet, &texcoords[idxs_drawn], count);
-			}
-			unpack_list_close(packet);
-
-			owl_add_cnt_tag(packet, 1, owl_vif_code_double(VIF_CODE(0, 0, VIF_NOP, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
-			
-			owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
-			owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));
-			owl_add_uint(packet, VIF_CODE(count, 0, VIF_ITOP, 0));
-			owl_add_uint(packet, VIF_CODE(mpg_addr, 0, (last_index == -1? VIF_MSCALF : VIF_MSCNT), 0)); 
-
-			idxs_to_draw -= count;
-			idxs_drawn += count;
-		}
-
-		last_index = data->material_indices[i].end;
-	}
-
-	owl_add_vif_codes(packet,
-		VIF_CODE(0, 0, VIF_FLUSH, 0),
-		VIF_CODE(0, 0, VIF_FLUSH, 0),
-		VIF_CODE(0, 0, VIF_NOP, 0),
-		VIF_CODE(0, 0, VIF_NOP, 0)
-	);
-}
-
-void draw_vu1_with_colors(athena_object_data *obj) {
-	athena_render_data *data = obj->data;
-
-	int batch_size = BATCH_SIZE;
-
-	int mpg_addr = vu_mpg_preload(vu1_colors, true);
-	
-	gsGlobal->PrimAAEnable = GS_SETTING_ON;
-
-	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 4);
-
-	owl_add_unpack_data(packet, 141, (void*)obj->transform, 4, 0);
-
-	unpack_list_open(packet, 0, false);
-	{
-		screen_scale.w = data->attributes.accurate_clipping;
-		unpack_list_append(packet, &screen_scale,       1);
-
-		unpack_list_append(packet, world_screen,       4);
-	}
-	unpack_list_close(packet);
-
-	//owl_add_end_tag(packet);
-
-	int last_index = -1;
-	GSTEXTURE* tex = NULL;
-	int texture_id;
-	for(int i = 0; i < data->material_index_count; i++) {
-		bool texture_mapping = ((data->materials[data->material_indices[i].index].texture_id != -1) && data->attributes.texture_mapping);
-
-		if (texture_mapping) {
-			GSTEXTURE *cur_tex = data->textures[data->materials[data->material_indices[i].index].texture_id];
-			if (cur_tex != tex) {
-				texture_id = texture_manager_bind(gsGlobal, cur_tex, true);
-				tex = cur_tex;
-			}
-		}
-
-		VECTOR* positions = &data->positions[last_index+1];
-		VECTOR* colours = &data->colours[last_index+1];
-		VECTOR* texcoords = texture_mapping? &data->texcoords[last_index+1] : NULL;
-
-		int idxs_to_draw = (data->material_indices[i].end-last_index);
-		int idxs_drawn = 0;
-
-		while (idxs_to_draw > 0) {
-			owl_query_packet(CHANNEL_VIF1, texture_mapping? 18 : 8);    
-
-			int count = batch_size;
-			if (idxs_to_draw < batch_size)
-			{
-				count = idxs_to_draw;
-			}
-
-			if (texture_mapping) {
-				append_texture_tags(packet, tex, texture_id, COLOR_MODULATE);
-			}
-
-			giftag_t clip_tag = {
-				.data = {
-					.NLOOP = 0,
-					.EOP = 1,
-					.PRE = 1,
-					.PRIM = (prim_reg_t) {
-						.data = { 
-							.PRIM = GS_PRIM_PRIM_TRIFAN,
-							.IIP = data->attributes.shade_model,
-							.TME = texture_mapping,
-							.FGE = gsGlobal->PrimFogEnable,
-							.ABE = gsGlobal->PrimAlphaEnable,
-							.AA1 = gsGlobal->PrimAAEnable,
-							.FST = 0,
-							.CTXT = 0,
-							.FIX = 0
-						}
-					}.raw,
-					.FLG = 0,
-					.NREG = 3
-
-				}
-			};
-
-			giftag_t prim_tag = {
-				.data = {
-					.NLOOP = 0,
-					.EOP = 1,
-					.PRE = 1,
-					.PRIM = (prim_reg_t) {
-						.data = { 
-							.PRIM = (data->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE),
-							.IIP = data->attributes.shade_model,
-							.TME = texture_mapping,
-							.FGE = gsGlobal->PrimFogEnable,
-							.ABE = gsGlobal->PrimAlphaEnable,
-							.AA1 = gsGlobal->PrimAAEnable,
-							.FST = 0,
-							.CTXT = 0,
-							.FIX = 0
-						}
-					}.raw,
-					.FLG = 0,
-					.NREG = 3
-
-				}
-			};
-
-			data->materials[data->material_indices[i].index].prim_tag.dword[1] = DRAW_STQ2_REGLIST;
-			data->materials[data->material_indices[i].index].prim_tag.dword[0] = prim_tag.raw;
-
-			data->materials[data->material_indices[i].index].clip_prim_tag.f[3] = data->attributes.face_culling;
-			data->materials[data->material_indices[i].index].clip_prim_tag.sword[2] = data->tristrip;
-			data->materials[data->material_indices[i].index].clip_prim_tag.sword[1] = data->attributes.accurate_clipping? (clip_tag.raw >> 32) : 0;
-
-			owl_add_unpack_data(packet, 26, (void*)&data->materials[data->material_indices[i].index].clip_prim_tag, 1, 0);
-
-			unpack_list_open(packet, 0, true);
-			{
-				unpack_list_append(packet, (void*)&data->materials[data->material_indices[i].index].prim_tag, 1);
-				unpack_list_append(packet, (void*)&data->materials[data->material_indices[i].index].diffuse, 1);
-				unpack_list_append(packet, &positions[idxs_drawn], count);
-				unpack_list_append(packet, &colours[idxs_drawn], count);
-				if (texcoords) 
-					unpack_list_append(packet, &texcoords[idxs_drawn], count);
-			}
-			unpack_list_close(packet);
-
-			owl_add_cnt_tag(packet, 1, owl_vif_code_double(VIF_CODE(0, 0, VIF_NOP, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
-			
-			owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
-			owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));
-			owl_add_uint(packet, VIF_CODE(count, 0, VIF_ITOP, 0));
-			owl_add_uint(packet, VIF_CODE(mpg_addr, 0, (last_index == -1? VIF_MSCALF : VIF_MSCNT), 0)); 
-
-			idxs_to_draw -= count;
-			idxs_drawn += count;
-		}
-
-		last_index = data->material_indices[i].end;
-	}
-
-	owl_add_vif_codes(packet,
-		VIF_CODE(0, 0, VIF_FLUSH, 0),
-		VIF_CODE(0, 0, VIF_FLUSH, 0),
-		VIF_CODE(0, 0, VIF_NOP, 0),
-		VIF_CODE(0, 0, VIF_NOP, 0)
-	);
 }
 
 void update_object_space(athena_object_data *obj) {
@@ -574,6 +263,172 @@ void update_object_space(athena_object_data *obj) {
 	matrix_functions->copy(obj->local_light, obj->transform);
 
   	matrix_functions->translate(obj->transform, obj->transform, obj->position);
+}
+
+void draw_vu1_with_colors(athena_object_data *obj) {
+	athena_render_data *data = obj->data;
+
+	int batch_size = BATCH_SIZE, mpg_addr = 0;
+
+	if (data->skeleton) {
+		batch_size = BATCH_SIZE_SKINNED;
+
+		process_animation(obj);
+
+		update_bone_transforms(obj);
+
+		mpg_addr = vu_mpg_preload(vu1_colors_skinned, true);
+	} else {
+		mpg_addr = vu_mpg_preload(vu1_colors, true);
+	}
+	
+	gsGlobal->PrimAAEnable = GS_SETTING_ON;
+
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 4);
+
+	owl_add_unpack_data(packet, 141, (void*)obj->transform, 4, 0);
+
+	if (obj->bone_matrices) {
+		owl_add_unpack_data(packet, 145, (void*)obj->bone_matrices, data->skeleton->bone_count*4, 0);
+	}
+
+	unpack_list_open(packet, 0, false);
+	{
+		screen_scale.w = data->attributes.accurate_clipping;
+		unpack_list_append(packet, &screen_scale,       1);
+
+		unpack_list_append(packet, world_screen,       4);
+	}
+	unpack_list_close(packet);
+
+	//owl_add_end_tag(packet);
+
+	int last_index = -1;
+	GSTEXTURE* tex = NULL;
+	int texture_id;
+	for(int i = 0; i < data->material_index_count; i++) {
+		bool texture_mapping = ((data->materials[data->material_indices[i].index].texture_id != -1) && data->attributes.texture_mapping);
+
+		if (texture_mapping) {
+			GSTEXTURE *cur_tex = data->textures[data->materials[data->material_indices[i].index].texture_id];
+			if (cur_tex != tex) {
+				texture_id = texture_manager_bind(gsGlobal, cur_tex, true);
+				tex = cur_tex;
+			}
+		}
+
+		VECTOR* positions = &data->positions[last_index+1];
+		VECTOR* colours = &data->colours[last_index+1];
+		VECTOR* texcoords = texture_mapping? &data->texcoords[last_index+1] : NULL;
+		vertex_skin_data* skin_data = data->skin_data? &data->skin_data[last_index+1] : NULL;
+
+		int idxs_to_draw = (data->material_indices[i].end-last_index);
+		int idxs_drawn = 0;
+
+		while (idxs_to_draw > 0) {
+			owl_query_packet(CHANNEL_VIF1, texture_mapping? 18 : 8);    
+
+			int count = batch_size;
+			if (idxs_to_draw < batch_size)
+			{
+				count = idxs_to_draw;
+			}
+
+			if (texture_mapping) {
+				append_texture_tags(packet, tex, texture_id, COLOR_MODULATE);
+			}
+
+			giftag_t clip_tag = {
+				.data = {
+					.NLOOP = 0,
+					.EOP = 1,
+					.PRE = 1,
+					.PRIM = (prim_reg_t) {
+						.data = { 
+							.PRIM = GS_PRIM_PRIM_TRIFAN,
+							.IIP = data->attributes.shade_model,
+							.TME = texture_mapping,
+							.FGE = gsGlobal->PrimFogEnable,
+							.ABE = gsGlobal->PrimAlphaEnable,
+							.AA1 = gsGlobal->PrimAAEnable,
+							.FST = 0,
+							.CTXT = 0,
+							.FIX = 0
+						}
+					}.raw,
+					.FLG = 0,
+					.NREG = 3
+
+				}
+			};
+
+			giftag_t prim_tag = {
+				.data = {
+					.NLOOP = 0,
+					.EOP = 1,
+					.PRE = 1,
+					.PRIM = (prim_reg_t) {
+						.data = { 
+							.PRIM = (data->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE),
+							.IIP = data->attributes.shade_model,
+							.TME = texture_mapping,
+							.FGE = gsGlobal->PrimFogEnable,
+							.ABE = gsGlobal->PrimAlphaEnable,
+							.AA1 = gsGlobal->PrimAAEnable,
+							.FST = 0,
+							.CTXT = 0,
+							.FIX = 0
+						}
+					}.raw,
+					.FLG = 0,
+					.NREG = 3
+
+				}
+			};
+
+			data->materials[data->material_indices[i].index].prim_tag.dword[1] = DRAW_STQ2_REGLIST;
+			data->materials[data->material_indices[i].index].prim_tag.dword[0] = prim_tag.raw;
+
+			data->materials[data->material_indices[i].index].clip_prim_tag.f[3] = data->attributes.face_culling;
+			data->materials[data->material_indices[i].index].clip_prim_tag.sword[2] = data->tristrip;
+			data->materials[data->material_indices[i].index].clip_prim_tag.sword[1] = data->attributes.accurate_clipping? (clip_tag.raw >> 32) : 0;
+
+			owl_add_unpack_data(packet, 26, (void*)&data->materials[data->material_indices[i].index].clip_prim_tag, 1, 0);
+
+			unpack_list_open(packet, 0, true);
+			{
+				unpack_list_append(packet, (void*)&data->materials[data->material_indices[i].index].prim_tag, 1);
+				unpack_list_append(packet, (void*)&data->materials[data->material_indices[i].index].diffuse, 1);
+				if (data->skin_data) {
+					unpack_list_append(packet, &skin_data[idxs_drawn], count*2);
+				}
+				unpack_list_append(packet, &positions[idxs_drawn], count);
+				unpack_list_append(packet, &colours[idxs_drawn], count);
+				if (texcoords) 
+					unpack_list_append(packet, &texcoords[idxs_drawn], count);
+			}
+			unpack_list_close(packet);
+
+			owl_add_cnt_tag(packet, 1, owl_vif_code_double(VIF_CODE(0, 0, VIF_NOP, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
+			
+			owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+			owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));
+			owl_add_uint(packet, VIF_CODE(count, 0, VIF_ITOP, 0));
+			owl_add_uint(packet, VIF_CODE(mpg_addr, 0, (last_index == -1? VIF_MSCALF : VIF_MSCNT), 0)); 
+
+			idxs_to_draw -= count;
+			idxs_drawn += count;
+		}
+
+		last_index = data->material_indices[i].end;
+	}
+
+	owl_add_vif_codes(packet,
+		VIF_CODE(0, 0, VIF_FLUSH, 0),
+		VIF_CODE(0, 0, VIF_FLUSH, 0),
+		VIF_CODE(0, 0, VIF_NOP, 0),
+		VIF_CODE(0, 0, VIF_NOP, 0)
+	);
 }
 
 void draw_vu1_with_lights(athena_object_data *obj) {
