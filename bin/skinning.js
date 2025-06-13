@@ -26,9 +26,9 @@ sky.height = canvas.height;
 
 const skin_anims = new AnimCollection("Twerk.gltf");
 const gltf_skin = new RenderData("Twerk.gltf");
-gltf_skin.accurate_clipping = false;
+gltf_skin.accurate_clipping = true;
 gltf_skin.face_culling = Render.CULL_FACE_BACK;
-gltf_skin.pipeline = Render.PL_NO_LIGHTS;
+gltf_skin.pipeline = Render.PL_SPECULAR;
 
 const skin_object = new RenderObject(gltf_skin);
 skin_object.rotation = {x:Math.PI/2, y:0.0, z:0.0};
@@ -37,7 +37,7 @@ skin_object.playAnim(skin_anims[4], false);
 
 const scene = new RenderData("scene.gltf");
 scene.face_culling = Render.CULL_FACE_NONE;
-scene.pipeline = Render.PL_NO_LIGHTS;
+scene.pipeline = Render.PL_SPECULAR;
 
 scene.getTexture(0).filter = LINEAR;
 
