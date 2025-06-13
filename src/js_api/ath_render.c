@@ -20,8 +20,6 @@ static void athena_render_data_dtor(JSRuntime *rt, JSValue val){
 	if (!ro)
 		return;
 
-	dbgprintf("Freeing RenderData\n");
-
 	if (ro->m.positions)
 		free(ro->m.positions); 
 	
@@ -39,6 +37,15 @@ static void athena_render_data_dtor(JSRuntime *rt, JSValue val){
 	
 	if (ro->m.material_indices)
 		free(ro->m.material_indices);
+
+	if (ro->m.skin_data)
+		free(ro->m.skin_data);
+
+	if (ro->m.skeleton)
+		free(ro->m.skeleton);
+
+	if (ro->m.skeleton->bones)
+		free(ro->m.skeleton->bones);
 
 	//printf("%d textures\n", ro->m.texture_count);
 
