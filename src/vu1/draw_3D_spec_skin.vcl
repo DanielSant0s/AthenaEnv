@@ -2,7 +2,7 @@
 ; AthenaEnv Renderer
 
 .syntax new
-.name VU1Draw3DCS_Skin
+.name VU1Draw3DLCSS_Skin
 .vu
 .init_vf_all
 .init_vi_all
@@ -12,6 +12,19 @@
 .include "vu1/include/athena_macros.i"
 .include "vu1/include/vcl_sml.i"
 
+.macro SpecularPowerScale 
+    add specAngle, vf00, vf00
+    VectorDotProduct specAngle, normal, halfDir
+    maxx		specAngle, specAngle, vf00			; Clamp to > 0
+    mul  		specAngle, specAngle, specAngle	; Square it
+    mul  		specAngle, specAngle, specAngle	; 4th power
+    mul  		specAngle, specAngle, specAngle	; 8th power
+    mul  		specAngle, specAngle, specAngle	; 16th power
+    ;mul 		specAngle, specAngle, specAngle	; 32nd power
+    ;mul 		specAngle, specAngle, specAngle	; 64nd power
+    mul         specAngle, LightSpecular, specAngle[x]
+    add.xyz         light, light, specAngle 
+.endm
 
 --enter
 --endenter
@@ -52,8 +65,19 @@ ignore_face_culling:
 cull_init:
     LoadCullScale clip_scale, 0.5
 
+    ;//////////// --- Load data 1 --- /////////////
+    ; Updated once per mesh
+    MatrixLoad	LocalLight,     LIGHT_MATRIX,  vi00   ; load local light matrix
+    ilw.w       dirLightQnt,    NUM_DIR_LIGHTS(vi00)  ; load active directional lights
+    lq.xyz      CamPos,         CAMERA_POSITION(vi00) ; load program params
+    iaddiu      lightDirs,      vi00,    LIGHT_DIRECTION_PTR       
+    iaddiu      lightAmbs,      vi00,    LIGHT_AMBIENT_PTR
+    iaddiu      lightDiffs,     vi00,    LIGHT_DIFFUSE_PTR    
+    iaddiu      lightSpecs,     vi00,    LIGHT_SPECULAR_PTR 
+
     ;//////////// --- Load data 2 --- /////////////
     ; Updated dynamically
+
 culled_init:
     xtop    iBase
     xitop   vertCount
@@ -61,13 +85,18 @@ culled_init:
     lq      primTag,        0(iBase) ; GIF tag - tell GS how many data we will send
     lq      matDiffuse,     1(iBase) ; RGBA
                                      ; u32 : R, G, B, A (0-128)
+
     iaddiu  skinData,        iBase,      2           ; pointer to vertex data
     iadd    vertexData,      skinData, vertCount    ; skin data takes 2 qw per value
     iadd    vertexData,      vertexData, vertCount
-    iadd    colorData,      vertexData, vertCount   ; pointer to stq
-    iadd    stqData,        colorData, vertCount   ; pointer to stq
-    iadd    kickAddress,    stqData,  vertCount       ; pointer for XGKICK
-    iaddiu    destAddress,    kickAddress,  1       ; helper pointer for data inserting
+
+    iadd      normalData,        vertexData, vertCount   ; pointer to stq
+    iadd       colorData,     normalData, vertCount   ; pointer to stq
+    iadd      stqData,      colorData,  vertCount   ; pointer to colors
+    iadd      dataPointers,   stqData,  vertCount
+
+    iaddiu    kickAddress,    dataPointers,  0       ; pointer for XGKICK
+    iaddiu    destAddress,    dataPointers,  1       ; helper pointer for data inserting
     ;////////////////////////////////////////////
 
     ;/////////// --- Store tags --- /////////////
@@ -84,9 +113,13 @@ culled_init:
     vertexLoop:
 
         ;////////// --- Load loop data --- //////////
-        lq inVert, 0(vertexData)   
-        lq inColor, 0(colorData)    
-        lq stq,    0(stqData)       
+        lq inVert, 0(vertexData)     
+        iadd normalPtr, vertexData, vertCount
+        lq.xyzw inNorm,  0(normalPtr)      
+        iadd colorPtr, normalPtr, vertCount    
+        lq inColor, 0(colorPtr)  
+        iadd tmpStqPtr, colorPtr, vertCount
+        lq stq,    0(tmpStqPtr)         
         ;////////////////////////////////////////////    
 
         iaddiu  currentWeight, vi00, 4
@@ -95,6 +128,7 @@ culled_init:
         lq boneWeights,    1(skinData) 
 
         move final_vertex, vf00
+        move final_normal, vf00
 
         skinWeightLoop_cull: 
             mtir           boneIndex, boneIndices[x]
@@ -102,17 +136,19 @@ culled_init:
             MatrixLoad	BoneMatrix, BONE_MATRICES, boneIndex
   
             MatrixMultiplyVertex ts_vertex, BoneMatrix, inVert
+            MatrixMultiplyVertex ts_normal, BoneMatrix, inNorm
 
             mul ts_vertex, ts_vertex, boneWeights[x]
+            mul ts_normal, ts_normal, boneWeights[x]
 
             add final_vertex, final_vertex, ts_vertex
+            add final_normal, final_normal, ts_normal
 
             mr32 boneIndices, boneIndices
             mr32 boneWeights, boneWeights
 
             iaddi   currentWeight,  currentWeight,  -1
             ibgtz    currentWeight,  skinWeightLoop_cull	
-
 
         ;////////////// --- Vertex --- //////////////
         MatrixMultiplyVertex	vertex, ObjectToScreen, final_vertex ; transform each vertex by the matrix
@@ -154,26 +190,71 @@ culled_init:
         mulq modStq, stq, q
         ;////////////////////////////////////////////
 
-        ;//////////////// - COLORS - /////////////////
-        add.xyzw    color, matDiffuse, inColor
+        ;//////////////// - NORMALS - /////////////////
+        MatrixMultiplyVertex	normal,    LocalLight, final_normal ; transform each normal by the matrix
+       ; MatrixMultiplyVertex	lightvert, LocalLight, final_vertex ; transform each normal by the matrix
+        div         q,      vf00[w],    normal[w]   ; perspective divide (1/vert[w]):
+        mul.xyz     normal, normal,     q
+        
+        move light, vf00
+        move intensity, vf00
+
+        iadd  currDirLight, vi00, vi00
+        culled_directionaLightsLoop:
+            lq LightAmbient, LIGHT_AMBIENT_PTR(currDirLight)
+
+            ; Ambient lighting
+            add.xyz light, light, LightAmbient
+
+            lq LightDirection, LIGHT_DIRECTION_PTR(currDirLight)
+            
+            ; Diffuse lighting
+            VectorDotProduct intensity, normal, LightDirection
+
+            maxx.xyzw  intensity, intensity, vf00
+
+            lq LightDiffuse, LIGHT_DIFFUSE_PTR(currDirLight)
+
+            mul diffuse, LightDiffuse, intensity[x]
+            add.xyz light, light, diffuse
+
+            ; Blinn-Phong Lighting Calculation
+            ;VectorNormalize CamPos, CamPos
+
+            ;sub lightDir, lightvert, CamPos ; Compute light direction vector
+            ;VectorNormalize lightDir, lightDir
+
+            ; Compute halfway vector
+            ;add halfDir, LightDirection, CamPos
+            ;VectorNormalize halfDir, halfDir
+            HalfAngle halfDir, LightDirection, CamPos
+
+            lq LightSpecular, LIGHT_SPECULAR_PTR(currDirLight)
+
+            SpecularPowerScale
+
+            iaddiu   currDirLight,  currDirLight,  1; increment the loop counter 
+            ibne    dirLightQnt,  currDirLight,  culled_directionaLightsLoop	; and repeat if needed
+
+        add.xyzw   color, matDiffuse, inColor
+        mul    color, color,      light       ; color = color * light
+
         VectorNormalizeClamp color, color
-        loi 128.0 
-        mul color, color, i                   ; normalize RGBA
+        loi 128.0
+        mul color, color, i                     ; normalize RGBA
         ColorFPtoGsRGBAQ intColor, color           ; convert to int
         ;///////////////////////////////////////////
 
 
         ;//////////// --- Store data --- ////////////
         sq.xyz modStq,      STQ(destAddress)      
-        sq intColor,    RGBA(destAddress)    ; q is grabbed from stq
+        sq intColor,    RGBA(destAddress)      ; q is grabbed from stq
         sq vertex,  XYZ2(destAddress)     
         ;////////////////////////////////////////////
 
         iaddiu          vertexData,     vertexData,     1    
-        iaddiu          colorData,      colorData,      1                        
-        iaddiu          stqData,        stqData,        1   
 
-        iaddiu         skinData,          skinData,        2   
+        iaddiu          skinData,     skinData,     2                     
 
         iaddiu          destAddress,    destAddress,    3
 
@@ -190,6 +271,7 @@ culled_init:
     b culled_init
 
 scissor_init:
+
     iaddiu               StackPtr, vi00, STACK_OFFSET
 
     .include "vu1/proc/setup_clip_trigger.i"
@@ -206,8 +288,6 @@ init:
     iaddiu  skinData,        iBase,      2           ; pointer to vertex data
     iadd    vertexData,      skinData, vertCount    ; skin data takes 2 qw per value
     iadd    vertexData,      vertexData, vertCount
-    iadd    colorData,   vertexData,    vertCount   ; pointer to colors
-    iadd    stqData,     colorData,     vertCount   ; pointer to colors
 
     iaddiu     kickAddress,    vertexData, INBUF_SIZE
     ;////////////////////////////////////////////
@@ -227,12 +307,19 @@ init:
 
     .include "vu1/proc/setup_vertex_queue.i"
 
+    iadd vertexCounter, vi00, vertCount ; loop vertCount times
+
     loop:
 
+
         ;////////// --- Load loop data --- //////////
-        lq inVert, 0(vertexData)   
-        lq inColor, 0(colorData)    
-        lq stq,    0(stqData)       
+        lq inVert,  0(vertexData)    
+        iadd tmpPtr, vertexData, vertCount
+        lq inNorm,  0(tmpPtr)    
+        iadd tmpPtr, tmpPtr, vertCount    
+        lq inColor, 0(tmpPtr)  
+        iadd stqData, tmpPtr, vertCount   ; will be used later on clipping
+        lq stq,     0(stqData)       
         ;////////////////////////////////////////////    
 
         iaddiu  currentWeight, vi00, 4
@@ -241,6 +328,7 @@ init:
         lq boneWeights,    1(skinData) 
 
         move final_vertex, vf00
+        move final_normal, vf00
 
         skinWeightLoop: 
             mtir           boneIndex, boneIndices[x]
@@ -248,10 +336,13 @@ init:
             MatrixLoad	BoneMatrix, BONE_MATRICES, boneIndex
   
             MatrixMultiplyVertex ts_vertex, BoneMatrix, inVert
+            MatrixMultiplyVertex ts_normal, BoneMatrix, inNorm
 
             mul ts_vertex, ts_vertex, boneWeights[x]
+            mul ts_normal, ts_normal, boneWeights[x]
 
             add final_vertex, final_vertex, ts_vertex
+            add final_normal, final_normal, ts_normal
 
             mr32 boneIndices, boneIndices
             mr32 boneWeights, boneWeights
@@ -259,11 +350,10 @@ init:
             iaddi   currentWeight,  currentWeight,  -1
             ibgtz    currentWeight,  skinWeightLoop	
 
-
         ;////////////// --- Vertex --- //////////////
         MatrixMultiplyVertex	vertex, ObjectToScreen, final_vertex ; transform each vertex by the matrix
         move formVertex, vertex
-
+         
         VertexPersCorrST vertex, modStq, vertex, stq
 
         mul.xyz    vertex, vertex,     scale
@@ -272,38 +362,97 @@ init:
         move vertex1, vertex2
         move vertex2, vertex3       
 
-        move vertex3, vertex
- 
+        move vertex3, vertex 
+
         VertexFpToGsXYZ2  vertex,vertex
         ;////////////////////////////////////////////
 
-        ;//////////////// - COLORS - /////////////////
-        add.xyzw    color, matDiffuse, inColor
+        ;//////////////// - NORMALS - /////////////////
+        MatrixLoad	LocalLight,     LIGHT_MATRIX, vi00     ; load local light matrix
+
+        MatrixMultiplyVertex	normal,    LocalLight, final_normal ; transform each normal by the matrix
+        div         q,      vf00[w],    normal[w]   ; perspective divide (1/vert[w]):
+        mul.xyz     normal, normal,     q
+        
+        move light, vf00
+        move intensity, vf00
+
+        iadd  currDirLight, vi00, vi00
+        ilw.w       dirLightQnt,    NUM_DIR_LIGHTS(vi00) ; load active directional lights 
+        directionaLightsLoop:
+            
+            lq.xyz      CamPos,         CAMERA_POSITION(vi00) ; load program params
+            iaddiu      lightDirs,      vi00,    LIGHT_DIRECTION_PTR      
+            iaddiu      lightAmbs,      vi00,    LIGHT_AMBIENT_PTR  
+            iaddiu      lightDiffs,     vi00,    LIGHT_DIFFUSE_PTR     
+            iaddiu      lightSpecs,     vi00,    LIGHT_SPECULAR_PTR  
+
+            iadd  currLightPtr, lightAmbs, currDirLight
+            lq LightAmbient, 0(currLightPtr)
+
+            ; Ambient lighting
+            add.xyz light, light, LightAmbient
+
+            iadd  currLightPtr, lightDirs, currDirLight
+            lq LightDirection, 0(currLightPtr)
+            
+            ; Diffuse lighting
+            VectorDotProduct intensity, normal, LightDirection
+
+            maxx.xyzw  intensity, intensity, vf00
+
+            iadd  currLightPtr, lightDiffs, currDirLight
+            lq LightDiffuse, 0(currLightPtr)
+
+            mul diffuse, LightDiffuse, intensity[x]
+            add.xyz light, light, diffuse
+
+
+            ; Blinn-Phong Lighting Calculation
+            ;VectorNormalize CamPos, CamPos
+
+            ;sub lightDir, lightvert, CamPos ; Compute light direction vector
+            ;VectorNormalize lightDir, lightDir
+
+            ; Compute halfway vector
+            ;add halfDir, LightDirection, CamPos
+            ;VectorNormalize halfDir, halfDir
+            HalfAngle halfDir, LightDirection, CamPos
+
+            iadd  currLightPtr, lightSpecs, currDirLight
+            lq LightSpecular, 0(currLightPtr)
+
+            SpecularPowerScale
+
+            iaddiu   currDirLight,  currDirLight,  1; increment the loop counter 
+            ibne    dirLightQnt,  currDirLight,  directionaLightsLoop	; and repeat if needed
+
+        add.xyzw   color, matDiffuse, inColor
+        mul    color, color,      light       ; color = color * light
+
         VectorNormalizeClamp color, color
-        loi 128.0 
+        loi 128.0
         mul color, color, i                        ; normalize RGBA
         ColorFPtoGsRGBAQ intColor, color           ; convert to int
         ;///////////////////////////////////////////
 
-
+ 
         ;//////////// --- Store data --- ////////////
-        sq.xyz modStq,      STQ(outputAddress)      
+        sq.xyz modStq,      STQ(outputAddress)     
         sq intColor,    RGBA(outputAddress)     ; q is grabbed from stq
-        sq vertex,      XYZ2(outputAddress)     
+        sq vertex,      XYZ2(outputAddress)   
         ;////////////////////////////////////////////
 
         .include "vu1/proc/process_scissor_clip.i"
 
-        iaddiu          vertexData,     vertexData,        1     
-        iaddiu          colorData,       colorData,        1                       
-        iaddiu          stqData,           stqData,        1   
+        iaddiu          vertexData,     vertexData,     1                         
 
-        iaddiu         skinData,          skinData,        2   
+        iaddiu          skinData,     skinData,     2
 
         iaddiu          outputAddress,  outputAddress,  3
 
-        iaddi   vertCount,  vertCount,  -1	; decrement the loop counter 
-        ibne    vertCount,  vi00,   loop	; and repeat if needed
+        iaddi   vertexCounter,  vertexCounter,  -1	; decrement the loop counter 
+        ibne    vertexCounter,  vi00,   loop	; and repeat if needed
 
     ;//////////////////////////////////////////// 
 

@@ -120,7 +120,7 @@
         PushVertex           StackPtr, CSVertex2
         PushVertex           StackPtr, CSVertex3
         PushInteger4         StackPtr, kickAddress, vertexData,  ClipFlag1, ClipFlag2
-        PushInteger4         StackPtr, ClipFlag3, outputAddress, vertCount,  ClipTrigger
+        PushInteger4         StackPtr, ClipFlag3, outputAddress, vertexCounter,  ClipTrigger
 
         ;-----------------------------------------------------------------------------------------------------------------------------------
         ;=====================================================================================
@@ -230,7 +230,7 @@
         iaddiu               NbrRotates,       vi00, 2
         iaddiu               ClipWorkBuf0,     vi00, CLIP_WORK_BUF_0
         iaddiu               ClipWorkBuf1,     vi00, CLIP_WORK_BUF_1
-        iaddiu               vertCount,        vi00, 3
+        iaddiu               vertexCounter,        vi00, 3
         iadd                 newVertCount,      vi00, vi00
         sub.x                PlaneSign,        vf00, vf00[w]     ; Negative
         
@@ -244,8 +244,8 @@
         bal                  RetAddr2, scissor_interpolation
      
         ; Repeat until we have no more vertices
-        isubiu               vertCount, vertCount, 1
-        ibne                 vertCount, vi00, LOOP_Z_MINUS
+        isubiu               vertexCounter, vertexCounter, 1
+        ibne                 vertexCounter, vi00, LOOP_Z_MINUS
      
         ; Copy the triangle fan's first vertex to the end (in clipping work buffer 1)
         iaddiu               ClipWorkBuf0, vi00, CLIP_WORK_BUF_1
@@ -262,7 +262,7 @@
         iaddiu               NbrRotates,       vi00, 2
         iaddiu               ClipWorkBuf0,     vi00, CLIP_WORK_BUF_1
         iaddiu               ClipWorkBuf1,     vi00, CLIP_WORK_BUF_0
-        iadd                 vertCount,         vi00, newVertCount
+        iadd                 vertexCounter,         vi00, newVertCount
         iadd               newVertCount,      vi00, vi00
         add.x                PlaneSign,        vf00, vf00[w]     ; Positive
 
@@ -276,8 +276,8 @@
         bal                  RetAddr2, scissor_interpolation
      
         ; Repeat until we have no more vertices
-        isubiu               vertCount, vertCount, 1
-        ibne                 vertCount, vi00, LOOP_Z_PLUS
+        isubiu               vertexCounter, vertexCounter, 1
+        ibne                 vertexCounter, vi00, LOOP_Z_PLUS
      
         ; Copy the triangle fan's first vertex to the end (in clipping work buffer 0)
         iaddiu               ClipWorkBuf0, vi00, CLIP_WORK_BUF_0
@@ -294,7 +294,7 @@
         iaddiu               NbrRotates,       vi00, 0
         iaddiu               ClipWorkBuf0,     vi00, CLIP_WORK_BUF_0
         iaddiu               ClipWorkBuf1,     vi00, CLIP_WORK_BUF_1
-        iadd                 vertCount,         vi00, newVertCount
+        iadd                 vertexCounter,         vi00, newVertCount
         iadd               newVertCount,      vi00, vi00
         sub.x                PlaneSign,        vf00, vf00[w]     ; Negative
 
@@ -308,8 +308,8 @@
        bal                  RetAddr2, scissor_interpolation
 
        ; Repeat until we have no more vertices
-       isubiu               vertCount, vertCount, 1
-       ibne                 vertCount, vi00, LOOP_X_MINUS
+       isubiu               vertexCounter, vertexCounter, 1
+       ibne                 vertexCounter, vi00, LOOP_X_MINUS
 
        ; Copy the triangle fan's first vertex to the end (in clipping work buffer 1)
        iaddiu               ClipWorkBuf0, vi00, CLIP_WORK_BUF_1
@@ -326,7 +326,7 @@
        iaddiu               NbrRotates,       vi00, 0
        iaddiu               ClipWorkBuf0,     vi00, CLIP_WORK_BUF_1
        iaddiu               ClipWorkBuf1,     vi00, CLIP_WORK_BUF_0
-       iadd                 vertCount,         vi00, newVertCount
+       iadd                 vertexCounter,         vi00, newVertCount
        iadd               newVertCount,      vi00, vi00
        add.x                PlaneSign,        vf00, vf00[w]     ; Positive
 
@@ -340,8 +340,8 @@
        bal                  RetAddr2, scissor_interpolation
 
        ; Repeat until we have no more vertices
-       isubiu               vertCount, vertCount, 1
-       ibne                 vertCount, vi00, LOOP_X_PLUS
+       isubiu               vertexCounter, vertexCounter, 1
+       ibne                 vertexCounter, vi00, LOOP_X_PLUS
 
        ; Copy the triangle fan's first vertex to the end (in clipping work buffer 0)
        iaddiu               ClipWorkBuf0, vi00, CLIP_WORK_BUF_0
@@ -358,7 +358,7 @@
        iaddiu               NbrRotates,       vi00, 1
        iaddiu               ClipWorkBuf0,     vi00, CLIP_WORK_BUF_0
        iaddiu               ClipWorkBuf1,     vi00, CLIP_WORK_BUF_1
-       iadd                 vertCount,         vi00, newVertCount
+       iadd                 vertexCounter,         vi00, newVertCount
        iadd               newVertCount,      vi00, vi00
        sub.x                PlaneSign,        vf00, vf00[w]     ; Negative
 
@@ -372,8 +372,8 @@
        bal                  RetAddr2, scissor_interpolation
 
        ; Repeat until we have no more vertices
-       isubiu               vertCount, vertCount, 1
-       ibne                 vertCount, vi00, LOOP_Y_MINUS
+       isubiu               vertexCounter, vertexCounter, 1
+       ibne                 vertexCounter, vi00, LOOP_Y_MINUS
 
        ; Copy the triangle fan's first vertex to the end (in clipping work buffer 1)
        iaddiu               ClipWorkBuf0, vi00, CLIP_WORK_BUF_1
@@ -390,7 +390,7 @@
        iaddiu               NbrRotates,       vi00, 1
        iaddiu               ClipWorkBuf0,     vi00, CLIP_WORK_BUF_1
        iaddiu               ClipWorkBuf1,     vi00, CLIP_WORK_BUF_0
-       iadd                 vertCount,         vi00, newVertCount
+       iadd                 vertexCounter,         vi00, newVertCount
        iadd               newVertCount,      vi00, vi00
        add.x                PlaneSign,        vf00, vf00[w]     ; Positive
 
@@ -404,8 +404,8 @@
        bal                  RetAddr2, scissor_interpolation
 
        ; Repeat until we have no more vertices
-       isubiu               vertCount, vertCount, 1
-       ibne                 vertCount, vi00, LOOP_Y_PLUS
+       isubiu               vertexCounter, vertexCounter, 1
+       ibne                 vertexCounter, vi00, LOOP_Y_PLUS
 
        ; Copy the triangle fan's first vertex to the end (in clipping work buffer 0)
        iaddiu               ClipWorkBuf0, vi00, CLIP_WORK_BUF_0
@@ -419,7 +419,7 @@
         ;=====================================================================================
         iaddiu               ClipWorkBuf0, vi00, CLIP_WORK_BUF_0
         iaddiu               ClipWorkBuf1, vi00, CLIP_WORK_BUF_1
-        iadd                 vertCount,    vi00, newVertCount
+        iadd                 vertexCounter,    vi00, newVertCount
 
         iaddiu               DummyXGKickPtr, vi00, DUMMY_XGKICK_BUF
         iaddiu               kickAddress, vi00, CLIPFAN_OFFSET
@@ -444,7 +444,7 @@
         xgkick               DummyXGKickPtr
 
         ; Set the GifTag EOP bit to 1 and NLOOP to the number of vertices
-        iaddiu               Mask, vertCount, 0x7fff
+        iaddiu               Mask, vertexCounter, 0x7fff
         iaddiu               Mask, Mask, 0x01
         isw.x                Mask, 0(kickAddress)
 
@@ -482,8 +482,8 @@
         iaddiu               vertexData, vertexData, 3
         iaddiu               outputAddress, outputAddress, 3
      
-        iaddi                vertCount, vertCount, -1
-        ibne                 vertCount, vi00, LOOP2
+        iaddi                vertexCounter, vertexCounter, -1
+        ibne                 vertexCounter, vi00, LOOP2
      
         ; --- send result to GIF and stop ---
         xgkick               kickAddress
@@ -494,7 +494,7 @@
         ;=====================================================================================
         ; Restore context
         ;=====================================================================================
-        PopInteger4          StackPtr, ClipFlag3, outputAddress, vertCount, ClipTrigger
+        PopInteger4          StackPtr, ClipFlag3, outputAddress, vertexCounter, ClipTrigger
         PopInteger4          StackPtr, kickAddress, vertexData, ClipFlag1, ClipFlag2
         PopVertex            StackPtr, CSVertex3
         PopVertex            StackPtr, CSVertex2

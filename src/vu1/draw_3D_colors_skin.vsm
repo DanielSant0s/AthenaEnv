@@ -159,7 +159,7 @@ loop:
          NOP                                                        lq            VF13,0(VI07)                        
          NOP                                                        lq            VF14,0(VI08)                        
          NOP                                                        lq.xyz        VF15,0(VI09)                        
-         NOP                                                        iaddiu        VI01,VI00,0x00000001                
+         NOP                                                        iaddiu        VI01,VI00,0x00000004                
          NOP                                                        lq            VF16,0(VI06)                        
          max           VF18,VF00,VF00                               lq            VF17,1(VI06)                        
 skinWeightLoop:

@@ -19,12 +19,16 @@ register_vu_program(VU1Draw3DLCS);
 register_vu_program(VU1Draw3DLCSS);
 
 register_vu_program(VU1Draw3DCS_Skin);
+register_vu_program(VU1Draw3DLCS_Skin);
+register_vu_program(VU1Draw3DLCSS_Skin);
 
 vu_mpg *vu1_colors = NULL;
 vu_mpg *vu1_lights = NULL;
 vu_mpg *vu1_specular = NULL;
 
 vu_mpg *vu1_colors_skinned = NULL;
+vu_mpg *vu1_lights_skinned = NULL;
+vu_mpg *vu1_specular_skinned = NULL;
 
 MATRIX view_screen;
 MATRIX world_view;
@@ -104,6 +108,8 @@ void init3D(float fov, float near, float far) {
 	vu1_specular = vu_mpg_load_buffer(embed_vu_code_ptr(VU1Draw3DLCSS), embed_vu_code_size(VU1Draw3DLCSS), VECTOR_UNIT_1, false);
 
 	vu1_colors_skinned = vu_mpg_load_buffer(embed_vu_code_ptr(VU1Draw3DCS_Skin), embed_vu_code_size(VU1Draw3DCS_Skin), VECTOR_UNIT_1, false);
+	vu1_lights_skinned = vu_mpg_load_buffer(embed_vu_code_ptr(VU1Draw3DLCS_Skin), embed_vu_code_size(VU1Draw3DLCS_Skin), VECTOR_UNIT_1, false);
+	vu1_specular_skinned = vu_mpg_load_buffer(embed_vu_code_ptr(VU1Draw3DLCSS_Skin), embed_vu_code_size(VU1Draw3DLCSS_Skin), VECTOR_UNIT_1, false);
 
 }
 
@@ -434,22 +440,36 @@ void draw_vu1_with_colors(athena_object_data *obj) {
 void draw_vu1_with_lights(athena_object_data *obj) {
 	athena_render_data *data = obj->data;
 
-	int batch_size = BATCH_SIZE;
+	int batch_size = BATCH_SIZE, mpg_addr = 0;
 
-	int mpg_addr = vu_mpg_preload(vu1_lights, true);
+	if (data->skeleton) {
+		batch_size = BATCH_SIZE_SKINNED;
+
+		process_animation(obj);
+
+		update_bone_transforms(obj);
+
+		mpg_addr = vu_mpg_preload(vu1_lights_skinned, true);
+	} else {
+		mpg_addr = vu_mpg_preload(vu1_lights, true);
+	}
 		
 	gsGlobal->PrimAAEnable = GS_SETTING_ON;
 
-	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 7); // 5 for unpack static data + 2 for flush with end
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 8); // 5 for unpack static data + 2 for flush with end
 
 	owl_add_unpack_data(packet, 141, (void*)obj->transform, 4, 0);
+
+	if (obj->bone_matrices) {
+		owl_add_unpack_data(packet, 145, (void*)obj->bone_matrices, data->skeleton->bone_count*4, 0);
+	}
 
 	unpack_list_open(packet, 0, false);
 	{
 		unpack_list_append(packet, &screen_scale,       1); 
 
 		unpack_list_append(packet, world_screen,       4);
-		unpack_list_append(packet, obj->local_light,        4);
+		unpack_list_append(packet, obj->local_light,   4);
 
 		unpack_list_append(packet, getCameraPosition(), 1);
 		unpack_list_append(packet, &dir_lights,        16);
@@ -476,12 +496,13 @@ void draw_vu1_with_lights(athena_object_data *obj) {
 		VECTOR* texcoords = texture_mapping? &data->texcoords[last_index+1] : NULL;
 		VECTOR* normals = &data->normals[last_index+1];
 		VECTOR* colours = &data->colours[last_index+1];
+		vertex_skin_data* skin_data = data->skin_data? &data->skin_data[last_index+1] : NULL;
 
 		int idxs_to_draw = (data->material_indices[i].end-last_index);
 		int idxs_drawn = 0;
 
 		while (idxs_to_draw > 0) {
-			owl_query_packet(CHANNEL_VIF1, texture_mapping? 18 : 8);
+			owl_query_packet(CHANNEL_VIF1, texture_mapping? 19 : 9);
 
 			int count = batch_size;
 			if (idxs_to_draw < batch_size)
@@ -555,6 +576,9 @@ void draw_vu1_with_lights(athena_object_data *obj) {
 			{
 				unpack_list_append(packet, (void*)&data->materials[data->material_indices[i].index].prim_tag, 1);
 				unpack_list_append(packet, (void*)&data->materials[data->material_indices[i].index].diffuse, 1);
+				if (data->skin_data) {
+					unpack_list_append(packet, &skin_data[idxs_drawn], count*2);
+				}
 				unpack_list_append(packet, &positions[idxs_drawn], count);
 				unpack_list_append(packet, &normals[idxs_drawn], count);
 				unpack_list_append(packet, &colours[idxs_drawn], count);
@@ -589,15 +613,29 @@ void draw_vu1_with_lights(athena_object_data *obj) {
 void draw_vu1_with_spec_lights(athena_object_data *obj) {
 	athena_render_data *data = obj->data;
 
-	int batch_size = BATCH_SIZE;
+	int batch_size = BATCH_SIZE, mpg_addr = 0;
 
-	int mpg_addr = vu_mpg_preload(vu1_specular, true);
+	if (data->skeleton) {
+		batch_size = BATCH_SIZE_SKINNED;
+
+		process_animation(obj);
+
+		update_bone_transforms(obj);
+
+		mpg_addr = vu_mpg_preload(vu1_specular_skinned, true);
+	} else {
+		mpg_addr = vu_mpg_preload(vu1_specular, true);
+	}
 
 	gsGlobal->PrimAAEnable = GS_SETTING_ON;
 
-	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 7);
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 8);
 
 	owl_add_unpack_data(packet, 141, (void*)obj->transform, 4, 0);
+
+	if (obj->bone_matrices) {
+		owl_add_unpack_data(packet, 145, (void*)obj->bone_matrices, data->skeleton->bone_count*4, 0);
+	}
 
 	unpack_list_open(packet, 0, false);
 	{
@@ -631,12 +669,13 @@ void draw_vu1_with_spec_lights(athena_object_data *obj) {
 		VECTOR* texcoords = texture_mapping? &data->texcoords[last_index+1] : NULL;
 		VECTOR* normals = &data->normals[last_index+1];
 		VECTOR* colours = &data->colours[last_index+1];
+		vertex_skin_data* skin_data = data->skin_data? &data->skin_data[last_index+1] : NULL;
 
 		int idxs_to_draw = (data->material_indices[i].end-last_index);
 		int idxs_drawn = 0;
 
 		while (idxs_to_draw > 0) {
-			owl_query_packet(CHANNEL_VIF1, texture_mapping? 18 : 8);
+			owl_query_packet(CHANNEL_VIF1, texture_mapping? 19 : 9);
 
 			int count = batch_size;
 			if (idxs_to_draw < batch_size)
@@ -709,6 +748,9 @@ void draw_vu1_with_spec_lights(athena_object_data *obj) {
 			{
 				unpack_list_append(packet, (void*)&data->materials[data->material_indices[i].index].prim_tag, 1);
 				unpack_list_append(packet, (void*)&data->materials[data->material_indices[i].index].diffuse, 1);
+				if (data->skin_data) {
+					unpack_list_append(packet, &skin_data[idxs_drawn], count*2);
+				}
 				unpack_list_append(packet, &positions[idxs_drawn], count);
 				unpack_list_append(packet, &normals[idxs_drawn], count);
 				unpack_list_append(packet, &colours[idxs_drawn], count);

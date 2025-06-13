@@ -139,12 +139,16 @@ int vu_mpg_preload(vu_mpg *mpg, bool dma_transfer) {
 
     i -= (i < MPG_CACHE_SIZE? 0 : 1);
 
-    for (vu_mpg *tmp = NULL; (i > 0 && (vu_code_qwc_used[mpg->dst] + mpg->qwc) > vu_code_qwc[mpg->dst]); i--, tmp = mpg_cache[mpg->dst].entries[i]) {
+    vu_mpg *tmp = mpg_cache[mpg->dst].entries[i];
+    for (; (i >= 0 && (vu_code_qwc_used[mpg->dst] + mpg->qwc) > vu_code_qwc[mpg->dst]); i--, tmp = mpg_cache[mpg->dst].entries[i]) {
         if (tmp) {
             vu_code_qwc_used[mpg->dst] -= tmp->qwc;
             mpg_cache[mpg->dst].entries[i] = NULL;
         }
     }
+
+    if (i < 0) 
+        i++;
 
     mpg_cache[mpg->dst].entries[i] = mpg;
     mpg_addr = mpg_cache[mpg->dst].dests[i] = vu_code_qwc_used[mpg->dst];
