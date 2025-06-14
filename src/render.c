@@ -12,6 +12,8 @@
 
 #include <mpg_manager.h>
 
+#include <vector.h>
+
 #define DEG2RAD(deg) ((deg) * (M_PI / 180.0f))
 
 register_vu_program(VU1Draw3DCS);
@@ -36,22 +38,28 @@ MATRIX world_screen;
 
 FIVECTOR screen_scale;
 
-void draw_vu1_with_colors(athena_object_data *obj);
-void draw_vu1_with_lights(athena_object_data *obj);
-void draw_vu1_with_spec_lights(athena_object_data *obj);
+VECTOR zero_bump_offset = { 0.0f, 0.0f, 0.0f, 0.0f };
 
-void (*render_funcs[3])(athena_object_data *obj) = {
+void draw_vu1_with_colors(athena_object_data *obj, bool bump_pass);
+void draw_vu1_with_lights(athena_object_data *obj, bool bump_pass);
+void draw_vu1_with_spec_lights(athena_object_data *obj, bool bump_pass);
+void draw_vu1_with_bump_mapping(athena_object_data *obj, bool bump_pass);
+
+void (*render_funcs[])(athena_object_data *obj, bool bump_pass) = {
 	draw_vu1_with_colors,
 	draw_vu1_with_lights,
-	draw_vu1_with_spec_lights
+	draw_vu1_with_spec_lights,
+	draw_vu1_with_bump_mapping
 };
 
 void render_object(athena_object_data *obj) {
-	render_funcs[obj->data->pipeline](obj);
+	render_funcs[obj->data->pipeline](obj, false);
 }
 
 void new_render_object(athena_object_data *obj, athena_render_data *data) {
 	obj->data = data;
+
+	obj->bump_offset_buffer = &zero_bump_offset;
 
 	if (data->skin_data) {
 		obj->anim_controller.current = NULL;
@@ -94,7 +102,7 @@ void init3D(float fov, float near, float far) {
 
 	matrix_functions->multiply(world_screen, world_view, view_screen);
 
-	vu1_set_double_buffer_settings(273, 357); // Skinned layout
+	vu1_set_double_buffer_settings(274, 357); // Skinned layout
 	// vu1_set_double_buffer_settings(141, 400);
 	owl_flush_packet();
 
@@ -271,7 +279,7 @@ void update_object_space(athena_object_data *obj) {
   	matrix_functions->translate(obj->transform, obj->transform, obj->position);
 }
 
-void draw_vu1_with_colors(athena_object_data *obj) {
+void draw_vu1_with_colors(athena_object_data *obj, bool bump_pass) {
 	athena_render_data *data = obj->data;
 
 	int batch_size = BATCH_SIZE, mpg_addr = 0;
@@ -298,6 +306,8 @@ void draw_vu1_with_colors(athena_object_data *obj) {
 		owl_add_unpack_data(packet, 145, (void*)obj->bone_matrices, data->skeleton->bone_count*4, 0);
 	}
 
+	owl_add_unpack_data(packet, 273, (void*)obj->bump_offset_buffer, 1, 0);
+
 	unpack_list_open(packet, 0, false);
 	{
 		screen_scale.w = data->attributes.accurate_clipping;
@@ -313,10 +323,10 @@ void draw_vu1_with_colors(athena_object_data *obj) {
 	GSTEXTURE* tex = NULL;
 	int texture_id;
 	for(int i = 0; i < data->material_index_count; i++) {
-		bool texture_mapping = ((data->materials[data->material_indices[i].index].texture_id != -1) && data->attributes.texture_mapping);
+		bool texture_mapping = ((((data->materials[data->material_indices[i].index].texture_id != -1)) && data->attributes.texture_mapping) || bump_pass);
 
 		if (texture_mapping) {
-			GSTEXTURE *cur_tex = data->textures[data->materials[data->material_indices[i].index].texture_id];
+			GSTEXTURE *cur_tex = data->textures[(bump_pass? data->materials[data->material_indices[i].index].bump_texture_id : data->materials[data->material_indices[i].index].texture_id)];
 			if (cur_tex != tex) {
 				texture_id = texture_manager_bind(gsGlobal, cur_tex, true);
 				tex = cur_tex;
@@ -437,7 +447,7 @@ void draw_vu1_with_colors(athena_object_data *obj) {
 	);
 }
 
-void draw_vu1_with_lights(athena_object_data *obj) {
+void draw_vu1_with_lights(athena_object_data *obj, bool bump_pass) {
 	athena_render_data *data = obj->data;
 
 	int batch_size = BATCH_SIZE, mpg_addr = 0;
@@ -610,7 +620,7 @@ void draw_vu1_with_lights(athena_object_data *obj) {
 	);
 }
 
-void draw_vu1_with_spec_lights(athena_object_data *obj) {
+void draw_vu1_with_spec_lights(athena_object_data *obj, bool bump_pass) {
 	athena_render_data *data = obj->data;
 
 	int batch_size = BATCH_SIZE, mpg_addr = 0;
@@ -779,4 +789,34 @@ void draw_vu1_with_spec_lights(athena_object_data *obj) {
 		VIF_CODE(0, 0, VIF_NOP, 0),
 		VIF_CODE(0, 0, VIF_NOP, 0)
 	);
+}
+
+void draw_vu1_with_bump_mapping(athena_object_data *obj, bool bump_pass) {
+	uint64_t old_alpha = get_screen_param(ALPHA_BLEND_EQUATION);
+	uint64_t old_colclamp = get_screen_param(COLOR_CLAMP_MODE);
+
+    VECTOR light_dir;
+
+	matrix_functions->apply(light_dir, obj->local_light, dir_lights.direction[0]);
+
+	vector_functions->normalize(light_dir, light_dir);
+	
+    obj->bump_offset[0] = light_dir[0] * 0.005f;
+    obj->bump_offset[1] = light_dir[1] * 0.005f;
+
+	set_screen_param(COLOR_CLAMP_MODE, 0);
+
+	draw_vu1_with_spec_lights(obj, false);
+
+	obj->bump_offset_buffer = &obj->bump_offset;
+	set_screen_param(ALPHA_BLEND_EQUATION, ALPHA_EQUATION(SRC_RGB, ZERO_RGB, ALPHA_FIX, DST_RGB, 0x34));
+	draw_vu1_with_colors(obj, true);
+
+	obj->bump_offset_buffer = &zero_bump_offset;
+	set_screen_param(ALPHA_BLEND_EQUATION, ALPHA_EQUATION(ZERO_RGB, SRC_RGB, ALPHA_FIX, DST_RGB, 0x34));
+	draw_vu1_with_colors(obj, true);
+
+	set_screen_param(COLOR_CLAMP_MODE, old_colclamp);
+	set_screen_param(ALPHA_BLEND_EQUATION, old_alpha);
+
 }

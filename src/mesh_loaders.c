@@ -239,7 +239,7 @@ void loadOBJ(athena_render_data* res_m, const char* path, GSTEXTURE* text) {
 	fast_obj_destroy(m);
 }
 
-void load_gltf_material(ath_mat* mat, const cgltf_material* gltf_mat, athena_render_data* res_m) {
+void load_gltf_material(ath_mat* mat, const cgltf_material* gltf_mat, athena_render_data* res_m, const cgltf_data* gltf_data) {
     init_vector(mat->ambient);
     init_vector(mat->diffuse);
     init_vector(mat->specular);
@@ -251,6 +251,8 @@ void load_gltf_material(ath_mat* mat, const cgltf_material* gltf_mat, athena_ren
     mat->refraction = 1.0f;
     mat->disolve = 1.0f;
     mat->texture_id = -1;
+    mat->bump_texture_id = -1;  
+    mat->bump_scale = 1.0f;     
     
     if (!gltf_mat) return;
     
@@ -292,6 +294,72 @@ void load_gltf_material(ath_mat* mat, const cgltf_material* gltf_mat, athena_ren
 
     if (gltf_mat->alpha_mode == cgltf_alpha_mode_blend) {
         mat->disolve = gltf_mat->alpha_cutoff;
+    }
+
+    if (gltf_mat->extensions_count > 0) {
+        for (cgltf_size i = 0; i < gltf_mat->extensions_count; i++) {
+            const cgltf_extension* ext = &gltf_mat->extensions[i];
+            
+            if (strcmp(ext->name, "ATHENA_material_bump") == 0) {
+                if (ext->data) {
+                    parse_athena_bump_extension(mat, ext->data, res_m, gltf_data);
+                }
+                break;
+            }
+        }
+    }
+}
+
+void parse_athena_bump_extension(ath_mat* mat, const char* json_data, athena_render_data* res_m, const cgltf_data* gltf_data) {
+    const char* bump_texture_start = strstr(json_data, "\"bumpTexture\"");
+    const char* bump_scale_start = strstr(json_data, "\"bumpScale\"");
+    
+    if (bump_texture_start) {
+        const char* index_start = strstr(bump_texture_start, "\"index\"");
+        if (index_start) {
+            index_start = strchr(index_start, ':');
+            if (index_start) {
+                index_start++; 
+
+                while (*index_start == ' ' || *index_start == '\t') {
+                    index_start++;
+                }
+                
+                int texture_index = atoi(index_start);
+
+                load_bump_texture_by_index(mat, texture_index, res_m, gltf_data);
+            }
+        }
+    }
+    
+    if (bump_scale_start) {
+        const char* scale_start = strchr(bump_scale_start, ':');
+        if (scale_start) {
+            scale_start++;
+
+            while (*scale_start == ' ' || *scale_start == '\t') {
+                scale_start++;
+            }
+            
+            mat->bump_scale = atof(scale_start);
+        }
+    }
+}
+
+void load_bump_texture_by_index(ath_mat* mat, int texture_index, athena_render_data* res_m, const cgltf_data* gltf_data) {
+    if (gltf_data && texture_index >= 0 && texture_index < gltf_data->textures_count) {
+        const cgltf_texture* bump_tex = &gltf_data->textures[texture_index];
+        
+        if (bump_tex->image && bump_tex->image->uri) {
+            mat->bump_texture_id = res_m->texture_count;
+            GSTEXTURE* bump_texture = malloc(sizeof(GSTEXTURE));
+
+            load_image(bump_texture, bump_tex->image->uri, true);
+
+            bump_texture->Filter = GS_FILTER_LINEAR;
+
+            append_texture(res_m, bump_texture);
+        }
     }
 }
 
@@ -481,13 +549,13 @@ void loadGLTF(athena_render_data* res_m, const char* path, GSTEXTURE* text) {
         res_m->material_count = data->materials_count;
         
         for (size_t i = 0; i < data->materials_count; i++) {
-            load_gltf_material(&res_m->materials[i], &data->materials[i], res_m);
+            load_gltf_material(&res_m->materials[i], &data->materials[i], res_m, data);
         }
     } else {
         res_m->materials = (ath_mat*)malloc(sizeof(ath_mat));
         res_m->material_count = 1;
         
-        load_gltf_material(&res_m->materials[0], NULL, res_m);
+        load_gltf_material(&res_m->materials[0], NULL, res_m, data);
         
         if (text) {
             res_m->materials[0].texture_id = 0;

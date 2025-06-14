@@ -23,5 +23,7 @@ OBJECT_MATRIX       .assign 141
 
 BONE_MATRICES       .assign 145
 
+TEXCOORD_OFFSET     .assign 273
+
 INBUF_SIZE          .assign 204         ; Max NbrVerts (51 * 4)
 DUMMY_XGKICK_BUF    .assign 1023

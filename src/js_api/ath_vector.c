@@ -346,7 +346,7 @@ typedef struct {
 
 static JSClassID js_vector3_class_id;
 
-JSClassID get_matrix3_class_id(){
+JSClassID get_vector3_class_id(){
 	return js_vector3_class_id;
 }
 
