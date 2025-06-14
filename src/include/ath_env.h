@@ -53,6 +53,7 @@ JSClassID get_imglist_class_id();
 JSClassID get_matrix4_class_id();
 JSClassID get_vector2_class_id();
 JSClassID get_vector3_class_id();
+JSClassID get_vector4_class_id();
 
 #define countof(x) (sizeof(x) / sizeof((x)[0]))
 
@@ -78,6 +79,7 @@ JSModuleDef *athena_task_init(JSContext* ctx);
 JSModuleDef *athena_pads_init(JSContext* ctx);
 
 JSModuleDef *athena_vector_init(JSContext *ctx);
+JSModuleDef *athena_vector4_init(JSContext *ctx);
 JSModuleDef *athena_matrix_init(JSContext *ctx);
 JSModuleDef *athena_physics_init(JSContext *ctx);
 
