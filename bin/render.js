@@ -4,7 +4,8 @@
 const pipelines = [
     "NO_LIGHTS",
     "DEFAULT",
-    "SPECULAR"
+    "SPECULAR",
+    "BUMPMAP"
 ];
 
 const font = new Font("default");
@@ -14,7 +15,7 @@ font.outline = 1.0f;
 font.outline_color = Color.new(0, 0, 0);
 
 Screen.setFrameCounter(true);
-Screen.setVSync(false);
+Screen.setVSync(true);
 
 const canvas = Screen.getMode();
 
@@ -77,7 +78,9 @@ trilist_materials[0].diffuse.b = 0.0;
 
 listtest.materials = trilist_materials;
 
-const gltf_box = new RenderData("Cube.gltf");
+const gltf_box = new RenderData("box_bump.gltf");
+//gltf_box.texture_mapping = false;
+gltf_box.pipeline = Render.PL_BUMPMAP;
 
 const dragontex = new Image("dragon.png");
 const dragonmesh = new RenderData("dragon.obj", dragontex);
@@ -133,6 +136,7 @@ Camera.position(0.0f, 0.0f, 35.0f);
 
 const light = Lights.new();
 Lights.set(light, Lights.DIRECTION, 0.0,  0.5, 1.0);
+Lights.set(light, Lights.AMBIENT,   0.12, 0.15, 0.2);
 Lights.set(light, Lights.DIFFUSE,   0.5, 0.5, 0.5);
 Lights.set(light, Lights.SPECULAR,  1.0, 1.0, 1.0);
 
@@ -169,13 +173,13 @@ while(true) {
     Camera.update();
     pad.update();
 
-    lx = ((pad.lx > 25 || pad.lx < -25)? pad.lx : 0) / 1024.0f;
-    ly = ((pad.ly > 25 || pad.ly < -25)? pad.ly : 0) / 1024.0f;
+    lx = ((pad.lx > 25 || pad.lx < -25)? pad.lx : 0) / 4096.0f;
+    ly = ((pad.ly > 25 || pad.ly < -25)? pad.ly : 0) / 4096.0f;
     savedlx = savedlx - lx;
     savedly = savedly - ly;
 
-    rx = ((pad.rx > 25 || pad.rx < -25)? pad.rx : 0) / 1024.0f;
-    ry = ((pad.ry > 25 || pad.ry < -25)? pad.ry : 0) / 1024.0f;
+    rx = ((pad.rx > 25 || pad.rx < -25)? pad.rx : 0) / 2048.0f;
+    ry = ((pad.ry > 25 || pad.ry < -25)? pad.ry : 0) / 2048.0f;
     savedrx = savedrx - rx;
     savedry = savedry + ry;
 
@@ -185,7 +189,11 @@ while(true) {
         savedrz += 0.05f;
     }
 
-    Camera.target(savedrx, savedry, savedrz);
+    Camera.target(0.0f, 0.0f, savedrz);
+
+    if (rx || ry) {
+        Lights.set(light, Lights.DIRECTION, savedrx,  savedry, 1.0);
+    }
 
     if(pad.justPressed(Pads.LEFT) && modeltodisplay > 0){
         modeltodisplay -= 1;

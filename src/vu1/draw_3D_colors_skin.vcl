@@ -22,6 +22,8 @@
 
     MatrixMultiply   ObjectToScreen, ObjectMatrix, ScreenMatrix
 
+    lq             st_offset, TEXCOORD_OFFSET(vi00)
+
     lq.w           bfc_multiplier, CLIPFAN_OFFSET(vi00)
 
     ftoi0.w        bfc_sign_mask, bfc_multiplier
@@ -80,7 +82,7 @@ culled_init:
     ;////////////////////////////////////////////
 
     ;/////////////// --- Loop --- ///////////////
-    iadd vertexCounter, iBase, vertCount ; loop vertCount times
+    iadd vertexCounter, vi00, vertCount ; loop vertCount times
     vertexLoop:
 
         ;////////// --- Load loop data --- //////////
@@ -151,6 +153,7 @@ culled_init:
 
 
         ;//////////////// --- ST --- ////////////////
+        add.xy stq, stq, st_offset
         mulq modStq, stq, q
         ;////////////////////////////////////////////
 
@@ -178,7 +181,7 @@ culled_init:
         iaddiu          destAddress,    destAddress,    3
 
         iaddi   vertexCounter,  vertexCounter,  -1	; decrement the loop counter 
-        ibne    vertexCounter,  iBase,   vertexLoop	; and repeat if needed
+        ibne    vertexCounter,  vi00,   vertexLoop	; and repeat if needed
 
     ;//////////////////////////////////////////// 
 
@@ -227,6 +230,8 @@ init:
 
     .include "vu1/proc/setup_vertex_queue.i"
 
+    iadd vertexCounter, vi00, vertCount ; loop vertCount times
+
     loop:
 
         ;////////// --- Load loop data --- //////////
@@ -264,6 +269,7 @@ init:
         MatrixMultiplyVertex	vertex, ObjectToScreen, final_vertex ; transform each vertex by the matrix
         move formVertex, vertex
 
+        add.xy stq, stq, st_offset
         VertexPersCorrST vertex, modStq, vertex, stq
 
         mul.xyz    vertex, vertex,     scale
@@ -292,7 +298,7 @@ init:
         sq vertex,      XYZ2(outputAddress)     
         ;////////////////////////////////////////////
 
-        .include "vu1/proc/process_scissor_clip.i"
+        .include "vu1/proc/process_scissor_clip_offset.i"
 
         iaddiu          vertexData,     vertexData,        1     
         iaddiu          colorData,       colorData,        1                       
@@ -302,8 +308,8 @@ init:
 
         iaddiu          outputAddress,  outputAddress,  3
 
-        iaddi   vertCount,  vertCount,  -1	; decrement the loop counter 
-        ibne    vertCount,  vi00,   loop	; and repeat if needed
+        iaddi   vertexCounter,  vertexCounter,  -1	; decrement the loop counter 
+        ibne    vertexCounter,  vi00,   loop	; and repeat if needed
 
     ;//////////////////////////////////////////// 
 

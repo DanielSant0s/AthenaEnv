@@ -13,11 +13,23 @@ typedef struct {
 	uint32_t w;
 } FIVECTOR;
 
-typedef struct {
-	float    x;
-	float    y;
-	float    z;
-	uint32_t w;
+typedef union {
+    struct {
+	    float    x;
+	    float    y;
+	    float    z;
+	    float    w;
+    };
+
+    struct {
+	    uint32_t    ix;
+	    uint32_t    iy;
+	    uint32_t    iz;
+	    uint32_t    iw;
+    };
+
+    float    f[4];
+    uint32_t u[4];
 } VUVECTOR;
 
 typedef struct {
@@ -42,6 +54,7 @@ typedef enum {
 	PL_NO_LIGHTS,
 	PL_DEFAULT,
 	PL_SPECULAR,
+    PL_BUMPMAP,
 } eRenderPipelines;
 
 typedef enum {
@@ -141,7 +154,11 @@ typedef struct
     VECTOR transmission_filter; 
     float  disolve;  
 
+    float bump_scale; 
+
 	int texture_id;
+    int bump_texture_id;
+    int env_texture_id;
 } ath_mat;
 
 typedef struct {
@@ -189,6 +206,9 @@ typedef struct athena_object_data {
     athena_animation_controller anim_controller; 
     athena_bone_transform *bones;
     MATRIX *bone_matrices;
+
+    VECTOR *bump_offset_buffer;
+    VECTOR bump_offset;
 
     athena_render_data *data;
 
