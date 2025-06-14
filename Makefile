@@ -82,7 +82,7 @@ APP_CORE = main.o bootlogo.o texture_manager.o owl_packet.o vif.o athena_math.o 
 
 INI_READER = readini/src/readini.o
 
-ATHENA_MODULES = ath_env.o ath_physics.o ath_vector.o ath_matrix.o ath_pads.o ath_system.o ath_iop.o ath_archive.o ath_timer.o ath_task.o
+ATHENA_MODULES = ath_env.o ath_physics.o ath_vector.o ath_vector4.o ath_matrix.o ath_pads.o ath_system.o ath_iop.o ath_archive.o ath_timer.o ath_task.o
 
 IOP_MODULES = iomanx.o filexio.o sio2man.o mcman.o mcserv.o padman.o  \
 			  usbd.o bdm.o bdmfs_fatfs.o usbmass_bd.o cdfs.o \

@@ -200,6 +200,7 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"import * as Archive from 'Archive';\n"
 				"import * as Vector2 from 'Vector2';\n"
 				"import * as Vector3 from 'Vector3';\n"
+				"import * as Vector4 from 'Vector4';\n"
 				"import * as Matrix4 from 'Matrix4';\n"
 				"import * as Physics from 'Physics';\n"
 
@@ -213,6 +214,7 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"globalThis.IOP = IOP;\n"
 				"globalThis.Vector2 = Vector2.Vector2;\n"
 				"globalThis.Vector3 = Vector3.Vector3;\n"
+				"globalThis.Vector4 = Vector4.Vector4;\n"
 				"globalThis.Matrix4 = Matrix4.Matrix4;\n"
 				"globalThis.Physics = Physics;\n";
 
@@ -266,6 +268,7 @@ static JSContext *JS_NewCustomContext(JSRuntime *rt)
 	athena_task_init(ctx);
 	athena_pads_init(ctx);
 	athena_vector_init(ctx);
+	athena_vector4_init(ctx);
 	athena_matrix_init(ctx);
 	athena_physics_init(ctx);
 

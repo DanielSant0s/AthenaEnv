@@ -241,6 +241,25 @@ register_3d_render_data:
 
 			JS_DefinePropertyValueStr(ctx, bone, "inverse_bind", bone_matrix, JS_PROP_C_W_E);
 
+
+			JSValue bone_position = JS_NewObjectClass(ctx, get_vector4_class_id());
+
+			JS_SetOpaque(bone_position, &ro->m.skeleton->bones[i].position);
+
+			JS_DefinePropertyValueStr(ctx, bone, "position", bone_position, JS_PROP_C_W_E);
+
+			JSValue bone_rotation = JS_NewObjectClass(ctx, get_vector4_class_id());
+
+			JS_SetOpaque(bone_rotation, &ro->m.skeleton->bones[i].rotation);
+
+			JS_DefinePropertyValueStr(ctx, bone, "rotation", bone_rotation, JS_PROP_C_W_E);
+
+			JSValue bone_scale = JS_NewObjectClass(ctx, get_vector4_class_id());
+
+			JS_SetOpaque(bone_scale, &ro->m.skeleton->bones[i].scale);
+
+			JS_DefinePropertyValueStr(ctx, bone, "scale", bone_scale, JS_PROP_C_W_E);
+
 			JS_DefinePropertyValueUint32(ctx, bones, i, bone, JS_PROP_C_W_E);
 		}
 
@@ -710,6 +729,24 @@ register_3d_object_data:
 			JS_SetOpaque(bone_transform, &ro->obj.bones[i].transform);
 
 			JS_DefinePropertyValueStr(ctx, bone, "transform", bone_transform, JS_PROP_C_W_E);
+
+			JSValue bone_position = JS_NewObjectClass(ctx, get_vector4_class_id());
+
+			JS_SetOpaque(bone_position, &ro->obj.bones[i].position);
+
+			JS_DefinePropertyValueStr(ctx, bone, "position", bone_position, JS_PROP_C_W_E);
+
+			JSValue bone_rotation = JS_NewObjectClass(ctx, get_vector4_class_id());
+
+			JS_SetOpaque(bone_rotation, &ro->obj.bones[i].rotation);
+
+			JS_DefinePropertyValueStr(ctx, bone, "rotation", bone_rotation, JS_PROP_C_W_E);
+
+			JSValue bone_scale = JS_NewObjectClass(ctx, get_vector4_class_id());
+
+			JS_SetOpaque(bone_scale, &ro->obj.bones[i].scale);
+
+			JS_DefinePropertyValueStr(ctx, bone, "scale", bone_scale, JS_PROP_C_W_E);
 
 			JS_DefinePropertyValueUint32(ctx, bone_transforms, i, bone, JS_PROP_C_W_E);
 
