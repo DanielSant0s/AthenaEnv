@@ -67,7 +67,6 @@ cull_init:
 
     ;//////////// --- Load data 1 --- /////////////
     ; Updated once per mesh
-    MatrixLoad	LocalLight,     LIGHT_MATRIX,  vi00   ; load local light matrix
     ilw.w       dirLightQnt,    NUM_DIR_LIGHTS(vi00)  ; load active directional lights
     lq.xyz      CamPos,         CAMERA_POSITION(vi00) ; load program params
     iaddiu      lightDirs,      vi00,    LIGHT_DIRECTION_PTR       
@@ -136,7 +135,7 @@ culled_init:
             MatrixLoad	BoneMatrix, BONE_MATRICES, boneIndex
   
             MatrixMultiplyVertex ts_vertex, BoneMatrix, inVert
-            MatrixMultiplyVertex ts_normal, BoneMatrix, inNorm
+            MatrixMultiplyVector ts_normal, BoneMatrix, inNorm
 
             mul ts_vertex, ts_vertex, boneWeights[x]
             mul ts_normal, ts_normal, boneWeights[x]
@@ -191,10 +190,7 @@ culled_init:
         ;////////////////////////////////////////////
 
         ;//////////////// - NORMALS - /////////////////
-        MatrixMultiplyVertex	normal,    LocalLight, final_normal ; transform each normal by the matrix
-       ; MatrixMultiplyVertex	lightvert, LocalLight, final_vertex ; transform each normal by the matrix
-        div         q,      vf00[w],    normal[w]   ; perspective divide (1/vert[w]):
-        mul.xyz     normal, normal,     q
+        MatrixMultiplyVector	normal,    ObjectMatrix, final_normal ; transform each normal by the matrix
         
         move light, vf00
         move intensity, vf00
@@ -219,14 +215,6 @@ culled_init:
             add.xyz light, light, diffuse
 
             ; Blinn-Phong Lighting Calculation
-            ;VectorNormalize CamPos, CamPos
-
-            ;sub lightDir, lightvert, CamPos ; Compute light direction vector
-            ;VectorNormalize lightDir, lightDir
-
-            ; Compute halfway vector
-            ;add halfDir, LightDirection, CamPos
-            ;VectorNormalize halfDir, halfDir
             HalfAngle halfDir, LightDirection, CamPos
 
             lq LightSpecular, LIGHT_SPECULAR_PTR(currDirLight)
@@ -254,7 +242,7 @@ culled_init:
 
         iaddiu          vertexData,     vertexData,     1    
 
-        iaddiu          skinData,     skinData,     2                     
+        iaddiu          skinData,     skinData,         2                     
 
         iaddiu          destAddress,    destAddress,    3
 
@@ -310,8 +298,6 @@ init:
     iadd vertexCounter, vi00, vertCount ; loop vertCount times
 
     loop:
-
-
         ;////////// --- Load loop data --- //////////
         lq inVert,  0(vertexData)    
         iadd tmpPtr, vertexData, vertCount
@@ -336,7 +322,7 @@ init:
             MatrixLoad	BoneMatrix, BONE_MATRICES, boneIndex
   
             MatrixMultiplyVertex ts_vertex, BoneMatrix, inVert
-            MatrixMultiplyVertex ts_normal, BoneMatrix, inNorm
+            MatrixMultiplyVector ts_normal, BoneMatrix, inNorm
 
             mul ts_vertex, ts_vertex, boneWeights[x]
             mul ts_normal, ts_normal, boneWeights[x]
@@ -368,11 +354,7 @@ init:
         ;////////////////////////////////////////////
 
         ;//////////////// - NORMALS - /////////////////
-        MatrixLoad	LocalLight,     LIGHT_MATRIX, vi00     ; load local light matrix
-
-        MatrixMultiplyVertex	normal,    LocalLight, final_normal ; transform each normal by the matrix
-        div         q,      vf00[w],    normal[w]   ; perspective divide (1/vert[w]):
-        mul.xyz     normal, normal,     q
+        MatrixMultiplyVector	normal,    ObjectMatrix, final_normal ; transform each normal by the matrix
         
         move light, vf00
         move intensity, vf00
@@ -407,16 +389,6 @@ init:
             mul diffuse, LightDiffuse, intensity[x]
             add.xyz light, light, diffuse
 
-
-            ; Blinn-Phong Lighting Calculation
-            ;VectorNormalize CamPos, CamPos
-
-            ;sub lightDir, lightvert, CamPos ; Compute light direction vector
-            ;VectorNormalize lightDir, lightDir
-
-            ; Compute halfway vector
-            ;add halfDir, LightDirection, CamPos
-            ;VectorNormalize halfDir, halfDir
             HalfAngle halfDir, LightDirection, CamPos
 
             iadd  currLightPtr, lightSpecs, currDirLight

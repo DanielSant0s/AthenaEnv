@@ -24,6 +24,8 @@ register_vu_program(VU1Draw3DCS_Skin);
 register_vu_program(VU1Draw3DLCS_Skin);
 register_vu_program(VU1Draw3DLCSS_Skin);
 
+register_vu_program(VU1Draw3DLCS_Ref);
+
 vu_mpg *vu1_colors = NULL;
 vu_mpg *vu1_lights = NULL;
 vu_mpg *vu1_specular = NULL;
@@ -32,67 +34,14 @@ vu_mpg *vu1_colors_skinned = NULL;
 vu_mpg *vu1_lights_skinned = NULL;
 vu_mpg *vu1_specular_skinned = NULL;
 
+vu_mpg *vu1_lights_reflection = NULL;
+
 MATRIX view_screen;
 MATRIX world_view;
 MATRIX world_screen;
 
 FIVECTOR screen_scale;
 
-VECTOR zero_bump_offset = { 0.0f, 0.0f, 0.0f, 0.0f };
-
-void draw_vu1_with_colors(athena_object_data *obj, bool bump_pass);
-void draw_vu1_with_lights(athena_object_data *obj, bool bump_pass);
-void draw_vu1_with_spec_lights(athena_object_data *obj, bool bump_pass);
-void draw_vu1_with_bump_mapping(athena_object_data *obj, bool bump_pass);
-
-void (*render_funcs[])(athena_object_data *obj, bool bump_pass) = {
-	draw_vu1_with_colors,
-	draw_vu1_with_lights,
-	draw_vu1_with_spec_lights,
-	draw_vu1_with_bump_mapping
-};
-
-void render_object(athena_object_data *obj) {
-	render_funcs[obj->data->pipeline](obj, false);
-}
-
-void new_render_object(athena_object_data *obj, athena_render_data *data) {
-	obj->data = data;
-
-	obj->bump_offset_buffer = &zero_bump_offset;
-
-	if (data->skin_data) {
-		obj->anim_controller.current = NULL;
-
-		obj->bones = (athena_bone_transform*)malloc(data->skeleton->bone_count * sizeof(athena_bone_transform));
-		obj->bone_matrices = (MATRIX*)malloc(data->skeleton->bone_count * sizeof(MATRIX));
-
-		for (int i = 0; i < data->skeleton->bone_count; i++) {
-			copy_vector(obj->bones[i].position, data->skeleton->bones[i].position);
-			copy_vector(obj->bones[i].rotation, data->skeleton->bones[i].rotation);
-			copy_vector(obj->bones[i].scale, data->skeleton->bones[i].scale);
-		}
-
-		update_bone_transforms(obj);
-	}
-
-	obj->position[0] = 0.0f;
-	obj->position[1] = 0.0f;
-	obj->position[2] = 0.0f;
-	obj->position[3] = 1.0f;
-
-	obj->rotation[0] = 0.0f;
-	obj->rotation[1] = 0.0f;
-	obj->rotation[2] = 0.0f;
-	obj->rotation[3] = 1.0f;
-
-	obj->scale[0] = 1.0f;
-	obj->scale[1] = 1.0f;
-	obj->scale[2] = 1.0f;
-	obj->scale[3] = 1.0f;
-
-	update_object_space(obj);
-}
 
 void init3D(float fov, float near, float far) {
 	GSGLOBAL* gsGlobal = getGSGLOBAL();
@@ -118,6 +67,8 @@ void init3D(float fov, float near, float far) {
 	vu1_colors_skinned = vu_mpg_load_buffer(embed_vu_code_ptr(VU1Draw3DCS_Skin), embed_vu_code_size(VU1Draw3DCS_Skin), VECTOR_UNIT_1, false);
 	vu1_lights_skinned = vu_mpg_load_buffer(embed_vu_code_ptr(VU1Draw3DLCS_Skin), embed_vu_code_size(VU1Draw3DLCS_Skin), VECTOR_UNIT_1, false);
 	vu1_specular_skinned = vu_mpg_load_buffer(embed_vu_code_ptr(VU1Draw3DLCSS_Skin), embed_vu_code_size(VU1Draw3DLCSS_Skin), VECTOR_UNIT_1, false);
+
+	vu1_lights_reflection = vu_mpg_load_buffer(embed_vu_code_ptr(VU1Draw3DLCS_Ref), embed_vu_code_size(VU1Draw3DLCS_Ref), VECTOR_UNIT_1, false);
 
 }
 
@@ -163,6 +114,95 @@ void SetLightAttribute(int id, float x, float y, float z, int attr) {
 			dir_lights.specular[id][2] = z;
 			break;
 	}
+}
+
+
+VECTOR zero_bump_offset = { 0.0f, 0.0f, 0.0f, 0.0f };
+
+void draw_vu1_with_colors(athena_object_data *obj, bool bump_pass);
+void draw_vu1_with_lights(athena_object_data *obj, bool bump_pass);
+void draw_vu1_with_spec_lights(athena_object_data *obj, bool bump_pass);
+void draw_vu1_with_lights_ref(athena_object_data *obj, bool bump_pass);
+
+void (*render_funcs[])(athena_object_data *obj, bool bump_pass) = {
+	draw_vu1_with_colors,
+	draw_vu1_with_lights,
+	draw_vu1_with_spec_lights
+};
+
+void render_object(athena_object_data *obj) {
+	uint64_t old_alpha = get_screen_param(ALPHA_BLEND_EQUATION);
+	uint64_t old_colclamp = get_screen_param(COLOR_CLAMP_MODE);
+
+	render_funcs[obj->data->pipeline](obj, false);
+	
+	if (obj->data->attributes.has_refmap) {
+		set_screen_param(ALPHA_BLEND_EQUATION, ALPHA_EQUATION(SRC_RGB, ZERO_RGB, ALPHA_FIX, DST_RGB, 0x40));
+
+		draw_vu1_with_lights_ref(obj, false);
+	}
+
+	if (obj->data->attributes.has_bumpmap) {
+    	VECTOR light_dir;
+
+		matrix_functions->apply(light_dir, obj->transform, dir_lights.direction[0]);
+
+		vector_functions->normalize(light_dir, light_dir);
+		
+    	obj->bump_offset[0] = light_dir[0] * 0.008f;
+    	obj->bump_offset[1] = light_dir[1] * 0.008f;
+
+		set_screen_param(COLOR_CLAMP_MODE, 0);
+
+		obj->bump_offset_buffer = &obj->bump_offset;
+		set_screen_param(ALPHA_BLEND_EQUATION, ALPHA_EQUATION(SRC_RGB, ZERO_RGB, ALPHA_FIX, DST_RGB, 0x34));
+		draw_vu1_with_colors(obj, true);
+
+		obj->bump_offset_buffer = &zero_bump_offset;
+		set_screen_param(ALPHA_BLEND_EQUATION, ALPHA_EQUATION(ZERO_RGB, SRC_RGB, ALPHA_FIX, DST_RGB, 0x34));
+		draw_vu1_with_colors(obj, true);
+	}	
+
+	set_screen_param(COLOR_CLAMP_MODE, old_colclamp);
+	set_screen_param(ALPHA_BLEND_EQUATION, old_alpha);
+}
+
+void new_render_object(athena_object_data *obj, athena_render_data *data) {
+	obj->data = data;
+
+	obj->bump_offset_buffer = &zero_bump_offset;
+
+	if (data->skin_data) {
+		obj->anim_controller.current = NULL;
+
+		obj->bones = (athena_bone_transform*)malloc(data->skeleton->bone_count * sizeof(athena_bone_transform));
+		obj->bone_matrices = (MATRIX*)malloc(data->skeleton->bone_count * sizeof(MATRIX));
+
+		for (int i = 0; i < data->skeleton->bone_count; i++) {
+			copy_vector(obj->bones[i].position, data->skeleton->bones[i].position);
+			copy_vector(obj->bones[i].rotation, data->skeleton->bones[i].rotation);
+			copy_vector(obj->bones[i].scale, data->skeleton->bones[i].scale);
+		}
+
+		update_bone_transforms(obj);
+	}
+
+	obj->position[0] = 0.0f;
+	obj->position[1] = 0.0f;
+	obj->position[2] = 0.0f;
+	obj->position[3] = 1.0f;
+
+	obj->rotation[0] = 0.0f;
+	obj->rotation[1] = 0.0f;
+	obj->rotation[2] = 0.0f;
+	obj->rotation[3] = 1.0f;
+
+	obj->scale[0] = 1.0f;
+	obj->scale[1] = 1.0f;
+	obj->scale[2] = 1.0f;
+	obj->scale[3] = 1.0f;
+
+	update_object_space(obj);
 }
 
 void draw_bbox(athena_object_data* obj, Color color) {
@@ -270,12 +310,9 @@ void process_animation(athena_object_data *obj) {
 
 void update_object_space(athena_object_data *obj) {
   	matrix_functions->identity(obj->transform);
+
   	matrix_functions->rotate(obj->transform, obj->transform, obj->rotation);
-
 	matrix_functions->scale(obj->transform, obj->transform, obj->scale);
-
-	matrix_functions->copy(obj->local_light, obj->transform);
-
   	matrix_functions->translate(obj->transform, obj->transform, obj->position);
 }
 
@@ -478,8 +515,7 @@ void draw_vu1_with_lights(athena_object_data *obj, bool bump_pass) {
 	{
 		unpack_list_append(packet, &screen_scale,       1); 
 
-		unpack_list_append(packet, world_screen,       4);
-		unpack_list_append(packet, obj->local_light,   4);
+		unpack_list_append(packet, world_screen,       8);
 
 		unpack_list_append(packet, getCameraPosition(), 1);
 		unpack_list_append(packet, &dir_lights,        16);
@@ -652,7 +688,6 @@ void draw_vu1_with_spec_lights(athena_object_data *obj, bool bump_pass) {
 		unpack_list_append(packet, &screen_scale,       1);
 
 		unpack_list_append(packet, world_screen,       4);
-		unpack_list_append(packet, obj->local_light,        4);
 
 		unpack_list_append(packet, getCameraPosition(), 1);
 		unpack_list_append(packet, &dir_lights,         16);
@@ -791,32 +826,173 @@ void draw_vu1_with_spec_lights(athena_object_data *obj, bool bump_pass) {
 	);
 }
 
-void draw_vu1_with_bump_mapping(athena_object_data *obj, bool bump_pass) {
-	uint64_t old_alpha = get_screen_param(ALPHA_BLEND_EQUATION);
-	uint64_t old_colclamp = get_screen_param(COLOR_CLAMP_MODE);
+void draw_vu1_with_lights_ref(athena_object_data *obj, bool bump_pass) {
+	athena_render_data *data = obj->data;
 
-    VECTOR light_dir;
+	int batch_size = BATCH_SIZE, mpg_addr = 0;
 
-	matrix_functions->apply(light_dir, obj->local_light, dir_lights.direction[0]);
+	if (data->skeleton) {
+		batch_size = BATCH_SIZE_SKINNED;
 
-	vector_functions->normalize(light_dir, light_dir);
-	
-    obj->bump_offset[0] = light_dir[0] * 0.005f;
-    obj->bump_offset[1] = light_dir[1] * 0.005f;
+		process_animation(obj);
 
-	set_screen_param(COLOR_CLAMP_MODE, 0);
+		update_bone_transforms(obj);
 
-	draw_vu1_with_spec_lights(obj, false);
+		mpg_addr = vu_mpg_preload(vu1_lights_reflection, true);
+	} else {
+		mpg_addr = vu_mpg_preload(vu1_lights_reflection, true);
+	}
+		
+	gsGlobal->PrimAAEnable = GS_SETTING_ON;
 
-	obj->bump_offset_buffer = &obj->bump_offset;
-	set_screen_param(ALPHA_BLEND_EQUATION, ALPHA_EQUATION(SRC_RGB, ZERO_RGB, ALPHA_FIX, DST_RGB, 0x34));
-	draw_vu1_with_colors(obj, true);
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 8); // 5 for unpack static data + 2 for flush with end
 
-	obj->bump_offset_buffer = &zero_bump_offset;
-	set_screen_param(ALPHA_BLEND_EQUATION, ALPHA_EQUATION(ZERO_RGB, SRC_RGB, ALPHA_FIX, DST_RGB, 0x34));
-	draw_vu1_with_colors(obj, true);
+	owl_add_unpack_data(packet, 141, (void*)obj->transform, 4, 0);
 
-	set_screen_param(COLOR_CLAMP_MODE, old_colclamp);
-	set_screen_param(ALPHA_BLEND_EQUATION, old_alpha);
+	if (obj->bone_matrices) {
+		owl_add_unpack_data(packet, 145, (void*)obj->bone_matrices, data->skeleton->bone_count*4, 0);
+	}
 
+	unpack_list_open(packet, 0, false);
+	{
+		unpack_list_append(packet, &screen_scale,       1); 
+
+		unpack_list_append(packet, world_screen,       8);
+
+		unpack_list_append(packet, getCameraPosition(), 1);
+		unpack_list_append(packet, &dir_lights,        16);
+	}
+	unpack_list_close(packet);
+
+	//owl_add_end_tag(packet);
+
+	int last_index = -1;
+	GSTEXTURE* tex = NULL;
+	int texture_id;
+	for(int i = 0; i < data->material_index_count; i++) {
+		bool texture_mapping = ((data->materials[data->material_indices[i].index].ref_texture_id != -1));
+
+		if (texture_mapping) {
+			GSTEXTURE *cur_tex = data->textures[data->materials[data->material_indices[i].index].ref_texture_id];
+			if (cur_tex != tex) {
+				texture_id = texture_manager_bind(gsGlobal, cur_tex, true);
+				tex = cur_tex;
+			}
+		} else {
+			continue;
+		}
+
+		VECTOR* positions = &data->positions[last_index+1];
+		VECTOR* normals = &data->normals[last_index+1];
+		VECTOR* colours = &data->colours[last_index+1];
+		vertex_skin_data* skin_data = data->skin_data? &data->skin_data[last_index+1] : NULL;
+
+		int idxs_to_draw = (data->material_indices[i].end-last_index);
+		int idxs_drawn = 0;
+
+		while (idxs_to_draw > 0) {
+			owl_query_packet(CHANNEL_VIF1, texture_mapping? 19 : 9);
+
+			int count = batch_size;
+			if (idxs_to_draw < batch_size)
+			{
+				count = idxs_to_draw;
+			}
+
+			if (texture_mapping) {
+				append_texture_tags(packet, tex, texture_id, COLOR_MODULATE);
+			}
+
+			giftag_t clip_tag = {
+				.data = {
+					.NLOOP = 0,
+					.EOP = 1,
+					.PRE = 1,
+					.PRIM = (prim_reg_t) {
+						.data = { 
+							.PRIM = GS_PRIM_PRIM_TRIFAN,
+							.IIP = data->attributes.shade_model,
+							.TME = texture_mapping,
+							.FGE = gsGlobal->PrimFogEnable,
+							.ABE = gsGlobal->PrimAlphaEnable,
+							.AA1 = gsGlobal->PrimAAEnable,
+							.FST = 0,
+							.CTXT = 0,
+							.FIX = 0
+						}
+					}.raw,
+					.FLG = 0,
+					.NREG = 3
+
+				}
+			};
+
+			giftag_t prim_tag = {
+				.data = {
+					.NLOOP = 0,
+					.EOP = 1,
+					.PRE = 1,
+					.PRIM = (prim_reg_t) {
+						.data = { 
+							.PRIM = (data->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE),
+							.IIP = data->attributes.shade_model,
+							.TME = texture_mapping,
+							.FGE = gsGlobal->PrimFogEnable,
+							.ABE = gsGlobal->PrimAlphaEnable,
+							.AA1 = gsGlobal->PrimAAEnable,
+							.FST = 0,
+							.CTXT = 0,
+							.FIX = 0
+						}
+					}.raw,
+					.FLG = 0,
+					.NREG = 3
+
+				}
+			};
+
+			data->materials[data->material_indices[i].index].prim_tag.dword[1] = DRAW_STQ2_REGLIST;
+			data->materials[data->material_indices[i].index].prim_tag.dword[0] = prim_tag.raw;
+
+			data->materials[data->material_indices[i].index].clip_prim_tag.f[3] = data->attributes.face_culling;
+
+			data->materials[data->material_indices[i].index].clip_prim_tag.sword[2] = data->tristrip;
+			data->materials[data->material_indices[i].index].clip_prim_tag.sword[1] = (data->attributes.accurate_clipping? (clip_tag.raw >> 32) : 0);
+
+			owl_add_unpack_data(packet, 26, (void*)&data->materials[data->material_indices[i].index].clip_prim_tag, 1, 0);
+
+			unpack_list_open(packet, 0, true);
+			{
+				unpack_list_append(packet, (void*)&data->materials[data->material_indices[i].index].prim_tag, 1);
+				unpack_list_append(packet, (void*)&data->materials[data->material_indices[i].index].diffuse, 1);
+				if (data->skin_data) {
+					// unpack_list_append(packet, &skin_data[idxs_drawn], count*2);
+				}
+				unpack_list_append(packet, &positions[idxs_drawn], count);
+				unpack_list_append(packet, &normals[idxs_drawn], count);
+				unpack_list_append(packet, &colours[idxs_drawn], count);
+			}
+			unpack_list_close(packet);
+
+			owl_add_cnt_tag(packet, 1, owl_vif_code_double(VIF_CODE(0, 0, VIF_NOP, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
+			
+			owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));
+			owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+			owl_add_uint(packet, VIF_CODE(count, 0, VIF_ITOP, 0));
+			owl_add_uint(packet, VIF_CODE(mpg_addr, 0, (last_index == -1? VIF_MSCALF : VIF_MSCNT), 0)); 
+
+			idxs_to_draw -= count;
+			idxs_drawn += count;
+			
+		}
+
+		last_index = data->material_indices[i].end;
+	}
+
+	owl_add_vif_codes(packet,
+		VIF_CODE(0, 0, VIF_FLUSH, 0),
+		VIF_CODE(0, 0, VIF_FLUSH, 0),
+		VIF_CODE(0, 0, VIF_NOP, 0),
+		VIF_CODE(0, 0, VIF_NOP, 0)
+	);
 }

@@ -4,8 +4,7 @@
 const pipelines = [
     "NO_LIGHTS",
     "DEFAULT",
-    "SPECULAR",
-    "BUMPMAP"
+    "SPECULAR"
 ];
 
 const font = new Font("default");
@@ -69,6 +68,9 @@ const vertList = Render.vertexList(triPositions,
 const listtest = new RenderData(vertList);
 listtest.face_culling = Render.CULL_FACE_NONE;
 
+const skytex = new Image("env.png");
+skytex.filter = LINEAR;
+
 const trilist_materials = listtest.materials;
 
 trilist_materials[0].diffuse.r = 0.0;
@@ -88,13 +90,23 @@ const dragonmesh = new RenderData("dragon.obj", dragontex);
 const monkeytex = new Image("monkey.png");
 const monkeymesh = new RenderData("monkey.obj", monkeytex);
 
+monkeymesh.setTexture(1, skytex);
+
+const dragon_materials = monkeymesh.materials;
+
+dragon_materials[0].ref_texture_id = 1;
+
+monkeymesh.materials = dragon_materials;
+
 const moontex = new Image("moon.png");
 
 const car = new RenderData("Car.obj");
+car.setTexture(0, skytex);
 
 const car_materials = car.materials;
 
 const new_materials = car_materials.map((mat) => {
+    mat.ref_texture_id = 0;
     if (mat.diffuse.r > 0.4 && mat.diffuse.g == 0.0 && mat.diffuse.b == 0.0) {
         mat.diffuse.r = 0.25;
         mat.diffuse.b = 0.5;
@@ -190,6 +202,7 @@ while(true) {
     }
 
     Camera.target(0.0f, 0.0f, savedrz);
+    Camera.target(savedrx,  savedry, savedrz);
 
     if (rx || ry) {
         Lights.set(light, Lights.DIRECTION, savedrx,  savedry, 1.0);

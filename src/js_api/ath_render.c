@@ -134,6 +134,8 @@ static JSValue athena_render_data_ctor(JSContext *ctx, JSValueConst new_target, 
 		ro->m.materials[0].disolve = 1.0f;
 
 		ro->m.materials[0].texture_id = -1;
+    	ro->m.materials[0].bump_texture_id = -1;  
+    	ro->m.materials[0].ref_texture_id = -1; 
 
 		ro->m.material_indices[0].index = 0;
 		ro->m.material_indices[0].end = ro->m.index_count;
@@ -439,6 +441,8 @@ static JSValue js_render_data_get(JSContext *ctx, JSValueConst this_val, int mag
 					JS_DefinePropertyValueStr(ctx, obj, "disolve", JS_NewFloat32(ctx, ro->m.materials[i].disolve), JS_PROP_C_W_E);
 
 					JS_DefinePropertyValueStr(ctx, obj, "texture_id", JS_NewInt32(ctx, ro->m.materials[i].texture_id), JS_PROP_C_W_E);
+					JS_DefinePropertyValueStr(ctx, obj, "ref_texture_id", JS_NewInt32(ctx, ro->m.materials[i].ref_texture_id), JS_PROP_C_W_E);
+					JS_DefinePropertyValueStr(ctx, obj, "bump_texture_id", JS_NewInt32(ctx, ro->m.materials[i].bump_texture_id), JS_PROP_C_W_E);
 
 					JS_DefinePropertyValueUint32(ctx, arr, i, obj, JS_PROP_C_W_E);
 				}
@@ -535,14 +539,13 @@ static JSValue js_render_data_set(JSContext *ctx, JSValueConst this_val, JSValue
 		case 1:
 			{
 				uint32_t material_count = 0;
+				int has_refmap = 0;
 
 				JS_ToUint32(ctx, &material_count, JS_GetPropertyStr(ctx, val, "length"));
 
 				if (material_count > ro->m.material_count) {
 					ro->m.materials = realloc(ro->m.materials, material_count);
 				}
-
-				
 
 				for (int i = 0; i < material_count; i++) {
 					JSValue obj = JS_GetPropertyUint32(ctx, val, i);
@@ -558,6 +561,17 @@ static JSValue js_render_data_set(JSContext *ctx, JSValueConst this_val, JSValue
 					JS_ToFloat32(ctx,  &ro->m.materials[i].disolve,             JS_GetPropertyStr(ctx, obj, "disolve"));
 
 					JS_ToInt32(ctx,    &ro->m.materials[i].texture_id,          JS_GetPropertyStr(ctx, obj, "texture_id"));
+					JS_ToInt32(ctx,    &ro->m.materials[i].ref_texture_id,          JS_GetPropertyStr(ctx, obj, "ref_texture_id"));
+
+					if (ro->m.materials[i].ref_texture_id != -1 && !ro->m.attributes.has_refmap) {
+						ro->m.attributes.has_refmap = true;
+					}
+
+					JS_ToInt32(ctx,    &ro->m.materials[i].bump_texture_id,          JS_GetPropertyStr(ctx, obj, "bump_texture_id"));
+
+					if (ro->m.materials[i].bump_texture_id != -1 && !ro->m.attributes.has_bumpmap) {
+						ro->m.attributes.has_bumpmap = true;
+					}
 
 					JS_FreeValue(ctx, obj);
 				}
@@ -701,20 +715,17 @@ static JSValue athena_render_object_ctor(JSContext *ctx, JSValueConst new_target
 
 	new_render_object(&ro->obj, &rd->m);
 
-    JSValue transform_matrix = JS_UNDEFINED, local_light_matrix = JS_UNDEFINED;
+    JSValue transform_matrix = JS_UNDEFINED;
 
     transform_matrix = JS_NewObjectClass(ctx, get_matrix4_class_id());
-	local_light_matrix = JS_NewObjectClass(ctx, get_matrix4_class_id());
 
     JS_SetOpaque(transform_matrix, &ro->obj.transform);
-	JS_SetOpaque(local_light_matrix, &ro->obj.local_light);
 
 register_3d_object_data:
     proto = JS_GetPropertyStr(ctx, new_target, "prototype");
     obj = JS_NewObjectProtoClass(ctx, proto, js_render_object_class_id);
 
 	JS_DefinePropertyValueStr(ctx, obj, "transform", transform_matrix, JS_PROP_C_W_E);
-	JS_DefinePropertyValueStr(ctx, obj, "local_light", local_light_matrix, JS_PROP_C_W_E);
 
 	if (ro->obj.data->skin_data) {
 		JSValue bone_transforms = JS_NewArray(ctx);
@@ -910,6 +921,8 @@ static JSValue athena_newmaterial(JSContext *ctx, JSValue this_val, int argc, JS
 	JS_DefinePropertyValueStr(ctx, obj, "transmission_filter", argv[7], JS_PROP_C_W_E);
 	JS_DefinePropertyValueStr(ctx, obj, "disolve",             argv[8], JS_PROP_C_W_E);
 	JS_DefinePropertyValueStr(ctx, obj, "texture_id",          argv[9], JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "bump_texture_id",          argv[10], JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "ref_texture_id",          argv[11], JS_PROP_C_W_E);
 
 	return obj;
 }
@@ -955,7 +968,6 @@ static const JSCFunctionListEntry render_funcs[] = {
 	JS_PROP_INT32_DEF("PL_NO_LIGHTS",                       PL_NO_LIGHTS, JS_PROP_CONFIGURABLE),
 	JS_PROP_INT32_DEF("PL_DEFAULT",                           PL_DEFAULT, JS_PROP_CONFIGURABLE),
 	JS_PROP_INT32_DEF("PL_SPECULAR",                         PL_SPECULAR, JS_PROP_CONFIGURABLE),
-	JS_PROP_INT32_DEF("PL_BUMPMAP",                           PL_BUMPMAP, JS_PROP_CONFIGURABLE),
 	JS_PROP_FLOAT_DEF("CULL_FACE_NONE",                   CULL_FACE_NONE, JS_PROP_CONFIGURABLE),
 	JS_PROP_FLOAT_DEF("CULL_FACE_BACK",                   CULL_FACE_BACK, JS_PROP_CONFIGURABLE),
 	JS_PROP_FLOAT_DEF("CULL_FACE_FRONT",                 CULL_FACE_FRONT, JS_PROP_CONFIGURABLE),

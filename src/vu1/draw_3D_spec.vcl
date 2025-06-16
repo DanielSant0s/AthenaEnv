@@ -67,7 +67,6 @@ cull_init:
 
     ;//////////// --- Load data 1 --- /////////////
     ; Updated once per mesh
-    MatrixLoad	LocalLight,     LIGHT_MATRIX,  vi00   ; load local light matrix
     ilw.w       dirLightQnt,    NUM_DIR_LIGHTS(vi00)  ; load active directional lights
     lq.xyz      CamPos,         CAMERA_POSITION(vi00) ; load program params
     iaddiu      lightDirs,      vi00,    LIGHT_DIRECTION_PTR       
@@ -107,7 +106,7 @@ culled_init:
     ;////////////////////////////////////////////
 
     ;/////////////// --- Loop --- ///////////////
-    iadd vertexCounter, iBase, vertCount ; loop vertCount times
+    iadd vertexCounter, vi00, vertCount ; loop vertCount times
     vertexLoop:
 
         ;////////// --- Load loop data --- //////////
@@ -159,10 +158,7 @@ culled_init:
         ;////////////////////////////////////////////
 
         ;//////////////// - NORMALS - /////////////////
-        MatrixMultiplyVertex	normal,    LocalLight, inNorm ; transform each normal by the matrix
-        MatrixMultiplyVertex	lightvert, LocalLight, inVert ; transform each normal by the matrix
-        div         q,      vf00[w],    normal[w]   ; perspective divide (1/vert[w]):
-        mul.xyz     normal, normal,     q
+        MatrixMultiplyVector	normal,    ObjectMatrix, inNorm ; transform each normal by the matrix
         
         move light, vf00
         move intensity, vf00
@@ -186,15 +182,6 @@ culled_init:
             mul diffuse, LightDiffuse, intensity[x]
             add.xyz light, light, diffuse
 
-            ; Blinn-Phong Lighting Calculation
-            ;VectorNormalize CamPos, CamPos
-
-            ;sub lightDir, lightvert, CamPos ; Compute light direction vector
-            ;VectorNormalize lightDir, lightDir
-
-            ; Compute halfway vector
-            ;add halfDir, LightDirection, CamPos
-            ;VectorNormalize halfDir, halfDir
             HalfAngle halfDir, LightDirection, CamPos
 
             lq LightSpecular, LIGHT_SPECULAR_PTR(currDirLight)
@@ -227,7 +214,7 @@ culled_init:
         iaddiu          destAddress,    destAddress,    3
 
         iaddi   vertexCounter,  vertexCounter,  -1	; decrement the loop counter 
-        ibne    vertexCounter,  iBase,   vertexLoop	; and repeat if needed
+        ibne    vertexCounter,  vi00,   vertexLoop	; and repeat if needed
 
     ;//////////////////////////////////////////// 
 
@@ -276,6 +263,8 @@ init:
 
     .include "vu1/proc/setup_vertex_queue.i"
 
+    iadd vertexCounter, vi00, vertCount ; loop vertCount times
+
     loop:
 
         ;////////// --- Load loop data --- //////////
@@ -304,11 +293,7 @@ init:
         ;////////////////////////////////////////////
 
         ;//////////////// - NORMALS - /////////////////
-        MatrixLoad	LocalLight,     LIGHT_MATRIX, vi00     ; load local light matrix
-
-        MatrixMultiplyVertex	normal,    LocalLight, inNorm ; transform each normal by the matrix
-        div         q,      vf00[w],    normal[w]   ; perspective divide (1/vert[w]):
-        mul.xyz     normal, normal,     q
+        MatrixMultiplyVector	normal,    ObjectMatrix, inNorm ; transform each normal by the matrix
         
         move light, vf00
         move intensity, vf00
@@ -388,8 +373,8 @@ init:
 
         iaddiu          outputAddress,  outputAddress,  3
 
-        iaddi   vertCount,  vertCount,  -1	; decrement the loop counter 
-        ibne    vertCount,  vi00,   loop	; and repeat if needed
+        iaddi   vertexCounter,  vertexCounter,  -1	; decrement the loop counter 
+        ibne    vertexCounter,  vi00,   loop	; and repeat if needed
 
     ;//////////////////////////////////////////// 
 
