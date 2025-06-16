@@ -59,6 +59,8 @@ void loadOBJ(athena_render_data* res_m, const char* path, GSTEXTURE* text) {
 
 	res_m->texture_count = 0;
 	res_m->textures = NULL;
+    res_m->attributes.has_bumpmap = false;
+    res_m->attributes.has_refmap = false;
 
 	if (m->material_count && !m->strip_count) {
 		res_m->materials = (ath_mat *)malloc(m->material_count*sizeof(ath_mat));
@@ -81,6 +83,8 @@ void loadOBJ(athena_render_data* res_m, const char* path, GSTEXTURE* text) {
 			res_m->materials[i].disolve =   m->materials[i].d;
 
 			res_m->materials[i].texture_id = -1;
+            res_m->materials[i].bump_texture_id = -1;
+            res_m->materials[i].ref_texture_id = -1;
 
 			if (m->materials[i].map_Kd.name) {
 				bool prev_loaded = false;
@@ -115,6 +119,8 @@ void loadOBJ(athena_render_data* res_m, const char* path, GSTEXTURE* text) {
 		res_m->materials[0].disolve = 1.0f;
 
 		res_m->materials[0].texture_id = -1;
+        res_m->materials[0].bump_texture_id = -1;
+        res_m->materials[0].ref_texture_id = -1;
 
 		if((text)) {
 			res_m->materials[0].texture_id = 0;
@@ -252,6 +258,7 @@ void load_gltf_material(ath_mat* mat, const cgltf_material* gltf_mat, athena_ren
     mat->disolve = 1.0f;
     mat->texture_id = -1;
     mat->bump_texture_id = -1;  
+    mat->ref_texture_id = -1; 
     mat->bump_scale = 1.0f;     
     
     if (!gltf_mat) return;
@@ -359,6 +366,8 @@ void load_bump_texture_by_index(ath_mat* mat, int texture_index, athena_render_d
             bump_texture->Filter = GS_FILTER_LINEAR;
 
             append_texture(res_m, bump_texture);
+
+            res_m->attributes.has_bumpmap = true;
         }
     }
 }
@@ -543,6 +552,9 @@ void loadGLTF(athena_render_data* res_m, const char* path, GSTEXTURE* text) {
 
     res_m->texture_count = 0;
     res_m->textures = NULL;
+
+    res_m->attributes.has_bumpmap = false;
+    res_m->attributes.has_refmap = false;
 
     if (data->materials_count > 0) {
         res_m->materials = (ath_mat*)malloc(data->materials_count * sizeof(ath_mat));

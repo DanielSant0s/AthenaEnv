@@ -7,7 +7,7 @@
 
 static JSClassID js_vector4_class_id;
 
-JSClassID get_vector4_class_id(){
+JSClassID get_vector4_class_id() {
 	return js_vector4_class_id;
 }
 

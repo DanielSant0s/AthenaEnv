@@ -74,7 +74,8 @@ VU1_MPGS = draw_3D_colors.o \
            draw_3D_spec.o \
            draw_3D_colors_skin.o \
            draw_3D_lights_skin.o \
-           draw_3D_spec_skin.o
+           draw_3D_spec_skin.o \
+           draw_3D_lights_ref.o 
 
 # VU0_MPGS = matrix_multiply.o
 
@@ -210,7 +211,7 @@ all: $(DIR_GUARD) $(EXT_LIBS) $(EE_OBJS)
 	
 	ps2-packer $(EE_BIN) $(EE_BIN_PKD) > /dev/null
 
- # vu1_mpgs: src/vu1/draw_3D_colors.vsm src/vu1/draw_3D_lights.vsm src/vu1/draw_3D_spec.vsm src/vu1/draw_3D_colors_skin.vsm src/vu1/draw_3D_lights_skin.vsm src/vu1/draw_3D_spec_skin.vsm
+ # vu1_mpgs: src/vu1/draw_3D_colors.vsm src/vu1/draw_3D_lights.vsm src/vu1/draw_3D_spec.vsm src/vu1/draw_3D_colors_skin.vsm src/vu1/draw_3D_lights_skin.vsm src/vu1/draw_3D_spec_skin.vsm src/vu1/draw_3D_lights_ref.vsm 
  # vu0_mpgs: src/vu0/matrix_multiply.vsm
 
 debug: $(DIR_GUARD) $(EXT_LIBS) $(EE_OBJS) 

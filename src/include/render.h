@@ -54,7 +54,6 @@ typedef enum {
 	PL_NO_LIGHTS,
 	PL_DEFAULT,
 	PL_SPECULAR,
-    PL_BUMPMAP,
 } eRenderPipelines;
 
 typedef enum {
@@ -63,11 +62,13 @@ typedef enum {
 	SHADE_BLINN_PHONG,
 } eRenderShadeModels;
 
-typedef struct {
+typedef struct { 
 	int accurate_clipping; 
 	float face_culling; 
 	int texture_mapping;
 	int shade_model; // 0 = flat, 1 = gouraud
+    int has_refmap; 
+    int has_bumpmap; 
 } RenderAttributes;
 
 
@@ -158,7 +159,7 @@ typedef struct
 
 	int texture_id;
     int bump_texture_id;
-    int env_texture_id;
+    int ref_texture_id;
 } ath_mat;
 
 typedef struct {
@@ -196,7 +197,6 @@ typedef struct athena_render_data {
 } athena_render_data;
 
 typedef struct athena_object_data {
-	MATRIX local_light;
 	MATRIX transform;
 
     VECTOR position;
