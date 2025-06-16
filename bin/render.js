@@ -201,7 +201,6 @@ while(true) {
         savedrz += 0.05f;
     }
 
-    Camera.target(0.0f, 0.0f, savedrz);
     Camera.target(savedrx,  savedry, savedrz);
 
     if (rx || ry) {
