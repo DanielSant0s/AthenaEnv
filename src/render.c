@@ -687,7 +687,7 @@ void draw_vu1_with_spec_lights(athena_object_data *obj, bool bump_pass) {
 	{
 		unpack_list_append(packet, &screen_scale,       1);
 
-		unpack_list_append(packet, world_screen,       4);
+		unpack_list_append(packet, world_screen,       8);
 
 		unpack_list_append(packet, getCameraPosition(), 1);
 		unpack_list_append(packet, &dir_lights,         16);

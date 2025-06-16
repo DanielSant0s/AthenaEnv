@@ -82,7 +82,6 @@ listtest.materials = trilist_materials;
 
 const gltf_box = new RenderData("box_bump.gltf");
 //gltf_box.texture_mapping = false;
-gltf_box.pipeline = Render.PL_BUMPMAP;
 
 const dragontex = new Image("dragon.png");
 const dragonmesh = new RenderData("dragon.obj", dragontex);
