@@ -23,6 +23,8 @@ static const u64 BLACK_RGBAQ   = GS_SETREG_RGBAQ(0x00,0x00,0x00,0x80,0x00);
 
 GSGLOBAL *gsGlobal = NULL;
 
+GSTEXTURE fb[3] = { NULL };
+
 void (*flipScreen)();
 
 static bool vsync = true;
@@ -189,11 +191,7 @@ void set_register(int reg_id, uint64_t data) {
 	gs_reg_cache[reg_id] = data;
 }
 
-uint64_t get_register(int reg_id) {
-	return gs_reg_cache[reg_id];
-}
-
-void set_alpha_blend_mode(uint64_t alpha_equation) {
+void flush_gs_texcache() {
 	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 4);
  
 	owl_add_cnt_tag(packet, 3, 0);
@@ -201,11 +199,15 @@ void set_alpha_blend_mode(uint64_t alpha_equation) {
 	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
 	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
 	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
-	owl_add_uint(packet, VIF_CODE(2, 0, VIF_DIRECT, 0)); // 3 giftags
+	owl_add_uint(packet, VIF_CODE(2, 0, VIF_DIRECT, 0)); 
 
 	owl_add_tag(packet, GIF_AD, VU_GS_GIFTAG(1, 1, NULL, 0, 0, 0, 1));
 
-	owl_add_tag(packet, GS_ALPHA_1, alpha_equation);
+	owl_add_tag(packet, GS_TEXFLUSH, 1);
+}
+
+uint64_t get_register(int reg_id) {
+	return gs_reg_cache[reg_id];
 }
 
 void page_clear(Color color) {
@@ -315,6 +317,9 @@ void setactive(GSGLOBAL *gsGlobal)
 
 	gs_reg_cache[GS_CACHE_SCISSOR_2] = gs_reg_cache[GS_CACHE_SCISSOR] = GS_SETREG_SCISSOR_1( 0, gsGlobal->Width - 1, 0, gsGlobal->Height - 1 );
 	gs_reg_cache[GS_CACHE_FRAME_2] = gs_reg_cache[GS_CACHE_FRAME] = GS_SETREG_FRAME_1( gsGlobal->ScreenBuffer[gsGlobal->ActiveBuffer & 1] / 8192, gsGlobal->Width / 64, gsGlobal->PSM, 0 );
+
+	fb[gsGlobal->ActiveBuffer & 1].Vram = gsGlobal->ScreenBuffer[gsGlobal->ActiveBuffer];
+	fb[gsGlobal->ActiveBuffer].Vram = gsGlobal->ScreenBuffer[gsGlobal->ActiveBuffer & 1];
 
 	// Context 1
 	owl_add_tag(packet, GS_SCISSOR_1, gs_reg_cache[GS_CACHE_SCISSOR]);
@@ -959,7 +964,7 @@ void init_screen(GSGLOBAL *gsGlobal)
 
 	*p_data++ = GS_DIMX;
 
-	*p_data++ = GS_SETREG_TEXA(0x00, 0, 0x80);
+	*p_data++ = GS_SETREG_TEXA(0x80, 0, 0x80);
 	*p_data++ = GS_TEXA;
 
 	if((gsGlobal->Dithering == GS_SETTING_ON) && ((gsGlobal->PSM == GS_PSM_CT16) || (gsGlobal->PSM == GS_PSM_CT16S))) {
@@ -1065,6 +1070,38 @@ void set_display_offset(GSGLOBAL *gsGlobal, int x, int y)
 			gsGlobal->DH - 1);		// Display area height
 }
 
+void setup_buffer_textures() {
+	for (int i = 0; i < 2; i++) {
+   		fb[i].Width = gsGlobal->Width;
+		fb[i].Height = gsGlobal->Height;
+		fb[i].PSM = gsGlobal->PSM;
+    	fb[i].ClutPSM = GS_PSM_CT32;
+
+		fb[i].Mem = NULL;
+		fb[i].Clut = NULL;
+		fb[i].Vram = gsGlobal->ScreenBuffer[i];
+		fb[i].VramClut = 0;
+		fb[i].Delayed = false;
+		fb[i].Filter = GS_FILTER_NEAREST;
+
+		gsKit_setup_tbw(&fb[i]);
+	}
+
+   	fb[2].Width = gsGlobal->Width;
+	fb[2].Height = gsGlobal->Height;
+	fb[2].PSM = gsGlobal->PSMZ;
+    fb[2].ClutPSM = GS_PSM_CT32;
+
+	fb[2].Mem = NULL;
+	fb[2].Clut = NULL;
+	fb[2].Vram = gsGlobal->ZBuffer;
+	fb[2].VramClut = 0;
+	fb[2].Delayed = false;
+	fb[2].Filter = GS_FILTER_NEAREST;
+
+	gsKit_setup_tbw(&fb[2]);
+}
+
 void setVideoMode(s16 mode, int width, int height, int psm, s16 interlace, s16 field, bool zbuffering, int psmz, bool double_buffering, uint8_t pass_count) {
 	gsGlobal->Mode = mode;
 	gsGlobal->Width = width;
@@ -1090,6 +1127,7 @@ void setVideoMode(s16 mode, int width, int height, int psm, s16 interlace, s16 f
 
 	texture_manager_init(gsGlobal);
 
+	setup_buffer_textures();
 
 	switchFlipScreenFunction();
 	
@@ -1140,6 +1178,8 @@ void init_graphics()
 	//gsKit_set_clamp(gsGlobal, GS_CMODE_REPEAT);
 
 	texture_manager_init(gsGlobal);
+
+	setup_buffer_textures();
 
 	DIntr();
 	int callback_id = AddIntcHandler(INTC_VBLANK_S, vsync_handler, 0);

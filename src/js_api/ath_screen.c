@@ -228,6 +228,45 @@ static JSValue athena_get_param(JSContext *ctx, JSValue this_val, int argc, JSVa
 	return JS_UNDEFINED;
 }
 
+JSValue js_screen_buffers[3] = { JS_UNDEFINED, JS_UNDEFINED, JS_UNDEFINED };
+
+static JSValue athena_getimage(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
+	int buffer_id;
+
+	JSImageData* image;
+
+	JS_ToInt32(ctx, &buffer_id, argv[0]);
+
+	if (js_screen_buffers[buffer_id] != JS_UNDEFINED) {
+		return js_screen_buffers[buffer_id];
+	}
+
+	GSTEXTURE *tex = &fb[buffer_id];
+
+	image = js_mallocz(ctx, sizeof(*image));
+    if (!image)
+        return JS_EXCEPTION;
+
+	image->delayed = false;
+	image->tex = tex;
+
+	image->loaded = true;
+	image->width = image->tex->Width;
+	image->height = image->tex->Height;
+	image->endx = image->tex->Width;
+	image->endy = image->tex->Height;
+
+	image->startx = 0.0f;
+	image->starty = 0.0f;
+	image->angle = 0.0f;
+	image->color = 0x80808080;
+
+    js_screen_buffers[buffer_id] = JS_NewObjectClass(ctx, get_img_class_id());    
+    JS_SetOpaque(js_screen_buffers[buffer_id], image);
+
+	return js_screen_buffers[buffer_id];
+}
+
 static const JSCFunctionListEntry module_funcs[] = {
     JS_CFUNC_DEF("flip", 0, athena_flip),
     JS_CFUNC_DEF("clear", 1, athena_clear),
@@ -315,6 +354,12 @@ static const JSCFunctionListEntry module_funcs[] = {
 	JS_PROP_INT32_DEF("Z24", GS_PSMZ_24, JS_PROP_CONFIGURABLE),
 	JS_PROP_INT32_DEF("Z16", GS_PSMZ_16, JS_PROP_CONFIGURABLE),
 	JS_PROP_INT32_DEF("Z16S", GS_PSMZ_16S, JS_PROP_CONFIGURABLE),
+
+	JS_CFUNC_DEF("getBufferImage", 1, athena_getimage),
+
+	JS_PROP_INT32_DEF("FRAME_BUFFER_0", FRAME_BUFFER_0, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("FRAME_BUFFER_1", FRAME_BUFFER_1, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("DEPTH_BUFFER", DEPTH_BUFFER, JS_PROP_CONFIGURABLE),
 };
 
 static int screen_init(JSContext *ctx, JSModuleDef *m)

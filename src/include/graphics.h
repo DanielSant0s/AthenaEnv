@@ -149,6 +149,8 @@ uint64_t get_screen_param(uint8_t param);
 
 void set_screen_param(uint8_t param, uint64_t value);
 
+void flush_gs_texcache();
+
 // The GS's alpha blending formula is fixed but it contains four variables that can be reconfigured:
 // Output = (((A - B) * C) >> 7) + D
 // A, B, and D are colors and C is an alpha value. Their specific values come from the ALPHA register:
@@ -173,6 +175,13 @@ void set_screen_param(uint8_t param, uint64_t value);
 #define GS_ALPHA_BLEND_ADD            (ALPHA_EQUATION(SRC_RGB, ZERO_RGB, SRC_ALPHA, DST_ALPHA, 0x00))
 
 extern GSGLOBAL *gsGlobal;
+extern GSTEXTURE fb[3];
+
+typedef enum {
+	FRAME_BUFFER_0,
+	FRAME_BUFFER_1,
+	DEPTH_BUFFER
+} eScreenBuffers;
 
 //remove fontm specific things here
 typedef enum {
@@ -395,8 +404,6 @@ void draw_triangle(float x, float y, float x2, float y2, float x3, float y3, Col
 void draw_triangle_gouraud(float x, float y, float x2, float y2, float x3, float y3, Color color, Color color2, Color color3);
 void draw_quad(float x, float y, float x2, float y2, float x3, float y3, float x4, float y4, Color color);
 void draw_quad_gouraud(float x, float y, float x2, float y2, float x3, float y3, float x4, float y4, Color color, Color color2, Color color3, Color color4);
-
-void set_alpha_blend_mode(uint64_t alpha_equation);
 
 GSFONT* loadFont(const char* path);
 void printFontText(GSFONT* font, const char* text, float x, float y, float scale, Color color);

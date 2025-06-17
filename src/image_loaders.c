@@ -60,7 +60,7 @@ typedef struct gsBitmap GSBITMAP;
 //2D drawing functions
 int athena_load_png(GSTEXTURE* tex, FILE* File, bool delayed)
 {
-	tex->Delayed = delayed;
+	tex->Delayed = true;
 
 	if (File == NULL)
 	{
@@ -307,45 +307,7 @@ int athena_load_png(GSTEXTURE* tex, FILE* File, bool delayed)
 	png_destroy_read_struct(&png_ptr, &info_ptr, (png_infopp) NULL);
 	fclose(File);
 
-	if(!tex->Delayed)
-	{
-		tex->Vram = gsKit_vram_alloc(gsGlobal, gsKit_texture_size(tex->Width, tex->Height, tex->PSM), GSKIT_ALLOC_USERBUFFER);
-		if(tex->Vram == GSKIT_ALLOC_ERROR)
-		{
-			dbgprintf("VRAM Allocation Failed. Will not upload texture.\n");
-			return -1;
-		}
-
-		if(tex->Clut != NULL)
-		{
-			if(tex->PSM == GS_PSM_T4)
-				tex->VramClut = gsKit_vram_alloc(gsGlobal, gsKit_texture_size(8, 2, GS_PSM_CT32), GSKIT_ALLOC_USERBUFFER);
-			else
-				tex->VramClut = gsKit_vram_alloc(gsGlobal, gsKit_texture_size(16, 16, GS_PSM_CT32), GSKIT_ALLOC_USERBUFFER);
-
-			if(tex->VramClut == GSKIT_ALLOC_ERROR)
-			{
-				dbgprintf("VRAM CLUT Allocation Failed. Will not upload texture.\n");
-				return -1;
-			}
-		}
-
-		// Upload texture
-		texture_upload(gsGlobal, tex);
-		// Free texture
-		free(tex->Mem);
-		tex->Mem = NULL;
-		// Free texture CLUT
-		if(tex->Clut != NULL)
-		{
-			free(tex->Clut);
-			tex->Clut = NULL;
-		}
-	}
-	else
-	{
-		gsKit_setup_tbw(tex);
-	}
+	gsKit_setup_tbw(tex);
 
 	return 0;
 
@@ -360,7 +322,7 @@ int athena_load_bmp(GSTEXTURE* tex, FILE* File, bool delayed)
 	u8  *image;
 	u8  *p;
 
-	tex->Delayed = delayed;
+	tex->Delayed = true;
 
 	if (File == NULL)
 	{
@@ -616,45 +578,7 @@ int athena_load_bmp(GSTEXTURE* tex, FILE* File, bool delayed)
 
 	fclose(File);
 
-	if(!tex->Delayed)
-	{
-		tex->Vram = gsKit_vram_alloc(gsGlobal, gsKit_texture_size(tex->Width, tex->Height, tex->PSM), GSKIT_ALLOC_USERBUFFER);
-		if(tex->Vram == GSKIT_ALLOC_ERROR)
-		{
-			dbgprintf("VRAM Allocation Failed. Will not upload texture.\n");
-			return -1;
-		}
-
-		if(tex->Clut != NULL)
-		{
-			if(tex->PSM == GS_PSM_T4)
-				tex->VramClut = gsKit_vram_alloc(gsGlobal, gsKit_texture_size(8, 2, GS_PSM_CT32), GSKIT_ALLOC_USERBUFFER);
-			else
-				tex->VramClut = gsKit_vram_alloc(gsGlobal, gsKit_texture_size(16, 16, GS_PSM_CT32), GSKIT_ALLOC_USERBUFFER);
-
-			if(tex->VramClut == GSKIT_ALLOC_ERROR)
-			{
-				dbgprintf("VRAM CLUT Allocation Failed. Will not upload texture.\n");
-				return -1;
-			}
-		}
-
-		// Upload texture
-		texture_upload(gsGlobal, tex);
-		// Free texture
-		free(tex->Mem);
-		tex->Mem = NULL;
-		// Free texture CLUT
-		if(tex->Clut != NULL)
-		{
-			free(tex->Clut);
-			tex->Clut = NULL;
-		}
-	}
-	else
-	{
-		gsKit_setup_tbw(tex);
-	}
+	gsKit_setup_tbw(tex);
 
 	return 0;
 
@@ -723,7 +647,7 @@ static void  _ps2_load_JPEG_generic(GSTEXTURE *Texture, struct jpeg_decompress_s
 
 int athena_load_jpeg(GSTEXTURE* tex, FILE* fp, bool scale_down, bool delayed)
 {
-	tex->Delayed = delayed;
+	tex->Delayed = true;
 
 	struct jpeg_decompress_struct cinfo;
 	struct my_error_mgr jerr;
@@ -763,46 +687,7 @@ int athena_load_jpeg(GSTEXTURE* tex, FILE* fp, bool scale_down, bool delayed)
 	jpeg_destroy_decompress(&cinfo);
 	fclose(fp);
 
-	
-	if(!tex->Delayed)
-	{
-		tex->Vram = gsKit_vram_alloc(gsGlobal, gsKit_texture_size(tex->Width, tex->Height, tex->PSM), GSKIT_ALLOC_USERBUFFER);
-		if(tex->Vram == GSKIT_ALLOC_ERROR)
-		{
-			dbgprintf("VRAM Allocation Failed. Will not upload texture.\n");
-			return -1;
-		}
-
-		if(tex->Clut != NULL)
-		{
-			if(tex->PSM == GS_PSM_T4)
-				tex->VramClut = gsKit_vram_alloc(gsGlobal, gsKit_texture_size(8, 2, GS_PSM_CT32), GSKIT_ALLOC_USERBUFFER);
-			else
-				tex->VramClut = gsKit_vram_alloc(gsGlobal, gsKit_texture_size(16, 16, GS_PSM_CT32), GSKIT_ALLOC_USERBUFFER);
-
-			if(tex->VramClut == GSKIT_ALLOC_ERROR)
-			{
-				dbgprintf("VRAM CLUT Allocation Failed. Will not upload texture.\n");
-				return -1;
-			}
-		}
-
-		// Upload texture
-		texture_upload(gsGlobal, tex);
-		// Free texture
-		free(tex->Mem);
-		tex->Mem = NULL;
-		// Free texture CLUT
-		if(tex->Clut != NULL)
-		{
-			free(tex->Clut);
-			tex->Clut = NULL;
-		}
-	}
-	else
-	{
-		gsKit_setup_tbw(tex);
-	}
+	gsKit_setup_tbw(tex);
 
 	return 0;
 
