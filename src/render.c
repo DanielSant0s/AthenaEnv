@@ -42,6 +42,99 @@ MATRIX world_screen;
 
 FIVECTOR screen_scale;
 
+#define CHANNEL_SHUFFLE_RED 0x000000FF
+#define CHANNEL_SHUFFLE_GREEN 0x0000FF00
+#define CHANNEL_SHUFFLE_BLUE 0x00FF0000
+#define CHANNEL_SHUFFLE_ALPHA 0xFF000000
+
+/* void channel_shuffle_slow(uint32_t channelIn, uint32_t channelOut, uint32_t blockX, uint32_t blockY, uint32_t source, uint32_t width, uint32_t height, uint32_t palette)
+{
+    sceGsFrame* buf_frame;
+    uint64_t frameAddress;
+    int tw, th;
+
+    if( skyFrameBit & 0x1 ) {
+        buf_frame = &_rwDMAFlipData_db->draw01.frame1;
+    } else {
+        buf_frame = &_rwDMAFlipData_db->draw11.frame1;
+    }    
+
+    frameAddress = buf_frame->FBP;
+
+	// For the BLUE and ALPHA channels, we need to offset our 'U's by 8 texels
+	const uint32_t horz_block_offset = (channelIn == CHANNEL_SHUFFLE_BLUE || channelIn == CHANNEL_SHUFFLE_ALPHA);
+	// For the GREEN and ALPHA channels, we need to offset our 'T's by 2 texels
+	const uint32_t vert_block_offset = (channelIn == CHANNEL_SHUFFLE_GREEN || channelIn == CHANNEL_SHUFFLE_ALPHA);
+
+	const uint32_t clamp_horz = horz_block_offset ? 8 : 0;
+	const uint32_t clamp_vert = vert_block_offset ? 2 : 0;
+
+    if (!_rwDMAOpenVIFPkt(RWDMA_FIXUP, 500)) return;
+
+    owl_add_tag(packet, GIF_PACKED_AD, GIF_SET_TAG(5, 1, 0, 0, GIF_PACKED, 1));
+
+    owl_add_tag(packet, GS_XYOFFSET_1, GS_SET_XYOFFSET_1(0, 0));
+
+    set_tw_th(width, height, &tw, &th);
+
+    owl_add_tag(packet, GS_TEX0_1, GS_SET_TEX0(source, 1, GS_PSM_8, tw, th, 1, 1, palette, GS_PSM_32, 0, 0, 1));
+
+    owl_add_tag(packet, GS_CLAMP_1, GS_SET_CLAMP(3, 3, 0xF7, clamp_horz, 0xFD, clamp_vert));
+
+    owl_add_tag(packet, GS_TEXFLUSH, GS_SET_TEXFLUSH(1));
+
+	uint32_t frame_mask = ~channelOut;
+
+    owl_add_tag(packet, GS_FRAME_1, GS_SET_FRAME(frameAddress, 10, GS_PSM_32, frame_mask));
+
+    owl_add_tag(packet, (GS_UV) | (GS_XYZ2 << 4) | (GS_UV << 8) | (GS_XYZ2 << 12), 
+             GIF_SET_TAG(96, 1, 1, GS_SET_PRIM(GS_PRIM_SPRITE, 0, 1, 0, 0, 0, 1, 0, 0), GIF_PACKED, 4)
+    );
+
+    int y;
+	for (y = 0; y < 32; y += 2)
+	{
+		if (((y % 4) == 0) ^ (vert_block_offset == 1)) // Even (4 16x2 sprites)
+		{
+            int x;
+			for (x = 0; x < 64; x += 16)
+			{
+				// UV
+                owl_add_tag(packet, 0, GS_SET_ST(8 + ((8 + x * 2) << 4), 8 + ((y * 2) << 4)));
+				// XYZ2
+                owl_add_tag(packet, 1, (uint64_t)((x + blockX) << 4) | ((uint64_t)((y + blockY) << 4) << 32));
+				// UV
+                owl_add_tag(packet, 0, GS_SET_ST(8 + ((24 + x * 2) << 4), 8 + ((2 + y * 2) << 4)));
+				// XYZ2
+                owl_add_tag(packet, 1, (uint64_t)((x + 16 + blockX) << 4) | ((uint64_t)((y + 2 + blockY) << 4) << 32));
+			}
+		}
+		else // Odd (Eight 8x2 sprites)
+		{
+            int x;
+			for (x = 0; x < 64; x += 8)
+			{
+				// UV
+                owl_add_tag(packet, 0, GS_SET_ST(8 + ((4 + x * 2) << 4), 8 + ((y * 2) << 4)));
+				// XYZ2
+                owl_add_tag(packet, 1, (uint64_t)((x + blockX) << 4) | ((uint64_t)((y + blockY) << 4) << 32));
+				// UV
+                owl_add_tag(packet, 0, GS_SET_ST(8 + ((12 + x * 2) << 4), 8 + ((2 + y * 2) << 4)));
+				// XYZ2
+                owl_add_tag(packet, 1, (uint64_t)((x + 8 + blockX) << 4) | ((uint64_t)((y + 2 + blockY) << 4) << 32));
+			}
+		}
+	}
+
+    owl_add_tag(packet, GIF_AD, GIF_SET_TAG(3, 1, 0, 0, GIF_PACKED, 1));
+
+    owl_add_tag(packet, GS_CLAMP_1, GS_SET_CLAMP(1, 1, 0x00, 0x0, 0x00, 0x00));
+
+    owl_add_tag(packet, GS_FRAME_1, GS_SET_FRAME(frameAddress, 10, GS_PSM_32, 0x00));
+
+    owl_add_tag(packet, GS_XYOFFSET_1, skyXyoffset_1);
+    
+} */
 
 void init3D(float fov, float near, float far) {
 	GSGLOBAL* gsGlobal = getGSGLOBAL();
@@ -70,8 +163,6 @@ void init3D(float fov, float near, float far) {
 
 	vu1_lights_reflection = vu_mpg_load_buffer(embed_vu_code_ptr(VU1Draw3DLCS_Ref), embed_vu_code_size(VU1Draw3DLCS_Ref), VECTOR_UNIT_1, false);
 }
-
-
 
 static int active_aaa_lights = 0;
 static int active_bbb_lights = 0;
@@ -153,7 +244,7 @@ void render_object(athena_object_data *obj) {
     	obj->bump_offset[0] = light_dir[0] * 0.008f;
     	obj->bump_offset[1] = light_dir[1] * 0.008f;
 
-		set_screen_param(COLOR_CLAMP_MODE, 0);
+		set_screen_param(COLOR_CLAMP_MODE, 1);
 
 		obj->bump_offset_buffer = &obj->bump_offset;
 		set_screen_param(ALPHA_BLEND_EQUATION, ALPHA_EQUATION(SRC_RGB, ZERO_RGB, ALPHA_FIX, DST_RGB, 0x34));
