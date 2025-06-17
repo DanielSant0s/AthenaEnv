@@ -252,7 +252,7 @@ void page_clear(Color color) {
 	owl_add_tag(packet, GIF_AD, VU_GS_GIFTAG(2, 1, NULL, 0, 0, 0, 1));
 	
 	owl_add_tag(packet, GS_TEST_1, get_register(GS_CACHE_TEST));
-	owl_add_tag(packet, GS_XYOFFSET_1, GS_SETREG_XYOFFSET(gsGlobal->OffsetX, gsGlobal->OffsetY));
+	owl_add_tag(packet, GS_XYOFFSET_1, get_register(GS_CACHE_XYOFFSET));
 }
 
 void clearScreen(Color color)
