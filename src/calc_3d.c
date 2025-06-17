@@ -151,7 +151,7 @@ unsigned int get_max_z(GSGLOBAL* gsGlobal)
 			return -1;
 	}
 
-	max_z = (1 << (z - 1)) / z;
+	max_z = (1 << (z - 1));
 
 	// End function.
 	return max_z;
