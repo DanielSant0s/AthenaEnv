@@ -54,15 +54,20 @@ const uint8_t gs_reg_map[] = {
 	GS_REG_MIPTBP2,
 	GS_REG_TEXA,
 	GS_REG_SCISSOR,
+	GS_REG_SCISSOR_2,
 	GS_REG_ALPHA,
+	GS_REG_ALPHA_2,
 	GS_REG_DIMX,
 	GS_REG_DTHE,
 	GS_REG_COLCLAMP,
 	GS_REG_TEST,
+	GS_REG_TEST_2,
 	GS_REG_PABE,
 	GS_REG_FBA,
 	GS_REG_FRAME,
-	GS_REG_ZBUF
+	GS_REG_FRAME_2,
+	GS_REG_ZBUF,
+	GS_REG_ZBUF_2
 };
 
 void set_screen_param(uint8_t param, uint64_t value) {
@@ -308,15 +313,16 @@ void setactive(GSGLOBAL *gsGlobal)
 
 	owl_add_tag(packet, GIF_AD, VU_GS_GIFTAG(4, 1, NULL, 0, 0, 0, 1));
 
-	// Context 1
+	gs_reg_cache[GS_CACHE_SCISSOR_2] = gs_reg_cache[GS_CACHE_SCISSOR] = GS_SETREG_SCISSOR_1( 0, gsGlobal->Width - 1, 0, gsGlobal->Height - 1 );
+	gs_reg_cache[GS_CACHE_FRAME_2] = gs_reg_cache[GS_CACHE_FRAME] = GS_SETREG_FRAME_1( gsGlobal->ScreenBuffer[gsGlobal->ActiveBuffer & 1] / 8192, gsGlobal->Width / 64, gsGlobal->PSM, 0 );
 
-	owl_add_tag(packet, GS_SCISSOR_1, GS_SETREG_SCISSOR_1( 0, gsGlobal->Width - 1, 0, gsGlobal->Height - 1 ));
-	owl_add_tag(packet, GS_FRAME_1, GS_SETREG_FRAME_1( gsGlobal->ScreenBuffer[gsGlobal->ActiveBuffer & 1] / 8192, gsGlobal->Width / 64, gsGlobal->PSM, 0 ));
+	// Context 1
+	owl_add_tag(packet, GS_SCISSOR_1, gs_reg_cache[GS_CACHE_SCISSOR]);
+	owl_add_tag(packet, GS_FRAME_1, gs_reg_cache[GS_CACHE_FRAME]);
 
 	// Context 2
-
-	owl_add_tag(packet, GS_SCISSOR_2, GS_SETREG_SCISSOR_1( 0, gsGlobal->Width - 1, 0, gsGlobal->Height - 1 ));
-	owl_add_tag(packet, GS_FRAME_2, GS_SETREG_FRAME_1( gsGlobal->ScreenBuffer[gsGlobal->ActiveBuffer & 1] / 8192, gsGlobal->Width / 64, gsGlobal->PSM, 0 ));
+	owl_add_tag(packet, GS_SCISSOR_2, gs_reg_cache[GS_CACHE_SCISSOR_2]);
+	owl_add_tag(packet, GS_FRAME_2, gs_reg_cache[GS_CACHE_FRAME_2]);
 }
 
 /* Copy of sync_screen_flip, but without the 'flip' */
@@ -884,10 +890,10 @@ void init_screen(GSGLOBAL *gsGlobal)
 	*p_data++ = 1;
 	*p_data++ = GS_PRMODECONT;
 
-	*p_data++ = GS_SETREG_FRAME_1( gsGlobal->ScreenBuffer[0] / 8192, gsGlobal->Width / 64, gsGlobal->PSM, 0 );
+	*p_data++ = gs_reg_cache[GS_CACHE_FRAME] = GS_SETREG_FRAME_1( gsGlobal->ScreenBuffer[0] / 8192, gsGlobal->Width / 64, gsGlobal->PSM, 0 );
 	*p_data++ = GS_FRAME_1;
 
-	*p_data++ = GS_SETREG_XYOFFSET_1( gsGlobal->OffsetX,
+	*p_data++ = gs_reg_cache[GS_CACHE_XYOFFSET] = GS_SETREG_XYOFFSET_1( gsGlobal->OffsetX,
 					  gsGlobal->OffsetY);
 	*p_data++ = GS_XYOFFSET_1;
 
@@ -898,7 +904,7 @@ void init_screen(GSGLOBAL *gsGlobal)
 
 	*p_data++ = GS_TEST_1;
 
-	*p_data++ = GS_SETREG_CLAMP(gsGlobal->Clamp->WMS, gsGlobal->Clamp->WMT,
+	*p_data++ = gs_reg_cache[GS_CACHE_CLAMP] = GS_SETREG_CLAMP(gsGlobal->Clamp->WMS, gsGlobal->Clamp->WMT,
 				gsGlobal->Clamp->MINU, gsGlobal->Clamp->MAXU,
 				gsGlobal->Clamp->MINV, gsGlobal->Clamp->MAXV);
 
@@ -911,53 +917,37 @@ void init_screen(GSGLOBAL *gsGlobal)
         if((gsGlobal->PSM != GS_PSM_CT16) && (gsGlobal->PSMZ == GS_PSMZ_16))
             gsGlobal->PSMZ = GS_PSMZ_16S; // other depths don't seem to work with 16-bit non-S z depth
 
-		*p_data++ = GS_SETREG_ZBUF_1( gsGlobal->ZBuffer / 8192, gsGlobal->PSMZ, 0 );
-		*p_data++ = GS_ZBUF_1;
+		*p_data++ = gs_reg_cache[GS_CACHE_ZBUF] = GS_SETREG_ZBUF_1( gsGlobal->ZBuffer / 8192, gsGlobal->PSMZ, 0 );
+	} else {
+		*p_data++ = gs_reg_cache[GS_CACHE_ZBUF] = GS_SETREG_ZBUF_1( 0, gsGlobal->PSM, 1 );
 	}
-	if(gsGlobal->ZBuffering == GS_SETTING_OFF)
-	{
-		*p_data++ = GS_SETREG_ZBUF_1( 0, gsGlobal->PSM, 1 );
-		*p_data++ = GS_ZBUF_1;
-	}
+	*p_data++ = GS_ZBUF_1;
 
-	*p_data++ = GS_SETREG_COLCLAMP( 255 );
+	*p_data++ = gs_reg_cache[GS_CACHE_COLCLAMP] = GS_SETREG_COLCLAMP( 255 );
 	*p_data++ = GS_COLCLAMP;
 
-	*p_data++ = GS_SETREG_FRAME_1( gsGlobal->ScreenBuffer[1] / 8192, gsGlobal->Width / 64, gsGlobal->PSM, 0 );
+	*p_data++ = gs_reg_cache[GS_CACHE_FRAME_2] = GS_SETREG_FRAME_1( gsGlobal->ScreenBuffer[1] / 8192, gsGlobal->Width / 64, gsGlobal->PSM, 0 );
 	*p_data++ = GS_FRAME_2;
 
-	*p_data++ = GS_SETREG_XYOFFSET_1( gsGlobal->OffsetX,
-					  gsGlobal->OffsetY);
+	*p_data++ = gs_reg_cache[GS_CACHE_XYOFFSET];
 	*p_data++ = GS_XYOFFSET_2;
 
-	*p_data++ = gs_reg_cache[GS_CACHE_SCISSOR];
+	*p_data++ = gs_reg_cache[GS_CACHE_SCISSOR_2] = gs_reg_cache[GS_CACHE_SCISSOR];
 	*p_data++ = GS_SCISSOR_2;
 
-	*p_data++ = gs_reg_cache[GS_CACHE_TEST];
-
+	*p_data++ = gs_reg_cache[GS_CACHE_TEST_2] = gs_reg_cache[GS_CACHE_TEST];
 	*p_data++ = GS_TEST_2;
 
-	*p_data++ = GS_SETREG_CLAMP(gsGlobal->Clamp->WMS, gsGlobal->Clamp->WMT,
-				gsGlobal->Clamp->MINU, gsGlobal->Clamp->MAXU,
-				gsGlobal->Clamp->MINV, gsGlobal->Clamp->MAXV);
-
+	*p_data++ = gs_reg_cache[GS_CACHE_CLAMP];
 	*p_data++ = GS_CLAMP_2;
 
-	if(gsGlobal->ZBuffering == GS_SETTING_ON)
-	{
-		*p_data++ = GS_SETREG_ZBUF_1( gsGlobal->ZBuffer / 8192, gsGlobal->PSMZ, 0 );
-		*p_data++ = GS_ZBUF_2;
-	}
-	if(gsGlobal->ZBuffering == GS_SETTING_OFF)
-	{
-		*p_data++ = GS_SETREG_ZBUF_1( 0, gsGlobal->PSM, 1 );
-		*p_data++ = GS_ZBUF_2;
-	}
+	*p_data++ = gs_reg_cache[GS_CACHE_ZBUF_2] = gs_reg_cache[GS_CACHE_ZBUF];
+	*p_data++ = GS_ZBUF_2;
 
 	*p_data++ = gs_reg_cache[GS_CACHE_ALPHA] = GS_ALPHA_BLEND_NORMAL;
 	*p_data++ = GS_ALPHA_1;
 
-	*p_data++ = gs_reg_cache[GS_CACHE_ALPHA];
+	*p_data++ = gs_reg_cache[GS_CACHE_ALPHA_2] = gs_reg_cache[GS_CACHE_ALPHA];
 	*p_data++ = GS_ALPHA_2;
 
 	*p_data++ = GS_SETREG_DIMX(gsGlobal->DitherMatrix[0],gsGlobal->DitherMatrix[1],
