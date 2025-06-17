@@ -243,6 +243,9 @@ while(true) {
         render_data[modeltodisplay].accurate_clipping ^= 1;
     }
 
+    Screen.setParam(Screen.DEPTH_TEST_ENABLE, true);
+    Screen.setParam(Screen.DEPTH_TEST_METHOD, Screen.DEPTH_GEQUAL);
+
     //dragon_object.render();
     //monkey_object.render();
 
@@ -251,6 +254,8 @@ while(true) {
     }
 
     render_object[modeltodisplay].render();
+
+    Screen.setParam(Screen.DEPTH_TEST_ENABLE, false);
 
     font.print(10, 10, Screen.getFPS(360) + " FPS | " + free_mem + " | Free VRAM: " + free_vram + "KB");
     font.print(10, 25, render_data[modeltodisplay].size + " Vertices | " + "Pipeline: " + pipelines[render_data[modeltodisplay].pipeline]);

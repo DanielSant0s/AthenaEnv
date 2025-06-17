@@ -24,12 +24,18 @@
 
 #define VIF1_MARK_CLEAN 65535
 
+#define TEXTURE_UPLOAD_QUEUE_SIZE 2048
+
+#define MAX_TEXTURE_PACKET_SIZE 640
+
+uint32_t *VIF1_MARK = (uint32_t *)(0x10003C30);
 
 struct SVramBlock {
 	unsigned int iStart;
 	unsigned int iSize;
 	unsigned int iUseCount;
 	unsigned int iUseCountPrev;
+	unsigned int bLocked;
 
 	GSTEXTURE * tex;
 	struct SVramBlock * pNext;
@@ -39,10 +45,6 @@ struct SVramBlock {
 static struct SVramBlock * __head = NULL;
 static int texture_upload_callback_id = -1;
 
-#define TEXTURE_UPLOAD_QUEUE_SIZE 2048
-
-#define MAX_TEXTURE_PACKET_SIZE 640
-
 static int texture_upload_queue_top = 0;
 
 GSTEXTURE *texture_upload_queue[TEXTURE_UPLOAD_QUEUE_SIZE] = { NULL };
@@ -50,8 +52,6 @@ GSTEXTURE *texture_upload_queue[TEXTURE_UPLOAD_QUEUE_SIZE] = { NULL };
 owl_packet* async_upload_packet = NULL;
 
 owl_qword async_upload_packet_buffer[owl_packet_size(MAX_TEXTURE_PACKET_SIZE)] qw_aligned;
-
-uint32_t *VIF1_MARK = (uint32_t *)(0x10003C30);
 
 uint32_t texture_manager_get_size(int width, int height, int psm)
 {
@@ -236,6 +236,7 @@ _blockCreate(unsigned int start, unsigned int size)
 	block->iSize = size;
 	block->iUseCount = 0;
 	block->iUseCountPrev = 0;
+	block->bLocked = 0;
 
 	block->tex = NULL;
 	block->pNext = NULL;
@@ -314,6 +315,10 @@ _blockGetWeight(struct SVramBlock * block)
 	unsigned int weight = 0;
 
 	if ((block != NULL) && (block->tex != NULL)) {
+		if (block->bLocked) {
+			return 0xFFFFFFFF;
+		}
+
 		if(block->iUseCount == block->iUseCountPrev) {
 			// Prediction:
 			// - This frame: done
@@ -358,7 +363,7 @@ _blockAlloc(unsigned int size)
 	while (block == NULL) {
 		// Free blocks starting with the least used textures
 		for (block = __head; block != NULL; block = block->pNext) {
-			if ((block->tex != NULL) && (_blockGetWeight(block) <= weight)) {
+			if ((block->tex != NULL) && !block->bLocked && (_blockGetWeight(block) <= weight)) {
 				// Free block
 				block->tex = NULL;
 				block = _blockMergeFree(block);
@@ -415,8 +420,8 @@ int texture_manager_push(GSTEXTURE *tex) {
 }
 
 
-int texture_manager_bind(GSGLOBAL *gsGlobal, GSTEXTURE *tex, bool async)
-{
+int texture_manager_bind(GSGLOBAL *gsGlobal, GSTEXTURE *tex, bool async) {
+	if (!tex->Delayed) return -1;
 
 	struct SVramBlock * block;
 	unsigned int ttransfer = 0;
@@ -445,6 +450,7 @@ int texture_manager_bind(GSGLOBAL *gsGlobal, GSTEXTURE *tex, bool async)
 		block->tex = tex;
 		block->iUseCount = 0;
 		block->iUseCountPrev = 1;
+		block->bLocked = 0;
 
 		tex->Vram = 0;
 		tex->VramClut = 0;
@@ -455,33 +461,40 @@ int texture_manager_bind(GSGLOBAL *gsGlobal, GSTEXTURE *tex, bool async)
 		ttransfer = 1;
 
 	// (Re-)transfer clut if invalidated
-	if ((tex->Clut) && (tex->VramClut == 0))
+	if (tex->VramClut == 0)
 		ctransfer = 1;
 
 	if (ttransfer) {
 		tex->Vram = block->iStart;
 		gsKit_setup_tbw(tex);
-		SyncDCache(tex->Mem, (u8 *)(tex->Mem) + tsize);
 
-		if (async) {
-			tex->Vram |= TRANSFER_REQUEST_MASK;
+		if (tex->Mem) {
+			SyncDCache(tex->Mem, (u8 *)(tex->Mem) + tsize);
+
+			if (async) {
+				tex->Vram |= TRANSFER_REQUEST_MASK;
+			} else {
+				//texture_send(tex->Mem, tex->Width, tex->Height, tex->Vram, tex->PSM, tex->TBW, tex->Clut ? GS_CLUT_TEXTURE : GS_CLUT_NONE, NULL);
+			}
 		} else {
-			//texture_send(tex->Mem, tex->Width, tex->Height, tex->Vram, tex->PSM, tex->TBW, tex->Clut ? GS_CLUT_TEXTURE : GS_CLUT_NONE, NULL);
+			ttransfer = 0;
 		}
-
 	}
 
 	if (ctransfer) {
 		tex->VramClut = block->iStart + tsize;
-		SyncDCache(tex->Clut, (u8 *)(tex->Clut) + csize);
 
-		if (async) {
-			tex->VramClut |= TRANSFER_REQUEST_MASK;
+		if (tex->Clut) {
+			SyncDCache(tex->Clut, (u8 *)(tex->Clut) + csize);
+
+			if (async) {
+				tex->VramClut |= TRANSFER_REQUEST_MASK;
+			} else {
+				//texture_send(tex->Clut, cwidth, cheight, tex->VramClut, tex->ClutPSM, 1, GS_CLUT_PALLETE, NULL);
+			}
 		} else {
-			//texture_send(tex->Clut, cwidth, cheight, tex->VramClut, tex->ClutPSM, 1, GS_CLUT_PALLETE, NULL);
+			ctransfer = 0;
 		}
-		
-
 	}
 
 	block->iUseCount++;
@@ -493,6 +506,87 @@ int texture_manager_bind(GSGLOBAL *gsGlobal, GSTEXTURE *tex, bool async)
 }
 
 //---------------------------------------------------------------------------
+int texture_manager_lock(GSTEXTURE *tex)
+{
+	struct SVramBlock * block;
+
+	for (block = __head; block != NULL; block = block->pNext) {
+		if(block->tex == tex) {
+			block->bLocked = 1;
+			return 1;  
+		}
+	}
+	
+	return 0;  
+}
+
+//---------------------------------------------------------------------------
+int texture_manager_unlock(GSTEXTURE *tex)
+{
+	struct SVramBlock * block;
+
+	for (block = __head; block != NULL; block = block->pNext) {
+		if(block->tex == tex) {
+			block->bLocked = 0;
+			return 1;
+		}
+	}
+	
+	return 0;  
+}
+
+int texture_manager_is_locked(GSTEXTURE *tex)
+{
+	struct SVramBlock * block;
+
+	for (block = __head; block != NULL; block = block->pNext) {
+		if(block->tex == tex) {
+			return block->bLocked;
+		}
+	}
+	
+	return 0;  
+}
+
+int texture_manager_lock_and_bind(GSGLOBAL *gsGlobal, GSTEXTURE *tex, bool async)
+{
+	int result = texture_manager_bind(gsGlobal, tex, async);
+	
+	if (result >= 0) {
+		texture_manager_lock(tex);
+	}
+	
+	return result;
+}
+
+int texture_manager_get_locked_count()
+{
+	struct SVramBlock * block;
+	int count = 0;
+
+	for (block = __head; block != NULL; block = block->pNext) {
+		if ((block->tex != NULL) && block->bLocked) {
+			count++;
+		}
+	}
+	
+	return count;
+}
+
+unsigned int texture_manager_get_locked_memory()
+{
+	struct SVramBlock * block;
+	unsigned int total = 0;
+
+	for (block = __head; block != NULL; block = block->pNext) {
+		if ((block->tex != NULL) && block->bLocked) {
+			total += block->iSize;
+		}
+	}
+	
+	return total;
+}
+
 
 void texture_manager_invalidate(GSTEXTURE *tex)
 {
@@ -510,6 +604,7 @@ void texture_manager_free(GSTEXTURE * tex)
 		if(block->tex == tex) {
 			// Free block
 			block->tex = NULL;
+			block->bLocked = 0;
 			_blockMergeFree(block);
 			tex->Vram = 0;
 			tex->VramClut = 0;
