@@ -1,6 +1,5 @@
 // {"name": "Render demo", "author": "Daniel Santos", "version": "04072023", "icon": "render_icon.png", "file": "render.js"}
 
-
 const pipelines = [
     "NO_LIGHTS",
     "DEFAULT",
@@ -19,7 +18,7 @@ Screen.setVSync(true);
 const canvas = Screen.getMode();
 
 canvas.zbuffering = true;
-canvas.psmz = Screen.Z16S;
+canvas.psmz = Screen.Z24;
 
 Screen.setMode(canvas);
 
@@ -179,6 +178,25 @@ let bbox = false;
 
 let spec = false;
 
+const draw_buffer = Screen.getBufferImage(Screen.DRAW_BUFFER);
+const depth_buffer = Screen.getBufferImage(Screen.DEPTH_BUFFER);
+
+const additive_alpha = {a:Screen.SRC_RGB, b:Screen.ZERO_RGB, c:Screen.DST_ALPHA, d:Screen.DST_RGB, fix:0};
+
+const default_alpha = Screen.getParam(Screen.ALPHA_BLEND_EQUATION);
+
+const temp_buffer = new Image();
+temp_buffer.bpp = 24;
+temp_buffer.texWidth = 256;
+temp_buffer.texHeight = 256;
+
+temp_buffer.width = 256;
+temp_buffer.height = 256;
+temp_buffer.endx = 256;
+temp_buffer.endy = 256;
+
+temp_buffer.lock();
+
 while(true) {
     Screen.clear(gray);
     Camera.update();
@@ -256,6 +274,26 @@ while(true) {
     render_object[modeltodisplay].render();
 
     Screen.setParam(Screen.DEPTH_TEST_ENABLE, false);
+
+    Image.copyVRAMBlock(draw_buffer, 0, 0, depth_buffer, 0, 0);
+
+    Screen.setParam(Screen.ALPHA_BLEND_EQUATION, additive_alpha);
+
+    depth_buffer.color = Color.new(128, 100, 100, 32);
+    depth_buffer.draw(2, 2);
+
+    depth_buffer.color = Color.new(100, 100, 128, 32);
+    depth_buffer.draw(-2, 2);
+
+    depth_buffer.color = Color.new(100, 128, 100, 32);
+    depth_buffer.draw(2, -2);
+
+    Screen.setParam(Screen.ALPHA_BLEND_EQUATION, default_alpha);
+
+    Image.copyVRAMBlock(draw_buffer, 150, 150, temp_buffer, 0, 0);
+
+    temp_buffer.color = Color.new(128, 0, 0);
+    temp_buffer.draw(0, 0);
 
     font.print(10, 10, Screen.getFPS(360) + " FPS | " + free_mem + " | Free VRAM: " + free_vram + "KB");
     font.print(10, 25, render_data[modeltodisplay].size + " Vertices | " + "Pipeline: " + pipelines[render_data[modeltodisplay].pipeline]);

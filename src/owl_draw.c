@@ -362,6 +362,10 @@ void draw_image_list(GSTEXTURE* source, float x, float y, prim_tex_sprite *list,
 
 void draw_image(GSTEXTURE* source, float x, float y, float width, float height, float startx, float starty, float endx, float endy, Color color)
 {
+	if (source == &fb[0] || source == &fb[1] || source == &fb[2]) {
+		flush_gs_texcache();
+	}
+
     int texture_id = texture_manager_bind(gsGlobal, source, true);
 
 	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, texture_id != -1? 13 : 9);

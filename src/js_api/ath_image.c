@@ -61,8 +61,6 @@ static void athena_image_dtor(JSRuntime *rt, JSValue val) {
 }
 
 static JSValue athena_image_ctor(JSContext *ctx, JSValueConst new_target, int argc, JSValueConst *argv) {
-	if (argc != 1 && argc != 2 && argc != 3) return JS_ThrowSyntaxError(ctx, "Image takes 1, 2 or 3 arguments");
-
     JSImageData* image;
     JSValue obj = JS_UNDEFINED;
     JSValue proto;
@@ -75,18 +73,24 @@ static JSValue athena_image_ctor(JSContext *ctx, JSValueConst new_target, int ar
 
 	image->tex->Width = 0;
 	image->tex->Height = 0;
-
-	image->path = JS_ToCString(ctx, argv[0]);
+	image->tex->Delayed = true;
+	image->tex->Mem = NULL;
+	image->tex->Clut = NULL;
+	image->tex->Vram = 0;
+	image->tex->VramClut = 0;
 
 	image->delayed = true;
-	if (argc > 1) image->delayed = JS_ToBool(ctx, argv[1]);
-	if (argc > 2) {
+
+	if (argc > 0) {
+		image->path = JS_ToCString(ctx, argv[0]);
+		load_image(image->tex, image->path, image->delayed);
+	}
+
+	if (argc > 1) {
 		append_img(image, JS_GetOpaque2(ctx, argv[2], get_imglist_class_id()));
 		image->loaded = false;
 		goto register_obj;
 	}
-
-	load_image(image->tex, image->path, image->delayed);
 
 	image->loaded = true;
 	image->width = image->tex->Width;
@@ -138,6 +142,28 @@ static JSValue athena_image_draw(JSContext *ctx, JSValue this_val, int argc, JSV
 	}
 
 	return JS_UNDEFINED;
+}
+
+static JSValue athena_image_lock(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	JSImageData *image = JS_GetOpaque2(ctx, this_val, js_image_class_id);
+
+	if (!image->tex->Mem) {
+		texture_manager_bind(gsGlobal, image->tex, true);
+	}
+
+	return JS_NewBool(ctx, texture_manager_lock(image->tex));
+}
+
+static JSValue athena_image_unlock(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	JSImageData *image = JS_GetOpaque2(ctx, this_val, js_image_class_id);
+
+	return JS_NewBool(ctx, texture_manager_unlock(image->tex));
+}
+
+static JSValue athena_image_locked(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	JSImageData *image = JS_GetOpaque2(ctx, this_val, js_image_class_id);
+
+	return JS_NewBool(ctx, texture_manager_is_locked(image->tex));
 }
 
 static JSValue athena_image_optimize(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
@@ -250,10 +276,13 @@ static JSValue athena_image_get_uint(JSContext *ctx, JSValueConst this_val, int 
 					return JS_NewUint32(ctx, 8);
 				case GS_PSM_CT16:
 				case GS_PSM_CT16S:
+				case GS_PSMZ_16S:
 					return JS_NewUint32(ctx, 16);
 				case GS_PSM_CT24:
+				case GS_PSMZ_24:
 					return JS_NewUint32(ctx, 24);
 				case GS_PSM_CT32:
+				case GS_PSMZ_32:
 					return JS_NewUint32(ctx, 32);
 			}
 		case 4:
@@ -269,6 +298,10 @@ static JSValue athena_image_get_uint(JSContext *ctx, JSValueConst this_val, int 
 			} else if (s->tex->PSM == GS_PSM_T8) {
 				return JS_NewArrayBuffer(ctx, s->tex->Clut, gsKit_texture_size_ee(16, 16, GS_PSM_CT32), NULL, NULL, 1);
 			}
+		case 7:
+			return JS_NewUint32(ctx, s->tex->Width);
+		case 8:
+			return JS_NewUint32(ctx, s->tex->Height);
 			
 	}
 
@@ -291,11 +324,42 @@ static JSValue athena_image_set_uint(JSContext *ctx, JSValueConst this_val, JSVa
 		case 1:
 			s->tex->Filter = value;
 			break;
+		case 3:
+			switch (value) {
+				case 4:
+					s->tex->PSM = GS_PSM_T4;
+					break;
+				case 8:
+					s->tex->PSM = GS_PSM_T8;
+					break;
+				case 16:
+					s->tex->PSM = GS_PSM_CT16S;
+					break;
+				case 24:
+					s->tex->PSM = GS_PSM_CT24;
+					break;
+				case 32:
+					s->tex->PSM = GS_PSM_CT32;
+					break;
+				// Depth formats
+				case 18:
+					s->tex->PSM = GS_PSMZ_16S;
+					break;
+				case 26:
+					s->tex->PSM = GS_PSMZ_24;
+					break;
+				case 34:
+					s->tex->PSM = GS_PSMZ_32;
+					break;
+			}
+			break;
 		case 5:
 			if (s->tex->Delayed) {
 				void *pixels = JS_GetArrayBuffer(ctx, &arr_size, val);
 				if (pixels != s->tex->Mem) {
-					free(s->tex->Mem);
+					if (s->tex->Mem)
+						free(s->tex->Mem);
+
 					s->tex->Mem = pixels;
 				}
 			}
@@ -308,6 +372,12 @@ static JSValue athena_image_set_uint(JSContext *ctx, JSValueConst this_val, JSVa
 					s->tex->Clut = palette;
 				}
 			}
+			break;
+		case 7:
+			s->tex->Width = value;
+			break;
+		case 8:
+			s->tex->Height = value;
 			break;
 			
 
@@ -327,6 +397,10 @@ static const JSCFunctionListEntry js_image_proto_funcs[] = {
 	JS_CFUNC_DEF("optimize", 0, athena_image_optimize),
 	JS_CFUNC_DEF("free", 0, athena_image_free),
 
+	JS_CFUNC_DEF("lock", 0, athena_image_lock),
+	JS_CFUNC_DEF("unlock", 0, athena_image_unlock),
+	JS_CFUNC_DEF("locked", 0, athena_image_locked),
+
 	JS_CGETSET_MAGIC_DEF("width", js_image_get, js_image_set, 0),
 	JS_CGETSET_MAGIC_DEF("height", js_image_get, js_image_set, 1),
 	JS_CGETSET_MAGIC_DEF("startx", js_image_get, js_image_set, 2),
@@ -341,6 +415,30 @@ static const JSCFunctionListEntry js_image_proto_funcs[] = {
 	JS_CGETSET_MAGIC_DEF("delayed", athena_image_get_uint, athena_image_set_uint, 4),
 	JS_CGETSET_MAGIC_DEF("pixels", athena_image_get_uint, athena_image_set_uint, 5),
 	JS_CGETSET_MAGIC_DEF("palette", athena_image_get_uint, athena_image_set_uint, 6),
+	JS_CGETSET_MAGIC_DEF("texWidth", athena_image_get_uint, athena_image_set_uint, 7),
+	JS_CGETSET_MAGIC_DEF("texHeight", athena_image_get_uint, athena_image_set_uint, 8),
+};
+
+static JSValue athena_copy_block(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	int src_x, src_y, dst_x, dst_y;
+
+	JSImageData *src = JS_GetOpaque2(ctx, argv[0], js_image_class_id);
+
+	JS_ToInt32(ctx, &src_x, argv[1]);
+	JS_ToInt32(ctx, &src_y, argv[2]);
+
+	JSImageData *dst = JS_GetOpaque2(ctx, argv[3], js_image_class_id);
+
+	JS_ToInt32(ctx, &dst_x, argv[4]);
+	JS_ToInt32(ctx, &dst_y, argv[5]);
+
+	gs_copy_block(src->tex, src_x, src_y, dst->tex, dst_x, dst_y);
+
+	return JS_UNDEFINED;
+}
+
+static const JSCFunctionListEntry js_image_funcs[] = {
+    JS_CFUNC_DEF("copyVRAMBlock", 6, athena_copy_block),
 };
 
 static int image_init(JSContext *ctx, JSModuleDef *m) {
@@ -357,6 +455,8 @@ static int image_init(JSContext *ctx, JSModuleDef *m) {
     /* set proto.constructor and ctor.prototype */
     JS_SetConstructor(ctx, image_class, image_proto);
     JS_SetClassProto(ctx, js_image_class_id, image_proto);
+
+	JS_SetPropertyFunctionList(ctx, image_class, js_image_funcs, countof(js_image_funcs));
                       
     JS_SetModuleExport(ctx, m, "Image", image_class);
     return 0;
