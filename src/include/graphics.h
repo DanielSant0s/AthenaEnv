@@ -15,6 +15,27 @@
 
 #include <texture_manager.h>
 
+
+#undef GS_PSMZ_32 
+#undef GS_PSMZ_24 
+#undef GS_PSMZ_16 
+#undef GS_PSMZ_16S
+
+#define GS_PSMZ_32  0x30
+#define GS_PSMZ_24  0x31
+#define GS_PSMZ_16  0x32
+#define GS_PSMZ_16S 0x3A
+
+#define GS_ZBUF_32  0x00
+#define GS_ZBUF_24  0x01
+#define GS_ZBUF_16  0x02
+#define GS_ZBUF_16S 0x0A
+
+#define CHANNEL_SHUFFLE_RED 0x000000FF
+#define CHANNEL_SHUFFLE_GREEN 0x0000FF00
+#define CHANNEL_SHUFFLE_BLUE 0x00FF0000
+#define CHANNEL_SHUFFLE_ALPHA 0xFF000000
+
 typedef enum {
 	ALPHA_TEST_ENABLE,
 	ALPHA_TEST_METHOD,
@@ -178,8 +199,8 @@ extern GSGLOBAL *gsGlobal;
 extern GSTEXTURE fb[3];
 
 typedef enum {
-	FRAME_BUFFER_0,
-	FRAME_BUFFER_1,
+	DRAW_BUFFER,
+	DISPLAY_BUFFER,
 	DEPTH_BUFFER
 } eScreenBuffers;
 
@@ -395,6 +416,8 @@ void draw_tex_triangle_list(GSTEXTURE* source, float x, float y, prim_tex_triang
 void draw_tex_triangle_gouraud_list(GSTEXTURE* source, float x, float y, prim_tex_gouraud_triangle *list, int list_size);
 
 void draw_image_list(GSTEXTURE* source, float x, float y, prim_tex_sprite *list, int list_size);
+
+void gs_copy_block(GSTEXTURE *src, int src_x, int src_y, GSTEXTURE *dst, int dst_x, int dst_y);
 
 void draw_point(float x, float y, Color color);
 void draw_line(float x, float y, float x2, float y2, Color color);

@@ -37,7 +37,7 @@ static float fps = 0.0f;
 static int frames = 0;
 static int frame_interval = -1;
 
-#define OWL_PACKET_BUFFER_SIZE 1024
+#define OWL_PACKET_BUFFER_SIZE 2048
 
 static owl_qword owl_packet_buffer[OWL_PACKET_BUFFER_SIZE] qw_aligned = { 0 };
 
@@ -71,6 +71,109 @@ const uint8_t gs_reg_map[] = {
 	GS_REG_ZBUF,
 	GS_REG_ZBUF_2
 };
+
+void gs_copy_block(GSTEXTURE *src, int src_x, int src_y, GSTEXTURE *dst, int dst_x, int dst_y) {
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 6);
+ 
+	owl_add_cnt_tag(packet, 5, owl_vif_code_double(VIF_CODE(5, 0, VIF_DIRECT, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
+
+    owl_add_tag(packet, GIF_AD, GIFTAG(4, 1, 0, 0, 0, 1));
+    
+    owl_add_tag(packet, GS_BITBLTBUF, GS_SETREG_BITBLTBUF(src->Vram / 256, 
+                                            src->TBW, 
+                                            src->PSM, 
+                                            dst->Vram / 256, 
+                                            dst->TBW, 
+                                            dst->PSM));
+
+    owl_add_tag(packet, GS_TRXPOS, GS_SETREG_TRXPOS(src_x, src_y, dst_x, dst_y, 0)); 
+    
+    owl_add_tag(packet, GS_TRXREG, GS_SETREG_TRXREG(dst->Width, dst->Height)); 
+    
+    owl_add_tag(packet, GS_TRXDIR, 2); 
+}
+
+void gs_channel_shuffle_slow(GSTEXTURE *dst, uint32_t in, uint32_t out, uint32_t blockX, uint32_t blockY, GSTEXTURE *source, uint32_t width, uint32_t height, GSTEXTURE *pal) {
+    int tw, th;
+
+	// For the BLUE and ALPHA channels, we need to offset our 'U's by 8 texels
+	const uint32_t horz_block_offset = (in == CHANNEL_SHUFFLE_BLUE || in == CHANNEL_SHUFFLE_ALPHA);
+	// For the GREEN and ALPHA channels, we need to offset our 'T's by 2 texels
+	const uint32_t vert_block_offset = (in == CHANNEL_SHUFFLE_GREEN || in == CHANNEL_SHUFFLE_ALPHA);
+
+	const uint32_t clamp_horz = horz_block_offset ? 8 : 0;
+	const uint32_t clamp_vert = vert_block_offset ? 2 : 0;
+
+    owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 502);
+
+	owl_add_cnt_tag(packet, 501, 0);
+
+	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+	owl_add_uint(packet, VIF_CODE(500, 0, VIF_DIRECT, 0)); 
+
+    owl_add_tag(packet, GIF_AD, GIF_SET_TAG(5, 1, 0, 0, 0, 1));
+
+    owl_add_tag(packet, GS_XYOFFSET_1, GS_SETREG_XYOFFSET_1(0, 0));
+
+    athena_set_tw_th(width, height, &tw, &th);
+
+    owl_add_tag(packet, GS_TEX0_1, GS_SETREG_TEX0(source->Vram/256, source->TBW, GS_PSM_T8, tw, th, 1, COLOR_DECAL, pal->Vram/256, GS_PSM_CT32, 0, 0, 1));
+
+    owl_add_tag(packet, GS_CLAMP_1, GS_SETREG_CLAMP(3, 3, 0xF7, clamp_horz, 0xFD, clamp_vert));
+
+    owl_add_tag(packet, GS_TEXFLUSH, 1);
+
+    owl_add_tag(packet, GS_FRAME_1, GS_SETREG_FRAME(dst->Vram/8192, dst->TBW, GS_PSM_CT32, ~out));
+
+    owl_add_tag(packet, (GS_UV) | (GS_XYZ2 << 4) | (GS_UV << 8) | (GS_XYZ2 << 12), 
+             GIF_SET_TAG(96, 1, 1, GS_SETREG_PRIM(GS_PRIM_SPRITE, 0, 1, 0, 0, 0, 1, 0, 0), 0, 4)
+    );
+
+    int y;
+	for (y = 0; y < 32; y += 2)
+	{
+		if (((y % 4) == 0) ^ (vert_block_offset == 1)) // Even (4 16x2 sprites)
+		{
+            int x;
+			for (x = 0; x < 64; x += 16)
+			{
+				// UV
+                owl_add_tag(packet, 0, GS_SETREG_STQ(8 + ((8 + x * 2) << 4), 8 + ((y * 2) << 4)));
+				// XYZ2
+                owl_add_tag(packet, 1, (uint64_t)((x + blockX) << 4) | ((uint64_t)((y + blockY) << 4) << 32));
+				// UV
+                owl_add_tag(packet, 0, GS_SETREG_STQ(8 + ((24 + x * 2) << 4), 8 + ((2 + y * 2) << 4)));
+				// XYZ2
+                owl_add_tag(packet, 1, (uint64_t)((x + 16 + blockX) << 4) | ((uint64_t)((y + 2 + blockY) << 4) << 32));
+			}
+		}
+		else // Odd (Eight 8x2 sprites)
+		{
+            int x;
+			for (x = 0; x < 64; x += 8)
+			{
+				// UV
+                owl_add_tag(packet, 0, GS_SETREG_STQ(8 + ((4 + x * 2) << 4), 8 + ((y * 2) << 4)));
+				// XYZ2
+                owl_add_tag(packet, 1, (uint64_t)((x + blockX) << 4) | ((uint64_t)((y + blockY) << 4) << 32));
+				// UV
+                owl_add_tag(packet, 0, GS_SETREG_STQ(8 + ((12 + x * 2) << 4), 8 + ((2 + y * 2) << 4)));
+				// XYZ2
+                owl_add_tag(packet, 1, (uint64_t)((x + 8 + blockX) << 4) | ((uint64_t)((y + 2 + blockY) << 4) << 32));
+			}
+		}
+	}
+
+    owl_add_tag(packet, GIF_AD, GIF_SET_TAG(3, 1, 0, 0, 0, 1));
+
+    owl_add_tag(packet, GS_CLAMP_1, gs_reg_cache[GS_CACHE_CLAMP]);
+
+    owl_add_tag(packet, GS_FRAME_1, gs_reg_cache[GS_CACHE_FRAME]);
+
+    owl_add_tag(packet, GS_XYOFFSET_1, gs_reg_cache[GS_CACHE_XYOFFSET]);
+}
 
 void set_screen_param(uint8_t param, uint64_t value) {
 	test_reg test = { .data = get_register(GS_CACHE_TEST) };
@@ -318,8 +421,8 @@ void setactive(GSGLOBAL *gsGlobal)
 	gs_reg_cache[GS_CACHE_SCISSOR_2] = gs_reg_cache[GS_CACHE_SCISSOR] = GS_SETREG_SCISSOR_1( 0, gsGlobal->Width - 1, 0, gsGlobal->Height - 1 );
 	gs_reg_cache[GS_CACHE_FRAME_2] = gs_reg_cache[GS_CACHE_FRAME] = GS_SETREG_FRAME_1( gsGlobal->ScreenBuffer[gsGlobal->ActiveBuffer & 1] / 8192, gsGlobal->Width / 64, gsGlobal->PSM, 0 );
 
-	fb[gsGlobal->ActiveBuffer & 1].Vram = gsGlobal->ScreenBuffer[gsGlobal->ActiveBuffer];
-	fb[gsGlobal->ActiveBuffer].Vram = gsGlobal->ScreenBuffer[gsGlobal->ActiveBuffer & 1];
+	fb[0].Vram = gsGlobal->ScreenBuffer[gsGlobal->ActiveBuffer & 1];
+	fb[1].Vram = gsGlobal->ScreenBuffer[gsGlobal->ActiveBuffer];
 
 	// Context 1
 	owl_add_tag(packet, GS_SCISSOR_1, gs_reg_cache[GS_CACHE_SCISSOR]);
@@ -917,10 +1020,10 @@ void init_screen(GSGLOBAL *gsGlobal)
 
 	if(gsGlobal->ZBuffering == GS_SETTING_ON)
 	{
-	    if((gsGlobal->PSM == GS_PSM_CT16) && (gsGlobal->PSMZ != GS_PSMZ_16))
-            gsGlobal->PSMZ = GS_PSMZ_16; // seems only non-S 16-bit z depth works with this mode
-        if((gsGlobal->PSM != GS_PSM_CT16) && (gsGlobal->PSMZ == GS_PSMZ_16))
-            gsGlobal->PSMZ = GS_PSMZ_16S; // other depths don't seem to work with 16-bit non-S z depth
+	    if((gsGlobal->PSM == GS_PSM_CT16) && (gsGlobal->PSMZ != GS_ZBUF_16))
+            gsGlobal->PSMZ = GS_ZBUF_16; // seems only non-S 16-bit z depth works with this mode
+        if((gsGlobal->PSM != GS_PSM_CT16) && (gsGlobal->PSMZ == GS_ZBUF_16))
+            gsGlobal->PSMZ = GS_ZBUF_16S; // other depths don't seem to work with 16-bit non-S z depth
 
 		*p_data++ = gs_reg_cache[GS_CACHE_ZBUF] = GS_SETREG_ZBUF_1( gsGlobal->ZBuffer / 8192, gsGlobal->PSMZ, 0 );
 	} else {
@@ -994,7 +1097,7 @@ GSGLOBAL *temp_init_global()
     gsGlobal->Aspect = GS_ASPECT_4_3;
 
     gsGlobal->PSM = GS_PSM_CT24;
-    gsGlobal->PSMZ = GS_PSMZ_32;
+    gsGlobal->PSMZ = GS_ZBUF_32;
 
     gsGlobal->Dithering = GS_SETTING_OFF;
     gsGlobal->DoubleBuffering = GS_SETTING_ON;
@@ -1089,7 +1192,7 @@ void setup_buffer_textures() {
 
    	fb[2].Width = gsGlobal->Width;
 	fb[2].Height = gsGlobal->Height;
-	fb[2].PSM = gsGlobal->PSMZ;
+	fb[2].PSM = gsGlobal->PSMZ+0x30;
     fb[2].ClutPSM = GS_PSM_CT32;
 
 	fb[2].Mem = NULL;
@@ -1154,7 +1257,7 @@ void init_graphics()
 	//gsGlobal->OffsetY = (int)((2048.0f-(gsGlobal->Height/2)) * 16.0f);
 
 	gsGlobal->PSM  = GS_PSM_CT24;
-	gsGlobal->PSMZ = GS_PSMZ_16S;
+	gsGlobal->PSMZ = GS_ZBUF_16S;
 	gsGlobal->ZBuffering = GS_SETTING_OFF;
 	gsGlobal->DoubleBuffering = GS_SETTING_ON;
 	gsGlobal->PrimAlphaEnable = GS_SETTING_ON;

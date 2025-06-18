@@ -45,6 +45,14 @@ void texture_manager_nextFrame(GSGLOBAL *gsGlobal);
 
 int texture_manager_push(GSTEXTURE *tex);
 
+int texture_manager_lock(GSTEXTURE *tex);
+
+int texture_manager_unlock(GSTEXTURE *tex);
+
+int texture_manager_is_locked(GSTEXTURE *tex);
+
+int texture_manager_lock_and_bind(GSGLOBAL *gsGlobal, GSTEXTURE *tex, bool async);
+
 #ifdef __cplusplus
 };
 #endif
