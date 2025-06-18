@@ -134,16 +134,16 @@ unsigned int get_max_z(GSGLOBAL* gsGlobal)
 	unsigned int max_z;
 
 	switch(gsGlobal->PSMZ){
-		case GS_PSMZ_32:
+		case GS_ZBUF_32:
 			z = 32;
 			break;
 
-		case GS_PSMZ_24:
+		case GS_ZBUF_24:
 			z = 24;
 			break;
 
-		case GS_PSMZ_16:
-		case GS_PSMZ_16S:
+		case GS_ZBUF_16:
+		case GS_ZBUF_16S:
 			z = 16;
 			break;
 		

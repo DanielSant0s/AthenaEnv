@@ -233,7 +233,9 @@ void athena_line_goraud_3d(GSGLOBAL *gsGlobal, float x1, float y1, int iz1, floa
 
 void LookAtCameraMatrix(MATRIX m, VECTOR position, VECTOR target, VECTOR up);
 
-void init3D(float fov, float near, float far);
+void render_init();
+
+void render_set_view(float fov, float near, float far, float width, float height);
 
 VECTOR *getCameraPosition();
 void    setCameraPosition(float x, float y, float z);

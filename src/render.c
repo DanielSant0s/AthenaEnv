@@ -42,22 +42,12 @@ MATRIX world_screen;
 
 FIVECTOR screen_scale;
 
-void init3D(float fov, float near, float far) {
-	GSGLOBAL* gsGlobal = getGSGLOBAL();
-
+void render_init() {
 	initCamera(&world_screen, &world_view, &view_screen);
-	create_view(view_screen, DEG2RAD(fov), near, far, gsGlobal->Width, gsGlobal->Height * ((gsGlobal->Interlace == GS_INTERLACED) && (gsGlobal->Field == GS_FRAME)? 2 : 1));
-
-	matrix_functions->multiply(world_screen, world_view, view_screen);
-
+	
 	vu1_set_double_buffer_settings(274, 357); // Skinned layout
 	// vu1_set_double_buffer_settings(141, 400);
 	owl_flush_packet();
-
-	screen_scale.x = gsGlobal->Width/2;
-	screen_scale.y = gsGlobal->Height/2;
-	screen_scale.z = ((float)get_max_z(gsGlobal)) / 2.0f;
-	screen_scale.w = 0; // athena_render_data attributes
 
 	vu1_colors   = vu_mpg_load_buffer(embed_vu_code_ptr(VU1Draw3DCS),   embed_vu_code_size(VU1Draw3DCS),   VECTOR_UNIT_1, false); 
 	vu1_lights   = vu_mpg_load_buffer(embed_vu_code_ptr(VU1Draw3DLCS),  embed_vu_code_size(VU1Draw3DLCS),  VECTOR_UNIT_1, false);
@@ -68,6 +58,21 @@ void init3D(float fov, float near, float far) {
 	vu1_specular_skinned = vu_mpg_load_buffer(embed_vu_code_ptr(VU1Draw3DLCSS_Skin), embed_vu_code_size(VU1Draw3DLCSS_Skin), VECTOR_UNIT_1, false);
 
 	vu1_lights_reflection = vu_mpg_load_buffer(embed_vu_code_ptr(VU1Draw3DLCS_Ref), embed_vu_code_size(VU1Draw3DLCS_Ref), VECTOR_UNIT_1, false);
+}
+
+void render_set_view(float fov, float near, float far, float width, float height) {
+	if (width == 0.0f && height == 0.0f) {
+		width = gsGlobal->Width;
+		height = gsGlobal->Height * ((gsGlobal->Interlace == GS_INTERLACED) && (gsGlobal->Field == GS_FRAME)? 2 : 1);
+	}
+
+	create_view(view_screen, DEG2RAD(fov), near, far, width, height);
+	matrix_functions->multiply(world_screen, world_view, view_screen);
+
+	screen_scale.x = width/2;
+	screen_scale.y = height/2;
+	screen_scale.z = ((float)get_max_z(gsGlobal)) / 2.0f;
+	screen_scale.w = 0;
 }
 
 static int active_aaa_lights = 0;

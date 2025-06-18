@@ -26,6 +26,8 @@ Screen.clear();
 font.print(0, 0, "Loading assets...");
 Screen.flip();
 
+Render.init();
+
 Render.setView(60.0, 5.0, 4000.0);
 
 // Change your root folder to "render" so we can work with file path magic :p
