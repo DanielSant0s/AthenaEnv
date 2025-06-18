@@ -893,8 +893,13 @@ static const JSCFunctionListEntry js_render_object_proto_funcs[] = {
 	JS_CGETSET_MAGIC_DEF("scale",             js_render_object_get, js_render_object_set, 2),
 };
 
-static JSValue athena_initrender(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
-	float fov = 60.0f, near = 1.0f, far = 2000.0f;
+static JSValue athena_r_init(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
+  	render_init();
+	return JS_UNDEFINED;
+}
+
+static JSValue athena_set_view(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
+	float fov = 60.0f, near = 1.0f, far = 2000.0f, width = 0.0f, height = 0.0f;
 
 	if (argc > 0) {
 		JS_ToFloat32(ctx, &fov, argv[0]);
@@ -902,9 +907,15 @@ static JSValue athena_initrender(JSContext *ctx, JSValue this_val, int argc, JSV
 		if (argc > 1) {
 			JS_ToFloat32(ctx, &near, argv[1]);
 			JS_ToFloat32(ctx, &far, argv[2]);
+
+			if (argc > 3) {
+				JS_ToFloat32(ctx, &width, argv[3]);
+				JS_ToFloat32(ctx, &height, argv[4]);
+			}
 		}
 	}
-  	init3D(fov, near, far);
+
+  	render_set_view(fov, near, far, width, height);
 	return JS_UNDEFINED;
 }
 
@@ -959,7 +970,8 @@ static JSValue athena_newvertex(JSContext *ctx, JSValue this_val, int argc, JSVa
 }
 
 static const JSCFunctionListEntry render_funcs[] = {
-    JS_CFUNC_DEF( "setView",         4,                athena_initrender),
+	JS_CFUNC_DEF( "init",            0,                athena_r_init),
+    JS_CFUNC_DEF( "setView",         6,                athena_set_view),
 	JS_CFUNC_DEF( "vertexList",      6,                 athena_newvertex),
 	JS_CFUNC_DEF( "materialColor",   3,             athena_materialcolor),
 	JS_CFUNC_DEF( "material",        0,               athena_newmaterial),
@@ -973,7 +985,7 @@ static const JSCFunctionListEntry render_funcs[] = {
 	JS_PROP_FLOAT_DEF("CULL_FACE_FRONT",                 CULL_FACE_FRONT, JS_PROP_CONFIGURABLE),
 };
 
-static int render_init(JSContext *ctx, JSModuleDef *m)
+static int render_module_init(JSContext *ctx, JSModuleDef *m)
 {
     return JS_SetModuleExportList(ctx, m, render_funcs, countof(render_funcs));
 }
@@ -1031,5 +1043,5 @@ JSModuleDef *athena_render_init(JSContext* ctx){
         return NULL;
     JS_AddModuleExport(ctx, m, "RenderObject");
 
-	return athena_push_module(ctx, render_init, render_funcs, countof(render_funcs), "Render");
+	return athena_push_module(ctx, render_module_init, render_funcs, countof(render_funcs), "Render");
 }
