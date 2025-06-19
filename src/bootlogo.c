@@ -26,7 +26,7 @@ bool bootlogo_finished() {
 void bootlogoThread(void* data) {
     clock_t start_time = 0;
     uint8_t logo_alpha = 0;
-    GSTEXTURE bootlogo = { };
+    GSSURFACE bootlogo = { };
 
    	bootlogo.Width = 128;
 	bootlogo.Height = 86;

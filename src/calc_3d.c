@@ -127,9 +127,7 @@ int draw_convert_xyz(xyz_t *output, float x, float y, int z, int count, vertex_f
 
 }
 
-unsigned int get_max_z(GSGLOBAL* gsGlobal)
-{
-
+unsigned int get_max_z(GSGLOBAL* gsGlobal) {
 	int z;
 	unsigned int max_z;
 
@@ -201,7 +199,7 @@ static inline u32 lzw(u32 val)
 	return(res);
 }
 
-void athena_set_tw_th(const GSTEXTURE *Texture, int *tw, int *th)
+void athena_set_tw_th(const GSSURFACE *Texture, int *tw, int *th)
 {
 	*tw = 31 - (lzw(Texture->Width) + 1);
 	if(Texture->Width > (1<<*tw))

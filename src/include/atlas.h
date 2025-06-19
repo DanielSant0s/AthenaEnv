@@ -1,7 +1,7 @@
 #ifndef __ATLAS_H
 #define __ATLAS_H
 
-#include <gsKit.h>
+#include <texture_manager.h>
 
 struct atlas_allocation_t
 {
@@ -15,7 +15,7 @@ typedef struct
 {
     struct atlas_allocation_t *allocation;
 
-    GSTEXTURE surface;
+    GSSURFACE surface;
 } atlas_t;
 
 /** allocates a new atlas. Further settings should be set manually

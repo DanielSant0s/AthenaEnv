@@ -12,6 +12,8 @@
 
 #include <mpg_manager.h>
 
+#include <texture_manager.h>z
+
 #include <vector.h>
 
 #define DEG2RAD(deg) ((deg) * (M_PI / 180.0f))
@@ -241,7 +243,7 @@ void draw_bbox(athena_object_data* obj, Color color) {
 	free(xyz);*/
 }
 
-void append_texture_tags(owl_packet* packet, GSTEXTURE *texture, int texture_id, eColorFunctions func) {
+void append_texture_tags(owl_packet* packet, GSSURFACE *texture, int texture_id, eColorFunctions func) {
 	if (texture_id != -1) {
 		owl_add_cnt_tag(packet, 8, 0); // 4 quadwords for vif
 		owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0)); 
@@ -319,6 +321,72 @@ void update_object_space(athena_object_data *obj) {
   	matrix_functions->translate(obj->transform, obj->transform, obj->position);
 }
 
+void bake_giftags(owl_packet *packet, athena_render_data *data, bool texture_mapping, int mat_id) {
+	prim_reg_t prim_data = {
+		.PRIM = GS_PRIM_PRIM_TRIFAN,
+		.IIP = data->attributes.shade_model,
+		.TME = 1,
+		.FGE = gsGlobal->PrimFogEnable,
+		.ABE = gsGlobal->PrimAlphaEnable,
+		.AA1 = gsGlobal->PrimAAEnable,
+		.FST = 0,
+		.CTXT = 0,
+		.FIX = 0
+	};
+
+	prim_reg_t notm_prim_data = prim_data;
+	notm_prim_data.TME = 0;
+
+	giftag_t clip_tag = {
+		.NLOOP = 0,
+		.EOP = 1,
+		.PRE = 1,
+		.PRIM = prim_data.data,
+		.FLG = 0,
+		.NREG = 3
+	};
+
+	giftag_t notm_clip_tag = clip_tag;
+	notm_clip_tag.PRIM = notm_prim_data.data;
+
+	prim_data.PRIM = (data->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE);
+	notm_prim_data.PRIM = prim_data.PRIM;
+
+	giftag_t prim_tag = {
+		.NLOOP = 0,
+		.EOP = 1,
+		.PRE = 1,
+		.PRIM = prim_data.data,
+		.FLG = 0,
+		.NREG = 3
+	};
+
+	giftag_t notm_prim_tag = prim_tag;
+	notm_prim_tag.PRIM = notm_prim_data.data;
+
+	data->materials[data->material_indices[mat_id].index].prim_tag.dword[1] = DRAW_STQ2_REGLIST;
+	data->materials[data->material_indices[mat_id].index].prim_tag.dword[0] = prim_tag.data;
+
+	data->materials[data->material_indices[mat_id].index].notm_prim_tag.dword[1] = DRAW_STQ2_REGLIST;
+	data->materials[data->material_indices[mat_id].index].notm_prim_tag.dword[0] = notm_prim_tag.data;
+
+	data->materials[data->material_indices[mat_id].index].clip_tag.f[3] = data->attributes.face_culling;
+	data->materials[data->material_indices[mat_id].index].clip_tag.sword[2] = data->tristrip;
+	data->materials[data->material_indices[mat_id].index].clip_tag.sword[1] = data->attributes.accurate_clipping? (clip_tag.data >> 32) : 0;
+
+	data->materials[data->material_indices[mat_id].index].notm_clip_tag.f[3] = data->attributes.face_culling;
+	data->materials[data->material_indices[mat_id].index].notm_clip_tag.sword[2] = data->tristrip;
+	data->materials[data->material_indices[mat_id].index].notm_clip_tag.sword[1] = data->attributes.accurate_clipping? (notm_clip_tag.data >> 32) : 0;
+
+	if (texture_mapping) {
+		owl_add_unpack_data(packet, 26, (void*)&data->materials[data->material_indices[mat_id].index].clip_tag, 1, 0);
+		owl_add_unpack_data(packet, 0, (void*)&data->materials[data->material_indices[mat_id].index].prim_tag, 1, 1);
+	} else {
+		owl_add_unpack_data(packet, 26, (void*)&data->materials[data->material_indices[mat_id].index].notm_clip_tag, 1, 0);
+		owl_add_unpack_data(packet, 0, (void*)&data->materials[data->material_indices[mat_id].index].notm_prim_tag, 1, 1);
+	}
+}
+
 void draw_vu1_with_colors(athena_object_data *obj, bool bump_pass) {
 	athena_render_data *data = obj->data;
 
@@ -360,13 +428,13 @@ void draw_vu1_with_colors(athena_object_data *obj, bool bump_pass) {
 	//owl_add_end_tag(packet);
 
 	int last_index = -1;
-	GSTEXTURE* tex = NULL;
+	GSSURFACE* tex = NULL;
 	int texture_id;
 	for(int i = 0; i < data->material_index_count; i++) {
 		bool texture_mapping = ((((data->materials[data->material_indices[i].index].texture_id != -1)) && data->attributes.texture_mapping) || bump_pass);
 
 		if (texture_mapping) {
-			GSTEXTURE *cur_tex = data->textures[(bump_pass? data->materials[data->material_indices[i].index].bump_texture_id : data->materials[data->material_indices[i].index].texture_id)];
+			GSSURFACE *cur_tex = data->textures[(bump_pass? data->materials[data->material_indices[i].index].bump_texture_id : data->materials[data->material_indices[i].index].texture_id)];
 			if (cur_tex != tex) {
 				texture_id = texture_manager_bind(gsGlobal, cur_tex, true);
 				tex = cur_tex;
@@ -394,67 +462,12 @@ void draw_vu1_with_colors(athena_object_data *obj, bool bump_pass) {
 				append_texture_tags(packet, tex, texture_id, COLOR_MODULATE);
 			}
 
-			giftag_t clip_tag = {
-				.data = {
-					.NLOOP = 0,
-					.EOP = 1,
-					.PRE = 1,
-					.PRIM = (prim_reg_t) {
-						.data = { 
-							.PRIM = GS_PRIM_PRIM_TRIFAN,
-							.IIP = data->attributes.shade_model,
-							.TME = texture_mapping,
-							.FGE = gsGlobal->PrimFogEnable,
-							.ABE = gsGlobal->PrimAlphaEnable,
-							.AA1 = gsGlobal->PrimAAEnable,
-							.FST = 0,
-							.CTXT = 0,
-							.FIX = 0
-						}
-					}.raw,
-					.FLG = 0,
-					.NREG = 3
+			bake_giftags(packet, data, texture_mapping, i);
 
-				}
-			};
+			owl_add_unpack_data(packet, 1, (void*)&data->materials[data->material_indices[i].index].diffuse, 1, 1);
 
-			giftag_t prim_tag = {
-				.data = {
-					.NLOOP = 0,
-					.EOP = 1,
-					.PRE = 1,
-					.PRIM = (prim_reg_t) {
-						.data = { 
-							.PRIM = (data->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE),
-							.IIP = data->attributes.shade_model,
-							.TME = texture_mapping,
-							.FGE = gsGlobal->PrimFogEnable,
-							.ABE = gsGlobal->PrimAlphaEnable,
-							.AA1 = gsGlobal->PrimAAEnable,
-							.FST = 0,
-							.CTXT = 0,
-							.FIX = 0
-						}
-					}.raw,
-					.FLG = 0,
-					.NREG = 3
-
-				}
-			};
-
-			data->materials[data->material_indices[i].index].prim_tag.dword[1] = DRAW_STQ2_REGLIST;
-			data->materials[data->material_indices[i].index].prim_tag.dword[0] = prim_tag.raw;
-
-			data->materials[data->material_indices[i].index].clip_prim_tag.f[3] = data->attributes.face_culling;
-			data->materials[data->material_indices[i].index].clip_prim_tag.sword[2] = data->tristrip;
-			data->materials[data->material_indices[i].index].clip_prim_tag.sword[1] = data->attributes.accurate_clipping? (clip_tag.raw >> 32) : 0;
-
-			owl_add_unpack_data(packet, 26, (void*)&data->materials[data->material_indices[i].index].clip_prim_tag, 1, 0);
-
-			unpack_list_open(packet, 0, true);
+			unpack_list_open(packet, 2, true);
 			{
-				unpack_list_append(packet, (void*)&data->materials[data->material_indices[i].index].prim_tag, 1);
-				unpack_list_append(packet, (void*)&data->materials[data->material_indices[i].index].diffuse, 1);
 				if (data->skin_data) {
 					unpack_list_append(packet, &skin_data[idxs_drawn], count*2);
 				}
@@ -528,13 +541,13 @@ void draw_vu1_with_lights(athena_object_data *obj, bool bump_pass) {
 	//owl_add_end_tag(packet);
 
 	int last_index = -1;
-	GSTEXTURE* tex = NULL;
+	GSSURFACE* tex = NULL;
 	int texture_id;
 	for(int i = 0; i < data->material_index_count; i++) {
 		bool texture_mapping = ((data->materials[data->material_indices[i].index].texture_id != -1) && data->attributes.texture_mapping);
 
 		if (texture_mapping) {
-			GSTEXTURE *cur_tex = data->textures[data->materials[data->material_indices[i].index].texture_id];
+			GSSURFACE *cur_tex = data->textures[data->materials[data->material_indices[i].index].texture_id];
 			if (cur_tex != tex) {
 				texture_id = texture_manager_bind(gsGlobal, cur_tex, true);
 				tex = cur_tex;
@@ -563,68 +576,12 @@ void draw_vu1_with_lights(athena_object_data *obj, bool bump_pass) {
 				append_texture_tags(packet, tex, texture_id, COLOR_MODULATE);
 			}
 
-			giftag_t clip_tag = {
-				.data = {
-					.NLOOP = 0,
-					.EOP = 1,
-					.PRE = 1,
-					.PRIM = (prim_reg_t) {
-						.data = { 
-							.PRIM = GS_PRIM_PRIM_TRIFAN,
-							.IIP = data->attributes.shade_model,
-							.TME = texture_mapping,
-							.FGE = gsGlobal->PrimFogEnable,
-							.ABE = gsGlobal->PrimAlphaEnable,
-							.AA1 = gsGlobal->PrimAAEnable,
-							.FST = 0,
-							.CTXT = 0,
-							.FIX = 0
-						}
-					}.raw,
-					.FLG = 0,
-					.NREG = 3
+			bake_giftags(packet, data, texture_mapping, i);
+			
+			owl_add_unpack_data(packet, 1, (void*)&data->materials[data->material_indices[i].index].diffuse, 1, 1);
 
-				}
-			};
-
-			giftag_t prim_tag = {
-				.data = {
-					.NLOOP = 0,
-					.EOP = 1,
-					.PRE = 1,
-					.PRIM = (prim_reg_t) {
-						.data = { 
-							.PRIM = (data->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE),
-							.IIP = data->attributes.shade_model,
-							.TME = texture_mapping,
-							.FGE = gsGlobal->PrimFogEnable,
-							.ABE = gsGlobal->PrimAlphaEnable,
-							.AA1 = gsGlobal->PrimAAEnable,
-							.FST = 0,
-							.CTXT = 0,
-							.FIX = 0
-						}
-					}.raw,
-					.FLG = 0,
-					.NREG = 3
-
-				}
-			};
-
-			data->materials[data->material_indices[i].index].prim_tag.dword[1] = DRAW_STQ2_REGLIST;
-			data->materials[data->material_indices[i].index].prim_tag.dword[0] = prim_tag.raw;
-
-			data->materials[data->material_indices[i].index].clip_prim_tag.f[3] = data->attributes.face_culling;
-
-			data->materials[data->material_indices[i].index].clip_prim_tag.sword[2] = data->tristrip;
-			data->materials[data->material_indices[i].index].clip_prim_tag.sword[1] = (data->attributes.accurate_clipping? (clip_tag.raw >> 32) : 0);
-
-			owl_add_unpack_data(packet, 26, (void*)&data->materials[data->material_indices[i].index].clip_prim_tag, 1, 0);
-
-			unpack_list_open(packet, 0, true);
+			unpack_list_open(packet, 2, true);
 			{
-				unpack_list_append(packet, (void*)&data->materials[data->material_indices[i].index].prim_tag, 1);
-				unpack_list_append(packet, (void*)&data->materials[data->material_indices[i].index].diffuse, 1);
 				if (data->skin_data) {
 					unpack_list_append(packet, &skin_data[idxs_drawn], count*2);
 				}
@@ -700,13 +657,13 @@ void draw_vu1_with_spec_lights(athena_object_data *obj, bool bump_pass) {
 	//owl_add_end_tag(packet);
 
 	int last_index = -1;
-	GSTEXTURE* tex = NULL;
+	GSSURFACE* tex = NULL;
 	int texture_id;
 	for(int i = 0; i < data->material_index_count; i++) {
 		bool texture_mapping = ((data->materials[data->material_indices[i].index].texture_id != -1) && data->attributes.texture_mapping);
 
 		if (texture_mapping) {
-			GSTEXTURE *cur_tex = data->textures[data->materials[data->material_indices[i].index].texture_id];
+			GSSURFACE *cur_tex = data->textures[data->materials[data->material_indices[i].index].texture_id];
 			if (cur_tex != tex) {
 				texture_id = texture_manager_bind(gsGlobal, cur_tex, true);
 				tex = cur_tex;
@@ -734,68 +691,12 @@ void draw_vu1_with_spec_lights(athena_object_data *obj, bool bump_pass) {
 				append_texture_tags(packet, tex, texture_id, COLOR_MODULATE);
 			}
 
-			giftag_t clip_tag = {
-				.data = {
-					.NLOOP = 0,
-					.EOP = 1,
-					.PRE = 1,
-					.PRIM = (prim_reg_t) {
-						.data = { 
-							.PRIM = GS_PRIM_PRIM_TRIFAN,
-							.IIP = data->attributes.shade_model,
-							.TME = texture_mapping,
-							.FGE = gsGlobal->PrimFogEnable,
-							.ABE = gsGlobal->PrimAlphaEnable,
-							.AA1 = gsGlobal->PrimAAEnable,
-							.FST = 0,
-							.CTXT = 0,
-							.FIX = 0
-						}
-					}.raw,
-					.FLG = 0,
-					.NREG = 3
+			bake_giftags(packet, data, texture_mapping, i);
+			
+			owl_add_unpack_data(packet, 1, (void*)&data->materials[data->material_indices[i].index].diffuse, 1, 1);
 
-				}
-			};
-
-			giftag_t prim_tag = {
-				.data = {
-					.NLOOP = 0,
-					.EOP = 1,
-					.PRE = 1,
-					.PRIM = (prim_reg_t) {
-						.data = { 
-							.PRIM = (data->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE),
-							.IIP = data->attributes.shade_model,
-							.TME = texture_mapping,
-							.FGE = gsGlobal->PrimFogEnable,
-							.ABE = gsGlobal->PrimAlphaEnable,
-							.AA1 = gsGlobal->PrimAAEnable,
-							.FST = 0,
-							.CTXT = 0,
-							.FIX = 0
-						}
-					}.raw,
-					.FLG = 0,
-					.NREG = 3
-
-				}
-			};
-
-			data->materials[data->material_indices[i].index].prim_tag.dword[1] = DRAW_STQ2_REGLIST;
-			data->materials[data->material_indices[i].index].prim_tag.dword[0] = prim_tag.raw;
-
-			data->materials[data->material_indices[i].index].clip_prim_tag.f[3] = data->attributes.face_culling;
-
-			data->materials[data->material_indices[i].index].clip_prim_tag.sword[2] = data->tristrip;
-			data->materials[data->material_indices[i].index].clip_prim_tag.sword[1] = data->attributes.accurate_clipping? (clip_tag.raw >> 32) : 0;
-
-			owl_add_unpack_data(packet, 26, (void*)&data->materials[data->material_indices[i].index].clip_prim_tag, 1, 0);
-
-			unpack_list_open(packet, 0, true);
+			unpack_list_open(packet, 2, true);
 			{
-				unpack_list_append(packet, (void*)&data->materials[data->material_indices[i].index].prim_tag, 1);
-				unpack_list_append(packet, (void*)&data->materials[data->material_indices[i].index].diffuse, 1);
 				if (data->skin_data) {
 					unpack_list_append(packet, &skin_data[idxs_drawn], count*2);
 				}
@@ -870,13 +771,13 @@ void draw_vu1_with_lights_ref(athena_object_data *obj, bool bump_pass) {
 	//owl_add_end_tag(packet);
 
 	int last_index = -1;
-	GSTEXTURE* tex = NULL;
+	GSSURFACE* tex = NULL;
 	int texture_id;
 	for(int i = 0; i < data->material_index_count; i++) {
 		bool texture_mapping = ((data->materials[data->material_indices[i].index].ref_texture_id != -1));
 
 		if (texture_mapping) {
-			GSTEXTURE *cur_tex = data->textures[data->materials[data->material_indices[i].index].ref_texture_id];
+			GSSURFACE *cur_tex = data->textures[data->materials[data->material_indices[i].index].ref_texture_id];
 			if (cur_tex != tex) {
 				texture_id = texture_manager_bind(gsGlobal, cur_tex, true);
 				tex = cur_tex;
@@ -906,68 +807,12 @@ void draw_vu1_with_lights_ref(athena_object_data *obj, bool bump_pass) {
 				append_texture_tags(packet, tex, texture_id, COLOR_MODULATE);
 			}
 
-			giftag_t clip_tag = {
-				.data = {
-					.NLOOP = 0,
-					.EOP = 1,
-					.PRE = 1,
-					.PRIM = (prim_reg_t) {
-						.data = { 
-							.PRIM = GS_PRIM_PRIM_TRIFAN,
-							.IIP = data->attributes.shade_model,
-							.TME = texture_mapping,
-							.FGE = gsGlobal->PrimFogEnable,
-							.ABE = gsGlobal->PrimAlphaEnable,
-							.AA1 = gsGlobal->PrimAAEnable,
-							.FST = 0,
-							.CTXT = 0,
-							.FIX = 0
-						}
-					}.raw,
-					.FLG = 0,
-					.NREG = 3
+			bake_giftags(packet, data, texture_mapping, i);
+			
+			owl_add_unpack_data(packet, 1, (void*)&data->materials[data->material_indices[i].index].diffuse, 1, 1);
 
-				}
-			};
-
-			giftag_t prim_tag = {
-				.data = {
-					.NLOOP = 0,
-					.EOP = 1,
-					.PRE = 1,
-					.PRIM = (prim_reg_t) {
-						.data = { 
-							.PRIM = (data->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE),
-							.IIP = data->attributes.shade_model,
-							.TME = texture_mapping,
-							.FGE = gsGlobal->PrimFogEnable,
-							.ABE = gsGlobal->PrimAlphaEnable,
-							.AA1 = gsGlobal->PrimAAEnable,
-							.FST = 0,
-							.CTXT = 0,
-							.FIX = 0
-						}
-					}.raw,
-					.FLG = 0,
-					.NREG = 3
-
-				}
-			};
-
-			data->materials[data->material_indices[i].index].prim_tag.dword[1] = DRAW_STQ2_REGLIST;
-			data->materials[data->material_indices[i].index].prim_tag.dword[0] = prim_tag.raw;
-
-			data->materials[data->material_indices[i].index].clip_prim_tag.f[3] = data->attributes.face_culling;
-
-			data->materials[data->material_indices[i].index].clip_prim_tag.sword[2] = data->tristrip;
-			data->materials[data->material_indices[i].index].clip_prim_tag.sword[1] = (data->attributes.accurate_clipping? (clip_tag.raw >> 32) : 0);
-
-			owl_add_unpack_data(packet, 26, (void*)&data->materials[data->material_indices[i].index].clip_prim_tag, 1, 0);
-
-			unpack_list_open(packet, 0, true);
+			unpack_list_open(packet, 2, true);
 			{
-				unpack_list_append(packet, (void*)&data->materials[data->material_indices[i].index].prim_tag, 1);
-				unpack_list_append(packet, (void*)&data->materials[data->material_indices[i].index].diffuse, 1);
 				if (data->skin_data) {
 					// unpack_list_append(packet, &skin_data[idxs_drawn], count*2);
 				}

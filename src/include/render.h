@@ -143,7 +143,10 @@ typedef struct vertex_skin_data {
 typedef struct
 {
 	owl_qword prim_tag;
-	owl_qword clip_prim_tag;
+	owl_qword clip_tag;
+
+	owl_qword notm_prim_tag;
+	owl_qword notm_clip_tag;
 
     VECTOR ambient; 
     VECTOR diffuse;
@@ -182,7 +185,7 @@ typedef struct athena_render_data {
 
     eRenderPipelines pipeline;
 
-    GSTEXTURE** textures;
+    GSSURFACE** textures;
 	int texture_count;
 
 	ath_mat *materials;
@@ -227,7 +230,7 @@ int draw_convert_xyz(xyz_t *output, float x, float y, int z, int count, vertex_f
 
 unsigned int get_max_z(GSGLOBAL* gsGlobal);
 
-void athena_set_tw_th(const GSTEXTURE *Texture, int *tw, int *th);
+void athena_set_tw_th(const GSSURFACE *Texture, int *tw, int *th);
 
 void athena_line_goraud_3d(GSGLOBAL *gsGlobal, float x1, float y1, int iz1, float x2, float y2, int iz2, u64 color1, u64 color2);
 
@@ -251,7 +254,7 @@ void panCamera(float x, float y);
 int NewLight();
 void SetLightAttribute(int id, float x, float y, float z, int attr);
 
-void loadModel(athena_render_data* res_m, const char* path, GSTEXTURE* text);
+void loadModel(athena_render_data* res_m, const char* path, GSSURFACE* text);
 void draw_bbox(athena_object_data *obj, Color color);
 
 void render_object(athena_object_data *obj);
@@ -280,7 +283,7 @@ do { \
 #define append_texture(m, tex) \
 do { \
 	m->texture_count++; \
-	m->textures = realloc(m->textures, sizeof(GSTEXTURE*)*m->texture_count); \
+	m->textures = realloc(m->textures, sizeof(GSSURFACE*)*m->texture_count); \
 	m->textures[m->texture_count-1] = tex; \
 } while (0)
 

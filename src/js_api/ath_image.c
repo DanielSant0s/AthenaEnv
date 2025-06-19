@@ -69,11 +69,12 @@ static JSValue athena_image_ctor(JSContext *ctx, JSValueConst new_target, int ar
     if (!image)
         return JS_EXCEPTION;
 
-	image->tex = js_malloc(ctx, sizeof(GSTEXTURE));
+	image->tex = js_malloc(ctx, sizeof(GSSURFACE));
 
 	image->tex->Width = 0;
 	image->tex->Height = 0;
 	image->tex->Delayed = true;
+	image->tex->PageAligned = false;
 	image->tex->Mem = NULL;
 	image->tex->Clut = NULL;
 	image->tex->Vram = 0;
@@ -302,6 +303,8 @@ static JSValue athena_image_get_uint(JSContext *ctx, JSValueConst this_val, int 
 			return JS_NewUint32(ctx, s->tex->Width);
 		case 8:
 			return JS_NewUint32(ctx, s->tex->Height);
+		case 9:
+			return JS_NewUint32(ctx, s->tex->PageAligned);
 			
 	}
 
@@ -379,6 +382,9 @@ static JSValue athena_image_set_uint(JSContext *ctx, JSValueConst this_val, JSVa
 		case 8:
 			s->tex->Height = value;
 			break;
+		case 9:
+			s->tex->PageAligned = value;
+			break;
 			
 
 	}
@@ -417,6 +423,7 @@ static const JSCFunctionListEntry js_image_proto_funcs[] = {
 	JS_CGETSET_MAGIC_DEF("palette", athena_image_get_uint, athena_image_set_uint, 6),
 	JS_CGETSET_MAGIC_DEF("texWidth", athena_image_get_uint, athena_image_set_uint, 7),
 	JS_CGETSET_MAGIC_DEF("texHeight", athena_image_get_uint, athena_image_set_uint, 8),
+	JS_CGETSET_MAGIC_DEF("renderable", athena_image_get_uint, athena_image_set_uint, 9),
 };
 
 static JSValue athena_copy_block(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){

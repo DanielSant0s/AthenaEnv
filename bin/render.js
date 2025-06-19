@@ -18,9 +18,23 @@ Screen.setVSync(true);
 const canvas = Screen.getMode();
 
 canvas.zbuffering = true;
+canvas.psm = Screen.CT32;
 canvas.psmz = Screen.Z24;
 
 Screen.setMode(canvas);
+
+//const temp_buffer = new Image();
+//temp_buffer.bpp = 32;
+//temp_buffer.texWidth = 256;
+//temp_buffer.texHeight = 128;
+//temp_buffer.renderable = true;
+//
+//temp_buffer.width = 256;
+//temp_buffer.height = 128;
+//temp_buffer.endx = 256;
+//temp_buffer.endy = 128;
+//
+//temp_buffer.lock();
 
 Screen.clear();
 font.print(0, 0, "Loading assets...");
@@ -87,16 +101,24 @@ const gltf_box = new RenderData("box_bump.gltf");
 const dragontex = new Image("dragon.png");
 const dragonmesh = new RenderData("dragon.obj", dragontex);
 
+dragonmesh.setTexture(1, skytex);
+
+const dragon_materials = dragonmesh.materials;
+
+dragon_materials[0].ref_texture_id = 1;
+
+dragonmesh.materials = dragon_materials;
+
 const monkeytex = new Image("monkey.png");
 const monkeymesh = new RenderData("monkey.obj", monkeytex);
 
 monkeymesh.setTexture(1, skytex);
 
-const dragon_materials = monkeymesh.materials;
+const monkey_materials = monkeymesh.materials;
 
-dragon_materials[0].ref_texture_id = 1;
+monkey_materials[0].ref_texture_id = 1;
 
-monkeymesh.materials = dragon_materials;
+monkeymesh.materials = monkey_materials;
 
 const moontex = new Image("moon.png");
 
@@ -180,24 +202,18 @@ let bbox = false;
 
 let spec = false;
 
-const draw_buffer = Screen.getBufferImage(Screen.DRAW_BUFFER);
-const depth_buffer = Screen.getBufferImage(Screen.DEPTH_BUFFER);
-
-const additive_alpha = {a:Screen.SRC_RGB, b:Screen.ZERO_RGB, c:Screen.DST_ALPHA, d:Screen.DST_RGB, fix:0};
-
-const default_alpha = Screen.getParam(Screen.ALPHA_BLEND_EQUATION);
-
-const temp_buffer = new Image();
-temp_buffer.bpp = 24;
-temp_buffer.texWidth = 256;
-temp_buffer.texHeight = 256;
-
-temp_buffer.width = 256;
-temp_buffer.height = 256;
-temp_buffer.endx = 256;
-temp_buffer.endy = 256;
-
-temp_buffer.lock();
+//Screen.initBuffers();
+//
+//const draw_buffer = Screen.getBuffer(Screen.DRAW_BUFFER);
+//const depth_buffer = Screen.getBuffer(Screen.DEPTH_BUFFER);
+//
+//const additive_alpha = {a:Screen.SRC_RGB, b:Screen.ZERO_RGB, c:Screen.DST_ALPHA, d:Screen.DST_RGB, fix:0};
+//
+//const default_alpha = Screen.getParam(Screen.ALPHA_BLEND_EQUATION);
+//
+//const temp_bounds = {x1:0, y1:0, x2:256, y2:128};
+//
+//const default_bounds = Screen.getParam(Screen.SCISSOR_BOUNDS);
 
 while(true) {
     Screen.clear(gray);
@@ -275,27 +291,46 @@ while(true) {
 
     render_object[modeltodisplay].render();
 
-    Screen.setParam(Screen.DEPTH_TEST_ENABLE, false);
+    //Screen.setParam(Screen.DEPTH_TEST_ENABLE, false);
+//
+    //Image.copyVRAMBlock(draw_buffer, 0, 0, depth_buffer, 0, 0);
+//
+    //Screen.setParam(Screen.ALPHA_BLEND_EQUATION, additive_alpha);
 
-    Image.copyVRAMBlock(draw_buffer, 0, 0, depth_buffer, 0, 0);
+    //depth_buffer.color = Color.new(128, 100, 100, 32);
+    //depth_buffer.draw(2, 2);
+//
+    //depth_buffer.color = Color.new(100, 100, 128, 32);
+    //depth_buffer.draw(-2, 2);
+//
+    //depth_buffer.color = Color.new(100, 128, 100, 32);
+    //depth_buffer.draw(2, -2);
 
-    Screen.setParam(Screen.ALPHA_BLEND_EQUATION, additive_alpha);
+    //Screen.setParam(Screen.ALPHA_BLEND_EQUATION, default_alpha);
+//
+    //Image.copyVRAMBlock(draw_buffer, 150, 150, temp_buffer, 0, 0);
+//
+    //temp_buffer.color = Color.new(128, 0, 0);
+    //temp_buffer.draw(0, 0);
+//
+    //Screen.setBuffer(Screen.DRAW_BUFFER, temp_buffer);
+//
+    //Screen.setParam(Screen.DST_ALPHA_TEST_ENABLE, true);
+    //Screen.setParam(Screen.DST_ALPHA_TEST_METHOD, true);
+//
+    //Draw.rect(10, 10, 236, 108, Color.new(0, 0, 0, 0)); // this is a rect mask
+//
+    //Draw.rect(0, 0, 256, 128, Color.new(0, 0, 0)); // sort of a clear
+//
+    //Screen.setParam(Screen.DST_ALPHA_TEST_ENABLE, false);
 
-    depth_buffer.color = Color.new(128, 100, 100, 32);
-    depth_buffer.draw(2, 2);
+    //
 
-    depth_buffer.color = Color.new(100, 100, 128, 32);
-    depth_buffer.draw(-2, 2);
+    //Draw.rect(32, 32, 64, 64, Color.new(64, 0, 128));
 
-    depth_buffer.color = Color.new(100, 128, 100, 32);
-    depth_buffer.draw(2, -2);
+    //Screen.setBuffer(Screen.DRAW_BUFFER, draw_buffer);
 
-    Screen.setParam(Screen.ALPHA_BLEND_EQUATION, default_alpha);
-
-    Image.copyVRAMBlock(draw_buffer, 150, 150, temp_buffer, 0, 0);
-
-    temp_buffer.color = Color.new(128, 0, 0);
-    temp_buffer.draw(0, 0);
+    //temp_buffer.draw(0, 128);
 
     font.print(10, 10, Screen.getFPS(360) + " FPS | " + free_mem + " | Free VRAM: " + free_vram + "KB");
     font.print(10, 25, render_data[modeltodisplay].size + " Vertices | " + "Pipeline: " + pipelines[render_data[modeltodisplay].pipeline]);

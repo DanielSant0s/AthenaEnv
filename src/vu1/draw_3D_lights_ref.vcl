@@ -143,7 +143,7 @@ culled_init:
         ;////////////////////////////////////////////
 
         ;//////////////// - NORMALS - /////////////////
-        MatrixMultiplyVector	normal,    LocalLight, inNorm ; transform each normal by the matrix
+        MatrixMultiplyVector	normal,    ObjectMatrix, inNorm ; transform each normal by the matrix
         
         move light, vf00
         move intensity, vf00

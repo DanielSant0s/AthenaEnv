@@ -58,10 +58,8 @@ typedef struct gsBitmap GSBITMAP;
 
 
 //2D drawing functions
-int athena_load_png(GSTEXTURE* tex, FILE* File, bool delayed)
+int athena_load_png(GSSURFACE* tex, FILE* File, bool delayed)
 {
-	tex->Delayed = true;
-
 	if (File == NULL)
 	{
 		dbgprintf("Failed to load PNG file\n");
@@ -313,7 +311,7 @@ int athena_load_png(GSTEXTURE* tex, FILE* File, bool delayed)
 
 }
 
-int athena_load_bmp(GSTEXTURE* tex, FILE* File, bool delayed)
+int athena_load_bmp(GSSURFACE* tex, FILE* File, bool delayed)
 {
 	GSBITMAP Bitmap;
 	int x, y;
@@ -321,8 +319,6 @@ int athena_load_bmp(GSTEXTURE* tex, FILE* File, bool delayed)
 	u32 FTexSize;
 	u8  *image;
 	u8  *p;
-
-	tex->Delayed = true;
 
 	if (File == NULL)
 	{
@@ -608,7 +604,7 @@ my_error_exit(j_common_ptr cinfo)
 
 // Following official documentation max width or height of the texture is 1024
 #define MAX_TEXTURE 1024
-static void  _ps2_load_JPEG_generic(GSTEXTURE *Texture, struct jpeg_decompress_struct *cinfo, struct my_error_mgr *jerr, bool scale_down)
+static void  _ps2_load_JPEG_generic(GSSURFACE *Texture, struct jpeg_decompress_struct *cinfo, struct my_error_mgr *jerr, bool scale_down)
 {
 	int textureSize = 0;
 	if (scale_down) {
@@ -645,10 +641,8 @@ static void  _ps2_load_JPEG_generic(GSTEXTURE *Texture, struct jpeg_decompress_s
 	jpeg_finish_decompress(cinfo);
 }
 
-int athena_load_jpeg(GSTEXTURE* tex, FILE* fp, bool scale_down, bool delayed)
+int athena_load_jpeg(GSSURFACE* tex, FILE* fp, bool scale_down, bool delayed)
 {
-	tex->Delayed = true;
-
 	struct jpeg_decompress_struct cinfo;
 	struct my_error_mgr jerr;
 
@@ -693,7 +687,10 @@ int athena_load_jpeg(GSTEXTURE* tex, FILE* fp, bool scale_down, bool delayed)
 
 }
 
-int load_image(GSTEXTURE* image, const char* path, bool delayed){
+int load_image(GSSURFACE* image, const char* path, bool delayed) {
+	image->Delayed = true;
+	image->PageAligned = false;
+
 	FILE* file = fopen(path, "rb");
 	uint16_t magic;
 	fread(&magic, 1, 2, file);

@@ -15,8 +15,7 @@
 #ifndef __TEXTURE_MANAGER_H__
 #define __TEXTURE_MANAGER_H__
 
-
-#include <gsKit.h>
+#include <graphics.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -24,34 +23,34 @@ extern "C" {
 
 #define TRANSFER_REQUEST_MASK 0x80000000
 
-void texture_upload(GSGLOBAL *gsGlobal, GSTEXTURE *Texture);
+void texture_upload(GSGLOBAL *gsGlobal, GSSURFACE *Texture);
 
 /// Initialize the texture manager
 void texture_manager_init(GSGLOBAL *gsGlobal);
 
 /// Bind a texture to VRAM, will automatically transfer the texture.
-int texture_manager_bind(GSGLOBAL *gsGlobal, GSTEXTURE *tex, bool async);
+int texture_manager_bind(GSGLOBAL *gsGlobal, GSSURFACE *tex, bool async);
 
 /// Invalidate a texture, will automatically transfer the texture on next bind call.
-void texture_manager_invalidate(GSTEXTURE *tex);
+void texture_manager_invalidate(GSSURFACE *tex);
 
 /// Free the texture, this is mainly a performance optimization.
 /// The texture will be automatically freed if not used.
-void texture_manager_free(GSTEXTURE *tex);
+void texture_manager_free(GSSURFACE *tex);
 
 /// When starting a next frame (on vsync/swap), call this function.
 /// It updates texture usage statistics.
 void texture_manager_nextFrame(GSGLOBAL *gsGlobal);
 
-int texture_manager_push(GSTEXTURE *tex);
+int texture_manager_push(GSSURFACE *tex);
 
-int texture_manager_lock(GSTEXTURE *tex);
+int texture_manager_lock(GSSURFACE *tex);
 
-int texture_manager_unlock(GSTEXTURE *tex);
+int texture_manager_unlock(GSSURFACE *tex);
 
-int texture_manager_is_locked(GSTEXTURE *tex);
+int texture_manager_is_locked(GSSURFACE *tex);
 
-int texture_manager_lock_and_bind(GSGLOBAL *gsGlobal, GSTEXTURE *tex, bool async);
+int texture_manager_lock_and_bind(GSGLOBAL *gsGlobal, GSSURFACE *tex, bool async);
 
 #ifdef __cplusplus
 };

@@ -54,7 +54,7 @@ void obj_transfer_vertex(athena_render_data* m, uint32_t dst_idx, fastObjMesh* o
 	m->normals[dst_idx][3] = 1.0f;
 }
 
-void loadOBJ(athena_render_data* res_m, const char* path, GSTEXTURE* text) {
+void loadOBJ(athena_render_data* res_m, const char* path, GSSURFACE* text) {
     fastObjMesh* m = fast_obj_read(path);
 
 	res_m->texture_count = 0;
@@ -91,7 +91,7 @@ void loadOBJ(athena_render_data* res_m, const char* path, GSTEXTURE* text) {
 
 				if (!prev_loaded) {
 					res_m->materials[i].texture_id = res_m->texture_count;
-					GSTEXTURE* tex = malloc(sizeof(GSTEXTURE));
+					GSSURFACE* tex = malloc(sizeof(GSSURFACE));
 					load_image(tex, m->materials[i].map_Kd.name, true);
 
 					append_texture(res_m, tex);
@@ -285,7 +285,7 @@ void load_gltf_material(ath_mat* mat, const cgltf_material* gltf_mat, athena_ren
             const cgltf_texture* tex = pbr->base_color_texture.texture;
             if (tex->image && tex->image->uri) {
                 mat->texture_id = res_m->texture_count;
-                GSTEXTURE* texture = malloc(sizeof(GSTEXTURE));
+                GSSURFACE* texture = malloc(sizeof(GSSURFACE));
                 load_image(texture, tex->image->uri, true);
                 append_texture(res_m, texture);
             }
@@ -359,7 +359,7 @@ void load_bump_texture_by_index(ath_mat* mat, int texture_index, athena_render_d
         
         if (bump_tex->image && bump_tex->image->uri) {
             mat->bump_texture_id = res_m->texture_count;
-            GSTEXTURE* bump_texture = malloc(sizeof(GSTEXTURE));
+            GSSURFACE* bump_texture = malloc(sizeof(GSSURFACE));
 
             load_image(bump_texture, bump_tex->image->uri, true);
 
@@ -531,7 +531,7 @@ athena_skeleton* load_gltf_skeleton(cgltf_data* data, cgltf_skin* skin) {
     return skeleton;
 }
 
-void loadGLTF(athena_render_data* res_m, const char* path, GSTEXTURE* text) {
+void loadGLTF(athena_render_data* res_m, const char* path, GSSURFACE* text) {
     cgltf_options options = {0};
     cgltf_data* data = NULL;
     cgltf_result result = cgltf_parse_file(&options, path, &data);
@@ -847,7 +847,7 @@ void load_gltf_animations(char * path, athena_animation_collection* collection) 
     cgltf_free(data);
 }
 
-void loadModel(athena_render_data* res_m, const char* path, GSTEXTURE* text) {
+void loadModel(athena_render_data* res_m, const char* path, GSSURFACE* text) {
     const char* ext = strrchr(path, '.');
     if (!ext) {
         printf("Unknown file format: %s\n", path);
