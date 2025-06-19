@@ -81,7 +81,7 @@ GSFONT *athena_init_font(u8 type, char *path)
     char *tmp = NULL;
 
 	GSFONT *gsFont = calloc(1,sizeof(GSFONT));
-	gsFont->Texture = calloc(1,sizeof(GSTEXTURE));
+	gsFont->Texture = calloc(1,sizeof(GSSURFACE));
 	gsFont->Path = calloc(1,strlen(path));
 	gsFont->Additional=calloc(1,sizeof(short)*256);
 

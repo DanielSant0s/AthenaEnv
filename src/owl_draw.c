@@ -12,6 +12,8 @@
 #include <dbgprintf.h>
 #include <fntsys.h>
 
+#include <texture_manager.h>
+
 #include <owl_packet.h>
 
 const int16_t OWL_XYOFFSET[8] qw_aligned = { 2048, 2048, 0, 0, 2048, 2048, 0, 0 };
@@ -142,7 +144,7 @@ void draw_triangle_gouraud_list(float x, float y, prim_gouraud_triangle *list, i
 	}
 }
 
-void draw_tex_triangle_list(GSTEXTURE* source, float x, float y, prim_tex_triangle *list, int list_size) {
+void draw_tex_triangle_list(GSSURFACE* source, float x, float y, prim_tex_triangle *list, int list_size) {
     int texture_id = texture_manager_bind(gsGlobal, source, true);
 
 	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, (texture_id != -1? 11 : 7)+(list_size*3));
@@ -207,7 +209,7 @@ void draw_tex_triangle_list(GSTEXTURE* source, float x, float y, prim_tex_triang
 	}
 }
 
-void draw_tex_triangle_gouraud_list(GSTEXTURE* source, float x, float y, prim_tex_gouraud_triangle *list, int list_size) {
+void draw_tex_triangle_gouraud_list(GSSURFACE* source, float x, float y, prim_tex_gouraud_triangle *list, int list_size) {
     int texture_id = texture_manager_bind(gsGlobal, source, true);
 
 	uint32_t packet_list_size = ceilf(list_size*4.5f);
@@ -284,7 +286,7 @@ void draw_tex_triangle_gouraud_list(GSTEXTURE* source, float x, float y, prim_te
 	owl_align_packet(packet);
 }
 
-void draw_image_list(GSTEXTURE* source, float x, float y, prim_tex_sprite *list, int list_size)
+void draw_image_list(GSSURFACE* source, float x, float y, prim_tex_sprite *list, int list_size)
 {
     int texture_id = texture_manager_bind(gsGlobal, source, true);
 
@@ -360,9 +362,9 @@ void draw_image_list(GSTEXTURE* source, float x, float y, prim_tex_sprite *list,
 	}
 }
 
-void draw_image(GSTEXTURE* source, float x, float y, float width, float height, float startx, float starty, float endx, float endy, Color color)
+void draw_image(GSSURFACE* source, float x, float y, float width, float height, float startx, float starty, float endx, float endy, Color color)
 {
-	if (source == &fb[0] || source == &fb[1] || source == &fb[2]) {
+	if (source == cur_screen_buffer[0] || source == cur_screen_buffer[1] || source == cur_screen_buffer[2]) {
 		flush_gs_texcache();
 	}
 
@@ -433,7 +435,7 @@ void draw_image(GSTEXTURE* source, float x, float y, float width, float height, 
                              endy);
 }
 
-void draw_image_rotate(GSTEXTURE* source, float x, float y, float width, float height, float startx, float starty, float endx, float endy, float angle, Color color){
+void draw_image_rotate(GSSURFACE* source, float x, float y, float width, float height, float startx, float starty, float endx, float endy, float angle, Color color){
 
 	float c = cosf(angle);
 	float s = sinf(angle);

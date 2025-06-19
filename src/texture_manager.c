@@ -37,7 +37,7 @@ struct SVramBlock {
 	unsigned int iUseCountPrev;
 	unsigned int bLocked;
 
-	GSTEXTURE * tex;
+	GSSURFACE * tex;
 	struct SVramBlock * pNext;
 	struct SVramBlock * pPrev;
 };
@@ -47,11 +47,15 @@ static int texture_upload_callback_id = -1;
 
 static int texture_upload_queue_top = 0;
 
-GSTEXTURE *texture_upload_queue[TEXTURE_UPLOAD_QUEUE_SIZE] = { NULL };
+GSSURFACE *texture_upload_queue[TEXTURE_UPLOAD_QUEUE_SIZE] = { NULL };
 
 owl_packet* async_upload_packet = NULL;
 
 owl_qword async_upload_packet_buffer[owl_packet_size(MAX_TEXTURE_PACKET_SIZE)] qw_aligned;
+
+static inline unsigned int align_to_page(unsigned int addr) {
+	return (addr + 8191) & ~8191;
+}
 
 uint32_t texture_manager_get_size(int width, int height, int psm)
 {
@@ -132,7 +136,7 @@ int upload_texture_handler(int cause) {
 		*VIF1_MARK = VIF1_MARK_CLEAN;
 
 		if (texture_upload_queue[tex_id]) {
-			GSTEXTURE *tex = texture_upload_queue[tex_id];
+			GSSURFACE *tex = texture_upload_queue[tex_id];
 			texture_upload_queue[tex_id] = NULL;
 
 			
@@ -199,7 +203,7 @@ void remove_texture_upload_handler()
 
 
 
-void texture_upload(GSGLOBAL *gsGlobal, GSTEXTURE *Texture)
+void texture_upload(GSGLOBAL *gsGlobal, GSSURFACE *Texture)
 {
 	gsKit_setup_tbw(Texture);
 
@@ -256,6 +260,29 @@ _blockInsertAfter(struct SVramBlock * block, struct SVramBlock * next)
 	}
 		
 	block->pNext = next;
+}
+
+static inline struct SVramBlock *
+_blockSplitFreeAligned(struct SVramBlock * block, unsigned int size, unsigned int aligned_start)
+{
+	struct SVramBlock * pNewBlock;
+	struct SVramBlock * pAlignmentBlock = NULL;
+
+	if (aligned_start > block->iStart) {
+		pAlignmentBlock = _blockCreate(block->iStart, aligned_start - block->iStart);
+		_blockInsertAfter(block, pAlignmentBlock);
+
+		block->iStart = aligned_start;
+		block->iSize -= (aligned_start - block->iStart);
+	}
+
+	if (block->iSize > size) {
+		pNewBlock = _blockCreate(block->iStart + size, block->iSize - size);
+		block->iSize = size;
+		_blockInsertAfter(block, pNewBlock);
+	}
+
+	return block;
 }
 
 //---------------------------------------------------------------------------
@@ -347,28 +374,40 @@ _blockGetWeight(struct SVramBlock * block)
 //---------------------------------------------------------------------------
 // Simple block allocator
 static inline struct SVramBlock *
-_blockAlloc(unsigned int size)
+_blockAlloc(unsigned int size, bool page_aligned)
 {
 	struct SVramBlock * block = NULL;
 	unsigned int weight = 0;
+	unsigned int aligned_start;
+	unsigned int required_size;
 
-	// Locate free block
 	for (block = __head; block != NULL; block = block->pNext) {
-		if ((block->tex == NULL) && (block->iSize >= size)) {
-			// Free block found (first fit)
-			break;
+		if (block->tex == NULL) {
+			if (page_aligned) {
+				aligned_start = align_to_page(block->iStart);
+				required_size = size + (aligned_start - block->iStart);
+				if (block->iSize >= required_size) {
+					break;
+				}
+			} else if (block->iSize >= size) {
+				break;
+			}
 		}
 	}
 
 	while (block == NULL) {
-		// Free blocks starting with the least used textures
 		for (block = __head; block != NULL; block = block->pNext) {
 			if ((block->tex != NULL) && !block->bLocked && (_blockGetWeight(block) <= weight)) {
-				// Free block
 				block->tex = NULL;
 				block = _blockMergeFree(block);
-				if (block->iSize >= size) {
-					// Free block found (created)
+				
+				if (page_aligned) {
+					aligned_start = align_to_page(block->iStart);
+					required_size = size + (aligned_start - block->iStart);
+					if (block->iSize >= required_size) {
+						break;
+					}
+				} else if (block->iSize >= size) {
 					break;
 				}
 			}
@@ -376,9 +415,13 @@ _blockAlloc(unsigned int size)
 		weight++;
 	}
 
-	// Split the block into the right size
 	if (block != NULL) {
-		block = _blockSplitFree(block, size);
+		if (page_aligned) {
+			aligned_start = align_to_page(block->iStart);
+			block = _blockSplitFreeAligned(block, size, aligned_start);
+		} else {
+			block = _blockSplitFree(block, size);
+		}
 	}
 
 	return block;
@@ -410,7 +453,7 @@ void texture_manager_init(GSGLOBAL *gsGlobal)
 
 //---------------------------------------------------------------------------
 
-int texture_manager_push(GSTEXTURE *tex) {
+int texture_manager_push(GSSURFACE *tex) {
 	int id = texture_upload_queue_top;
 	texture_upload_queue[id] = tex;
 
@@ -420,7 +463,7 @@ int texture_manager_push(GSTEXTURE *tex) {
 }
 
 
-int texture_manager_bind(GSGLOBAL *gsGlobal, GSTEXTURE *tex, bool async) {
+int texture_manager_bind(GSGLOBAL *gsGlobal, GSSURFACE *tex, bool async) {
 	if (!tex->Delayed) return -1;
 
 	struct SVramBlock * block;
@@ -431,7 +474,6 @@ int texture_manager_bind(GSGLOBAL *gsGlobal, GSTEXTURE *tex, bool async) {
 	unsigned int cwidth = 16;
 	unsigned int cheight = 16;
 
-	// Locate texture
 	for (block = __head; block != NULL; block = block->pNext) {
 		if(block->tex == tex)
 			break;
@@ -444,9 +486,8 @@ int texture_manager_bind(GSGLOBAL *gsGlobal, GSTEXTURE *tex, bool async) {
 		csize   = gsKit_texture_size(cwidth, cheight, tex->ClutPSM);
 	}
 
-	// Allocate new block if not already loaded
 	if (block == NULL) {
-		block = _blockAlloc(tsize + csize);
+		block = _blockAlloc(tsize + csize, tex->PageAligned);
 		block->tex = tex;
 		block->iUseCount = 0;
 		block->iUseCountPrev = 1;
@@ -456,16 +497,19 @@ int texture_manager_bind(GSGLOBAL *gsGlobal, GSTEXTURE *tex, bool async) {
 		tex->VramClut = 0;
 	}
 
-	// (Re-)transfer texture if invalidated
 	if (tex->Vram == 0)
 		ttransfer = 1;
 
-	// (Re-)transfer clut if invalidated
 	if (tex->VramClut == 0)
 		ctransfer = 1;
 
 	if (ttransfer) {
-		tex->Vram = block->iStart;
+		if (tex->PageAligned) {
+			tex->Vram = align_to_page(block->iStart);
+		} else {
+			tex->Vram = block->iStart;
+		}
+		
 		gsKit_setup_tbw(tex);
 
 		if (tex->Mem) {
@@ -482,7 +526,11 @@ int texture_manager_bind(GSGLOBAL *gsGlobal, GSTEXTURE *tex, bool async) {
 	}
 
 	if (ctransfer) {
-		tex->VramClut = block->iStart + tsize;
+		if (tex->PageAligned) {
+			tex->VramClut = align_to_page(block->iStart) + tsize;
+		} else {
+			tex->VramClut = block->iStart + tsize;
+		}
 
 		if (tex->Clut) {
 			SyncDCache(tex->Clut, (u8 *)(tex->Clut) + csize);
@@ -506,7 +554,7 @@ int texture_manager_bind(GSGLOBAL *gsGlobal, GSTEXTURE *tex, bool async) {
 }
 
 //---------------------------------------------------------------------------
-int texture_manager_lock(GSTEXTURE *tex)
+int texture_manager_lock(GSSURFACE *tex)
 {
 	struct SVramBlock * block;
 
@@ -521,7 +569,7 @@ int texture_manager_lock(GSTEXTURE *tex)
 }
 
 //---------------------------------------------------------------------------
-int texture_manager_unlock(GSTEXTURE *tex)
+int texture_manager_unlock(GSSURFACE *tex)
 {
 	struct SVramBlock * block;
 
@@ -535,7 +583,7 @@ int texture_manager_unlock(GSTEXTURE *tex)
 	return 0;  
 }
 
-int texture_manager_is_locked(GSTEXTURE *tex)
+int texture_manager_is_locked(GSSURFACE *tex)
 {
 	struct SVramBlock * block;
 
@@ -548,7 +596,7 @@ int texture_manager_is_locked(GSTEXTURE *tex)
 	return 0;  
 }
 
-int texture_manager_lock_and_bind(GSGLOBAL *gsGlobal, GSTEXTURE *tex, bool async)
+int texture_manager_lock_and_bind(GSGLOBAL *gsGlobal, GSSURFACE *tex, bool async)
 {
 	int result = texture_manager_bind(gsGlobal, tex, async);
 	
@@ -588,14 +636,14 @@ unsigned int texture_manager_get_locked_memory()
 }
 
 
-void texture_manager_invalidate(GSTEXTURE *tex)
+void texture_manager_invalidate(GSSURFACE *tex)
 {
 	tex->Vram = 0;
 	tex->VramClut = 0;
 }
 
 //---------------------------------------------------------------------------
-void texture_manager_free(GSTEXTURE * tex)
+void texture_manager_free(GSSURFACE * tex)
 {
 	struct SVramBlock * block;
 

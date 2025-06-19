@@ -146,7 +146,7 @@ static JSValue athena_render_data_ctor(JSContext *ctx, JSValueConst new_target, 
 
 			image->tex->Filter = GS_FILTER_LINEAR;
 
-			ro->m.textures = malloc(sizeof(GSTEXTURE*));
+			ro->m.textures = malloc(sizeof(GSSURFACE*));
 			ro->textures = malloc(sizeof(JSValue));
 
 			ro->m.textures[0] = image->tex;
@@ -325,7 +325,7 @@ static JSValue athena_settexture(JSContext *ctx, JSValue this_val, int argc, JSV
 	JS_ToUint32(ctx, &tex_idx, argv[0]);
 
 	if (ro->m.texture_count < (tex_idx+1)) {
-		ro->m.textures = realloc(ro->m.textures, sizeof(GSTEXTURE*)*(ro->m.texture_count+1));
+		ro->m.textures = realloc(ro->m.textures, sizeof(GSSURFACE*)*(ro->m.texture_count+1));
 		ro->textures =   realloc(ro->textures,   sizeof(JSValue)*(ro->m.texture_count+1));
 		ro->m.textures[tex_idx] = NULL;
 	}

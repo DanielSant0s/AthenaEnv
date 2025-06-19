@@ -563,7 +563,7 @@ int fntRenderString(int id, int x, int y, short aligned, size_t width, size_t he
 
     owl_packet *packet = NULL;
 
-    GSTEXTURE *tex = NULL;
+    GSSURFACE *tex = NULL;
 
     const char *text_to_render = string;
 

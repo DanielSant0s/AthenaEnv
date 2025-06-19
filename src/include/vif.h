@@ -104,8 +104,9 @@ typedef struct {
 	((u64)GS_XYZ2)   << 8
 
 #define DRAW_NOTEX_REGLIST \
-	((u64)GS_RGBAQ)  << 0 | \
-	((u64)GS_XYZ2)   << 4
+	((u64)GIF_NOP)   << 0 | \
+	((u64)GS_RGBAQ)  << 4 | \
+	((u64)GS_XYZ2)   << 8
 
 /** Texture Alpha Expansion */
 #define ALPHA_EXPAND_NORMAL			0

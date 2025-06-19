@@ -19,11 +19,18 @@
 #include <osd_config.h>
 #include <rom0_info.h>
 
+#include <texture_manager.h>
+
 static const u64 BLACK_RGBAQ   = GS_SETREG_RGBAQ(0x00,0x00,0x00,0x80,0x00);
 
 GSGLOBAL *gsGlobal = NULL;
 
-GSTEXTURE fb[3] = { NULL };
+GSSURFACE draw_buffer;
+GSSURFACE display_buffer;
+GSSURFACE depth_buffer;
+
+GSSURFACE *cur_screen_buffer[3] = { NULL };
+GSSURFACE *main_screen_buffer[3] = { NULL };
 
 void (*flipScreen)();
 
@@ -72,7 +79,7 @@ const uint8_t gs_reg_map[] = {
 	GS_REG_ZBUF_2
 };
 
-void gs_copy_block(GSTEXTURE *src, int src_x, int src_y, GSTEXTURE *dst, int dst_x, int dst_y) {
+void gs_copy_block(GSSURFACE *src, int src_x, int src_y, GSSURFACE *dst, int dst_x, int dst_y) {
 	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 6);
  
 	owl_add_cnt_tag(packet, 5, owl_vif_code_double(VIF_CODE(5, 0, VIF_DIRECT, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
@@ -93,7 +100,7 @@ void gs_copy_block(GSTEXTURE *src, int src_x, int src_y, GSTEXTURE *dst, int dst
     owl_add_tag(packet, GS_TRXDIR, 2); 
 }
 
-void gs_channel_shuffle_slow(GSTEXTURE *dst, uint32_t in, uint32_t out, uint32_t blockX, uint32_t blockY, GSTEXTURE *source, uint32_t width, uint32_t height, GSTEXTURE *pal) {
+void gs_channel_shuffle_slow(GSSURFACE *dst, uint32_t in, uint32_t out, uint32_t blockX, uint32_t blockY, GSSURFACE *source, uint32_t width, uint32_t height, GSSURFACE *pal) {
     int tw, th;
 
 	// For the BLUE and ALPHA channels, we need to offset our 'U's by 8 texels
@@ -173,6 +180,23 @@ void gs_channel_shuffle_slow(GSTEXTURE *dst, uint32_t in, uint32_t out, uint32_t
     owl_add_tag(packet, GS_FRAME_1, gs_reg_cache[GS_CACHE_FRAME]);
 
     owl_add_tag(packet, GS_XYOFFSET_1, gs_reg_cache[GS_CACHE_XYOFFSET]);
+}
+
+void set_screen_buffer(eScreenBuffers id, GSSURFACE *buf, uint32_t mask) {
+	switch (id) {
+		case DRAW_BUFFER:
+			cur_screen_buffer[DRAW_BUFFER] = buf;
+			set_register(GS_CACHE_FRAME, GS_SETREG_FRAME_1( buf->Vram / 8192, buf->TBW, buf->PSM, mask ));
+			set_register(GS_CACHE_FRAME_2, GS_SETREG_FRAME_1( buf->Vram / 8192, buf->TBW, buf->PSM, mask ));
+			break;
+		case DISPLAY_BUFFER:
+			cur_screen_buffer[DISPLAY_BUFFER] = buf;
+			break;
+		case DEPTH_BUFFER:
+			cur_screen_buffer[DEPTH_BUFFER] = buf;
+			set_register(GS_CACHE_ZBUF, GS_SETREG_ZBUF_1( buf->Vram / 8192, buf->PSM-0x30, mask ));
+			break;
+	}
 }
 
 void set_screen_param(uint8_t param, uint64_t value) {
@@ -421,8 +445,8 @@ void setactive(GSGLOBAL *gsGlobal)
 	gs_reg_cache[GS_CACHE_SCISSOR_2] = gs_reg_cache[GS_CACHE_SCISSOR] = GS_SETREG_SCISSOR_1( 0, gsGlobal->Width - 1, 0, gsGlobal->Height - 1 );
 	gs_reg_cache[GS_CACHE_FRAME_2] = gs_reg_cache[GS_CACHE_FRAME] = GS_SETREG_FRAME_1( gsGlobal->ScreenBuffer[gsGlobal->ActiveBuffer & 1] / 8192, gsGlobal->Width / 64, gsGlobal->PSM, 0 );
 
-	fb[0].Vram = gsGlobal->ScreenBuffer[gsGlobal->ActiveBuffer & 1];
-	fb[1].Vram = gsGlobal->ScreenBuffer[gsGlobal->ActiveBuffer];
+	draw_buffer.Vram = gsGlobal->ScreenBuffer[gsGlobal->ActiveBuffer & 1];
+	display_buffer.Vram = gsGlobal->ScreenBuffer[gsGlobal->ActiveBuffer];
 
 	// Context 1
 	owl_add_tag(packet, GS_SCISSOR_1, gs_reg_cache[GS_CACHE_SCISSOR]);
@@ -1174,35 +1198,47 @@ void set_display_offset(GSGLOBAL *gsGlobal, int x, int y)
 }
 
 void setup_buffer_textures() {
-	for (int i = 0; i < 2; i++) {
-   		fb[i].Width = gsGlobal->Width;
-		fb[i].Height = gsGlobal->Height;
-		fb[i].PSM = gsGlobal->PSM;
-    	fb[i].ClutPSM = GS_PSM_CT32;
+   	draw_buffer.Width = gsGlobal->Width;
+	draw_buffer.Height = gsGlobal->Height;
+	draw_buffer.PSM = gsGlobal->PSM;
+    draw_buffer.ClutPSM = GS_PSM_CT32;
 
-		fb[i].Mem = NULL;
-		fb[i].Clut = NULL;
-		fb[i].Vram = gsGlobal->ScreenBuffer[i];
-		fb[i].VramClut = 0;
-		fb[i].Delayed = false;
-		fb[i].Filter = GS_FILTER_NEAREST;
+	draw_buffer.Mem = NULL;
+	draw_buffer.Clut = NULL;
+	draw_buffer.Vram = gsGlobal->ScreenBuffer[0];
+	draw_buffer.VramClut = 0;
+	draw_buffer.Delayed = false;
+	draw_buffer.Filter = GS_FILTER_NEAREST;
 
-		gsKit_setup_tbw(&fb[i]);
-	}
+	gsKit_setup_tbw(&draw_buffer);
 
-   	fb[2].Width = gsGlobal->Width;
-	fb[2].Height = gsGlobal->Height;
-	fb[2].PSM = gsGlobal->PSMZ+0x30;
-    fb[2].ClutPSM = GS_PSM_CT32;
+   	display_buffer.Width = gsGlobal->Width;
+	display_buffer.Height = gsGlobal->Height;
+	display_buffer.PSM = gsGlobal->PSM;
+    display_buffer.ClutPSM = GS_PSM_CT32;
 
-	fb[2].Mem = NULL;
-	fb[2].Clut = NULL;
-	fb[2].Vram = gsGlobal->ZBuffer;
-	fb[2].VramClut = 0;
-	fb[2].Delayed = false;
-	fb[2].Filter = GS_FILTER_NEAREST;
+	display_buffer.Mem = NULL;
+	display_buffer.Clut = NULL;
+	display_buffer.Vram = gsGlobal->ScreenBuffer[1];
+	display_buffer.VramClut = 0;
+	display_buffer.Delayed = false;
+	display_buffer.Filter = GS_FILTER_NEAREST;
 
-	gsKit_setup_tbw(&fb[2]);
+	gsKit_setup_tbw(&display_buffer);
+
+   	depth_buffer.Width = gsGlobal->Width;
+	depth_buffer.Height = gsGlobal->Height;
+	depth_buffer.PSM = gsGlobal->PSMZ+0x30;
+    depth_buffer.ClutPSM = GS_PSM_CT32;
+
+	depth_buffer.Mem = NULL;
+	depth_buffer.Clut = NULL;
+	depth_buffer.Vram = gsGlobal->ZBuffer;
+	depth_buffer.VramClut = 0;
+	depth_buffer.Delayed = false;
+	depth_buffer.Filter = GS_FILTER_NEAREST;
+
+	gsKit_setup_tbw(&depth_buffer);
 }
 
 void setVideoMode(s16 mode, int width, int height, int psm, s16 interlace, s16 field, bool zbuffering, int psmz, bool double_buffering, uint8_t pass_count) {
@@ -1231,6 +1267,14 @@ void setVideoMode(s16 mode, int width, int height, int psm, s16 interlace, s16 f
 	texture_manager_init(gsGlobal);
 
 	setup_buffer_textures();
+
+	cur_screen_buffer[DRAW_BUFFER] = &draw_buffer;
+	cur_screen_buffer[DISPLAY_BUFFER] = &display_buffer;
+	cur_screen_buffer[DEPTH_BUFFER] = &depth_buffer;
+
+	main_screen_buffer[DRAW_BUFFER] = &draw_buffer;
+	main_screen_buffer[DISPLAY_BUFFER] = &display_buffer;
+	main_screen_buffer[DEPTH_BUFFER] = &depth_buffer;
 
 	switchFlipScreenFunction();
 	

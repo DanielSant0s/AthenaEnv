@@ -13,9 +13,6 @@
 #include <packet2.h>
 #include <packet2_utils.h>
 
-#include <texture_manager.h>
-
-
 #undef GS_PSMZ_32 
 #undef GS_PSMZ_24 
 #undef GS_PSMZ_16 
@@ -35,6 +32,30 @@
 #define CHANNEL_SHUFFLE_GREEN 0x0000FF00
 #define CHANNEL_SHUFFLE_BLUE 0x00FF0000
 #define CHANNEL_SHUFFLE_ALPHA 0xFF000000
+
+struct gsSurface
+{
+	uint32_t Width;		///< Width of the Texture
+	uint32_t Height;		///< Height of the Texture
+	uint8_t	PSM;		///< Pixel Storage Method (Color Format)
+	uint8_t	ClutPSM;	///< CLUT Pixel Storage Method (Color Format)
+	uint32_t	TBW;		///< Texture Base Width
+	uint32_t *Mem;		///< EE Memory Pointer
+	uint32_t *Clut;		///< EE CLUT Memory Pointer
+	uint32_t Vram;		///< GS VRAM Memory Pointer
+	uint32_t VramClut;	///< GS VRAM CLUT Memory Pointer
+	uint32_t Filter;		///< NEAREST or LINEAR
+	uint8_t ClutStorageMode;	///< CLUT Storage Mode
+	uint8_t	Delayed;	///< Delay Texture Upload To VRAM
+	uint8_t PageAligned;
+};
+typedef struct gsSurface GSSURFACE;
+
+typedef enum {
+	DRAW_BUFFER,
+	DISPLAY_BUFFER,
+	DEPTH_BUFFER
+} eScreenBuffers;
 
 typedef enum {
 	ALPHA_TEST_ENABLE,
@@ -170,6 +191,8 @@ uint64_t get_screen_param(uint8_t param);
 
 void set_screen_param(uint8_t param, uint64_t value);
 
+void set_screen_buffer(eScreenBuffers id, GSSURFACE *buf, uint32_t mask);
+
 void flush_gs_texcache();
 
 // The GS's alpha blending formula is fixed but it contains four variables that can be reconfigured:
@@ -196,13 +219,8 @@ void flush_gs_texcache();
 #define GS_ALPHA_BLEND_ADD            (ALPHA_EQUATION(SRC_RGB, ZERO_RGB, SRC_ALPHA, DST_ALPHA, 0x00))
 
 extern GSGLOBAL *gsGlobal;
-extern GSTEXTURE fb[3];
-
-typedef enum {
-	DRAW_BUFFER,
-	DISPLAY_BUFFER,
-	DEPTH_BUFFER
-} eScreenBuffers;
+extern GSSURFACE *cur_screen_buffer[3];
+extern GSSURFACE *main_screen_buffer[3];
 
 //remove fontm specific things here
 typedef enum {
@@ -221,7 +239,7 @@ struct gsFont
 	u8 Type;		///< Font Type
 	u8 *RawData;		///< Raw File Data
 	int RawSize;		///< Raw File Datasize
-	GSTEXTURE *Texture;	///< Font Texture Object
+	GSSURFACE *Texture;	///< Font Texture Object
 	u32 CharWidth;		///< Character Width
 	u32 CharHeight;		///< Character Height
 	u32 HChars;		///< Character Rows
@@ -251,7 +269,7 @@ typedef struct
     rm_tx_coord_t ul;
     rm_tx_coord_t br;
     u64 color;
-    GSTEXTURE *txt;
+    GSSURFACE *txt;
 } rm_quad_t;
 
 typedef enum {
@@ -289,10 +307,10 @@ float FPSCounter(int interval);
 
 void setVideoMode(s16 mode, int width, int height, int psm, s16 interlace, s16 field, bool zbuffering, int psmz, bool double_buffering, uint8_t pass_count);
 
-int load_image(GSTEXTURE* image, const char* path, bool delayed);
+int load_image(GSSURFACE* image, const char* path, bool delayed);
 
-void draw_image(GSTEXTURE* source, float x, float y, float width, float height, float startx, float starty, float endx, float endy, Color color);
-void draw_image_rotate(GSTEXTURE* source, float x, float y, float width, float height, float startx, float starty, float endx, float endy, float angle, Color color);
+void draw_image(GSSURFACE* source, float x, float y, float width, float height, float startx, float starty, float endx, float endy, Color color);
+void draw_image_rotate(GSSURFACE* source, float x, float y, float width, float height, float startx, float starty, float endx, float endy, float angle, Color color);
 
 typedef struct {
 	float x;
@@ -411,13 +429,13 @@ void draw_triangle_list(float x, float y, prim_triangle *list, int list_size);
 
 void draw_triangle_gouraud_list(float x, float y, prim_gouraud_triangle *list, int list_size);
 
-void draw_tex_triangle_list(GSTEXTURE* source, float x, float y, prim_tex_triangle *list, int list_size);
+void draw_tex_triangle_list(GSSURFACE* source, float x, float y, prim_tex_triangle *list, int list_size);
 
-void draw_tex_triangle_gouraud_list(GSTEXTURE* source, float x, float y, prim_tex_gouraud_triangle *list, int list_size);
+void draw_tex_triangle_gouraud_list(GSSURFACE* source, float x, float y, prim_tex_gouraud_triangle *list, int list_size);
 
-void draw_image_list(GSTEXTURE* source, float x, float y, prim_tex_sprite *list, int list_size);
+void draw_image_list(GSSURFACE* source, float x, float y, prim_tex_sprite *list, int list_size);
 
-void gs_copy_block(GSTEXTURE *src, int src_x, int src_y, GSTEXTURE *dst, int dst_x, int dst_y);
+void gs_copy_block(GSSURFACE *src, int src_x, int src_y, GSSURFACE *dst, int dst_x, int dst_y);
 
 void draw_point(float x, float y, Color color);
 void draw_line(float x, float y, float x2, float y2, Color color);

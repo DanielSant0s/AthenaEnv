@@ -229,42 +229,94 @@ static JSValue athena_get_param(JSContext *ctx, JSValue this_val, int argc, JSVa
 }
 
 JSValue js_screen_buffers[3] = { JS_UNDEFINED, JS_UNDEFINED, JS_UNDEFINED };
+JSValue js_current_screen_buffers[3] = { JS_UNDEFINED, JS_UNDEFINED, JS_UNDEFINED };
 
-static JSValue athena_getimage(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
+static JSValue athena_init_buffers(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
+	if (js_screen_buffers[0] != JS_UNDEFINED) {
+		return JS_ThrowInternalError(ctx, "Screen.initBuffers() shouldn't be called more than once!");
+	}
+
+	for (int i = 0; i < 3; i++) {
+		JSImageData* image;
+
+		GSSURFACE *tex = main_screen_buffer[i];
+
+		image = js_mallocz(ctx, sizeof(*image));
+    	if (!image)
+    	    return JS_EXCEPTION;
+
+		image->delayed = false;
+		image->tex = tex;
+
+		image->loaded = true;
+		image->width = image->tex->Width;
+		image->height = image->tex->Height;
+		image->endx = image->tex->Width;
+		image->endy = image->tex->Height;
+
+		image->startx = 0.0f;
+		image->starty = 0.0f;
+		image->angle = 0.0f;
+		image->color = 0x80808080;
+
+    	js_screen_buffers[i] = JS_NewObjectClass(ctx, get_img_class_id());    
+    	JS_SetOpaque(js_screen_buffers[i], image);
+
+		js_current_screen_buffers[i] = js_screen_buffers[i];
+	}
+
+	return JS_UNDEFINED;
+}
+
+static JSValue athena_get_buffer(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
+	if (js_screen_buffers[0] == JS_UNDEFINED) {
+		return JS_ThrowInternalError(ctx, "Call Screen.initBuffers() before using this function!");
+	}
+
 	int buffer_id;
-
-	JSImageData* image;
 
 	JS_ToInt32(ctx, &buffer_id, argv[0]);
 
-	if (js_screen_buffers[buffer_id] != JS_UNDEFINED) {
-		return js_screen_buffers[buffer_id];
+	return js_current_screen_buffers[buffer_id];
+}
+
+static JSValue athena_set_buffer(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
+	int buffer_id;
+	uint32_t mask = 0;
+
+	if (js_screen_buffers[0] == JS_UNDEFINED) {
+		return JS_ThrowInternalError(ctx, "Call Screen.initBuffers() before using this function!");
 	}
 
-	GSTEXTURE *tex = &fb[buffer_id];
+	JS_ToInt32(ctx, &buffer_id, argv[0]);
 
-	image = js_mallocz(ctx, sizeof(*image));
-    if (!image)
-        return JS_EXCEPTION;
+	JSImageData *image = JS_GetOpaque2(ctx, argv[1], get_img_class_id());
 
-	image->delayed = false;
-	image->tex = tex;
+	if (argc > 2) {
+		JS_ToUint32(ctx, &mask, argv[2]);
+	}
 
-	image->loaded = true;
-	image->width = image->tex->Width;
-	image->height = image->tex->Height;
-	image->endx = image->tex->Width;
-	image->endy = image->tex->Height;
+	set_screen_buffer((eScreenBuffers)buffer_id, image->tex, mask);
 
-	image->startx = 0.0f;
-	image->starty = 0.0f;
-	image->angle = 0.0f;
-	image->color = 0x80808080;
+	js_current_screen_buffers[buffer_id] = argv[1];
 
-    js_screen_buffers[buffer_id] = JS_NewObjectClass(ctx, get_img_class_id());    
-    JS_SetOpaque(js_screen_buffers[buffer_id], image);
+	return JS_UNDEFINED;
+}
 
-	return js_screen_buffers[buffer_id];
+static JSValue athena_reset_buffers(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
+	if (js_screen_buffers[0] == JS_UNDEFINED) {
+		return JS_ThrowInternalError(ctx, "Call Screen.initBuffers() before using this function!");
+	}
+
+	for (int i = 0; i < 3; i++) {
+		JSImageData *image = JS_GetOpaque2(ctx, js_screen_buffers[i], get_img_class_id());
+
+		set_screen_buffer((eScreenBuffers)i, image->tex, 0);
+
+		js_current_screen_buffers[i] = js_screen_buffers[i];
+	}
+
+	return JS_UNDEFINED;
 }
 
 static const JSCFunctionListEntry module_funcs[] = {
@@ -355,7 +407,11 @@ static const JSCFunctionListEntry module_funcs[] = {
 	JS_PROP_INT32_DEF("Z16", GS_ZBUF_16, JS_PROP_CONFIGURABLE),
 	JS_PROP_INT32_DEF("Z16S", GS_ZBUF_16S, JS_PROP_CONFIGURABLE),
 
-	JS_CFUNC_DEF("getBufferImage", 1, athena_getimage),
+	JS_CFUNC_DEF("initBuffers", 0, athena_init_buffers),
+	JS_CFUNC_DEF("resetBuffers", 0, athena_reset_buffers),
+
+	JS_CFUNC_DEF("getBuffer", 1, athena_get_buffer),
+	JS_CFUNC_DEF("setBuffer", 3, athena_set_buffer),
 
 	JS_PROP_INT32_DEF("DRAW_BUFFER", DRAW_BUFFER, JS_PROP_CONFIGURABLE),
 	JS_PROP_INT32_DEF("DISPLAY_BUFFER", DISPLAY_BUFFER, JS_PROP_CONFIGURABLE),

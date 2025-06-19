@@ -141,7 +141,7 @@ typedef struct {
     uint32_t size;
 
     JSValue texture_handle;
-    GSTEXTURE *texture;
+    GSSURFACE *texture;
 } JSPrimitiveList;
 
 static JSValue athena_prim_list_ctor(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
