@@ -700,6 +700,17 @@ static JSValue athena_play_anim(JSContext *ctx, JSValue this_val, int argc, JSVa
 	return JS_UNDEFINED;
 }
 
+static JSValue athena_is_playing(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	JSRenderObject* ro = JS_GetOpaque2(ctx, this_val, js_render_object_class_id);
+
+	athena_animation *anim = NULL;
+
+	if (argc > 0)
+		JS_ToUint32(ctx, &anim, argv[0]);
+
+	return JS_NewBool(ctx, (ro->obj.anim_controller.current && (ro->obj.anim_controller.current == anim)) );
+}
+
 static JSValue athena_render_object_ctor(JSContext *ctx, JSValueConst new_target, int argc, JSValueConst *argv) {
 	JSValue obj = JS_UNDEFINED;
     JSValue proto;
@@ -772,6 +783,7 @@ register_3d_object_data:
 		JS_DefinePropertyValueStr(ctx, obj, "bones", bone_transforms, JS_PROP_C_W_E);
 
 		JS_DefinePropertyValueStr(ctx, obj, "playAnim", JS_NewCFunction2(ctx, athena_play_anim, "playAnim", 2, JS_CFUNC_generic, 0), JS_PROP_C_W_E);
+		JS_DefinePropertyValueStr(ctx, obj, "isPlayingAnim", JS_NewCFunction2(ctx, athena_is_playing, "isPlayingAnim", 1, JS_CFUNC_generic, 0), JS_PROP_C_W_E);
 	}
 
     JS_FreeValue(ctx, proto);
