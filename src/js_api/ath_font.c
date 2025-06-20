@@ -323,6 +323,17 @@ static const JSCFunctionListEntry js_font_proto_funcs[] = {
     JS_CFUNC_DEF("getTextSize", 1, athena_font_gettextsize),
 };
 
+static const JSCFunctionListEntry js_font_funcs[] = {
+    JS_PROP_INT32_DEF("ALIGN_TOP", ALIGN_TOP, JS_PROP_CONFIGURABLE ),
+    JS_PROP_INT32_DEF("ALIGN_BOTTOM", ALIGN_BOTTOM, JS_PROP_CONFIGURABLE ),
+    JS_PROP_INT32_DEF("ALIGN_VCENTER", ALIGN_VCENTER, JS_PROP_CONFIGURABLE ),
+    JS_PROP_INT32_DEF("ALIGN_LEFT", ALIGN_LEFT, JS_PROP_CONFIGURABLE ),
+    JS_PROP_INT32_DEF("ALIGN_RIGHT", ALIGN_RIGHT, JS_PROP_CONFIGURABLE ),
+    JS_PROP_INT32_DEF("ALIGN_HCENTER", ALIGN_HCENTER, JS_PROP_CONFIGURABLE ),
+    JS_PROP_INT32_DEF("ALIGN_NONE", ALIGN_NONE, JS_PROP_CONFIGURABLE ),
+    JS_PROP_INT32_DEF("ALIGN_CENTER", ALIGN_CENTER, JS_PROP_CONFIGURABLE ),
+};
+
 static void js_renderfont_init(JSContext *ctx)
 {
     JSValue proto;
@@ -351,6 +362,8 @@ static int font_init(JSContext *ctx, JSModuleDef *m) {
     /* set proto.constructor and ctor.prototype */
     JS_SetConstructor(ctx, font_class, font_proto);
     JS_SetClassProto(ctx, js_font_class_id, font_proto);
+
+    JS_SetPropertyFunctionList(ctx, font_class, js_font_funcs, countof(js_font_funcs));
                       
     JS_SetModuleExport(ctx, m, "Font", font_class);
 
@@ -359,25 +372,8 @@ static int font_init(JSContext *ctx, JSModuleDef *m) {
     return 0;
 }
 
-static const JSCFunctionListEntry js_font_align[] = {
-    JS_PROP_INT32_DEF("TOP", ALIGN_TOP, JS_PROP_CONFIGURABLE ),
-    JS_PROP_INT32_DEF("BOTTOM", ALIGN_BOTTOM, JS_PROP_CONFIGURABLE ),
-    JS_PROP_INT32_DEF("VCENTER", ALIGN_VCENTER, JS_PROP_CONFIGURABLE ),
-    JS_PROP_INT32_DEF("LEFT", ALIGN_LEFT, JS_PROP_CONFIGURABLE ),
-    JS_PROP_INT32_DEF("RIGHT", ALIGN_RIGHT, JS_PROP_CONFIGURABLE ),
-    JS_PROP_INT32_DEF("HCENTER", ALIGN_HCENTER, JS_PROP_CONFIGURABLE ),
-    JS_PROP_INT32_DEF("NONE", ALIGN_NONE, JS_PROP_CONFIGURABLE ),
-    JS_PROP_INT32_DEF("CENTER", ALIGN_CENTER, JS_PROP_CONFIGURABLE ),
-};
-
-static int font_align_init(JSContext *ctx, JSModuleDef *m){
-    return JS_SetModuleExportList(ctx, m, js_font_align, countof(js_font_align));
-}
-
 JSModuleDef *athena_font_init(JSContext *ctx)
-{
-    athena_push_module(ctx, font_align_init, js_font_align, countof(js_font_align), "FontAlign");
-    
+{   
     JSModuleDef *m;
     m = JS_NewCModule(ctx, "Font", font_init);
     if (!m)

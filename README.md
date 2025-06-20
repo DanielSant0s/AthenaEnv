@@ -42,13 +42,40 @@
 AthenaEnv is a complete JavaScript Runtime Environment for the PlayStation 2. It has dozens of built-in exclusive libraries made for the project, such as a MMI instruction accelerated 2D renderer, asynchronous texture manager system and a advanced 3D renderer powered by VU1 and VU0. It let's you to almost instantly write modern code on PS2 powered by performant libraries and a fine-tuned interpreter for it.
 
 ### Modules:
-* System: Files, folders and system stuff.
-* Archive: A simple compressed file extractor and manager.
-* IOP: The PlayStation 2 has an I/O processor to deal with drivers and modules. Take control of it!
-* Image: Image drawing.
-* ImageList: Load and manage multiple images while your code is running, multithreaded loading!
-* Draw: Shape drawing, triangles, circles etc.
-* Render: High performance 3D renderer  
+* System: Files, folders and system stuff.  
+  • File operations  
+  • Folder operations  
+  • Mass device control
+  • Get machine info (CPU, GPU, memory, temperature)   
+  • Native function control (call C functions)   
+  • Load and use native dynamic libraries   
+
+* Archive: A simple compressed file extractor.  
+  • ZIP, GZ and TAR support   
+
+* IOP: I/O driver and module manager.  
+  • Module register  
+  • I/O memory tracking  
+  • Reverse init/end callbacks  
+  • Smart reset routine  
+
+* Image: Renderable surfaces.  
+  • PNG, BMP and JPEG formats support  
+  • Nearest and bilinear filters  
+  • Off-screen rendering surfaces  
+  • Surface cache system, with locks  
+  • Asynchronous image list loading  
+
+* Draw: Shape drawing.  
+  • MMI accelerated  
+  • Points  
+  • Lines  
+  • Rectangles  
+  • Circles  
+  • Triangles (flat, gouraud)  
+  • Quads (flat, gouraud)  
+
+* Render: High performance 3D renderer.  
   • VU1 vertex transformer  
   • VU0 matrix processor  
   • LookAt camera system  
@@ -58,16 +85,58 @@ AthenaEnv is a complete JavaScript Runtime Environment for the PlayStation 2. It
   • Polygon clipping  
   • (Back/Front)face culling  
   • Per-vertex colors  
+  • Emboss bump mapping  
+  • Skinning & node transforming  
+  • Environment/Reflection maps  
+  • Multiple material processing  
 
-* Screen: The entire screen of your project (2D and 3D), being able to change the resolution, enable or disable parameters.
-* Font: Functions that control the texts that appear on the screen, loading texts, drawing and unloading from memory.
-* Pads: Above being able to draw and everything else, A human interface is important. Supports rumble and pressure sensitivity.
+* Screen: Rendering and video control.  
+  • Screen control params (vsync, FPS)  
+  • Render params (alpha, scissor, depth)  
+  • Accelerated render loop  
+  • Off-screen rendering  
+  • Screenspace control  
+  • Video modes  
+
+* Font: Text rendering.  
+  • MMI accelerated  
+  • Render-time resizer  
+  • FreeType and Image fonts  
+  • Outline and dropshadow support  
+  • Alignment support  
+
+* Pads: DS2/3/4 input support.  
+  • Gamepad type recognition  
+  • Pressure sentivity  
+  • Rumble support  
+  • Connection states  
+  • Callback events  
+
+* Sound: Audio functions.  
+  • ADPCM sound effects  
+  • Automatic channel allocator  
+  • Per-effect volume controller  
+  • Pan and pitch control for effects  
+  • WAV and OGG stream sound support  
+  • Loop and position control for streams  
+
+* Network: Net basics and web requests.  
+  • HTTP/HTTPS support  
+  • TLS 1.3 support  
+  • A/Sync requests (GET, POST, HEAD)  
+  • Download functions  
+  • Static/DHCP  
+
+* Socket: Well, sockets.  
+  • Classic sockets  
+  • WebSockets  
+
+* Timer: A simple time manager.  
+  • Separated unique timers  
+  • Resolution selectable  
+
 * Keyboard: Basic USB keyboard support.
 * Mouse: Basic USB mouse support.
-* Timer: Control the time precisely in your code, it contains several timing functions.
-* Sound: Sound functions, supporting WAV, OGG and ADPCM.
-* Network: Net basics and web requests :D.
-* Socket: Well, sockets.
 
 New types are always being added and this list can grow a lot over time, so stay tuned.
 
@@ -568,14 +637,14 @@ Properties:
 * dropshadow_color - Define dropshadow tinting, default value is Color.new(0, 0, 0, 128).
 * dropshadow - Shadow drop position, default: 0.0f
 * align - Font alignment, default value is FontAlign.NONE. Avaliable options below:  
-  • FontAlign.NONE  
-  • FontAlign.TOP  
-  • FontAlign.BOTTOM  
-  • FontAlign.LEFT  
-  • FontAlign.RIGHT  
-  • FontAlign.VCENTER  
-  • FontAlign.HCENTER  
-  • FontAlign.CENTER  
+  • Font.ALIGN_NONE  
+  • Font.ALIGN_TOP  
+  • Font.ALIGN_BOTTOM  
+  • Font.ALIGN_LEFT  
+  • Font.ALIGN_RIGHT  
+  • Font.ALIGN_VCENTER  
+  • Font.ALIGN_HCENTER  
+  • Font.ALIGN_CENTER  
   
 
 P.S.: outline and drop shadow do not coexist, so one of them must be 0.0f.
@@ -737,7 +806,6 @@ Asynchronous functions:
 **Properties:**  
   • volume - Current sound effect volume, you can get or change from 0 to 100.  
   • pan - Sound effect spatial setting, you can get or change from -100(left) to 100(right), 0 is the center.  
-  • loop - If the sample is played in a loop, you can get or change.  
   • pitch - Sound effect pitch, you can get or change from -100 to 100, 0 is the default value.  
   
 ### Archive module
