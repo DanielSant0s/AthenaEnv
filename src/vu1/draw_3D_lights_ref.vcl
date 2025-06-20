@@ -45,6 +45,9 @@ ignore_face_culling:
 	fcset   0x000000	; VCL won't let us use CLIP without first zeroing
 				; the clip flags
 
+    ilw.y       accurateClipping,    CLIPFAN_OFFSET(vi00)
+    ibne vi00,  accurateClipping, scissor_init
+
 cull_init:
     LoadCullScale clip_scale, 0.5
 
@@ -204,6 +207,154 @@ culled_init:
 --cont
 
     b culled_init
+
+scissor_init:
+    iaddiu               StackPtr, vi00, STACK_OFFSET
+
+    .include "vu1/proc/setup_clip_trigger.i"
+
+    ;//////////// --- Load data 2 --- /////////////
+    ; Updated dynamically
+init:
+    xtop    iBase
+    xitop   vertCount
+
+    lq      primTag,        0(iBase) ; GIF tag - tell GS how many data we will send
+    lq      matDiffuse,     1(iBase) ; material diffuse color
+ 
+    iaddiu  vertexData,     iBase,      2           ; pointer to vertex data
+    iadd    normalData,     vertexData, vertCount   ; pointer to stq
+    iadd    colorData,     normalData, vertCount   ; pointer to stq
+
+    iaddiu     kickAddress,    vertexData, INBUF_SIZE
+    ;////////////////////////////////////////////
+
+    ;/////////// --- Store tags --- /////////////
+    sq primTag,    0(kickAddress) ; prim + tell gs how many data will be
+
+    ; Set the GifTag EOP bit to 1 and NLOOP to the number of vertices
+    iaddiu               Mask, vertCount, 0x7fff
+    iaddiu               Mask, Mask, 0x01
+    isw.x                Mask, 0(kickAddress)
+    ;//////////////////////////////////////////// 
+
+    iaddiu    outputAddress,    kickAddress,  1       ; helper pointer for data inserting
+
+    .include "vu1/proc/setup_clip_flags.i"
+
+    .include "vu1/proc/setup_vertex_queue.i"
+
+    iadd vertexCounter, vi00, vertCount ; loop vertCount times
+
+    loop:
+
+        ;////////// --- Load loop data --- //////////
+        lq inVert,  0(vertexData)   
+        lq inNorm,  0(normalData) 
+        lq inColor, 0(colorData) 
+        ;////////////////////////////////////////////    
+
+
+        ;////////////// --- Vertex --- //////////////
+        MatrixMultiplyVertex	vertex, ObjectToScreen, inVert ; transform each vertex by the matrix
+        move formVertex, vertex
+        
+        div         q,      vf00[w],    vertex[w]   ; perspective divide (1/vert[w]):
+
+        mul.xyz     vertex, vertex,     q
+ 
+        mul.xyz    vertex, vertex,     scale
+        add.xyz    vertex, vertex,     offset 
+
+        move vertex1, vertex2
+        move vertex2, vertex3       
+
+        move vertex3, vertex
+
+        VertexFpToGsXYZ2  vertex,vertex
+        ;//////////////////////////////////////////// 
+
+        MatrixMultiplyVector	stq, ObjectMatrix, inNorm 
+
+        sub.xyzw tmp_stq, vf00, vf00
+        subx.x tmp_stq, stq, vf00[x]
+        suby.y tmp_stq, tmp_stq, stq[y]
+        addw.xyz tmp_stq, tmp_stq, vf00[w]
+
+        loi 0.5
+        muli.xy tmp_stq, tmp_stq, I
+
+        mulq modStq, tmp_stq, q
+
+        ;//////////////// - NORMALS - /////////////////
+        MatrixMultiplyVector	normal,    ObjectMatrix, inNorm ; transform each normal by the matrix
+    
+        move light, vf00 
+        move intensity, vf00
+
+        iadd  currDirLight, vi00, vi00
+
+        ilw.w       dirLightQnt,    NUM_DIR_LIGHTS(vi00) ; load active directional lights
+
+        directionaLightsLoop: 
+            lq LightAmbient, LIGHT_AMBIENT_PTR(currDirLight)
+
+            ; Ambient lighting
+            add.xyz light, light, LightAmbient
+
+            lq LightDirection, LIGHT_DIRECTION_PTR(currDirLight)
+            
+            ; Diffuse lighting
+            VectorDotProduct intensity, normal, LightDirection
+
+            maxx.xyzw  intensity, intensity, vf00
+
+            lq LightDiffuse, LIGHT_DIFFUSE_PTR(currDirLight)
+
+            mul diffuse, LightDiffuse, intensity[x]
+            add.xyz light, light, diffuse
+
+            iaddiu   currDirLight,  currDirLight,  1; increment the loop counter 
+            ibne    dirLightQnt,  currDirLight,  directionaLightsLoop	; and repeat if needed
+
+        add.xyzw   color, matDiffuse, inColor
+        mul    color, color,      light       ; color = color * light
+        VectorNormalizeClamp color, color
+        loi 128.0
+        mul color, color, i                        ; normalize RGBA
+        ColorFPtoGsRGBAQ intColor, color           ; convert to int
+        ;///////////////////////////////////////////
+
+
+        ;//////////// --- Store data --- ////////////
+        sq.xyz modStq,      STQ(outputAddress)       
+        sq intColor,    RGBA(outputAddress)     ; q is grabbed from stq
+        sq vertex,      XYZ2(outputAddress)      
+        ;////////////////////////////////////////////
+
+        .include "vu1/proc/process_scissor_clip_ref.i"
+
+        iaddiu          vertexData,     vertexData,     1                          
+        iaddiu          normalData,     normalData,     1
+        iaddiu          colorData,      colorData,      1
+
+        iaddiu          outputAddress,  outputAddress,  3
+ 
+        iaddi   vertexCounter,  vertexCounter,  -1	; decrement the loop counter 
+        ibne    vertexCounter,  vi00,   loop	; and repeat if needed
+
+    ;//////////////////////////////////////////// 
+
+    xgkick kickAddress ; dispatch to the GS rasterizer.
+
+--barrier
+--cont
+
+    b init
+
+.include "vu1/proc/save_last_loop.i"
+
+.include "vu1/proc/scissor_interpolation.i"
 
 --exit
 --endexit
