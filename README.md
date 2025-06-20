@@ -45,7 +45,7 @@ AthenaEnv is a complete JavaScript Runtime Environment for the PlayStation 2. It
 * System: Files, folders and system stuff.  
   • File operations  
   • Folder operations  
-  • Mass device control
+  • Mass device control  
   • Get machine info (CPU, GPU, memory, temperature)   
   • Native function control (call C functions)   
   • Load and use native dynamic libraries   
