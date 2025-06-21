@@ -183,6 +183,8 @@ const dashboard = new Interface(pad, [background, menus, stats]);
 
 Screen.clearColor(Color.new(0, 0, 255, 128));
 
+Screen.setParam(Screen.DEPTH_TEST_ENABLE, false);
+
 Screen.display(() => {
     dashboard.run();
 

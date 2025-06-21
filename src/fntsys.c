@@ -573,6 +573,8 @@ int fntRenderString(int id, int x, int y, short aligned, size_t width, size_t he
 
     char *chars_to_count = width? " \n" : " ";
 
+    bool started_rendering = false;
+
     for (; *text_to_render; ++text_to_render) {
         if (utf8Decode(&state, &codepoint, *text_to_render)) // accumulate the codepoint value 
             continue;
@@ -614,7 +616,7 @@ int fntRenderString(int id, int x, int y, short aligned, size_t width, size_t he
             if (tex != &glyph->atlas->surface || !glyph->atlas->surface.Vram) {
                 tex = &glyph->atlas->surface;
                 
-                if (text_to_render != string) {
+                if (started_rendering) {
                     int last_size = (((uint32_t)after_draw)-((uint32_t)before_first_draw))/16;
 
                     last_cnt->dword[0] = DMA_TAG((texture_id != -1? 11 : 7)+last_size, 0, DMA_CNT, 0, 0, 0);
@@ -629,7 +631,7 @@ int fntRenderString(int id, int x, int y, short aligned, size_t width, size_t he
 				                            					   gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 1, gsGlobal->PrimContext, 0),
     			                            			1, 4);
 
-                }
+                } 
 
                 text_size = strlen(text_to_render)-count_spaces(text_to_render, chars_to_count)-count_nonascii(text_to_render);
                 int text_vert_size = (text_size*2);
@@ -714,6 +716,8 @@ int fntRenderString(int id, int x, int y, short aligned, size_t width, size_t he
             fntRenderGlyph(glyph, packet, pen_x, y, scale);
             
             after_draw = packet->ptr;
+
+            started_rendering = true;
         }
 
         pen_x += ((int)(glyph->shx*scale) >> 6);
