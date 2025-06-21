@@ -134,6 +134,13 @@ static const JSCFunctionListEntry js_socket_proto_funcs[] = {
     JS_CFUNC_DEF("close", 0, athena_socket_close ),
 };
 
+static const JSCFunctionListEntry js_socket_consts[] = {
+    JS_PROP_INT32_DEF("AF_INET", AF_INET, JS_PROP_CONFIGURABLE ),
+    JS_PROP_INT32_DEF("SOCK_STREAM", SOCK_STREAM, JS_PROP_CONFIGURABLE ),
+    JS_PROP_INT32_DEF("SOCK_DGRAM", SOCK_DGRAM, JS_PROP_CONFIGURABLE ),
+    JS_PROP_INT32_DEF("SOCK_RAW", SOCK_RAW, JS_PROP_CONFIGURABLE ),
+};
+
 static int js_socket_init(JSContext *ctx, JSModuleDef *m)
 {
     JSValue socket_proto, socket_class;
@@ -149,21 +156,11 @@ static int js_socket_init(JSContext *ctx, JSModuleDef *m)
     /* set proto.constructor and ctor.prototype */
     JS_SetConstructor(ctx, socket_class, socket_proto);
     JS_SetClassProto(ctx, js_socket_class_id, socket_proto);
+
+    JS_SetPropertyFunctionList(ctx, socket_class, js_socket_consts, countof(js_socket_consts));
                       
     JS_SetModuleExport(ctx, m, "Socket", socket_class);
     return 0;
-}
-
-static const JSCFunctionListEntry js_socket_consts[] = {
-    JS_PROP_INT32_DEF("AF_INET", AF_INET, JS_PROP_CONFIGURABLE ),
-    JS_PROP_INT32_DEF("SOCK_STREAM", SOCK_STREAM, JS_PROP_CONFIGURABLE ),
-    JS_PROP_INT32_DEF("SOCK_DGRAM", SOCK_DGRAM, JS_PROP_CONFIGURABLE ),
-    JS_PROP_INT32_DEF("SOCK_RAW", SOCK_RAW, JS_PROP_CONFIGURABLE ),
-};
-
-
-static int socket_consts_init(JSContext *ctx, JSModuleDef *m){
-    return JS_SetModuleExportList(ctx, m, js_socket_consts, countof(js_socket_consts));
 }
 
 JSModuleDef *athena_socket_init(JSContext *ctx)
@@ -173,10 +170,7 @@ JSModuleDef *athena_socket_init(JSContext *ctx)
     if (!m)
         return NULL;
     JS_AddModuleExport(ctx, m, "Socket");
-
-    athena_push_module(ctx, socket_consts_init, js_socket_consts, countof(js_socket_consts), "SocketConst");
-
-    dbgprintf("AthenaEnv: %s module pushed at 0x%x\n", "Socket", m);
+    
     return m;
 }
 

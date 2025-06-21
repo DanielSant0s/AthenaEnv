@@ -138,13 +138,8 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"import * as Network from 'Network';\n"
 				"import * as Request from 'Request';\n"
 				"import * as Socket from 'Socket';\n"
-				"import * as SocketConst from 'SocketConst';\n"
 				"import * as WebSocket from 'WebSocket';\n"
 				"globalThis.Network = Network;\n"
-				"globalThis.AF_INET = SocketConst.AF_INET;\n"
-				"globalThis.SOCK_STREAM = SocketConst.SOCK_STREAM;\n"
-				"globalThis.SOCK_DGRAM = SocketConst.SOCK_DGRAM;\n"
-				"globalThis.SOCK_RAW = SocketConst.SOCK_RAW;\n"
 				"globalThis.Socket = Socket.Socket;\n"
 				"globalThis.Request = Request.Request;\n"
 				"globalThis.WebSocket = WebSocket.WebSocket;\n"
@@ -171,8 +166,6 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 
 				"globalThis.NEAREST = 0;\n"
 				"globalThis.LINEAR = 1;\n"
-				"globalThis.VRAM = false;\n"
-				"globalThis.RAM = true;\n"
 				"globalThis.Image = Image.Image;\n"
 				"globalThis.ImageList = ImageList.ImageList;\n"
 
