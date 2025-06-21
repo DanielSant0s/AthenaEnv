@@ -35,7 +35,6 @@ int check_hdd_usability() {
 	return !HDD_USABLE;
 }
 
-
 uint8_t no_dependencies[4] = {
 	EMPTY_ENTRY, 
 	EMPTY_ENTRY,

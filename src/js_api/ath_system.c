@@ -232,10 +232,8 @@ static JSValue athena_getmcinfo(JSContext *ctx, JSValue this_val, int argc, JSVa
 	return obj;
 }
 
-static JSValue athena_loadELF(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
-{
-
-	JSValue val;
+static JSValue athena_loadELF(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
+ 	JSValue val;
 	int n = 0;
 	char **args = NULL;
 	const char *path = JS_ToCString(ctx, argv[0]);
@@ -258,11 +256,11 @@ static JSValue athena_loadELF(JSContext *ctx, JSValue this_val, int argc, JSValu
 	}
 
 	if (argc > 2) {
-		if (!JS_ToBool(ctx, argv[2]))
-			LoadExecPS2(path, n, args);
+		if (JS_ToBool(ctx, argv[2]))
+			LoadELFFromFile(path, n, args);
 	}
 
-	LoadELFFromFile(path, n, args);
+	LoadELFFromFileNoReset(path, n, args);
 
 	return JS_UNDEFINED;
 }

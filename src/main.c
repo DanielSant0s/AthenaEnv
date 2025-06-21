@@ -43,6 +43,8 @@ char default_script[128] = "main.js";
 char default_cfg[128] = "athena.ini";
 bool dark_mode, boot_logo;
 
+char MountPoint[32+6+1]; // max partition name + 'hdd0:/' + '\0'
+
 static __attribute__((used)) void *bypass_modulated_libs() {
     int func = NULL;
     func |= (int)_ps2sdk_ioctl;
@@ -127,7 +129,6 @@ int main(int argc, char **argv) {
     bool ignore_ini = false;
     bool reset_iop = true;
 
-    char MountPoint[32+6+1]; // max partition name + 'hdd0:/' + '\0'
     char newCWD[255];
 
     init_memory_manager();
@@ -210,9 +211,7 @@ int main(int argc, char **argv) {
                 }
 
             }
-        }
-
-        if (!strncmp(boot_path, "mass", 4)) {
+        } else if (!strncmp(boot_path, "mass", 4)) {
             char temp_path[255];
             if (!strncmp(boot_path, "mass:", 5)) {
                 strcpy(temp_path, "mass0:");

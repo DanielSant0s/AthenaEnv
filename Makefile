@@ -92,7 +92,7 @@ IOP_MODULES = iomanx.o filexio.o sio2man.o mcman.o mcserv.o padman.o  \
 
 EMBEDDED_ASSETS = quicksand_regular.o owl_indices.o owl_palette.o
 
-EE_OBJS = $(APP_CORE) $(INI_READER) $(JS_CORE) $(ATHENA_MODULES) $(IOP_MODULES) $(EMBEDDED_ASSETS) # group them all
+EMBEDDED_ELFS = loader_elf.o
 
 ifeq ($(UDPBD),1)
   EE_CFLAGS += -DATHENA_UDPBD
@@ -187,7 +187,7 @@ ATHENA_MODULES := $(ATHENA_MODULES:%=$(JS_API_DIR)%) #prepend the modules folder
 VU1_MPGS := $(VU1_MPGS:%=$(VU1_MPGS_DIR)%) #prepend the microprograms folder
 VU0_MPGS := $(VU0_MPGS:%=$(VU0_MPGS_DIR)%) #prepend the microprograms folder
 
-EE_OBJS = $(APP_CORE) $(INI_READER) $(JS_CORE) $(ATHENA_MODULES) $(VU1_MPGS) $(VU0_MPGS) $(IOP_MODULES) $(EMBEDDED_ASSETS) # group them all
+EE_OBJS = $(APP_CORE) $(INI_READER) $(JS_CORE) $(ATHENA_MODULES) $(VU1_MPGS) $(VU0_MPGS) $(IOP_MODULES) $(EMBEDDED_ELFS) $(EMBEDDED_ASSETS) # group them all
 EE_OBJS := $(EE_OBJS:%=$(EE_OBJ_DIR)%) #prepend the object folder
 
 EE_BIN := $(EE_BIN_DIR)$(EE_BIN_PREF)$(EE_EXT)
@@ -232,6 +232,7 @@ clean:
 	rm -rf $(EE_EMBED_DIR)
 	$(MAKE) -C iop_modules/ds34usb clean
 	$(MAKE) -C iop_modules/ds34bt clean
+	$(MAKE) -C ee_modules/loader clean
 
 	$(MAKE) -f Makefile.dl KEYBOARD=$(DYNAMIC_KEYBOARD) clean
 	$(MAKE) -f Makefile.dl MOUSE=$(DYNAMIC_MOUSE) clean
