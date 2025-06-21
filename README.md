@@ -697,6 +697,13 @@ You have 4 lights to use in 3D scenes, use set to configure them.
   • canvas.zbuffering - Enable or disable Z buffering (3D buffering)(bool).  
   • canvas.psmz - ZBuffering color mode. Available zbuffer colormodes: Screen.Z16, Screen.Z16S, Screen.Z24, Screen.Z32.  
 * Screen.setMode(canvas) - Set the current video mode, get an video mode object as an argument.  
+* Screen.initBuffers() - Init rendering buffers routine, it MUST be called before using offscreen rendering and screenspace related functionality.
+* Screen.resetBuffers() - Resets screen buffers to their original contexts.
+* const buffer = Screen.getBuffer(buffer_id) - Get buffer data as an Image.
+* Screen.setBuffer(buffer_id, new_buffer) - Set the screen buffer as new_buffer (must be an Image object with .renderable = true and cache locked), buffer IDs below:
+  • Screen.DRAW_BUFFER  
+  • Screen.DISPLAY_BUFFER  
+  • Screen.DEPTH_BUFFER  
 * let value = Screen.getParam(param) - Get screen/rendering parameters
 * Screen.setParam(param, value) - Set screen/rendering parameters  
   
