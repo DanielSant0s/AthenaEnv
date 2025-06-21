@@ -697,8 +697,6 @@ static JSValue athena_call_native(JSContext *ctx, JSValue this_val, int argc, JS
 				
 				break;
 		}
-
-		JS_FreeValue(ctx, obj);
 	}
 
 	switch (return_type) {
@@ -766,6 +764,15 @@ static JSValue athena_call_native(JSContext *ctx, JSValue this_val, int argc, JS
 				return JS_NewString(ctx, ret);
 			}
 
+	}
+
+	for (uint32_t i = 0; i < arg_count; i++) {
+		JSValue obj = JS_GetPropertyUint32(ctx, argv[1], i);
+		JS_ToUint32(ctx, &arg_type, JS_GetPropertyStr(ctx, obj, "type"));
+		JSValue val = JS_GetPropertyStr(ctx, obj, "value");
+
+		JS_FreeValue(ctx, val);
+		JS_FreeValue(ctx, obj);
 	}
 
 	return JS_UNDEFINED;

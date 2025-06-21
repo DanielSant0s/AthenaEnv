@@ -32,6 +32,8 @@ void worker_thread(void *arg) {
     for (int i = 0; i < tinfo->argc; i++) {
         JS_FreeValue(tinfo->ctx, tinfo->argv[i]);
     }
+
+    JS_FreeValue(tinfo->ctx, tinfo->func);
 }
 
 static JSValue athena_newtask(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
