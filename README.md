@@ -383,6 +383,68 @@ Constants to interpret the mode property returned by stat(). They have the same 
 * os.clearInterval(handle) - Cancel a interval.
 * os.clearImmediate(handle) - Cancel a immediate execution.
 * os.platform - Return a string representing the platform: "ps2".
+
+### Vector4 Module  
+
+Construction:  
+
+* let vec = new Vector4(x, y, z, w);  
+```js
+let test = new Vector4(0.0, 0.0, 0.0, 1.0); 
+``` 
+
+Properties:
+
+* x, y, z, w - Vector components.
+
+Methods:
+
+* norm() - Get vector length/norm.
+* dot(vec2) - Calculate vector dot product.
+* cross(vec2) - Calculate vector cross product.
+* distance(vec2) - Calculate vector distances.
+* distance2(vec2) - Calculate vector squared distances.
+
+Operators: 
+
+* add: +
+* sub: -
+* mul: *
+* div: /
+* eq: ==
+
+
+### Matrix4 Module  
+
+Construction:  
+
+* let mat = new Matrix4(m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16)  
+or
+* let mat = new Matrix4() - No arguments means identity matrix.
+```js
+let test = new Matrix4(); 
+``` 
+
+Properties:
+
+* length - 16.
+
+Methods:
+
+* toArray() - Returns an array from the matrix.
+* fromArray() - Puts the first 16 numbers of the array as the matrix elements.
+* clone() - Create a new clone of the given matrix.
+* copy(mat) - Copy the matrix contents to the given matrix.
+* transpose() - Transpose matrix.
+* invert() - Calculate matrix inverse.
+* identity() - Put matrix identity.
+
+Operators: 
+
+* mul: *
+* eq: ==
+
+P.S.: Matrix4 module components can be accessed as an array, so... mat[n] from 0 to 15.
     
 ### Color module
 * let col = Color.new(r, g, b, *a*) - Returns a color object from the specified RGB(A) parameters.
@@ -392,19 +454,20 @@ Constants to interpret the mode property returned by stat(). They have the same 
 * let a = Color.getA(col) - Get alpha intensity of the color.
 * Color.setR(col, r) - Set red intensity of the color.
 * Color.setG(col, g) - Set green intensity of the color.
-* Color.setB(col, g) - Set blue intensity of the color.
+* Color.setB(col, b) - Set blue intensity of the color.
 * Color.setA(col, a) - Set alpha intensity of the color.
 
 ### Image Module  
-
+Functions:  
+* Image.copyVRAMBlock(src_buffer, src_x, src_y, dest_buffer, dest_x, dest_y) - Copies a VRAM block from src_buffer to dest_buffer.
+  
 Construction:  
 
-* let image = new Image(path, *mode*, *async_list*);  
-  path - Path to the file, E.g.: "images/test.png".  
-  *mode* - Choose between storing the image between **RAM** or **VRAM**, default value is RAM.  
+* let image = new Image(*path*, *async_list*);  
+  *path* - Path to the file, E.g.: "images/test.png".  
   *async_list* - Gets a ImageList object, which is a asynchronous image loading list, if you want to load images in the background.  
 ```js
-let test = new Image("owl.png", VRAM); 
+let test = new Image("owl.png"); 
 ``` 
 
 Properties:
@@ -416,15 +479,19 @@ Properties:
 * color - Define image tinting, default value is Color.new(255, 255, 255, 128).
 * filter - Choose between **LINEAR** or **NEAREST**, default value is NEAREST.
 * size - Returns image real size occupied in memory.
-* bpp - Returns image bits per-pixel qantity.
-* delayed - If true, your texture was loaded in RAM, else, VRAM.
+* bpp - Bits per-pixel quantity.
 * pixels - The image pixel ArrayBuffer.
 * palette - If is a palette image, it has a palette ArrayBuffer right here.
+* texWidth, texHeight - The real texture area in memory.
+* renderable - Set if the texture can be used as a rendering buffer.
 
 Methods:
 
 * draw(x, y) - Draw loaded image onscreen(call it every frame). Example: image.draw(15.0, 100.0);
 * optimize() - If your image has 24 bits per-pixel (aka RGB), you can use this to make it 16 bits per-pixel, saving some memory!
+* lock() - Lock texture data in VRAM, useful when you deal with textures that are always needed or rendering buffers.
+* unlock() - Unlock texture data in VRAM, so it can be replaced with more used textures.
+* locked() - Returns true if the texture is locked in VRAM.
 * ready() - Returns true if an asynchronous image was successfully loaded in memory. 
 * free() - Free asset content immediately. P.S.: This is a way to quick free stuff from memory, but you can also wait for the garbage collector so it's not mandatory.
   
@@ -463,13 +530,14 @@ canvas.psmz = Z16S;
 Screen.setMode(canvas);
 ```
 
-* Render.setView(*fov*, *near_clip*, *far_clip*) - Initializes rendering routines. FOV, NearClip and FarClip aren't mandatory.  
+* Render.init() - Initializes rendering routines.
+* Render.setView(*fov*, *near_clip*, *far_clip*) - Set render default view matrix. FOV, NearClip and FarClip aren't mandatory.  
   • fov - Field of view, default: 60  
   • near_clip - Near clip, default: 0.1  
   • far_clip - Far clip, default: 2000.0  
 * Render.materialColor(red, green, blue, *alpha*) - alpha isn't mandatory.
 * Render.materialIndex(index, end)
-* Render.material(ambient, diffuse, specular, emission, transmittance, shininess, refraction, transmission_filter, disolve, texture_id) - Returns a material object.  
+* Render.material(ambient, diffuse, specular, emission, transmittance, shininess, refraction, transmission_filter, disolve, texture_id, bump_texture_id, ref_texture_id) - Returns a material object.  
   • ambient - Render.materialColor  
   • diffuse - Render.materialColor  
   • specular - Render.materialColor  
@@ -480,6 +548,8 @@ Screen.setMode(canvas);
   • transmission_filter - Render.materialColor  
   • disolve - Float32  
   • texture_id - Texture index, -1 for an untextured mesh.  
+  • bump_texture_id - Bump map texture index, -1 for disable.  
+  • ref_texture_id - Reflection/Env map texture index, -1 for disable.  
   
 * Render.vertexList(positions, normals, texcoords, colors, materials, material_indices) - Returns an object used to build a RenderData. P.S.: All vertex arrays are Vector4 (x, y, z, w for i+0, i+1, i+2, i+3, in steps of 4).  
   • positions - Float32Array that stores all vertex positions (x, y, z, w/adc).  
@@ -529,8 +599,30 @@ Properties:
   • Render.CULL_FACE_BACK  
 
 * texture_mapping - Toggle texture mapping. (it can be used to disable texturing on a whole textured model)
-* shade_model - Flat = 0, Gouraud = 1.
+* shade_model - Flat = 0, Gouraud = 1.  
+  
+Properties(skinned):
+* bones: Array - Skeleton bones data.  
+  • position: Vector4 - Bone local position.  
+  • rotation: Vector4 - Bone local rotation.  
+  • scale: Vector4 - Bone local scale.  
+  • inverse_bind: Matrix4 - Bone inverse bind matrix.  
 
+### AnimCollection module
+
+Construction:
+
+```js
+let walk_anims = new AnimCollection("walk_anims.gltf");
+```
+Loads an array map containing the animations inside the file, so you can either load them by index or name, for instance: for a anim called "run_fast", just pass as:
+```js
+character.playAnim(walk_anims["run_fast"], true);
+
+// now you want it to be in idle animation, which can be the first animation on our array, so:
+character.playAnim(walk_anims[0], true);
+```
+  
 ### RenderObject module
 
 Construction:
@@ -544,31 +636,40 @@ Methods:
 
 * render() - Draws the object on screen.
 * renderBounds() - Draws object bounding box.
-* free() - Free asset content immediately. P.S.: This is a way to quick free stuff from memory, but you can also wait for the garbage collector so it's not mandatory.
+* free() - Free asset content immediately. P.S.: This is a way to quick free stuff from memory, but you can also wait for the garbage collector so it's not mandatory.  
   
-Properties:
+Methods(skinned):
+
+* playAnim(anim, loop) - Play animation on a skinned RenderObject.
+* isPlayingAnim(anim) -  Returns true if anim is being played.  
+
+Properties:  
 
 * position - Object with x, y and z keys that stores the object position. Default is {x:0, y:0, z:0}.
 * rotation - Object with x, y and z keys that stores the object rotation. Default is {x:0, y:0, z:0}.
-  
+* scale - Object with x, y and z keys that stores the object scale. Default is {x:0, y:0, z:0}.
+* transform: Matrix4 - Object RTS transform matrix.  
+
+Properties(skinned):
+* bone_matrices: Matrix4[] - Array of Matrix4 containing the current bone state.
+* bones: Array - Current bones current data.  
+  • position: Vector4 - Current bone local position.  
+  • rotation: Vector4 - Current bone local rotation.  
+  • scale: Vector4 - Current bone local scale.  
+  • transform: Matrix4 - Current bone RTS matrix.  
   
 **Camera**   
-* Camera.type(type) - Change camera function types.  
-  • Camera.DEFAULT - Raw camera coordinates  
-    • Camera.position(x, y, z)  
-    • Camera.rotation(x, y, z)  
-  • Camera.LOOKAT - "Look at" style coordinates, most common for games  
-    • Camera.target(x, y, z)  
-    • Camera.orbit(yaw, pitch)  
-    • Camera.turn(yaw, pitch)  
-    • Camera.pan(x, y)  
-    • Camera.dolly(distance)  
-    • Camera.zoom(distance)  
+* Camera.position(x, y, z)  
+* Camera.rotation(x, y, z)  
+* Camera.target(x, y, z)  
+* Camera.orbit(yaw, pitch)  
+* Camera.turn(yaw, pitch)  
+* Camera.pan(x, y)  
+* Camera.dolly(distance)  
+* Camera.zoom(distance)  
   
 * Camera.update() - Update camera state (must be called every frame).  
   
-
-
 **Lights**  
 You have 4 lights to use in 3D scenes, use set to configure them.
 
@@ -596,11 +697,12 @@ You have 4 lights to use in 3D scenes, use set to configure them.
   • canvas.zbuffering - Enable or disable Z buffering (3D buffering)(bool).  
   • canvas.psmz - ZBuffering color mode. Available zbuffer colormodes: Screen.Z16, Screen.Z16S, Screen.Z24, Screen.Z32.  
 * Screen.setMode(canvas) - Set the current video mode, get an video mode object as an argument.  
-* Screen.blendEquation(preset) - Set alpha blending mode based on presets  
-  • Screen.BLEND_DEFAULT  
-  • Screen.BLEND_ADD  
-  • Screen.BLEND_ADD_NOALPHA  
-* Screen.blendEquation(a, b, c, d, fix) - Set alpha blending mode based on a fixed coefficient equation.  
+* let value = Screen.getParam(param) - Get screen/rendering parameters
+* Screen.setParam(param, value) - Set screen/rendering parameters  
+  
+Parameters below:  
+  
+* Screen.ALPHA_BLEND_EQUATION - Set alpha blending mode based on a fixed coefficient equation.  
   • Screen.SRC_RGB - Source RGB  
   • Screen.DST_RGB - Framebuffer RGB  
   • Screen.ZERO_RGB - Zero RGB  
@@ -616,6 +718,48 @@ A, B, and D are colors and C is an alpha value. Their specific values come from 
   1   Framebuffer RGB  Framebuffer RGB  Framebuffer alpha   Framebuffer RGB
   2   Zero RGB         Zero RGB         Fix argument        Zero RGB
 ```
+So pass it as an object like:
+```js
+const NORMAL_BLEND = {
+  a: Screen.SRC_RGB, 
+  b: Screen.DST_RGB, 
+  c: Screen.SRC_ALPHA, 
+  d: Screen.DST_RGB, 
+  fix: 0
+};
+
+Screen.setParam(Screen.ALPHA_BLEND_EQUATION, NORMAL_BLEND);
+```
+* Screen.ALPHA_TEST_ENABLE: bool - Enable or disable alpha test.
+* Screen.ALPHA_TEST_METHOD - Set alpha test method.  
+  • Screen.ALPHA_NEVER - All pixels fail  
+  • Screen.ALPHA_ALWAYS - All pixels pass  
+  • Screen.ALPHA_LESS - pixel alpha < ALPHA_TEST_REF passes  
+  • Screen.ALPHA_LEQUAL - pixel alpha <= ALPHA_TEST_REF passes  
+  • Screen.ALPHA_EQUAL - pixel alpha == ALPHA_TEST_REF passes  
+  • Screen.ALPHA_GEQUAL - pixel alpha >= ALPHA_TEST_REF passes  
+  • Screen.ALPHA_GREATER - pixel alpha > ALPHA_TEST_REF passes  
+  • Screen.ALPHA_NEQUAL - pixel alpha != ALPHA_TEST_REF passes  
+* Screen.ALPHA_TEST_REF: int - Alpha test reference, normally it is 128 (0x80).
+* Screen.ALPHA_TEST_FAIL - Set behavior when alpha test fails  
+  • Screen.ALPHA_FAIL_NO_UPDATE - Neither frame buffer nor depth buffer are updated.  
+  • Screen.ALPHA_FAIL_FB_ONLY - Only frame buffer is updated.  
+  • Screen.ALPHA_FAIL_ZB_ONLY - Only depth buffer is updated.  
+  • Screen.ALPHA_FAIL_RGB_ONLY - Only RGB in framebuffer is updated.  
+* Screen.DST_ALPHA_TEST_ENABLE: bool - Enable or disable destination alpha test.
+* Screen.DST_ALPHA_TEST_METHOD - Destination alpha test method.  
+  • Screen.DST_ALPHA_ZERO - Destination alpha bit == 0 passes  
+  • Screen.DST_ALPHA_ONE - Destination alpha bit == 1 passes  
+The alpha bit tested depends on the framebuffer format. If the format is CT32, bit 7 of alpha is tested. If the format is CT16/S, the sole alpha bit is tested. If the format is CT24, all pixels pass due to the lack of alpha.  
+* Screen.DEPTH_TEST_ENABLE: bool - Enable or disable depth test.  
+* Screen.DEPTH_TEST_METHOD - Depth test method.  
+  • Screen.DEPTH_NEVER - All pixels fail  
+  • Screen.DEPTH_ALWAYS - All pixels pass  
+  • Screen.DEPTH_GEQUAL - pixel Z >= depth buffer Z passes  
+  • Screen.DEPTH_GREATER - pixel Z > depth buffer Z passes  
+* Screen.PIXEL_ALPHA_BLEND_ENABLE: bool - If enabled, switch per-pixel alpha blending based on source alpha most significant bit value.
+* Screen.COLOR_CLAMP_MODE: bool - If true, RGB components will be 0 if negative after alpha-blending or 0xFF if 0x100 or above. else, each color component will be ANDed with 0xFF, ie, they overlap.
+* Screen.SCISSOR_BOUNDS - Object model: {x1: x_start, y1: y_start, x2: x_end, y2: y_end}
 
 ### Font module
 
@@ -727,7 +871,32 @@ Methods:
 * Mouse.setPosition(x, y) - Set mouse pointer position.
   
 ### System module
-
+* let ret = System.nativeCall(address, arguments, *return_type*)  
+  • address - Memory address of the native function.  
+  • arguments - Array of arguments for the function, details below:  
+    • Argument model: {type: System.T_X, value: X}, types below:
+      • System.T_LONG  
+      • System.T_ULONG  
+      • System.T_INT  
+      • System.T_UINT  
+      • System.T_SHORT  
+      • System.T_USHORT  
+      • System.T_CHAR  
+      • System.T_UCHAR  
+      • System.T_PTR  
+      • System.T_BOOL  
+      • System.T_FLOAT  
+      • System.T_STRING  
+      • System.JS_BUFFER - ArrayBuffer  
+  • return_type - Use one of the types above, or simply omit for void.  
+* let reloc_id = System.loadReloc(path) - Loads a relocatable code (library or module)
+* System.unloadReloc(reloc_id) - Unloads it from memory. P.S.: DANGER!!! Assures that you aren't using code from it.
+* let symbol_addr = System.findRelocObject("symbol_name") - Find object inside Athena binary or a relocatable code/data
+* let symbol_addr = System.findRelocLocalObject(reloc_id, "symbol_name") - Find object inside a relocatable code/data
+* let info = System.getBDMInfo("mass0") - Gets info about the BDM device. E.g.: {name: "usb", index:0}
+* let result = System.mount(mountpoint, device, *mode*)
+* let result = System.umount(path)
+* System.devices() - Array with avaliable devices: {name, desc}
 * let listdir = System.listDir(*path*)
   • listdir[index].name - return file name on indicated index(string)  
   • listdir[index].size - return file size on indicated index(integer)  
@@ -873,11 +1042,18 @@ Asynchronous methods:
 
 ### Socket module
 
+Properties:
+
+* Socket.AF_INET
+* Socket.SOCK_STREAM
+* Socket.SOCK_DGRAM
+* Socket.SOCK_RAW
+
 Construction:  
 
 * let s = new Socket(domain, type)  
 ```js
-let s = new Socket(AF_INET, SOCK_STREAM);
+let s = new Socket(Socket.AF_INET, Socket.SOCK_STREAM);
 ```
 
 Methods:
