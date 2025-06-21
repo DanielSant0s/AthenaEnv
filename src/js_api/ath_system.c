@@ -32,63 +32,90 @@
 
 static JSValue athena_dir(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
 {
-	if (argc != 0 && argc != 1) return JS_ThrowSyntaxError(ctx, "Argument error: System.listDir([path]) takes zero or one argument.");
+    if (argc != 0 && argc != 1) return JS_ThrowSyntaxError(ctx, "Argument error: System.listDir([path]) takes zero or one argument.");
 
-	JSValue arr = JS_NewArray(ctx);
+    JSValue arr = JS_NewArray(ctx);
 
     const char *temp_path = "";
-	char path[255], tpath[384];
+    char path[255], tpath[384];
 
-	getcwd((char *)path, 256);
-	dbgprintf("current dir %s\n",(char *)path);
+    getcwd((char *)path, 256);
+    dbgprintf("current dir %s\n",(char *)path);
 
-	if (argc != 0)
-	{
-		temp_path = JS_ToCString(ctx, argv[0]);
-		// append the given path to the boot_path
+    if (argc != 0)
+    {
+        temp_path = JS_ToCString(ctx, argv[0]);
+        // append the given path to the boot_path
 
-	        strcpy ((char *)path, boot_path);
+            strcpy ((char *)path, boot_path);
 
-	        if (strchr(temp_path, ':'))
-	           // workaround in case of temp_path is containing
-	           // a device name again
-	           strcpy ((char *)path, temp_path);
-	        else
-	           strcat ((char *)path, temp_path);
-	}
+            if (strchr(temp_path, ':'))
+               // workaround in case of temp_path is containing
+               // a device name again
+               strcpy ((char *)path, temp_path);
+            else
+               strcat ((char *)path, temp_path);
+    }
 
-	//strcpy(path, __ps2_normalize_path(path));
-	dbgprintf("\nchecking path : %s\n",path);
+    //strcpy(path, __ps2_normalize_path(path));
+    dbgprintf("\nchecking path : %s\n",path);
 
     int i = 0;
 
     DIR *d;
     struct dirent *dir;
 
-    d = opendir(path);
-
     struct stat     statbuf;
+    if (strncmp(path, "hdd", 3) == 0 && strlen(path) <= 5)
+    {
+        iox_dirent_t dirent;
+        int fd, ret = 0;
+        if ((fd = fileXioDopen(strncpy(tpath, path, 5))) >= 0) {
+            while (fileXioDread(fd, &dirent) > 0) {
+                if (dirent.stat.attr & APA_FLAG_SUB)
+                    continue;
+                if (strcmp(dirent.name, "__empty") == 0)
+                    continue;
 
-    if (d) {
-        while ((dir = readdir(d)) != NULL) {
+                JSValue obj = JS_NewObject(ctx);
 
-            strcpy(tpath, path);
-            strcat(tpath, "/");
-            strcat(tpath, dir->d_name);
-            stat(tpath, &statbuf);
+				if (dirent.stat.mode != APA_TYPE_HDL) {
+					strcpy(tpath, dirent.name);
+				} else {
+					snprintf(tpath, sizeof(tpath), "%s.iso", dirent.name);
+				}
+				JS_DefinePropertyValueStr(ctx, obj, "name", JS_NewString(ctx, tpath), JS_PROP_C_W_E);
+				JS_DefinePropertyValueStr(ctx, obj, "size", JS_NewUint32(ctx, (512 * dirent.stat.size * (dirent.stat.private_0 + 1))), JS_PROP_C_W_E);
+                JS_DefinePropertyValueStr(ctx, obj, "dir", JS_NewBool(ctx, (dirent.stat.mode == APA_TYPE_PFS)), JS_PROP_C_W_E);
 
-			JSValue obj = JS_NewObject(ctx);
+                JS_DefinePropertyValueUint32(ctx, arr, i++, obj, JS_PROP_C_W_E);
+            }
+        }
+        fileXioDclose(fd);
+    } else {
+        d = opendir(path);
 
-			JS_DefinePropertyValueStr(ctx, obj, "name", JS_NewString(ctx, dir->d_name), JS_PROP_C_W_E);
-			JS_DefinePropertyValueStr(ctx, obj, "size", JS_NewUint32(ctx, statbuf.st_size), JS_PROP_C_W_E);
-			JS_DefinePropertyValueStr(ctx, obj, "dir", JS_NewBool(ctx, (dir->d_type == DT_DIR)), JS_PROP_C_W_E);
+        if (d) {
+            while ((dir = readdir(d)) != NULL) {
 
-			JS_DefinePropertyValueUint32(ctx, arr, i++, obj, JS_PROP_C_W_E);
-	    }
-	    closedir(d);
-	}
+                strcpy(tpath, path);
+                strcat(tpath, "/");
+                strcat(tpath, dir->d_name);
+                stat(tpath, &statbuf);
 
-	return arr;
+                JSValue obj = JS_NewObject(ctx);
+
+                JS_DefinePropertyValueStr(ctx, obj, "name", JS_NewString(ctx, dir->d_name), JS_PROP_C_W_E);
+                JS_DefinePropertyValueStr(ctx, obj, "size", JS_NewUint32(ctx, statbuf.st_size), JS_PROP_C_W_E);
+                JS_DefinePropertyValueStr(ctx, obj, "dir", JS_NewBool(ctx, (dir->d_type == DT_DIR)), JS_PROP_C_W_E);
+
+                JS_DefinePropertyValueUint32(ctx, arr, i++, obj, JS_PROP_C_W_E);
+            }
+            closedir(d);
+        }
+    }
+
+    return arr;
 }
 
 static JSValue athena_removeDir(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
