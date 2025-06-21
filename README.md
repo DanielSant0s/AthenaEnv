@@ -177,6 +177,8 @@ Hello World:
 ```js
 const font = new Font("default");
 
+Screen.setParam(Screen.DEPTH_TEST_ENABLE, false); // Before doing 2D, disable depth!
+
 os.setInterval(() => { // Basically creates an infinite loop, similar to while true(you can use it too).
   Screen.clear(); // Clear screen for the next frame.
   font.print(0, 0, "Hello World!"); // x, y, text
