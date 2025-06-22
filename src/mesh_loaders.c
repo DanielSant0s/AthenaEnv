@@ -61,6 +61,7 @@ void loadOBJ(athena_render_data* res_m, const char* path, GSSURFACE* text) {
 	res_m->textures = NULL;
     res_m->attributes.has_bumpmap = false;
     res_m->attributes.has_refmap = false;
+    res_m->attributes.has_decal = false;
 
 	if (m->material_count && !m->strip_count) {
 		res_m->materials = (ath_mat *)malloc(m->material_count*sizeof(ath_mat));
@@ -85,6 +86,7 @@ void loadOBJ(athena_render_data* res_m, const char* path, GSSURFACE* text) {
 			res_m->materials[i].texture_id = -1;
             res_m->materials[i].bump_texture_id = -1;
             res_m->materials[i].ref_texture_id = -1;
+            res_m->materials[i].decal_texture_id = -1;
 
 			if (m->materials[i].map_Kd.name) {
 				bool prev_loaded = false;
@@ -121,6 +123,7 @@ void loadOBJ(athena_render_data* res_m, const char* path, GSSURFACE* text) {
 		res_m->materials[0].texture_id = -1;
         res_m->materials[0].bump_texture_id = -1;
         res_m->materials[0].ref_texture_id = -1;
+        res_m->materials[0].decal_texture_id = -1;
 
 		if((text)) {
 			res_m->materials[0].texture_id = 0;
@@ -258,6 +261,7 @@ void load_gltf_material(ath_mat* mat, const cgltf_material* gltf_mat, athena_ren
     mat->disolve = 1.0f;
     mat->texture_id = -1;
     mat->bump_texture_id = -1;  
+    mat->decal_texture_id = -1;  
     mat->ref_texture_id = -1; 
     mat->bump_scale = 1.0f;     
     
@@ -555,6 +559,7 @@ void loadGLTF(athena_render_data* res_m, const char* path, GSSURFACE* text) {
 
     res_m->attributes.has_bumpmap = false;
     res_m->attributes.has_refmap = false;
+    res_m->attributes.has_decal = false;
 
     if (data->materials_count > 0) {
         res_m->materials = (ath_mat*)malloc(data->materials_count * sizeof(ath_mat));

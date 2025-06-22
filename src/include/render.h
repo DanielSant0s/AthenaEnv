@@ -69,6 +69,7 @@ typedef struct {
 	int shade_model; // 0 = flat, 1 = gouraud
     int has_refmap; 
     int has_bumpmap; 
+    int has_decal;
 } RenderAttributes;
 
 
@@ -162,6 +163,7 @@ typedef struct
 
 	int texture_id;
     int bump_texture_id;
+    int decal_texture_id;
     int ref_texture_id;
 } ath_mat;
 

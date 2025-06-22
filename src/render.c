@@ -124,12 +124,12 @@ void SetLightAttribute(int id, float x, float y, float z, int attr) {
 
 VECTOR zero_bump_offset = { 0.0f, 0.0f, 0.0f, 0.0f };
 
-void draw_vu1_with_colors(athena_object_data *obj, bool bump_pass);
-void draw_vu1_with_lights(athena_object_data *obj, bool bump_pass);
-void draw_vu1_with_spec_lights(athena_object_data *obj, bool bump_pass);
-void draw_vu1_with_lights_ref(athena_object_data *obj, bool bump_pass);
+void draw_vu1_with_colors(athena_object_data *obj, int pass_state);
+void draw_vu1_with_lights(athena_object_data *obj, int pass_state);
+void draw_vu1_with_spec_lights(athena_object_data *obj, int pass_state);
+void draw_vu1_with_lights_ref(athena_object_data *obj, int pass_state);
 
-void (*render_funcs[])(athena_object_data *obj, bool bump_pass) = {
+void (*render_funcs[])(athena_object_data *obj, int pass_state) = {
 	draw_vu1_with_colors,
 	draw_vu1_with_lights,
 	draw_vu1_with_spec_lights
@@ -139,12 +139,16 @@ void render_object(athena_object_data *obj) {
 	uint64_t old_alpha = get_screen_param(ALPHA_BLEND_EQUATION);
 	uint64_t old_colclamp = get_screen_param(COLOR_CLAMP_MODE);
 
-	render_funcs[obj->data->pipeline](obj, false);
+	render_funcs[obj->data->pipeline](obj, 0);
+
+	if (obj->data->attributes.has_decal) {
+		render_funcs[obj->data->pipeline](obj, 2);
+	}
 	
 	if (obj->data->attributes.has_refmap) {
 		set_screen_param(ALPHA_BLEND_EQUATION, ALPHA_EQUATION(SRC_RGB, ZERO_RGB, ALPHA_FIX, DST_RGB, 0x40));
 
-		draw_vu1_with_lights_ref(obj, false);
+		draw_vu1_with_lights_ref(obj, 0);
 	}
 
 	if (obj->data->attributes.has_bumpmap) {
@@ -161,11 +165,11 @@ void render_object(athena_object_data *obj) {
 
 		obj->bump_offset_buffer = &obj->bump_offset;
 		set_screen_param(ALPHA_BLEND_EQUATION, ALPHA_EQUATION(SRC_RGB, ZERO_RGB, ALPHA_FIX, DST_RGB, 0x34));
-		draw_vu1_with_colors(obj, true);
+		draw_vu1_with_colors(obj, 1);
 
 		obj->bump_offset_buffer = &zero_bump_offset;
 		set_screen_param(ALPHA_BLEND_EQUATION, ALPHA_EQUATION(ZERO_RGB, SRC_RGB, ALPHA_FIX, DST_RGB, 0x34));
-		draw_vu1_with_colors(obj, true);
+		draw_vu1_with_colors(obj, 1);
 	}	
 
 	set_screen_param(COLOR_CLAMP_MODE, old_colclamp);
@@ -387,7 +391,7 @@ void bake_giftags(owl_packet *packet, athena_render_data *data, bool texture_map
 	}
 }
 
-void draw_vu1_with_colors(athena_object_data *obj, bool bump_pass) {
+void draw_vu1_with_colors(athena_object_data *obj, int pass_state) {
 	athena_render_data *data = obj->data;
 
 	int batch_size = BATCH_SIZE, mpg_addr = 0;
@@ -431,10 +435,21 @@ void draw_vu1_with_colors(athena_object_data *obj, bool bump_pass) {
 	GSSURFACE* tex = NULL;
 	int texture_id;
 	for(int i = 0; i < data->material_index_count; i++) {
-		bool texture_mapping = ((((data->materials[data->material_indices[i].index].texture_id != -1)) && data->attributes.texture_mapping) || bump_pass);
+		bool texture_mapping = ((((data->materials[data->material_indices[i].index].texture_id != -1)) && data->attributes.texture_mapping) || pass_state);
 
 		if (texture_mapping) {
-			GSSURFACE *cur_tex = data->textures[(bump_pass? data->materials[data->material_indices[i].index].bump_texture_id : data->materials[data->material_indices[i].index].texture_id)];
+			GSSURFACE *cur_tex = NULL;
+			switch (pass_state) {
+				case 1: // bump map 
+					cur_tex = data->textures[data->materials[data->material_indices[i].index].bump_texture_id];
+					break;
+				case 2: // decal
+					cur_tex = data->textures[data->materials[data->material_indices[i].index].decal_texture_id];
+					break;
+				default: 
+					cur_tex = data->textures[data->materials[data->material_indices[i].index].texture_id];
+			}
+
 			if (cur_tex != tex) {
 				texture_id = texture_manager_bind(gsGlobal, cur_tex, true);
 				tex = cur_tex;
@@ -500,7 +515,7 @@ void draw_vu1_with_colors(athena_object_data *obj, bool bump_pass) {
 	);
 }
 
-void draw_vu1_with_lights(athena_object_data *obj, bool bump_pass) {
+void draw_vu1_with_lights(athena_object_data *obj, int pass_state) {
 	athena_render_data *data = obj->data;
 
 	int batch_size = BATCH_SIZE, mpg_addr = 0;
@@ -544,10 +559,21 @@ void draw_vu1_with_lights(athena_object_data *obj, bool bump_pass) {
 	GSSURFACE* tex = NULL;
 	int texture_id;
 	for(int i = 0; i < data->material_index_count; i++) {
-		bool texture_mapping = ((data->materials[data->material_indices[i].index].texture_id != -1) && data->attributes.texture_mapping);
+		bool texture_mapping = (((data->materials[data->material_indices[i].index].texture_id != -1) && data->attributes.texture_mapping) || pass_state);
 
 		if (texture_mapping) {
-			GSSURFACE *cur_tex = data->textures[data->materials[data->material_indices[i].index].texture_id];
+			GSSURFACE *cur_tex = NULL;
+			switch (pass_state) {
+				case 1: // bump map 
+					cur_tex = data->textures[data->materials[data->material_indices[i].index].bump_texture_id];
+					break;
+				case 2: // decal
+					cur_tex = data->textures[data->materials[data->material_indices[i].index].decal_texture_id];
+					break;
+				default: 
+					cur_tex = data->textures[data->materials[data->material_indices[i].index].texture_id];
+			}
+
 			if (cur_tex != tex) {
 				texture_id = texture_manager_bind(gsGlobal, cur_tex, true);
 				tex = cur_tex;
@@ -616,7 +642,7 @@ void draw_vu1_with_lights(athena_object_data *obj, bool bump_pass) {
 	);
 }
 
-void draw_vu1_with_spec_lights(athena_object_data *obj, bool bump_pass) {
+void draw_vu1_with_spec_lights(athena_object_data *obj, int pass_state) {
 	athena_render_data *data = obj->data;
 
 	int batch_size = BATCH_SIZE, mpg_addr = 0;
@@ -660,10 +686,21 @@ void draw_vu1_with_spec_lights(athena_object_data *obj, bool bump_pass) {
 	GSSURFACE* tex = NULL;
 	int texture_id;
 	for(int i = 0; i < data->material_index_count; i++) {
-		bool texture_mapping = ((data->materials[data->material_indices[i].index].texture_id != -1) && data->attributes.texture_mapping);
+		bool texture_mapping = (((data->materials[data->material_indices[i].index].texture_id != -1) && data->attributes.texture_mapping) || pass_state);
 
 		if (texture_mapping) {
-			GSSURFACE *cur_tex = data->textures[data->materials[data->material_indices[i].index].texture_id];
+			GSSURFACE *cur_tex = NULL;
+			switch (pass_state) {
+				case 1: // bump map 
+					cur_tex = data->textures[data->materials[data->material_indices[i].index].bump_texture_id];
+					break;
+				case 2: // decal
+					cur_tex = data->textures[data->materials[data->material_indices[i].index].decal_texture_id];
+					break;
+				default: 
+					cur_tex = data->textures[data->materials[data->material_indices[i].index].texture_id];
+			}
+
 			if (cur_tex != tex) {
 				texture_id = texture_manager_bind(gsGlobal, cur_tex, true);
 				tex = cur_tex;
@@ -730,7 +767,7 @@ void draw_vu1_with_spec_lights(athena_object_data *obj, bool bump_pass) {
 	);
 }
 
-void draw_vu1_with_lights_ref(athena_object_data *obj, bool bump_pass) {
+void draw_vu1_with_lights_ref(athena_object_data *obj, int pass_state) {
 	athena_render_data *data = obj->data;
 
 	int batch_size = BATCH_SIZE, mpg_addr = 0;

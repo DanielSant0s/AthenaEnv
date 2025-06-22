@@ -13,7 +13,7 @@ font.outline = 1.0f;
 font.outline_color = Color.new(0, 0, 0);
 
 Screen.setFrameCounter(true);
-Screen.setVSync(true);
+Screen.setVSync(false);
 
 const canvas = Screen.getMode();
 
@@ -23,18 +23,19 @@ canvas.psmz = Screen.Z24;
 
 Screen.setMode(canvas);
 
-//const temp_buffer = new Image();
-//temp_buffer.bpp = 32;
-//temp_buffer.texWidth = 256;
-//temp_buffer.texHeight = 128;
-//temp_buffer.renderable = true;
-//
-//temp_buffer.width = 256;
-//temp_buffer.height = 128;
-//temp_buffer.endx = 256;
-//temp_buffer.endy = 128;
-//
-//temp_buffer.lock();
+const decal_buffer = new Image();
+
+decal_buffer.filter = LINEAR;
+
+decal_buffer.bpp = 32;
+decal_buffer.texWidth = 128;
+decal_buffer.texHeight = 128;
+decal_buffer.renderable = true;
+
+decal_buffer.width = 128;
+decal_buffer.height = 128;
+decal_buffer.endx = 128;
+decal_buffer.endy = 128;
 
 Screen.clear();
 font.print(0, 0, "Loading assets...");
@@ -101,34 +102,34 @@ const gltf_box = new RenderData("box_bump.gltf");
 const dragontex = new Image("dragon.png");
 const dragonmesh = new RenderData("dragon.obj", dragontex);
 
-dragonmesh.setTexture(1, skytex);
+const blood_tex = new Image("blood.png");
+blood_tex.width = 40;
+blood_tex.height = 40;
 
 const dragon_materials = dragonmesh.materials;
 
-dragon_materials[0].ref_texture_id = 1;
+dragon_materials[0].decal_texture_id = dragonmesh.pushTexture(decal_buffer);
 
 dragonmesh.materials = dragon_materials;
 
 const monkeytex = new Image("monkey.png");
 const monkeymesh = new RenderData("monkey.obj", monkeytex);
 
-monkeymesh.setTexture(1, skytex);
-
 const monkey_materials = monkeymesh.materials;
 
-monkey_materials[0].ref_texture_id = 1;
+monkey_materials[0].decal_texture_id = monkeymesh.pushTexture(decal_buffer);
 
 monkeymesh.materials = monkey_materials;
 
 const moontex = new Image("moon.png");
 
 const car = new RenderData("Car.obj");
-car.setTexture(0, skytex);
+const envmap_tex_id = car.pushTexture(skytex);
 
 const car_materials = car.materials;
 
 const new_materials = car_materials.map((mat) => {
-    mat.ref_texture_id = 0;
+    mat.ref_texture_id = envmap_tex_id;
     if (mat.diffuse.r > 0.4 && mat.diffuse.g == 0.0 && mat.diffuse.b == 0.0) {
         mat.diffuse.r = 0.25;
         mat.diffuse.b = 0.5;
@@ -202,18 +203,13 @@ let bbox = false;
 
 let spec = false;
 
-//Screen.initBuffers();
-//
-//const draw_buffer = Screen.getBuffer(Screen.DRAW_BUFFER);
-//const depth_buffer = Screen.getBuffer(Screen.DEPTH_BUFFER);
-//
-//const additive_alpha = {a:Screen.SRC_RGB, b:Screen.ZERO_RGB, c:Screen.DST_ALPHA, d:Screen.DST_RGB, fix:0};
-//
-//const default_alpha = Screen.getParam(Screen.ALPHA_BLEND_EQUATION);
-//
-//const temp_bounds = {x1:0, y1:0, x2:256, y2:128};
-//
-//const default_bounds = Screen.getParam(Screen.SCISSOR_BOUNDS);
+Screen.initBuffers();
+
+const draw_buffer = Screen.getBuffer(Screen.DRAW_BUFFER);
+const depth_buffer = Screen.getBuffer(Screen.DEPTH_BUFFER);
+
+let decal_x = 32;
+let decal_y = 0;
 
 while(true) {
     Screen.clear(gray);
@@ -236,11 +232,16 @@ while(true) {
         savedrz += 0.05f;
     }
 
-    Camera.target(savedrx,  savedry, savedrz);
-
     if (rx || ry) {
-        Lights.set(light, Lights.DIRECTION, savedrx,  savedry, 1.0);
+        decal_x += (rx*32.0f);
+        decal_y += (ry*32.0f);
     }
+
+    Camera.target(0,  0, savedrz);
+
+    //if (rx || ry) {
+    //    //Lights.set(light, Lights.DIRECTION, savedrx,  savedry, 1.0);
+    //}
 
     if(pad.justPressed(Pads.LEFT) && modeltodisplay > 0){
         modeltodisplay -= 1;
@@ -289,9 +290,28 @@ while(true) {
         render_object[modeltodisplay].rotation = {x:savedly, y:savedlx, z:0.0f};
     }
 
+    decal_buffer.lock();
+    
+    Screen.setBuffer(Screen.DRAW_BUFFER, decal_buffer);
+
+    Screen.setParam(Screen.DEPTH_TEST_ENABLE, false);
+
+    Draw.rect(0, 0, 128, 128, Color.new(0, 0, 0, 0));
+
+    blood_tex.draw(decal_x, decal_y);
+
+    Screen.setBuffer(Screen.DRAW_BUFFER, draw_buffer);
+
+    decal_buffer.draw(0, 100);
+
+    Screen.setParam(Screen.DEPTH_TEST_ENABLE, true);
+    Screen.setParam(Screen.DEPTH_TEST_METHOD, Screen.DEPTH_GEQUAL);
+
     render_object[modeltodisplay].render();
 
-    //Screen.setParam(Screen.DEPTH_TEST_ENABLE, false);
+    decal_buffer.unlock();
+
+    Screen.setParam(Screen.DEPTH_TEST_ENABLE, false);
 //
     //Image.copyVRAMBlock(draw_buffer, 0, 0, depth_buffer, 0, 0);
 //
@@ -313,24 +333,6 @@ while(true) {
     //temp_buffer.color = Color.new(128, 0, 0);
     //temp_buffer.draw(0, 0);
 //
-    //Screen.setBuffer(Screen.DRAW_BUFFER, temp_buffer);
-//
-    //Screen.setParam(Screen.DST_ALPHA_TEST_ENABLE, true);
-    //Screen.setParam(Screen.DST_ALPHA_TEST_METHOD, true);
-//
-    //Draw.rect(10, 10, 236, 108, Color.new(0, 0, 0, 0)); // this is a rect mask
-//
-    //Draw.rect(0, 0, 256, 128, Color.new(0, 0, 0)); // sort of a clear
-//
-    //Screen.setParam(Screen.DST_ALPHA_TEST_ENABLE, false);
-
-    //
-
-    //Draw.rect(32, 32, 64, 64, Color.new(64, 0, 128));
-
-    //Screen.setBuffer(Screen.DRAW_BUFFER, draw_buffer);
-
-    //temp_buffer.draw(0, 128);
 
     font.print(10, 10, Screen.getFPS(360) + " FPS | " + free_mem + " | Free VRAM: " + free_vram + "KB");
     font.print(10, 25, render_data[modeltodisplay].size + " Vertices | " + "Pipeline: " + pipelines[render_data[modeltodisplay].pipeline]);

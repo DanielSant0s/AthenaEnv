@@ -129,12 +129,17 @@ static JSValue athena_render_data_ctor(JSContext *ctx, JSValueConst new_target, 
 		init_vector(ro->m.materials[0].transmittance);
 		init_vector(ro->m.materials[0].transmission_filter);
 
+		ro->m.attributes.has_decal = false;
+		ro->m.attributes.has_refmap = false;
+		ro->m.attributes.has_bumpmap = false;
+
 		ro->m.materials[0].shininess = 1.0f;
 		ro->m.materials[0].refraction = 1.0f;
 		ro->m.materials[0].disolve = 1.0f;
 
 		ro->m.materials[0].texture_id = -1;
     	ro->m.materials[0].bump_texture_id = -1;  
+		ro->m.materials[0].decal_texture_id = -1;  
     	ro->m.materials[0].ref_texture_id = -1; 
 
 		ro->m.material_indices[0].index = 0;
@@ -363,6 +368,32 @@ static JSValue athena_gettexture(JSContext *ctx, JSValue this_val, int argc, JSV
 	return JS_UNDEFINED;
 }
 
+static JSValue athena_pushtexture(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	JSRenderData* ro = JS_GetOpaque2(ctx, this_val, js_render_data_class_id);
+
+	uint32_t tex_idx = ro->m.texture_count++;
+
+	ro->m.textures = realloc(ro->m.textures, sizeof(GSSURFACE*)*(ro->m.texture_count));
+	ro->textures =   realloc(ro->textures,   sizeof(JSValue)*(ro->m.texture_count));
+	ro->m.textures[tex_idx] = NULL;
+
+	if (ro->m.textures[tex_idx]) {
+		//JS_FreeValue(ctx, ro->textures[tex_idx]);
+	}
+
+	JS_DupValue(ctx, argv[0]);
+	JSImageData* image = JS_GetOpaque2(ctx, argv[0], get_img_class_id());
+
+	ro->textures[tex_idx] = argv[0];
+	ro->m.textures[tex_idx] = image->tex;
+
+	JSValue tex_arr = JS_GetPropertyStr(ctx, this_val, "textures");
+	JS_DefinePropertyValueUint32(ctx, tex_arr, tex_idx, ro->textures[tex_idx], JS_PROP_C_W_E);
+	JS_FreeValue(ctx, tex_arr);
+
+	return JS_NewUint32(ctx, tex_idx);
+}
+
 inline JSValue JS_NewVector(JSContext *ctx, VECTOR v) {
 	JSValue vec = JS_NewObject(ctx);
 	JS_DefinePropertyValueStr(ctx, vec, "x", JS_NewFloat32(ctx, v[0]), JS_PROP_C_W_E);
@@ -443,6 +474,7 @@ static JSValue js_render_data_get(JSContext *ctx, JSValueConst this_val, int mag
 					JS_DefinePropertyValueStr(ctx, obj, "texture_id", JS_NewInt32(ctx, ro->m.materials[i].texture_id), JS_PROP_C_W_E);
 					JS_DefinePropertyValueStr(ctx, obj, "ref_texture_id", JS_NewInt32(ctx, ro->m.materials[i].ref_texture_id), JS_PROP_C_W_E);
 					JS_DefinePropertyValueStr(ctx, obj, "bump_texture_id", JS_NewInt32(ctx, ro->m.materials[i].bump_texture_id), JS_PROP_C_W_E);
+					JS_DefinePropertyValueStr(ctx, obj, "decal_texture_id", JS_NewInt32(ctx, ro->m.materials[i].decal_texture_id), JS_PROP_C_W_E);
 
 					JS_DefinePropertyValueUint32(ctx, arr, i, obj, JS_PROP_C_W_E);
 				}
@@ -573,6 +605,12 @@ static JSValue js_render_data_set(JSContext *ctx, JSValueConst this_val, JSValue
 						ro->m.attributes.has_bumpmap = true;
 					}
 
+					JS_ToInt32(ctx,    &ro->m.materials[i].decal_texture_id,          JS_GetPropertyStr(ctx, obj, "decal_texture_id"));
+
+					if (ro->m.materials[i].decal_texture_id != -1 && !ro->m.attributes.has_decal) {
+						ro->m.attributes.has_decal = true;
+					}
+
 					JS_FreeValue(ctx, obj);
 				}
 
@@ -647,6 +685,8 @@ static JSValue js_render_data_set(JSContext *ctx, JSValueConst this_val, JSValue
 static const JSCFunctionListEntry js_render_data_proto_funcs[] = {
 	JS_CFUNC_DEF("setTexture",  3,  athena_settexture),
 	JS_CFUNC_DEF("getTexture",  1,  athena_gettexture),
+
+	JS_CFUNC_DEF("pushTexture",  1,  athena_pushtexture),
 
 	JS_CFUNC_DEF("free",  0,  athena_rdfree),
 
@@ -946,6 +986,7 @@ static JSValue athena_newmaterial(JSContext *ctx, JSValue this_val, int argc, JS
 	JS_DefinePropertyValueStr(ctx, obj, "texture_id",          argv[9], JS_PROP_C_W_E);
 	JS_DefinePropertyValueStr(ctx, obj, "bump_texture_id",          argv[10], JS_PROP_C_W_E);
 	JS_DefinePropertyValueStr(ctx, obj, "ref_texture_id",          argv[11], JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "decal_texture_id",          argv[12], JS_PROP_C_W_E);
 
 	return obj;
 }
