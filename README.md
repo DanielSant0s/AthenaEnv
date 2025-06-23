@@ -93,6 +93,7 @@ AthenaEnv is a complete JavaScript Runtime Environment for the PlayStation 2. It
 * Screen: Rendering and video control.  
   • Screen control params (vsync, FPS)  
   • Render params (alpha, scissor, depth)  
+  • Dual drawing context (optimized for off-screen drawing)  
   • Accelerated render loop  
   • Off-screen rendering  
   • Screenspace control  
