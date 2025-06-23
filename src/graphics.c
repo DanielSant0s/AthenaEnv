@@ -437,7 +437,7 @@ int screen_switch_context() {
 }
 
 void set_screen_param(uint8_t param, uint64_t value) {
-	test_reg test = { .data = get_register(GS_CACHE_TEST) };
+	test_reg test = { .data = get_register(GS_CACHE_TEST+gsGlobal->PrimContext) };
 
 	switch (param) {
 		case ALPHA_TEST_ENABLE:
