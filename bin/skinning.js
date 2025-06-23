@@ -83,7 +83,7 @@ let savedrz = 0.0f;
 let ee_info = System.getCPUInfo();
 
 let free_mem = `RAM: ${Math.floor(System.getMemoryStats().used / 1048576)}MB / ${Math.floor(ee_info.RAMSize / 1048576)}MB`;
-let free_vram = Screen.getFreeVRAM();
+let free_vram = Screen.getMemoryStats();
 
 const gray = Color.new(180, 180, 220, 128);
 

@@ -132,7 +132,7 @@ int athena_load_png(GSSURFACE* tex, FILE* File, bool delayed)
 	{
 		int row_bytes = png_get_rowbytes(png_ptr, info_ptr);
 		tex->PSM = GS_PSM_CT32;
-		tex->Mem = (u32*)memalign(128, gsKit_texture_size_ee(tex->Width, tex->Height, tex->PSM));
+		tex->Mem = (u32*)memalign(128, athena_surface_size(tex->Width, tex->Height, tex->PSM));
 
 		row_pointers = (png_byte**)calloc(height, sizeof(png_bytep));
 
@@ -158,7 +158,7 @@ int athena_load_png(GSSURFACE* tex, FILE* File, bool delayed)
 	{
 		int row_bytes = png_get_rowbytes(png_ptr, info_ptr);
 		tex->PSM = GS_PSM_CT24;
-		tex->Mem = (u32*)memalign(128, gsKit_texture_size_ee(tex->Width, tex->Height, tex->PSM));
+		tex->Mem = (u32*)memalign(128, athena_surface_size(tex->Width, tex->Height, tex->PSM));
 
 		row_pointers = (png_byte**)calloc(height, sizeof(png_bytep));
 
@@ -196,7 +196,7 @@ int athena_load_png(GSSURFACE* tex, FILE* File, bool delayed)
 
 			int row_bytes = png_get_rowbytes(png_ptr, info_ptr);
 			tex->PSM = GS_PSM_T4;
-			tex->Mem = (u32*)memalign(128, gsKit_texture_size_ee(tex->Width, tex->Height, tex->PSM));
+			tex->Mem = (u32*)memalign(128, athena_surface_size(tex->Width, tex->Height, tex->PSM));
 
 			row_pointers = (png_byte**)calloc(height, sizeof(png_bytep));
 
@@ -204,8 +204,8 @@ int athena_load_png(GSSURFACE* tex, FILE* File, bool delayed)
 
 			png_read_image(png_ptr, row_pointers);
 
-            tex->Clut = memalign(128, gsKit_texture_size_ee(8, 2, GS_PSM_CT32));
-            memset(tex->Clut, 0, gsKit_texture_size_ee(8, 2, GS_PSM_CT32));
+            tex->Clut = memalign(128, athena_surface_size(8, 2, GS_PSM_CT32));
+            memset(tex->Clut, 0, athena_surface_size(8, 2, GS_PSM_CT32));
 
             unsigned char *pixel = (unsigned char *)tex->Mem;
     		struct png_clut *clut = (struct png_clut *)tex->Clut;
@@ -235,7 +235,7 @@ int athena_load_png(GSSURFACE* tex, FILE* File, bool delayed)
     		unsigned char *tmpdst = (unsigned char *)tex->Mem;
     		unsigned char *tmpsrc = (unsigned char *)pixel;
 
-    		for (byte = 0; byte < gsKit_texture_size_ee(tex->Width, tex->Height, tex->PSM); byte++) tmpdst[byte] = (tmpsrc[byte] << 4) | (tmpsrc[byte] >> 4);
+    		for (byte = 0; byte < athena_surface_size(tex->Width, tex->Height, tex->PSM); byte++) tmpdst[byte] = (tmpsrc[byte] << 4) | (tmpsrc[byte] >> 4);
 
 			for(row = 0; row < height; row++) free(row_pointers[row]);
 
@@ -244,7 +244,7 @@ int athena_load_png(GSSURFACE* tex, FILE* File, bool delayed)
         } else if (bit_depth == 8) {
 			int row_bytes = png_get_rowbytes(png_ptr, info_ptr);
 			tex->PSM = GS_PSM_T8;
-			tex->Mem = (u32*)memalign(128, gsKit_texture_size_ee(tex->Width, tex->Height, tex->PSM));
+			tex->Mem = (u32*)memalign(128, athena_surface_size(tex->Width, tex->Height, tex->PSM));
 
 			row_pointers = (png_byte**)calloc(height, sizeof(png_bytep));
 
@@ -252,8 +252,8 @@ int athena_load_png(GSSURFACE* tex, FILE* File, bool delayed)
 
 			png_read_image(png_ptr, row_pointers);
 
-            tex->Clut = memalign(128, gsKit_texture_size_ee(16, 16, GS_PSM_CT32));
-            memset(tex->Clut, 0, gsKit_texture_size_ee(16, 16, GS_PSM_CT32));
+            tex->Clut = memalign(128, athena_surface_size(16, 16, GS_PSM_CT32));
+            memset(tex->Clut, 0, athena_surface_size(16, 16, GS_PSM_CT32));
 
             unsigned char *pixel = (unsigned char *)tex->Mem;
     		struct png_clut *clut = (struct png_clut *)tex->Clut;
@@ -305,7 +305,7 @@ int athena_load_png(GSSURFACE* tex, FILE* File, bool delayed)
 	png_destroy_read_struct(&png_ptr, &info_ptr, (png_infopp) NULL);
 	fclose(File);
 
-	gsKit_setup_tbw(tex);
+	athena_calculate_tbw(tex);
 
 	return 0;
 
@@ -350,10 +350,10 @@ int athena_load_bmp(GSSURFACE* tex, FILE* File, bool delayed)
 	if(Bitmap.InfoHeader.BitCount == 4)
 	{
 		tex->PSM = GS_PSM_T4;
-		tex->Clut = (u32*)memalign(128, gsKit_texture_size_ee(8, 2, GS_PSM_CT32));
+		tex->Clut = (u32*)memalign(128, athena_surface_size(8, 2, GS_PSM_CT32));
 		tex->ClutPSM = GS_PSM_CT32;
 
-		memset(tex->Clut, 0, gsKit_texture_size_ee(8, 2, GS_PSM_CT32));
+		memset(tex->Clut, 0, athena_surface_size(8, 2, GS_PSM_CT32));
 		fseek(File, 54, SEEK_SET);
 		if (fread(tex->Clut, Bitmap.InfoHeader.ColorUsed*sizeof(u32), 1, File) <= 0)
 		{
@@ -385,10 +385,10 @@ int athena_load_bmp(GSSURFACE* tex, FILE* File, bool delayed)
 	else if(Bitmap.InfoHeader.BitCount == 8)
 	{
 		tex->PSM = GS_PSM_T8;
-		tex->Clut = (u32*)memalign(128, gsKit_texture_size_ee(16, 16, GS_PSM_CT32));
+		tex->Clut = (u32*)memalign(128, athena_surface_size(16, 16, GS_PSM_CT32));
 		tex->ClutPSM = GS_PSM_CT32;
 
-		memset(tex->Clut, 0, gsKit_texture_size_ee(16, 16, GS_PSM_CT32));
+		memset(tex->Clut, 0, athena_surface_size(16, 16, GS_PSM_CT32));
 		fseek(File, 54, SEEK_SET);
 		if (fread(tex->Clut, Bitmap.InfoHeader.ColorUsed*sizeof(u32), 1, File) <= 0)
 		{
@@ -446,7 +446,7 @@ int athena_load_bmp(GSSURFACE* tex, FILE* File, bool delayed)
 
 	fseek(File, Bitmap.FileHeader.Offset, SEEK_SET);
 
-	u32 TextureSize = gsKit_texture_size_ee(tex->Width, tex->Height, tex->PSM);
+	u32 TextureSize = athena_surface_size(tex->Width, tex->Height, tex->PSM);
 
 	tex->Mem = (u32*)memalign(128,TextureSize);
 
@@ -574,7 +574,7 @@ int athena_load_bmp(GSSURFACE* tex, FILE* File, bool delayed)
 
 	fclose(File);
 
-	gsKit_setup_tbw(tex);
+	athena_calculate_tbw(tex);
 
 	return 0;
 
@@ -681,7 +681,7 @@ int athena_load_jpeg(GSSURFACE* tex, FILE* fp, bool scale_down, bool delayed)
 	jpeg_destroy_decompress(&cinfo);
 	fclose(fp);
 
-	gsKit_setup_tbw(tex);
+	athena_calculate_tbw(tex);
 
 	return 0;
 

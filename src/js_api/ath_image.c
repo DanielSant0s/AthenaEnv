@@ -172,7 +172,7 @@ static JSValue athena_image_optimize(JSContext *ctx, JSValue this_val, int argc,
 
 	switch(image->tex->PSM) {
 		case GS_PSM_CT24:
-			gsKit_texture_to_psm16(image->tex);
+			athena_texture_optimize(image->tex);
 			return JS_NewBool(ctx, true);
 			break;
 		default:
@@ -268,7 +268,7 @@ static JSValue athena_image_get_uint(JSContext *ctx, JSValueConst this_val, int 
 		case 1:
 			return JS_NewUint32(ctx, s->tex->Filter);
 		case 2:
-			return JS_NewUint32(ctx, gsKit_texture_size_ee(s->tex->Width, s->tex->Height, s->tex->PSM));
+			return JS_NewUint32(ctx, athena_surface_size(s->tex->Width, s->tex->Height, s->tex->PSM));
 		case 3:
 			switch (s->tex->PSM) {
 				case GS_PSM_T4:
@@ -290,14 +290,14 @@ static JSValue athena_image_get_uint(JSContext *ctx, JSValueConst this_val, int 
 			return JS_NewBool(ctx, s->delayed);
 		case 5:
 			if (s->tex->Mem)
-				return JS_NewArrayBuffer(ctx, s->tex->Mem, gsKit_texture_size_ee(s->tex->Width, s->tex->Height, s->tex->PSM), NULL, NULL, 1);
+				return JS_NewArrayBuffer(ctx, s->tex->Mem, athena_surface_size(s->tex->Width, s->tex->Height, s->tex->PSM), NULL, NULL, 1);
 
 			break;
 		case 6:
 			if (s->tex->PSM == GS_PSM_T4) {
-				return JS_NewArrayBuffer(ctx, s->tex->Clut, gsKit_texture_size_ee(8, 2, GS_PSM_CT32), NULL, NULL, 1);
+				return JS_NewArrayBuffer(ctx, s->tex->Clut, athena_surface_size(8, 2, GS_PSM_CT32), NULL, NULL, 1);
 			} else if (s->tex->PSM == GS_PSM_T8) {
-				return JS_NewArrayBuffer(ctx, s->tex->Clut, gsKit_texture_size_ee(16, 16, GS_PSM_CT32), NULL, NULL, 1);
+				return JS_NewArrayBuffer(ctx, s->tex->Clut, athena_surface_size(16, 16, GS_PSM_CT32), NULL, NULL, 1);
 			}
 		case 7:
 			return JS_NewUint32(ctx, s->tex->Width);

@@ -48,7 +48,12 @@ static JSValue athena_fcount(JSContext *ctx, JSValue this_val, int argc, JSValue
 }
 
 static JSValue athena_getFreeVRAM(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-	return JS_NewUint32(ctx, (uint32_t)(getFreeVRAM()));
+	uint32_t mode = VRAM_USED_TOTAL;
+
+	if (argc)
+		JS_ToUint32(ctx, &mode, argv[0]);
+
+	return JS_NewUint32(ctx, (uint32_t)(getFreeVRAM(mode)));
 }
 
 
@@ -59,7 +64,7 @@ static JSValue athena_getFPS(JSContext *ctx, JSValue this_val, int argc, JSValue
 }
 
 static JSValue athena_getvmode(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-	GSGLOBAL *gsGlobal = getGSGLOBAL();
+	GSCONTEXT *gsGlobal = getGSGLOBAL();
 	JSValue obj = JS_NewObject(ctx);
 
 	JS_DefinePropertyValueStr(ctx, obj, "mode", JS_NewInt32(ctx, gsGlobal->Mode), JS_PROP_C_W_E);
@@ -322,7 +327,13 @@ static JSValue athena_reset_buffers(JSContext *ctx, JSValue this_val, int argc, 
 static const JSCFunctionListEntry module_funcs[] = {
     JS_CFUNC_DEF("flip", 0, athena_flip),
     JS_CFUNC_DEF("clear", 1, athena_clear),
-	JS_CFUNC_DEF("getFreeVRAM", 0, athena_getFreeVRAM),
+
+	JS_CFUNC_DEF("getMemoryStats", 1, athena_getFreeVRAM),
+	JS_PROP_INT32_DEF("VRAM_SIZE", VRAM_SIZE, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("VRAM_USED_TOTAL", VRAM_USED_TOTAL, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("VRAM_USED_STATIC", VRAM_USED_STATIC, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("VRAM_USED_DYNAMIC", VRAM_USED_DYNAMIC, JS_PROP_CONFIGURABLE),
+
 	JS_CFUNC_DEF("getFPS", 1, athena_getFPS),
     JS_CFUNC_DEF("waitVblankStart", 0, athena_vblank),
 	JS_CFUNC_DEF("setVSync", 1, athena_vsync),

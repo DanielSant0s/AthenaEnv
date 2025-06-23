@@ -683,7 +683,11 @@ You have 4 lights to use in 3D scenes, use set to configure them.
 * Screen.clearColor(*color*) - Sets a constant clear color for Screen.display function.
 * Screen.clear(*color*) - Clears screen with the specified color. If you don't specify any argument, it will use black as default.  
 * Screen.flip() - Run the render queue and jump to the next frame, i.e.: Updates your screen.  
-* let freevram = Screen.getFreeVRAM() - Returns the total of free Video Memory.  
+* let vram_stat = Screen.getMemoryStats(*stat_id*) - Returns VRAM memory stats in bytes. Avaliable stats below:  
+  • Screen.VRAM_SIZE - Total VRAM size.  
+  • Screen.VRAM_USED_TOTAL - Total used VRAM memory. (This stats is returned by default if getMemoryStats is called without args)  
+  • Screen.VRAM_USED_STATIC - Static used VRAM memory. Normally used by screen buffers (draw, display, depth) and off-screen rendering buffers.  
+  • Screen.VRAM_USED_DYNAMIC - Dynamic used VRAM memory. Normally used by image textures.  
 * Screen.setVSync(bool) - Toggles VSync, which makes the framerate stable in 15, 30, 60(depending on the mode) on screen.  
 * Screen.setFrameCounter(bool) - Toggles frame counting and FPS collecting.  
 * Screen.waitVblankStart() - Waits for a vertical sync.  

@@ -230,11 +230,11 @@ int clip_bounding_box(MATRIX local_clip, VECTOR *bounding_box);
 void calculate_vertices_clipped(VECTOR *output,  int count, VECTOR *vertices, MATRIX local_screen);
 int draw_convert_xyz(xyz_t *output, float x, float y, int z, int count, vertex_f_t *vertices);
 
-unsigned int get_max_z(GSGLOBAL* gsGlobal);
+unsigned int get_max_z(GSCONTEXT* gsGlobal);
 
 void athena_set_tw_th(const GSSURFACE *Texture, int *tw, int *th);
 
-void athena_line_goraud_3d(GSGLOBAL *gsGlobal, float x1, float y1, int iz1, float x2, float y2, int iz2, u64 color1, u64 color2);
+void athena_line_goraud_3d(GSCONTEXT *gsGlobal, float x1, float y1, int iz1, float x2, float y2, int iz2, uint64_t color1, uint64_t color2);
 
 void LookAtCameraMatrix(MATRIX m, VECTOR position, VECTOR target, VECTOR up);
 

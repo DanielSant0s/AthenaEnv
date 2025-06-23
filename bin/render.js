@@ -195,7 +195,6 @@ let savedrz = 0.0f;
 let ee_info = System.getCPUInfo();
 
 let free_mem = `RAM: ${Math.floor(System.getMemoryStats().used / 1048576)}MB / ${Math.floor(ee_info.RAMSize / 1048576)}MB`;
-let free_vram = Screen.getFreeVRAM();
 
 const gray = Color.new(40, 40, 40, 128);
 
@@ -334,7 +333,7 @@ while(true) {
     //temp_buffer.draw(0, 0);
 //
 
-    font.print(10, 10, Screen.getFPS(360) + " FPS | " + free_mem + " | Free VRAM: " + free_vram + "KB");
+    font.print(10, 10, Screen.getFPS(360) + " FPS | " + free_mem + " | Static VRAM: " + Screen.getMemoryStats(Screen.VRAM_USED_STATIC)/1024 + "KB" + " | Dynamic VRAM: " + Screen.getMemoryStats(Screen.VRAM_USED_DYNAMIC)/1024 + "KB");
     font.print(10, 25, render_data[modeltodisplay].size + " Vertices | " + "Pipeline: " + pipelines[render_data[modeltodisplay].pipeline]);
 
     Screen.flip();

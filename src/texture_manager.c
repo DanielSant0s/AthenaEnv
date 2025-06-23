@@ -57,20 +57,6 @@ static inline unsigned int align_to_page(unsigned int addr) {
 	return (addr + 8191) & ~8191;
 }
 
-uint32_t texture_manager_get_size(int width, int height, int psm)
-{
-	switch (psm) {
-		case GS_PSM_CT32:  return (width*height*4);
-		case GS_PSM_CT24:  return (width*height*4);
-		case GS_PSM_CT16:  return (width*height*2);
-		case GS_PSM_CT16S: return (width*height*2);
-		case GS_PSM_T8:    return (width*height  );
-		case GS_PSM_T4:    return (width*height/2);
-	}
-
-	return -1;
-}
-
 void texture_send(u32 *mem, int width, int height, u32 tbp, u32 psm, u32 tbw, u8 clut)
 {
 	//int packet_size;
@@ -78,7 +64,7 @@ void texture_send(u32 *mem, int width, int height, u32 tbp, u32 psm, u32 tbw, u8
 	int remain;
 	int qwc;
 
-	uint32_t tex_size = texture_manager_get_size(width, height, psm);
+	uint32_t tex_size = athena_surface_size(width, height, psm);
 
 	qwc = (tex_size / 16) + (tex_size % 16? 1 : 0);
 
@@ -155,7 +141,7 @@ int upload_texture_handler(int cause) {
 			if ((tex->Vram & TRANSFER_REQUEST_MASK) == TRANSFER_REQUEST_MASK) {
 				tex->Vram &= ~TRANSFER_REQUEST_MASK;
 
-				gsKit_setup_tbw(tex);
+				athena_calculate_tbw(tex);
 				texture_send(tex->Mem, tex->Width, tex->Height, tex->Vram, tex->PSM, tex->TBW, (tex->Clut ? GS_CLUT_TEXTURE : GS_CLUT_NONE));
 			}
 
@@ -203,9 +189,9 @@ void remove_texture_upload_handler()
 
 
 
-void texture_upload(GSGLOBAL *gsGlobal, GSSURFACE *Texture)
+void texture_upload(GSCONTEXT *gsGlobal, GSSURFACE *Texture)
 {
-	gsKit_setup_tbw(Texture);
+	athena_calculate_tbw(Texture);
 
 	if (Texture->PSM == GS_PSM_T8)
 	{
@@ -431,7 +417,7 @@ _blockAlloc(unsigned int size, bool page_aligned)
 // Public functions
 
 //---------------------------------------------------------------------------
-void texture_manager_init(GSGLOBAL *gsGlobal)
+void texture_manager_init(GSCONTEXT *gsGlobal)
 {
 	struct SVramBlock * block = __head;
 
@@ -440,7 +426,7 @@ void texture_manager_init(GSGLOBAL *gsGlobal)
 		block = _blockRemove(block);
 
 	// Allocate the initial free block
-	__head = _blockCreate(gsGlobal->CurrentPointer, (4*1024*1024) - gsGlobal->CurrentPointer);
+	__head = _blockCreate(0, 4*1024*1024);
 
 	*VIF1_MARK = VIF1_MARK_CLEAN;
 
@@ -463,9 +449,7 @@ int texture_manager_push(GSSURFACE *tex) {
 }
 
 
-int texture_manager_bind(GSGLOBAL *gsGlobal, GSSURFACE *tex, bool async) {
-	if (!tex->Delayed) return -1;
-
+int texture_manager_bind(GSCONTEXT *gsGlobal, GSSURFACE *tex, bool async) {
 	struct SVramBlock * block;
 	unsigned int ttransfer = 0;
 	unsigned int ctransfer = 0;
@@ -479,11 +463,11 @@ int texture_manager_bind(GSGLOBAL *gsGlobal, GSSURFACE *tex, bool async) {
 			break;
 	}
 
-	tsize = gsKit_texture_size(tex->Width, tex->Height, tex->PSM);
+	tsize = athena_vram_surface_size(tex->Width, tex->Height, tex->PSM);
 	if (tex->Clut != NULL) {
 		cwidth  = (tex->PSM == GS_PSM_T8) ? 16 : 8;
 		cheight = (tex->PSM == GS_PSM_T8) ? 16 : 2;
-		csize   = gsKit_texture_size(cwidth, cheight, tex->ClutPSM);
+		csize   = athena_vram_surface_size(cwidth, cheight, tex->ClutPSM);
 	}
 
 	if (block == NULL) {
@@ -510,7 +494,7 @@ int texture_manager_bind(GSGLOBAL *gsGlobal, GSSURFACE *tex, bool async) {
 			tex->Vram = block->iStart;
 		}
 		
-		gsKit_setup_tbw(tex);
+		athena_calculate_tbw(tex);
 
 		if (tex->Mem) {
 			SyncDCache(tex->Mem, (u8 *)(tex->Mem) + tsize);
@@ -596,7 +580,7 @@ int texture_manager_is_locked(GSSURFACE *tex)
 	return 0;  
 }
 
-int texture_manager_lock_and_bind(GSGLOBAL *gsGlobal, GSSURFACE *tex, bool async)
+int texture_manager_lock_and_bind(GSCONTEXT *gsGlobal, GSSURFACE *tex, bool async)
 {
 	int result = texture_manager_bind(gsGlobal, tex, async);
 	
@@ -635,6 +619,33 @@ unsigned int texture_manager_get_locked_memory()
 	return total;
 }
 
+unsigned int texture_manager_get_unlocked_memory()
+{
+	struct SVramBlock * block;
+	unsigned int total = 0;
+
+	for (block = __head; block != NULL; block = block->pNext) {
+		if ((block->tex != NULL) && !block->bLocked) {
+			total += block->iSize;
+		}
+	}
+	
+	return total;
+}
+
+unsigned int texture_manager_used_memory()
+{
+	struct SVramBlock * block;
+	unsigned int total = 0;
+
+	for (block = __head; block != NULL; block = block->pNext) {
+		if (block->tex != NULL) {
+			total += block->iSize;
+		}
+	}
+	
+	return total;
+}
 
 void texture_manager_invalidate(GSSURFACE *tex)
 {
@@ -662,7 +673,7 @@ void texture_manager_free(GSSURFACE * tex)
 }
 
 //---------------------------------------------------------------------------
-void texture_manager_nextFrame(GSGLOBAL * gsGlobal)
+void texture_manager_nextFrame(GSCONTEXT * gsGlobal)
 {
 	struct SVramBlock * block;
 

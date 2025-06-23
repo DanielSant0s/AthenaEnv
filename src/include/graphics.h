@@ -1,12 +1,12 @@
 #ifndef GRAPHICS_H
 #define GRAPHICS_H
 
+#include <stdint.h>
+
 #include <kernel.h>
 
 #include <gsKit.h>
 #include <dmaKit.h>
-
-#include <gsInline.h>
 
 #include <math3d.h>
 
@@ -33,6 +33,47 @@
 #define CHANNEL_SHUFFLE_BLUE 0x00FF0000
 #define CHANNEL_SHUFFLE_ALPHA 0xFF000000
 
+struct gsContext
+{
+	int16_t Mode;            ///< Display Mode
+	int16_t Interlace;       ///< Interlace (On/Off)
+	int16_t Field;           ///< Field / Frame
+	uint8_t Dithering;        ///< Dithering (On/Off)
+	int8_t DitherMatrix[16]; ///< Dithering Matrix
+	uint8_t DoubleBuffering;	 ///< Enable/Disable Double Buffering
+	uint8_t ZBuffering;       ///< Enable/Disable Z Buffering
+	uint32_t ScreenBuffer[2]; ///< Screenbuffer Pointer Array
+	uint32_t ZBuffer;         ///< ZBuffer Pointer
+	uint8_t EvenOrOdd;        ///< Is ((GSREG*)CSR)->FIELD (Used for Interlace Correction)
+	uint8_t DrawOrder;        ///< Drawing Order (GS_PER_OS/GS_OS_PER) (GS_PER_OS = Persitant objects always drawn first)
+	uint8_t FirstFrame;       ///< Have we executed a frame yet?
+	uint8_t DrawField;        ///< Field to draw (GS_FIELD_NORMAL/GS_FIELD_ODD/GS_FIELD_EVEN)
+	uint8_t ActiveBuffer;     ///< Active Framebuffer
+	int Width;           ///< Framebuffer Width (the mode's DW is a multiple of this value)
+	int Height;          ///< Framebuffer Height (the mode's DH is a multiple of this value)
+	int Aspect;          ///< Framebuffer Aspect Ratio (GS_ASPECT_4_3/GS_ASPECT_16_9)
+	int OffsetX;         ///< X Window Offset
+	int OffsetY;         ///< Y Window Offset
+	int StartX;          ///< X Starting Coordinate (Used for Placement Correction) Default value
+	int StartY;          ///< Y Starting Coordinate (Used for Placement Correction) Default value
+	int StartXOffset;    ///< X Starting Coordinate (Used for Placement Correction) Additional correction
+	int StartYOffset;    ///< Y Starting Coordinate (Used for Placement Correction) Additional correction
+	int MagH;            ///< X Magnification Value (MAGH = DW / Width - 1)
+	int MagV;            ///< Y Magnification Value (MAGV = DH / Height - 1)
+	int DW;              ///< Total Display Area Width (DW = Width * (MAGH + 1))
+    int DH;              ///< Total Display Area Height (DH = Height * (MAGH + 1))
+	GSBGCOLOR *BGColor;  ///< Background Color Structure Pointer
+	void *dma_misc __attribute__ ((aligned (64)));	///< Misc 512 byte DMA Transfer Buffer (so we don't malloc at runtime)
+	int PSM;             ///< Pixel Storage Method (Color Mode)
+	int PSMZ;            ///< ZBuffer Pixel Storage Method
+	int PrimContext;     ///< Primitive Context
+	int PrimFogEnable;   ///< Primitive Fog Enable
+	int PrimAAEnable;    ///< Primitive AntiAlaising Enable
+	int PrimAlphaEnable; ///< Primitive Alpha Blending Enable
+	uint64_t PrimAlpha;       ///< Primitive Alpha Value
+};
+typedef struct gsContext GSCONTEXT;
+
 struct gsSurface
 {
 	uint32_t Width;		///< Width of the Texture
@@ -50,6 +91,14 @@ struct gsSurface
 	uint8_t PageAligned;
 };
 typedef struct gsSurface GSSURFACE;
+
+void athena_calculate_tbw(GSSURFACE *Texture);
+
+void athena_texture_optimize(GSSURFACE *Texture);
+
+uint32_t athena_surface_size(int width, int height, int psm);
+
+uint32_t athena_vram_surface_size(int width, int height, int psm);
 
 typedef enum {
 	DRAW_BUFFER,
@@ -218,7 +267,7 @@ void flush_gs_texcache();
 #define GS_ALPHA_BLEND_ADD_NOALPHA    (ALPHA_EQUATION(SRC_RGB, ZERO_RGB, ALPHA_FIX, DST_ALPHA, 0x80))
 #define GS_ALPHA_BLEND_ADD            (ALPHA_EQUATION(SRC_RGB, ZERO_RGB, SRC_ALPHA, DST_ALPHA, 0x00))
 
-extern GSGLOBAL *gsGlobal;
+extern GSCONTEXT *gsGlobal;
 extern GSSURFACE *cur_screen_buffer[3];
 extern GSSURFACE *main_screen_buffer[3];
 
@@ -297,11 +346,18 @@ void setVSync(bool vsync_flag);
 
 void toggleFrameCounter(bool enable);
 
-GSGLOBAL *getGSGLOBAL();
+GSCONTEXT *getGSGLOBAL();
 
 int GetInterlacedFrameMode();
 
-int getFreeVRAM();
+typedef enum {
+	VRAM_SIZE,
+	VRAM_USED_TOTAL,
+	VRAM_USED_STATIC,
+	VRAM_USED_DYNAMIC
+} eVRAMBlockType;
+
+int getFreeVRAM(int mode);
 
 float FPSCounter(int interval);
 

@@ -94,7 +94,7 @@ atlas_t *atlasNew(size_t width, size_t height, u8 psm)
 
     atlas->surface.Filter = GS_FILTER_LINEAR;
 
-    size_t txtsize = gsKit_texture_size(width, height, psm);
+    size_t txtsize = athena_vram_surface_size(width, height, psm);
     atlas->surface.PSM = psm;
     atlas->surface.Mem = (u32 *)memalign(128, txtsize);
     atlas->surface.Vram = 0;

@@ -15,7 +15,7 @@
 
 #include <owl_packet.h>
 
-int athena_font_upload(GSGLOBAL *gsGlobal, GSFONT *gsFont)
+int athena_font_upload(GSCONTEXT *gsGlobal, GSFONT *gsFont)
 {
 	int i;
 
@@ -122,7 +122,7 @@ GSFONT *athena_init_font(u8 type, char *path)
 
 }
 
-void athena_font_print_scaled(GSGLOBAL *gsGlobal, GSFONT *gsFont, float X, float Y, int Z,
+void athena_font_print_scaled(GSCONTEXT *gsGlobal, GSFONT *gsFont, float X, float Y, int Z,
                       float scale, unsigned long color, const char *String)
 {
 	if( gsFont->Type == FONT_TYPE_PNG_DAT)

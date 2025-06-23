@@ -23,7 +23,7 @@
 
 static const u64 BLACK_RGBAQ   = GS_SETREG_RGBAQ(0x00,0x00,0x00,0x80,0x00);
 
-GSGLOBAL *gsGlobal = NULL;
+GSCONTEXT *gsGlobal = NULL;
 
 GSSURFACE draw_buffer;
 GSSURFACE display_buffer;
@@ -78,6 +78,230 @@ const uint8_t gs_reg_map[] = {
 	GS_REG_ZBUF,
 	GS_REG_ZBUF_2
 };
+
+// TODO: USE MMI INSTEAD!
+
+static inline uint8_t
+from8to5(uint8_t c, const int8_t dither)
+{
+	if((c+dither) > 255)
+		return 255>>3;
+	else if((c+dither) < 0)
+		return 0;
+	else
+		return (c+dither)>>3;
+}
+
+static inline uint16_t
+fromRGBto16(const int8_t dither, uint8_t r, uint8_t g, uint8_t b)
+{
+	// A1 B5 G5 R5
+	return 0x8000 | (from8to5(b, dither)<<10) | (from8to5(g, dither)<<5) | from8to5(r, dither);
+}
+
+static inline uint16_t
+from24to16(const int8_t dither, uint8_t *c)
+{
+	return fromRGBto16(dither, c[0], c[1], c[2]);
+}
+
+void athena_texture_optimize(GSSURFACE *Texture)
+{
+	int x, y;
+	const int8_t dither_matrix[16] = {-4,2,-3,3,0,-2,1,-1,-3,3,-4,2,1,-1,0,-2};
+	size_t size;
+	uint16_t *pixels16;
+	uint8_t  *pixels24;
+
+	// Only 24bit to 16bit supported
+	if (Texture->PSM != GS_PSM_CT24)
+		return;
+
+	size = Texture->Width * Texture->Height * 2;
+	pixels16 = (uint16_t*)memalign(128, size);
+	pixels24 = (uint8_t *)Texture->Mem;
+
+	for(y=0; y < Texture->Height; y++) {
+		for(x=0; x < Texture->Width; x++) {
+			int i = y * Texture->Width + x;
+			int8_t dither = dither_matrix[(y&3)*4+(x&3)];
+			pixels16[i] = from24to16(dither, &pixels24[i*3]);
+		}
+	}
+
+	free(Texture->Mem);
+	Texture->Mem = (void*)pixels16;
+	Texture->PSM = GS_PSM_CT16S;
+}
+
+uint32_t athena_surface_size(int width, int height, int psm)
+{
+	switch (psm) {
+		case GS_PSM_CT32:  
+		case GS_PSM_CT24:
+		case GS_PSMZ_32:  
+		case GS_PSMZ_24:
+			return (width*height*4);
+		case GS_PSM_CT16:  
+		case GS_PSM_CT16S:
+		case GS_PSMZ_16:  
+		case GS_PSMZ_16S:
+			return (width*height*2);
+		case GS_PSM_T8:    
+			return (width*height  );
+		case GS_PSM_T4:    
+			return (width*height/2);
+	}
+
+	return -1;
+}
+
+uint32_t athena_vram_surface_size(int width, int height, int psm)
+{
+	int widthBlocks, heightBlocks;
+	int widthAlign, heightAlign;
+
+	// Calculate the number of blocks width and height
+	// A block is 256 bytes in size
+	switch (psm) {
+		case GS_PSM_CT32:
+		case GS_PSM_CT24:
+		case GS_PSMZ_32:
+		case GS_PSMZ_24:
+			// 1 block = 8x8 pixels
+			widthBlocks  = (width  + 7) / 8;
+			heightBlocks = (height + 7) / 8;
+			break;
+		case GS_PSM_CT16:
+		case GS_PSM_CT16S:
+		case GS_PSMZ_16:
+		case GS_PSMZ_16S:
+			// 1 block = 16x8 pixels
+			widthBlocks  = (width  + 15) / 16;
+			heightBlocks = (height +  7) /  8;
+			break;
+		case GS_PSM_T8:
+			// 1 block = 16x16 pixels
+			widthBlocks  = (width  + 15) / 16;
+			heightBlocks = (height + 15) / 16;
+			break;
+		case GS_PSM_T4:
+			// 1 block = 32x16 pixels
+			widthBlocks  = (width  + 31) / 32;
+			heightBlocks = (height + 15) / 16;
+			break;
+		default:
+			printf("gsKit: unsupported PSM %d\n", psm);
+			return -1;
+	}
+
+	// Calculate the minimum block alignment
+	if(psm == GS_PSM_CT32 || psm == GS_PSM_CT24 || psm == GS_PSMZ_32 || psm == GS_PSMZ_24 || psm == GS_PSM_T8) {
+		// 8x4 blocks in a page.
+		// block traversing order:
+		// 0145....
+		// 2367....
+		// ........
+		// ........
+		if(widthBlocks <= 2 && heightBlocks <= 1) {
+			widthAlign = 1;
+			heightAlign = 1;
+		}
+		else if(widthBlocks <= 4 && heightBlocks <= 2) {
+			widthAlign = 2;
+			heightAlign = 2;
+		}
+		else if(widthBlocks <= 8 && heightBlocks <= 4) {
+			widthAlign = 4;
+			heightAlign = 4;
+		}
+		else {
+			widthAlign = 8;
+			heightAlign = 4;
+		}
+	}
+	else if(psm == GS_PSM_CT16 || psm == GS_PSMZ_16 || psm == GS_PSM_T4) {
+		// 4x8 blocks in a page.
+		// block traversing order:
+		// 02..
+		// 13..
+		// 46..
+		// 57..
+		// ....
+		// ....
+		// ....
+		// ....
+		if(widthBlocks <= 1 && heightBlocks <= 2) {
+			widthAlign = 1;
+			heightAlign = 1;
+		}
+		else if(widthBlocks <= 2 && heightBlocks <= 4) {
+			widthAlign = 2;
+			heightAlign = 2;
+		}
+		else if(widthBlocks <= 4 && heightBlocks <= 8) {
+			widthAlign = 4;
+			heightAlign = 4;
+		}
+		else {
+			widthAlign = 4;
+			heightAlign = 8;
+		}
+	}
+	else /* if(psm == GS_PSM_CT16S) */ {
+		// 4x8 blocks in a page.
+		// block traversing order:
+		// 02..
+		// 13..
+		// ....
+		// ....
+		// 46..
+		// 57..
+		// ....
+		// ....
+		if(widthBlocks <= 1 && heightBlocks <= 2) {
+			widthAlign = 1;
+			heightAlign = 1;
+		}
+		else if(widthBlocks <= 2 && heightBlocks <= 2) {
+			widthAlign = 2;
+			heightAlign = 2;
+		}
+		else if(widthBlocks <= 2 && heightBlocks <= 8) {
+			widthAlign = 2;
+			heightAlign = 8;
+		}
+		else {
+			widthAlign = 4;
+			heightAlign = 8;
+		}
+	}
+
+	widthBlocks  = (-widthAlign)  & (widthBlocks  + widthAlign  - 1);
+	heightBlocks = (-heightAlign) & (heightBlocks + heightAlign - 1);
+
+	return widthBlocks * heightBlocks * 256;
+}
+
+void athena_calculate_tbw(GSSURFACE *Texture)
+{
+	if(Texture->PSM == GS_PSM_T8 || Texture->PSM == GS_PSM_T4)
+	{
+		Texture->TBW = (-GS_VRAM_TBWALIGN_CLUT)&(Texture->Width+GS_VRAM_TBWALIGN_CLUT-1);
+		if(Texture->TBW / 64 > 0)
+			Texture->TBW = (Texture->TBW / 64);
+		else
+			Texture->TBW = 1;
+	}
+	else
+	{
+		Texture->TBW = (-GS_VRAM_TBWALIGN)&(Texture->Width+GS_VRAM_TBWALIGN-1);
+		if(Texture->TBW / 64 > 0)
+			Texture->TBW = (Texture->TBW / 64);
+		else
+			Texture->TBW = 1;
+	}
+}
 
 void gs_copy_block(GSSURFACE *src, int src_x, int src_y, GSSURFACE *dst, int dst_x, int dst_y) {
 	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 6);
@@ -187,7 +411,6 @@ void set_screen_buffer(eScreenBuffers id, GSSURFACE *buf, uint32_t mask) {
 		case DRAW_BUFFER:
 			cur_screen_buffer[DRAW_BUFFER] = buf;
 			set_register(GS_CACHE_FRAME, GS_SETREG_FRAME_1( buf->Vram / 8192, buf->TBW, buf->PSM, mask ));
-			set_register(GS_CACHE_FRAME_2, GS_SETREG_FRAME_1( buf->Vram / 8192, buf->TBW, buf->PSM, mask ));
 			break;
 		case DISPLAY_BUFFER:
 			cur_screen_buffer[DISPLAY_BUFFER] = buf;
@@ -395,8 +618,19 @@ float FPSCounter(int interval)
 	return fps;
 }
 
-int getFreeVRAM(){
-	return (4096 - (gsGlobal->CurrentPointer / 1024));
+int getFreeVRAM(int mode) {
+	switch (mode) {
+		case VRAM_SIZE:
+			return 4*1024*1024;
+		case VRAM_USED_TOTAL:
+			return texture_manager_used_memory();
+		case VRAM_USED_STATIC:
+			return texture_manager_get_locked_memory();
+		case VRAM_USED_DYNAMIC:
+			return texture_manager_get_unlocked_memory();
+	}
+
+	return 0;
 }
 
 int GetInterlacedFrameMode()
@@ -406,7 +640,7 @@ int GetInterlacedFrameMode()
 
     return 0;
 }
-GSGLOBAL *getGSGLOBAL(){ return gsGlobal; }
+GSCONTEXT *getGSGLOBAL(){ return gsGlobal; }
 
 static void switchFlipScreenFunction();
 
@@ -429,36 +663,32 @@ void toggleFrameCounter(bool enable){
 	switchFlipScreenFunction();
 }
 
-void setactive(GSGLOBAL *gsGlobal)
+void setactive(GSCONTEXT *gsGlobal)
 {
-	owl_packet *packet = owl_query_packet(DMA_CHANNEL_VIF1, 7);
+	owl_packet *packet = owl_query_packet(DMA_CHANNEL_VIF1, 5);
 
-	owl_add_cnt_tag(packet, 6, 0);
+	owl_add_cnt_tag(packet, 4, 0);
 
 	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
 	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
 	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
-	owl_add_uint(packet, VIF_CODE(5, 0, VIF_DIRECT, 0)); // 3 giftags
+	owl_add_uint(packet, VIF_CODE(3, 0, VIF_DIRECT, 0)); // 3 giftags
 
-	owl_add_tag(packet, GIF_AD, VU_GS_GIFTAG(4, 1, NULL, 0, 0, 0, 1));
-
-	gs_reg_cache[GS_CACHE_SCISSOR_2] = gs_reg_cache[GS_CACHE_SCISSOR] = GS_SETREG_SCISSOR_1( 0, gsGlobal->Width - 1, 0, gsGlobal->Height - 1 );
-	gs_reg_cache[GS_CACHE_FRAME_2] = gs_reg_cache[GS_CACHE_FRAME] = GS_SETREG_FRAME_1( gsGlobal->ScreenBuffer[gsGlobal->ActiveBuffer & 1] / 8192, gsGlobal->Width / 64, gsGlobal->PSM, 0 );
+	owl_add_tag(packet, GIF_AD, VU_GS_GIFTAG(2, 1, NULL, 0, 0, 0, 1));
 
 	draw_buffer.Vram = gsGlobal->ScreenBuffer[gsGlobal->ActiveBuffer & 1];
 	display_buffer.Vram = gsGlobal->ScreenBuffer[gsGlobal->ActiveBuffer];
 
+	gs_reg_cache[GS_CACHE_SCISSOR] = GS_SETREG_SCISSOR_1( 0, gsGlobal->Width - 1, 0, gsGlobal->Height - 1 );
+	gs_reg_cache[GS_CACHE_FRAME] = GS_SETREG_FRAME_1( draw_buffer.Vram / 8192, gsGlobal->Width / 64, gsGlobal->PSM, 0 );
+
 	// Context 1
 	owl_add_tag(packet, GS_SCISSOR_1, gs_reg_cache[GS_CACHE_SCISSOR]);
 	owl_add_tag(packet, GS_FRAME_1, gs_reg_cache[GS_CACHE_FRAME]);
-
-	// Context 2
-	owl_add_tag(packet, GS_SCISSOR_2, gs_reg_cache[GS_CACHE_SCISSOR_2]);
-	owl_add_tag(packet, GS_FRAME_2, gs_reg_cache[GS_CACHE_FRAME_2]);
 }
 
 /* Copy of sync_screen_flip, but without the 'flip' */
-static void sync_screen(GSGLOBAL *gsGlobal)
+static void sync_screen(GSCONTEXT *gsGlobal)
 {
    if (!gsGlobal->FirstFrame) WaitSema(vsync_sema_id);
    while (PollSema(vsync_sema_id) >= 0)
@@ -466,7 +696,7 @@ static void sync_screen(GSGLOBAL *gsGlobal)
 }
 
 /* Copy of sync_screen_flip, but without the 'sync' */
-static void flip_screen(GSGLOBAL *gsGlobal)
+static void flip_screen(GSCONTEXT *gsGlobal)
 {
    if (!gsGlobal->FirstFrame)
    {
@@ -669,7 +899,10 @@ static void flipScreenDoubleBufferingNoVSync()
 
 	dmaKit_wait(DMA_CHANNEL_GIF, 0);
 
-	gsKit_finish();
+	if(!gsGlobal->FirstFrame)
+		while(!(GS_CSR_FINISH));
+
+	GS_SETREG_CSR_FINISH(1);
 
 	flip_screen(gsGlobal);
 	//gsKit_queue_exec(gsGlobal);	
@@ -763,7 +996,7 @@ short int check_rom(void)
 	return default_signal;
 }
 
-static void set_buffer_attributes(GSGLOBAL *gsGlobal)
+static void set_buffer_attributes(GSCONTEXT *gsGlobal)
 {
 	int gs_DX, gs_DY, gs_DW, gs_DH;
 
@@ -929,11 +1162,11 @@ static void set_buffer_attributes(GSGLOBAL *gsGlobal)
 	}
 }
 
-void init_screen(GSGLOBAL *gsGlobal)
+void init_screen(GSCONTEXT *gsGlobal)
 {
 	u64	*p_data;
 	u64	*p_store;
-	int	size = 19;
+	int	size = 18;
 
 	if((gsGlobal->Dithering == GS_SETTING_ON) &&
 	   ((gsGlobal->PSM == GS_PSM_CT16) || (gsGlobal->PSM == GS_PSM_CT16S)))
@@ -1000,25 +1233,6 @@ void init_screen(GSGLOBAL *gsGlobal)
 
     EIntr(); //enable interrupts
 
-    gsGlobal->CurrentPointer = 0; // reset vram pointer too
-
-	// Context 1
-	gsGlobal->ScreenBuffer[0] = gsKit_vram_alloc( gsGlobal, gsKit_texture_size(gsGlobal->Width, gsGlobal->Height, gsGlobal->PSM), GSKIT_ALLOC_SYSBUFFER );
-
-	if(gsGlobal->DoubleBuffering == GS_SETTING_OFF)
-	{
-		gsGlobal->ScreenBuffer[1] = gsGlobal->ScreenBuffer[0];
-	}
-	else
-		// Context 2
-		gsGlobal->ScreenBuffer[1] = gsKit_vram_alloc( gsGlobal, gsKit_texture_size(gsGlobal->Width, gsGlobal->Height, gsGlobal->PSM), GSKIT_ALLOC_SYSBUFFER );
-
-
-	if(gsGlobal->ZBuffering == GS_SETTING_ON)
-		gsGlobal->ZBuffer = gsKit_vram_alloc( gsGlobal, gsKit_texture_size(gsGlobal->Width, gsGlobal->Height, gsGlobal->PSMZ), GSKIT_ALLOC_SYSBUFFER ); // Z Buffer
-
-    gsGlobal->TexturePointer = gsGlobal->CurrentPointer; // first useable address for textures
-
 	p_data = p_store = (u64 *)gsGlobal->dma_misc;
 
 	*p_data++ = GIF_TAG( size - 1, 1, 0, 0, GSKIT_GIF_FLG_PACKED, 1 );
@@ -1041,9 +1255,7 @@ void init_screen(GSGLOBAL *gsGlobal)
 
 	*p_data++ = GS_TEST_1;
 
-	*p_data++ = gs_reg_cache[GS_CACHE_CLAMP] = GS_SETREG_CLAMP(gsGlobal->Clamp->WMS, gsGlobal->Clamp->WMT,
-				gsGlobal->Clamp->MINU, gsGlobal->Clamp->MAXU,
-				gsGlobal->Clamp->MINV, gsGlobal->Clamp->MAXV);
+	*p_data++ = gs_reg_cache[GS_CACHE_CLAMP] = GS_SETREG_CLAMP(GS_CMODE_REPEAT, GS_CMODE_REPEAT, 0, 0, 0, 0);
 
 	*p_data++ = GS_CLAMP_1;
 
@@ -1108,16 +1320,15 @@ void init_screen(GSGLOBAL *gsGlobal)
 	dmaKit_wait_fast();
 }
 
-GSGLOBAL *temp_init_global()
+GSCONTEXT *temp_init_global()
 {
-    //s8 dither_matrix[16] = {-4,2,-3,3,0,-2,1,-1,-3,3,-4,2,1,-1,0,-2};
-    s8 dither_matrix[16] = {4,2,5,3,0,6,1,7,5,3,4,2,1,7,0,6}; //different matrix
+    //int8_t dither_matrix[16] = {-4,2,-3,3,0,-2,1,-1,-3,3,-4,2,1,-1,0,-2};
+    int8_t dither_matrix[16] = {4,2,5,3,0,6,1,7,5,3,4,2,1,7,0,6}; //different matrix
     int i = 0;
 
-	GSGLOBAL *gsGlobal = calloc(1,sizeof(GSGLOBAL));
+	GSCONTEXT *gsGlobal = calloc(1,sizeof(GSCONTEXT));
 	gsGlobal->BGColor = calloc(1,sizeof(GSBGCOLOR));
-	gsGlobal->Clamp = calloc(1,sizeof(GSCLAMP));
-	gsGlobal->dma_misc = gsKit_alloc_ucab(512);
+	gsGlobal->dma_misc = ((uint32_t)memalign(128, 512)) | 0x30000000;
 
 	/* Generic Values */
 	_io_driver driver = posixIODriver;
@@ -1141,8 +1352,6 @@ GSGLOBAL *temp_init_global()
     if(gsGlobal->Mode == GS_MODE_PAL) gsGlobal->Height = 512;
     else gsGlobal->Height = 448;
 
-    gsGlobal->CurrentPointer = 0;
-
 	gsGlobal->DrawOrder = GS_PER_OS;
 
 	gsGlobal->EvenOrOdd = 0;
@@ -1150,7 +1359,6 @@ GSGLOBAL *temp_init_global()
 	gsGlobal->OffsetX = (int)(2048.0f * 16.0f);
 	gsGlobal->OffsetY = (int)(2048.0f * 16.0f);
 	gsGlobal->ActiveBuffer = 1;
-    gsGlobal->LockBuffer = GS_SETTING_OFF;
 	gsGlobal->PrimFogEnable = GS_SETTING_OFF;
 	gsGlobal->PrimAAEnable = GS_SETTING_OFF;
 	gsGlobal->PrimContext = 0;
@@ -1165,17 +1373,10 @@ GSGLOBAL *temp_init_global()
 	gsGlobal->BGColor->Green = 0x00;
 	gsGlobal->BGColor->Blue = 0x00;
 
-	gsGlobal->Clamp->WMS = GS_CMODE_REPEAT;
-	gsGlobal->Clamp->WMT = GS_CMODE_REPEAT;
-	gsGlobal->Clamp->MINU = 0;
-	gsGlobal->Clamp->MAXU = 0;
-	gsGlobal->Clamp->MINV = 0;
-	gsGlobal->Clamp->MAXV = 0;
-
 	return gsGlobal;
 }
 
-void set_display_offset(GSGLOBAL *gsGlobal, int x, int y)
+void set_display_offset(GSCONTEXT *gsGlobal, int x, int y)
 {
 	gsGlobal->StartXOffset = x;
 	gsGlobal->StartYOffset = y;
@@ -1210,12 +1411,12 @@ void setup_buffer_textures() {
 
 	draw_buffer.Mem = NULL;
 	draw_buffer.Clut = NULL;
-	draw_buffer.Vram = gsGlobal->ScreenBuffer[0];
+	draw_buffer.Vram = 0;
 	draw_buffer.VramClut = 0;
-	draw_buffer.Delayed = false;
+	depth_buffer.PageAligned = true;
 	draw_buffer.Filter = GS_FILTER_NEAREST;
 
-	gsKit_setup_tbw(&draw_buffer);
+	texture_manager_lock_and_bind(gsGlobal, &draw_buffer, false);
 
    	display_buffer.Width = gsGlobal->Width;
 	display_buffer.Height = gsGlobal->Height;
@@ -1224,12 +1425,12 @@ void setup_buffer_textures() {
 
 	display_buffer.Mem = NULL;
 	display_buffer.Clut = NULL;
-	display_buffer.Vram = gsGlobal->ScreenBuffer[1];
+	display_buffer.Vram = 0;
 	display_buffer.VramClut = 0;
-	display_buffer.Delayed = false;
+	depth_buffer.PageAligned = true;
 	display_buffer.Filter = GS_FILTER_NEAREST;
 
-	gsKit_setup_tbw(&display_buffer);
+	texture_manager_lock_and_bind(gsGlobal, &display_buffer, false);
 
    	depth_buffer.Width = gsGlobal->Width;
 	depth_buffer.Height = gsGlobal->Height;
@@ -1238,12 +1439,16 @@ void setup_buffer_textures() {
 
 	depth_buffer.Mem = NULL;
 	depth_buffer.Clut = NULL;
-	depth_buffer.Vram = gsGlobal->ZBuffer;
+	depth_buffer.Vram = 0;
 	depth_buffer.VramClut = 0;
-	depth_buffer.Delayed = false;
+	depth_buffer.PageAligned = true;
 	depth_buffer.Filter = GS_FILTER_NEAREST;
 
-	gsKit_setup_tbw(&depth_buffer);
+	texture_manager_lock_and_bind(gsGlobal, &depth_buffer, false);
+
+	gsGlobal->ScreenBuffer[0] = draw_buffer.Vram;
+	gsGlobal->ScreenBuffer[1] = display_buffer.Vram;
+	gsGlobal->ZBuffer = depth_buffer.Vram;
 }
 
 void setVideoMode(s16 mode, int width, int height, int psm, s16 interlace, s16 field, bool zbuffering, int psmz, bool double_buffering, uint8_t pass_count) {
@@ -1267,11 +1472,11 @@ void setVideoMode(s16 mode, int width, int height, int psm, s16 interlace, s16 f
 	dbgprintf("\nGraphics: created video surface of (%d, %d)\n",
 		gsGlobal->Width, gsGlobal->Height);
 
-	init_screen(gsGlobal);
-
 	texture_manager_init(gsGlobal);
 
 	setup_buffer_textures();
+
+	init_screen(gsGlobal);
 
 	cur_screen_buffer[DRAW_BUFFER] = &draw_buffer;
 	cur_screen_buffer[DISPLAY_BUFFER] = &display_buffer;
@@ -1296,12 +1501,6 @@ void init_graphics()
 
 	gsGlobal = temp_init_global();
 
-	if (gsGlobal->Mode == GS_MODE_PAL){
-		gsGlobal->Height = 512;
-	} else {
-		gsGlobal->Height = 448;
-	}
-
 	//gsGlobal->OffsetX = (int)((2048.0f-(gsGlobal->Width/2)) * 16.0f);
 	//gsGlobal->OffsetY = (int)((2048.0f-(gsGlobal->Height/2)) * 16.0f);
 
@@ -1325,13 +1524,19 @@ void init_graphics()
 	dbgprintf("\nGraphics: created %ix%i video surface\n",
 		gsGlobal->Width, gsGlobal->Height);
 
-	init_screen(gsGlobal);
-
-	//gsKit_set_clamp(gsGlobal, GS_CMODE_REPEAT);
-
 	texture_manager_init(gsGlobal);
 
 	setup_buffer_textures();
+
+	init_screen(gsGlobal);
+
+	cur_screen_buffer[DRAW_BUFFER] = &draw_buffer;
+	cur_screen_buffer[DISPLAY_BUFFER] = &display_buffer;
+	cur_screen_buffer[DEPTH_BUFFER] = &depth_buffer;
+
+	main_screen_buffer[DRAW_BUFFER] = &draw_buffer;
+	main_screen_buffer[DISPLAY_BUFFER] = &display_buffer;
+	main_screen_buffer[DEPTH_BUFFER] = &depth_buffer;
 
 	DIntr();
 	int callback_id = AddIntcHandler(INTC_VBLANK_S, vsync_handler, 0);
@@ -1349,5 +1554,6 @@ void init_graphics()
 }
 
 void graphicWaitVblankStart(){
-	gsKit_vsync_wait();
+	*GS_CSR = *GS_CSR & 8;
+	while(!(*GS_CSR & 8));
 }

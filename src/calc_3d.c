@@ -127,7 +127,7 @@ int draw_convert_xyz(xyz_t *output, float x, float y, int z, int count, vertex_f
 
 }
 
-unsigned int get_max_z(GSGLOBAL* gsGlobal) {
+unsigned int get_max_z(GSCONTEXT* gsGlobal) {
 	int z;
 	unsigned int max_z;
 
@@ -156,9 +156,9 @@ unsigned int get_max_z(GSGLOBAL* gsGlobal) {
 
 }
 
-void athena_line_goraud_3d(GSGLOBAL *gsGlobal, float x1, float y1, int iz1, float x2, float y2, int iz2, u64 color1, u64 color2)
+void athena_line_goraud_3d(GSCONTEXT *gsGlobal, float x1, float y1, int iz1, float x2, float y2, int iz2, u64 color1, u64 color2)
 {
-	u64* p_store;
+	/*u64* p_store;
 	u64* p_data;
 	int qsize = 3;
 	int bsize = 48;
@@ -189,7 +189,7 @@ void athena_line_goraud_3d(GSGLOBAL *gsGlobal, float x1, float y1, int iz1, floa
 	*p_data++ = GS_SETREG_XYZ2( ix1, iy1, (unsigned int)((iz1 + 1.0f) * max_z) );
 
 	*p_data++ = color2;
-	*p_data++ = GS_SETREG_XYZ2( ix2, iy2, (unsigned int)((iz2 + 1.0f) * max_z) );
+	*p_data++ = GS_SETREG_XYZ2( ix2, iy2, (unsigned int)((iz2 + 1.0f) * max_z) );*/
 }
 
 static inline u32 lzw(u32 val)
