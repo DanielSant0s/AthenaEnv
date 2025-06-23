@@ -203,15 +203,22 @@ typedef enum {
 
 typedef enum {
 	GS_CACHE_TEX0,
+	GS_CACHE_TEX0_2,
 	GS_CACHE_CLAMP,
+	GS_CACHE_CLAMP_2,
 	GS_CACHE_TEX1,
+	GS_CACHE_TEX1_2,
 	GS_CACHE_TEX2,
+	GS_CACHE_TEX2_2,
 	GS_CACHE_XYOFFSET,
+	GS_CACHE_XYOFFSET_2,
 	GS_CACHE_PRMODECONT,
 	GS_CACHE_PRMODE,
 	GS_CACHE_TEXCLUT,
 	GS_CACHE_MIPTBP1,
+	GS_CACHE_MIPTBP1_2,
 	GS_CACHE_MIPTBP2,
+	GS_CACHE_MIPTBP2_2,
 	GS_CACHE_TEXA,
 	GS_CACHE_SCISSOR,
 	GS_CACHE_SCISSOR_2,
@@ -224,6 +231,7 @@ typedef enum {
 	GS_CACHE_TEST_2,
 	GS_CACHE_PABE,
 	GS_CACHE_FBA,
+	GS_CACHE_FBA_2,
 	GS_CACHE_FRAME,
 	GS_CACHE_FRAME_2,
 	GS_CACHE_ZBUF,
@@ -241,6 +249,8 @@ uint64_t get_screen_param(uint8_t param);
 void set_screen_param(uint8_t param, uint64_t value);
 
 void set_screen_buffer(eScreenBuffers id, GSSURFACE *buf, uint32_t mask);
+
+int screen_switch_context();
 
 void flush_gs_texcache();
 

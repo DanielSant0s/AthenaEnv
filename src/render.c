@@ -278,7 +278,7 @@ void append_texture_tags(owl_packet* packet, GSSURFACE *texture, int texture_id,
 	athena_set_tw_th(texture, &tw, &th);
 
 	owl_add_tag(packet, 
-		GS_TEX0_1, 
+		GS_TEX0_1+gsGlobal->PrimContext, 
 		GS_SETREG_TEX0((texture->Vram & ~TRANSFER_REQUEST_MASK)/256, 
 					  texture->TBW, 
 					  texture->PSM,
@@ -291,7 +291,7 @@ void append_texture_tags(owl_packet* packet, GSSURFACE *texture, int texture_id,
 					  texture->VramClut? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD)
 	);
 	
-	owl_add_tag(packet, GS_TEX1_1, GS_SETREG_TEX1(1, 0, texture->Filter, texture->Filter, 0, 0, 0));
+	owl_add_tag(packet, GS_TEX1_1+gsGlobal->PrimContext, GS_SETREG_TEX1(1, 0, texture->Filter, texture->Filter, 0, 0, 0));
 }
 
 void process_animation(athena_object_data *obj) {
@@ -334,7 +334,7 @@ void bake_giftags(owl_packet *packet, athena_render_data *data, bool texture_map
 		.ABE = gsGlobal->PrimAlphaEnable,
 		.AA1 = gsGlobal->PrimAAEnable,
 		.FST = 0,
-		.CTXT = 0,
+		.CTXT = gsGlobal->PrimContext,
 		.FIX = 0
 	};
 

@@ -303,7 +303,8 @@ static JSValue athena_set_buffer(JSContext *ctx, JSValue this_val, int argc, JSV
 
 	set_screen_buffer((eScreenBuffers)buffer_id, image->tex, mask);
 
-	js_current_screen_buffers[buffer_id] = argv[1];
+	if (!gsGlobal->PrimContext)
+		js_current_screen_buffers[buffer_id] = argv[1];
 
 	return JS_UNDEFINED;
 }
@@ -322,6 +323,10 @@ static JSValue athena_reset_buffers(JSContext *ctx, JSValue this_val, int argc, 
 	}
 
 	return JS_UNDEFINED;
+}
+
+static JSValue athena_switch_context(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
+	return JS_NewInt32(ctx, screen_switch_context());
 }
 
 static const JSCFunctionListEntry module_funcs[] = {
@@ -427,6 +432,8 @@ static const JSCFunctionListEntry module_funcs[] = {
 	JS_PROP_INT32_DEF("DRAW_BUFFER", DRAW_BUFFER, JS_PROP_CONFIGURABLE),
 	JS_PROP_INT32_DEF("DISPLAY_BUFFER", DISPLAY_BUFFER, JS_PROP_CONFIGURABLE),
 	JS_PROP_INT32_DEF("DEPTH_BUFFER", DEPTH_BUFFER, JS_PROP_CONFIGURABLE),
+
+	JS_CFUNC_DEF("switchContext", 0, athena_switch_context),
 };
 
 static int screen_init(JSContext *ctx, JSModuleDef *m)

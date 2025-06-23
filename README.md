@@ -712,6 +712,7 @@ You have 4 lights to use in 3D scenes, use set to configure them.
   • Screen.DEPTH_BUFFER  
 * let value = Screen.getParam(param) - Get screen/rendering parameters
 * Screen.setParam(param, value) - Set screen/rendering parameters  
+* let current_ctx = Screen.switchContext() - Athena has two drawing contexts, one tipically for screen drawing and other for off-screen drawing mostly, this function switches between them so you can give a draw buffer, alpha and test attributes for your second context without the need for calling setBuffer everytime you need off-screen drawing.
   
 Parameters below:  
   

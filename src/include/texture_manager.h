@@ -7,7 +7,7 @@
 // Copyright 2004 - Chris "Neovanglist" Gilbert <Neovanglist@LainOS.org>
 // Licenced under Academic Free License version 2.0
 // 
-// Changes to work with Athena multi-path DMA manager:
+// Changes to work with Athena multi-path DMA manager, cache lock system and memory tracking:
 // 2025 - Daniel Santos
 //
 

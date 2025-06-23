@@ -23,6 +23,11 @@ canvas.psmz = Screen.Z24;
 
 Screen.setMode(canvas);
 
+Screen.initBuffers();
+
+const draw_buffer = Screen.getBuffer(Screen.DRAW_BUFFER);
+const depth_buffer = Screen.getBuffer(Screen.DEPTH_BUFFER);
+
 const decal_buffer = new Image();
 
 decal_buffer.filter = LINEAR;
@@ -36,6 +41,16 @@ decal_buffer.width = 128;
 decal_buffer.height = 128;
 decal_buffer.endx = 128;
 decal_buffer.endy = 128;
+
+decal_buffer.lock();
+
+Screen.switchContext();
+
+Screen.setBuffer(Screen.DRAW_BUFFER, decal_buffer);
+
+Screen.setParam(Screen.DEPTH_TEST_ENABLE, false);
+
+Screen.switchContext();
 
 Screen.clear();
 font.print(0, 0, "Loading assets...");
@@ -202,11 +217,6 @@ let bbox = false;
 
 let spec = false;
 
-Screen.initBuffers();
-
-const draw_buffer = Screen.getBuffer(Screen.DRAW_BUFFER);
-const depth_buffer = Screen.getBuffer(Screen.DEPTH_BUFFER);
-
 let decal_x = 32;
 let decal_y = 0;
 
@@ -279,9 +289,6 @@ while(true) {
         render_data[modeltodisplay].accurate_clipping ^= 1;
     }
 
-    Screen.setParam(Screen.DEPTH_TEST_ENABLE, true);
-    Screen.setParam(Screen.DEPTH_TEST_METHOD, Screen.DEPTH_GEQUAL);
-
     //dragon_object.render();
     //monkey_object.render();
 
@@ -289,17 +296,13 @@ while(true) {
         render_object[modeltodisplay].rotation = {x:savedly, y:savedlx, z:0.0f};
     }
 
-    decal_buffer.lock();
-    
-    Screen.setBuffer(Screen.DRAW_BUFFER, decal_buffer);
-
-    Screen.setParam(Screen.DEPTH_TEST_ENABLE, false);
+    Screen.switchContext();
 
     Draw.rect(0, 0, 128, 128, Color.new(0, 0, 0, 0));
 
     blood_tex.draw(decal_x, decal_y);
 
-    Screen.setBuffer(Screen.DRAW_BUFFER, draw_buffer);
+    Screen.switchContext();
 
     decal_buffer.draw(0, 100);
 
@@ -307,8 +310,6 @@ while(true) {
     Screen.setParam(Screen.DEPTH_TEST_METHOD, Screen.DEPTH_GEQUAL);
 
     render_object[modeltodisplay].render();
-
-    decal_buffer.unlock();
 
     Screen.setParam(Screen.DEPTH_TEST_ENABLE, false);
 //

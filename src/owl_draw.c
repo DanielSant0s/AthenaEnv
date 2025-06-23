@@ -177,7 +177,7 @@ void draw_tex_triangle_list(GSSURFACE* source, float x, float y, prim_tex_triang
 	athena_set_tw_th(source, &tw, &th);
 
 	owl_add_tag(packet, 
-		GS_TEX0_1, 
+		GS_TEX0_1+gsGlobal->PrimContext, 
 		GS_SETREG_TEX0((source->Vram & ~TRANSFER_REQUEST_MASK)/256, 
 					  source->TBW, 
 					  source->PSM,
@@ -190,7 +190,7 @@ void draw_tex_triangle_list(GSSURFACE* source, float x, float y, prim_tex_triang
 					  source->VramClut? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD)
 	);
 	
-	owl_add_tag(packet, GS_TEX1_1, GS_SETREG_TEX1(1, 0, source->Filter, source->Filter, 0, 0, 0));
+	owl_add_tag(packet, GS_TEX1_1+gsGlobal->PrimContext, GS_SETREG_TEX1(1, 0, source->Filter, source->Filter, 0, 0, 0));
 
 	owl_add_tag(packet, GS_PRIM, VU_GS_PRIM(GS_PRIM_PRIM_TRIANGLE, 0, 1, gsGlobal->PrimFogEnable, gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 1, gsGlobal->PrimContext, 0));
 
@@ -244,7 +244,7 @@ void draw_tex_triangle_gouraud_list(GSSURFACE* source, float x, float y, prim_te
 	athena_set_tw_th(source, &tw, &th);
 
 	owl_add_tag(packet, 
-		GS_TEX0_1, 
+		GS_TEX0_1+gsGlobal->PrimContext, 
 		GS_SETREG_TEX0((source->Vram & ~TRANSFER_REQUEST_MASK)/256, 
 					  source->TBW, 
 					  source->PSM,
@@ -257,7 +257,7 @@ void draw_tex_triangle_gouraud_list(GSSURFACE* source, float x, float y, prim_te
 					  source->VramClut? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD)
 	);
 	
-	owl_add_tag(packet, GS_TEX1_1, GS_SETREG_TEX1(1, 0, source->Filter, source->Filter, 0, 0, 0));
+	owl_add_tag(packet, GS_TEX1_1+gsGlobal->PrimContext, GS_SETREG_TEX1(1, 0, source->Filter, source->Filter, 0, 0, 0));
 
 	owl_add_tag(packet, GS_PRIM, VU_GS_PRIM(GS_PRIM_PRIM_TRIANGLE, 0, 1, gsGlobal->PrimFogEnable, gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 1, gsGlobal->PrimContext, 0));
 
@@ -320,7 +320,7 @@ void draw_image_list(GSSURFACE* source, float x, float y, prim_tex_sprite *list,
 	athena_set_tw_th(source, &tw, &th);
 
 	owl_add_tag(packet, 
-		GS_TEX0_1, 
+		GS_TEX0_1+gsGlobal->PrimContext, 
 		GS_SETREG_TEX0((source->Vram & ~TRANSFER_REQUEST_MASK)/256, 
 					  source->TBW, 
 					  source->PSM,
@@ -333,7 +333,7 @@ void draw_image_list(GSSURFACE* source, float x, float y, prim_tex_sprite *list,
 					  source->VramClut? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD)
 	);
 	
-	owl_add_tag(packet, GS_TEX1_1, GS_SETREG_TEX1(1, 0, source->Filter, source->Filter, 0, 0, 0));
+	owl_add_tag(packet, GS_TEX1_1+gsGlobal->PrimContext, GS_SETREG_TEX1(1, 0, source->Filter, source->Filter, 0, 0, 0));
 
 	owl_add_tag(packet, 
 		((uint64_t)(GS_PRIM) << 0 | (uint64_t)(GS_RGBAQ) << 4 | (uint64_t)(GS_UV) << 8 | (uint64_t)(GS_XYZ2) << 12 | (uint64_t)(GS_UV) << 16 | (uint64_t)(GS_XYZ2) << 20), 
@@ -400,7 +400,7 @@ void draw_image(GSSURFACE* source, float x, float y, float width, float height, 
 	athena_set_tw_th(source, &tw, &th);
 
 	owl_add_tag(packet, 
-		GS_TEX0_1, 
+		GS_TEX0_1+gsGlobal->PrimContext, 
 		GS_SETREG_TEX0((source->Vram & ~TRANSFER_REQUEST_MASK)/256, 
 					  source->TBW, 
 					  source->PSM,
@@ -413,7 +413,7 @@ void draw_image(GSSURFACE* source, float x, float y, float width, float height, 
 					  source->VramClut? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD)
 	);
 	
-	owl_add_tag(packet, GS_TEX1_1, GS_SETREG_TEX1(1, 0, source->Filter, source->Filter, 0, 0, 0));
+	owl_add_tag(packet, GS_TEX1_1+gsGlobal->PrimContext, GS_SETREG_TEX1(1, 0, source->Filter, source->Filter, 0, 0, 0));
 
 	owl_add_tag(packet, 
 					   ((uint64_t)(GS_PRIM) << 0 | (uint64_t)(GS_RGBAQ) << 4 | (uint64_t)(GS_UV) << 8 | (uint64_t)(GS_XYZ2) << 12 | (uint64_t)(GS_UV) << 16 | (uint64_t)(GS_XYZ2) << 20), 
@@ -475,7 +475,7 @@ void draw_image_rotate(GSSURFACE* source, float x, float y, float width, float h
 	athena_set_tw_th(source, &tw, &th);
 
 	owl_add_tag(packet, 
-		GS_TEX0_1, 
+		GS_TEX0_1+gsGlobal->PrimContext, 
 		GS_SETREG_TEX0((source->Vram & ~TRANSFER_REQUEST_MASK)/256, 
 					  source->TBW, 
 					  source->PSM,
@@ -488,7 +488,7 @@ void draw_image_rotate(GSSURFACE* source, float x, float y, float width, float h
 					  source->VramClut? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD)
 	);
 	
-	owl_add_tag(packet, GS_TEX1_1, GS_SETREG_TEX1(1, 0, source->Filter, source->Filter, 0, 0, 0));
+	owl_add_tag(packet, GS_TEX1_1+gsGlobal->PrimContext, GS_SETREG_TEX1(1, 0, source->Filter, source->Filter, 0, 0, 0));
 
 	owl_add_tag(packet, GS_RGBAQ, color);
 

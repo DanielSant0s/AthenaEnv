@@ -52,15 +52,22 @@ uint64_t gs_reg_cache[GS_CACHE_SIZE];
 
 const uint8_t gs_reg_map[] = {
 	GS_REG_TEX0,
+	GS_REG_TEX0_2,
 	GS_REG_CLAMP,
+	GS_REG_CLAMP_2,
 	GS_REG_TEX1,
+	GS_REG_TEX1_2,
 	GS_REG_TEX2,
+	GS_REG_TEX2_2,
 	GS_REG_XYOFFSET,
+	GS_REG_XYOFFSET_2,
 	GS_REG_PRMODECONT,
 	GS_REG_PRMODE,
 	GS_REG_TEXCLUT,
 	GS_REG_MIPTBP1,
+	GS_REG_MIPTBP1_2,
 	GS_REG_MIPTBP2,
+	GS_REG_MIPTBP2_2,
 	GS_REG_TEXA,
 	GS_REG_SCISSOR,
 	GS_REG_SCISSOR_2,
@@ -73,6 +80,7 @@ const uint8_t gs_reg_map[] = {
 	GS_REG_TEST_2,
 	GS_REG_PABE,
 	GS_REG_FBA,
+	GS_REG_FBA_2,
 	GS_REG_FRAME,
 	GS_REG_FRAME_2,
 	GS_REG_ZBUF,
@@ -409,17 +417,23 @@ void gs_channel_shuffle_slow(GSSURFACE *dst, uint32_t in, uint32_t out, uint32_t
 void set_screen_buffer(eScreenBuffers id, GSSURFACE *buf, uint32_t mask) {
 	switch (id) {
 		case DRAW_BUFFER:
-			cur_screen_buffer[DRAW_BUFFER] = buf;
-			set_register(GS_CACHE_FRAME, GS_SETREG_FRAME_1( buf->Vram / 8192, buf->TBW, buf->PSM, mask ));
+			set_register(GS_CACHE_FRAME+gsGlobal->PrimContext, GS_SETREG_FRAME_1( buf->Vram / 8192, buf->TBW, buf->PSM, mask ));
 			break;
 		case DISPLAY_BUFFER:
-			cur_screen_buffer[DISPLAY_BUFFER] = buf;
 			break;
 		case DEPTH_BUFFER:
-			cur_screen_buffer[DEPTH_BUFFER] = buf;
-			set_register(GS_CACHE_ZBUF, GS_SETREG_ZBUF_1( buf->Vram / 8192, buf->PSM-0x30, mask ));
+			set_register(GS_CACHE_ZBUF+gsGlobal->PrimContext, GS_SETREG_ZBUF_1( buf->Vram / 8192, buf->PSM-0x30, mask ));
 			break;
 	}
+
+	if (!gsGlobal->PrimContext) {
+		cur_screen_buffer[id] = buf;
+	}
+}
+
+int screen_switch_context() {
+	gsGlobal->PrimContext ^= 1;
+	return gsGlobal->PrimContext;
 }
 
 void set_screen_param(uint8_t param, uint64_t value) {
@@ -456,10 +470,10 @@ void set_screen_param(uint8_t param, uint64_t value) {
 			test.fields.depth_test_method = (int)value;
 			break;
 		case ALPHA_BLEND_EQUATION: 
-			set_register(GS_CACHE_ALPHA, value);
+			set_register(GS_CACHE_ALPHA+gsGlobal->PrimContext, value);
 			return;
 		case SCISSOR_BOUNDS:
-			set_register(GS_CACHE_SCISSOR, value);
+			set_register(GS_CACHE_SCISSOR+gsGlobal->PrimContext, value);
 			return;
 		case PIXEL_ALPHA_BLEND_ENABLE:
 			set_register(GS_CACHE_PABE, value);
@@ -469,11 +483,11 @@ void set_screen_param(uint8_t param, uint64_t value) {
 			return;
 	}
 
-	set_register(GS_CACHE_TEST, test.data);
+	set_register(GS_CACHE_TEST+gsGlobal->PrimContext, test.data);
 }
 
 uint64_t get_screen_param(uint8_t param) {
-	test_reg test = { .data = get_register(GS_CACHE_TEST) };
+	test_reg test = { .data = get_register(GS_CACHE_TEST+gsGlobal->PrimContext) };
 
 	switch (param) {
 		case ALPHA_TEST_ENABLE:
@@ -496,9 +510,9 @@ uint64_t get_screen_param(uint8_t param) {
 		case DEPTH_TEST_METHOD:
 			return test.fields.depth_test_method;
 		case ALPHA_BLEND_EQUATION:
-			return get_register(GS_CACHE_ALPHA);
+			return get_register(GS_CACHE_ALPHA+gsGlobal->PrimContext);
 		case SCISSOR_BOUNDS:
-			return get_register(GS_CACHE_SCISSOR);
+			return get_register(GS_CACHE_SCISSOR+gsGlobal->PrimContext);
 		case PIXEL_ALPHA_BLEND_ENABLE:
 			return get_register(GS_CACHE_PABE);
 		case COLOR_CLAMP_MODE:
@@ -574,9 +588,9 @@ void page_clear(Color color) {
 
 	owl_add_tag(packet, GIF_AD, VU_GS_GIFTAG(4, 1, NULL, 1, 0, 0, 1));
 
-	owl_add_tag(packet, GS_TEST_1, GS_SETREG_TEST(0, 0, 0, 0, 0, 0, 1, 1)); // Ignore cache because it is a single operation
+	owl_add_tag(packet, GS_TEST_1+gsGlobal->PrimContext, GS_SETREG_TEST(0, 0, 0, 0, 0, 0, 1, 1)); // Ignore cache because it is a single operation
 	//owl_add_tag(packet, GS_SCISSOR_1, GS_SETREG_SCISSOR(0, 64 - 1, 0, 2048 - 1));
-	owl_add_tag(packet, GS_XYOFFSET_1, GS_SETREG_XYOFFSET(0, 0));
+	owl_add_tag(packet, GS_XYOFFSET_1+gsGlobal->PrimContext, GS_SETREG_XYOFFSET(0, 0));
 
 	// Clear
 	owl_add_tag(packet, GS_RGBAQ, color);
@@ -603,8 +617,8 @@ void page_clear(Color color) {
 
 	owl_add_tag(packet, GIF_AD, VU_GS_GIFTAG(2, 1, NULL, 0, 0, 0, 1));
 	
-	owl_add_tag(packet, GS_TEST_1, get_register(GS_CACHE_TEST));
-	owl_add_tag(packet, GS_XYOFFSET_1, get_register(GS_CACHE_XYOFFSET));
+	owl_add_tag(packet, GS_TEST_1, get_register(GS_CACHE_TEST+gsGlobal->PrimContext));
+	owl_add_tag(packet, GS_XYOFFSET_1, get_register(GS_CACHE_XYOFFSET+gsGlobal->PrimContext));
 }
 
 void clearScreen(Color color)
