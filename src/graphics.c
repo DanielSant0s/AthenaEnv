@@ -1444,7 +1444,9 @@ void setup_buffer_textures() {
 	depth_buffer.PageAligned = true;
 	display_buffer.Filter = GS_FILTER_NEAREST;
 
-	texture_manager_lock_and_bind(gsGlobal, &display_buffer, false);
+	if (gsGlobal->DoubleBuffering) {
+		texture_manager_lock_and_bind(gsGlobal, &display_buffer, false);
+	}
 
    	depth_buffer.Width = gsGlobal->Width;
 	depth_buffer.Height = gsGlobal->Height;
