@@ -1458,7 +1458,9 @@ void setup_buffer_textures() {
 	depth_buffer.PageAligned = true;
 	depth_buffer.Filter = GS_FILTER_NEAREST;
 
-	texture_manager_lock_and_bind(gsGlobal, &depth_buffer, false);
+	if (gsGlobal->ZBuffering) {
+		texture_manager_lock_and_bind(gsGlobal, &depth_buffer, false);
+	}
 
 	gsGlobal->ScreenBuffer[0] = draw_buffer.Vram;
 	gsGlobal->ScreenBuffer[1] = display_buffer.Vram;
