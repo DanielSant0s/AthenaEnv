@@ -227,7 +227,7 @@ void decompose_transform_matrix(const MATRIX matrix, VECTOR position,
     }
 
     MATRIX rotation_matrix;
-    matrix_unit(rotation_matrix);
+    matrix_functions->identity(rotation_matrix);
     
     if (scale[0] != 0.0f) {
         rotation_matrix[0] = col1[0] / scale[0];
@@ -284,7 +284,7 @@ void create_transform_matrix(MATRIX result, const VECTOR position,
                            const VECTOR rotation, const VECTOR scale) {
 
     MATRIX scale_matrix;
-    matrix_unit(scale_matrix);
+    matrix_functions->identity(scale_matrix);
     scale_matrix[0] =  scale[0] * 1.0f;
     scale_matrix[5] =  scale[1] * 1.0f;
     scale_matrix[10] = scale[2] * 1.0f;
@@ -293,7 +293,7 @@ void create_transform_matrix(MATRIX result, const VECTOR position,
     quaternion_to_matrix(rotation_matrix, rotation);
 
     MATRIX translation_matrix;
-    matrix_unit(translation_matrix);
+    matrix_functions->identity(translation_matrix);
     translation_matrix[3] = position[0];
     translation_matrix[7] = position[1];
     translation_matrix[11] = position[2];
@@ -322,7 +322,7 @@ void quaternion_to_matrix(MATRIX result, const VECTOR quaternion) {
     float wy = w * y2;
     float wz = w * z2;
     
-    matrix_unit(result);
+    matrix_functions->identity(result);
     
     result[0] = 1.0f - (yy + zz);
     result[1] = xy - wz;

@@ -551,46 +551,46 @@ void core_matrix_apply(VECTOR output, MATRIX matrix, VECTOR input) {
 void core_matrix_rotate(MATRIX output, MATRIX input0, VECTOR input1) {
     MATRIX work;
 
-    matrix_unit(work);
+    core_matrix_identity(work);
     work[0x00] =  cosf(input1[2]);
     work[0x01] =  sinf(input1[2]);
     work[0x04] = -sinf(input1[2]);
     work[0x05] =  cosf(input1[2]);
-    matrix_multiply(output, input0, work);
+    core_matrix_multiply(output, input0, work);
 
-    matrix_unit(work);
+    core_matrix_identity(work);
     work[0x00] =  cosf(input1[1]);
     work[0x02] = -sinf(input1[1]);
     work[0x08] =  sinf(input1[1]);
     work[0x0A] =  cosf(input1[1]);
-    matrix_multiply(output, output, work);
+    core_matrix_multiply(output, output, work);
 
-    matrix_unit(work);
+    core_matrix_identity(work);
     work[0x05] =  cosf(input1[0]);
     work[0x06] =  sinf(input1[0]);
     work[0x09] = -sinf(input1[0]);
     work[0x0A] =  cosf(input1[0]);
-    matrix_multiply(output, output, work);
+    core_matrix_multiply(output, output, work);
 }
 
 void core_matrix_scale(MATRIX output, MATRIX input0, VECTOR input1) {
     MATRIX work;
 
-    matrix_unit(work);
+    core_matrix_identity(work);
     work[0x00] = input1[0];
     work[0x05] = input1[1];
     work[0x0A] = input1[2];
-    matrix_multiply(output, input0, work);
+    core_matrix_multiply(output, input0, work);
 }
 
 void core_matrix_translate(MATRIX output, MATRIX input0, VECTOR input1) {
     MATRIX work;
 
-    matrix_unit(work);
+    core_matrix_identity(work);
     work[0x0C] = input1[0];
     work[0x0D] = input1[1];
     work[0x0E] = input1[2];
-    matrix_multiply(output, input0, work);
+    core_matrix_multiply(output, input0, work);
 }
 
 int core_matrix_equals(MATRIX m0, MATRIX m1) {

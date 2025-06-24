@@ -110,7 +110,7 @@ ifeq ($(MX4SIO),1)
 endif
 
 ifeq ($(GRAPHICS),1)
-  EE_LIBS += -L$(PS2DEV)/gsKit/lib/ -lmath3d -ljpeg -lfreetype -ldmakit -lpng
+  EE_LIBS += -L$(PS2DEV)/gsKit/lib/ -ljpeg -lfreetype -ldmakit -lpng
   EE_INCS += -I$(PS2DEV)/gsKit/include -I$(PS2SDK)/ports/include/freetype2
   EE_CFLAGS += -DATHENA_GRAPHICS
   APP_CORE += graphics.o image_font.o owl_draw.o image_loaders.o mesh_loaders.o atlas.o fntsys.o render.o camera.o skin_math.o calc_3d.o fast_obj/fast_obj.o
