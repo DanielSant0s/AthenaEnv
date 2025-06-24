@@ -162,10 +162,10 @@ Using AthenaEnv you only need one way to code and one way to test your code, tha
 ![image](https://user-images.githubusercontent.com/47725160/145600021-b07dd873-137d-4364-91ec-7ace0b1936e2.png)  
   
   • Qt version:  
-![image](https://github.com/DanielSant0s/AthenaEnv/assets/47725160/e90471f6-7ada-4176-88e8-8a9d2c1e7eb4)  
+<img src="https://github.com/DanielSant0s/AthenaEnv/assets/47725160/e90471f6-7ada-4176-88e8-8a9d2c1e7eb4" width=50% height=50%>
   
 Qt recommendation: Enable console output  
-![console0](https://github.com/DanielSant0s/AthenaEnv/assets/47725160/7ced1570-0013-4072-ad01-66b8a63dab6e)
+<img src="https://github.com/DanielSant0s/AthenaEnv/assets/47725160/7ced1570-0013-4072-ad01-66b8a63dab6e" width=50% height=50%>
 
   
 * Android: [QuickEdit](https://play.google.com/store/apps/details?id=com.rhmsoft.edit&hl=pt_BR&gl=US) and a PS2 with wLE for test.
@@ -207,46 +207,22 @@ let test_float = Math.fround(15.0); // Math.fround returns real single floats on
 
 **How to run it**
 
-Athena is basically a JavaScript loader, so it loads .js files. It runs "main.js" by default, but you can run other file names by passing it as the first argument when launching the ELF file.
-
-If you try to just download it on releases tab and run it, that's what you will see:
-![_50bda816_20230409025946](https://user-images.githubusercontent.com/47725160/230757268-5968d7e0-79df-4e98-9c02-4ec5252e056f.png)
-
-That's the default dashboard, coded in default main.js file. It searchs JavaScript files with the first line containing the following structure:
-```js
-// {"name": "App name", "author": "Who did it?", "version": "04012023", "icon": "app_icon.png", "file": "my_app.js"}
-// Now you can freely code below:
-```
-Once it was found, it will appear on the dashboard app list.
+Athena is basically a JavaScript loader, so it loads .js files. It runs "main.js" by default, but you can run other file names by changing "athena.ini" default script or passing it as the first argument when launching the ELF file.
 
 **Error reporting system**
 
-Athena has a consistent error system, which is capable of pointing the error type, custom message, files, lines and it even has
-a color code.
+Athena has a consistent error system, has two levels. 
 
-EvalError:  
-![_50bda816_20230409024828](https://user-images.githubusercontent.com/47725160/230756846-e7e5ef7d-4ca6-4e10-822b-bd8ab94e302f.png)
+Runtime error:  
+A runtime error occurs on JavaScript side, it can be rich in debug data and easily fixable. It is capable of pointing the error type, custom message, files, lines and it even has
+a color code.  
+  
+<img src="https://user-images.githubusercontent.com/47725160/230756861-94df60f8-8550-43a3-ac43-56d150e94145.png" width=50% height=50%>
 
-SyntaxError:  
-![_50bda816_20230409024849](https://user-images.githubusercontent.com/47725160/230756861-94df60f8-8550-43a3-ac43-56d150e94145.png)
-
-TypeError:  
-![_50bda816_20230409024911](https://user-images.githubusercontent.com/47725160/230756863-9b5d2b27-ef7c-449b-8663-7b466243c425.png)
-
-ReferenceError:  
-![_50bda816_20230409024944](https://user-images.githubusercontent.com/47725160/230756870-1deac594-7b3b-4804-a5cd-bfe366f5be27.png)
-
-RangeError:  
-![_50bda816_20230409025004](https://user-images.githubusercontent.com/47725160/230756874-5b03f2ee-1f23-4629-a775-5567c580b1da.png)
-
-InternalError:  
-![_50bda816_20230409025029](https://user-images.githubusercontent.com/47725160/230756880-d3f9449f-a379-4eec-8342-721987d3c7a9.png)
-
-URIError:  
-![_50bda816_20230409025053](https://user-images.githubusercontent.com/47725160/230756884-0e7dc7c8-91b3-4a4d-9d0f-ee120b4cc18a.png)
-
-AggregateError:  
-![_50bda816_20230409025131](https://user-images.githubusercontent.com/47725160/230756885-11749f0c-ef5b-4f17-ad78-59181230e75a.png)
+Core error:  
+A core error happens when AthenaEnv is interrupted due to a critical exception (null pointer, invalid address, bus error, overflow etc). It is a lot harder to debug and require low-level programming skills to figure out, from that screen you can get the exception cause, processor register dump, the bad address (if it is related with addresses), return function name(+offset) and the function that caused the error(+offset). It is highly recommended to contact the author to get proper support.  
+  
+<img src="https://github.com/user-attachments/assets/25da3350-cd53-4302-bf5e-3b7fdebcb4bb" width=50% height=50%>
 
 ## Functions, classes and consts
 
