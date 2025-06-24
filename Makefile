@@ -56,7 +56,7 @@ DYNAMIC_MOUSE ?= 0
 DYNAMIC_NETWORK ?= 0
 DYNAMIC_CAMERA ?= 0
 
-EE_LIBS = -L$(PS2SDK)/ports/lib -lmc -lpad -lmtap -lpatches -lz -llzma -lzip -lfileXio -lelf-loader-nocolour -lerl
+EE_LIBS = -L$(PS2SDK)/ports/lib -lmc -lpad -lmtap -lpatches -lz -llzma -lzip -lfileXio -lelf-loader-nocolour -lerl -ldebug
 
 EE_INCS += -I$(PS2SDK)/ports/include -I$(PS2SDK)/ports/include/zlib -Isrc/readini/include -Isrc/include
 
@@ -79,7 +79,7 @@ VU1_MPGS = draw_3D_colors.o \
 
 # VU0_MPGS = matrix_multiply.o
 
-APP_CORE = main.o bootlogo.o texture_manager.o owl_packet.o vif.o athena_math.o memory.o ee_tools.o module_system.o iop_manager.o taskman.o pad.o system.o strUtils.o mpg_manager.o matrix.o vector.o
+APP_CORE = main.o bootlogo.o texture_manager.o owl_packet.o vif.o athena_math.o memory.o ee_tools.o module_system.o iop_manager.o taskman.o pad.o system.o strUtils.o mpg_manager.o matrix.o vector.o excepHandler.o exceptions.o 
 
 INI_READER = readini/src/readini.o
 
@@ -251,6 +251,16 @@ $(EE_OBJ_DIR):
 
 $(EE_OBJ_DIR)%.o: $(EE_SRC_DIR)%.c | $(EE_OBJ_DIR)
 	@echo CC - $<
+	$(DIR_GUARD)
+	$(EE_CC) $(EE_CFLAGS) $(EE_INCS) -c $< -o $@
+
+  $(EE_OBJ_DIR)%.o: $(EE_SRC_DIR)%.s | $(EE_OBJ_DIR)
+	@echo AS - $<
+	$(DIR_GUARD)
+	$(EE_AS) $(EE_ASFLAGS) $(EE_INCS) $< -o $@
+
+  $(EE_OBJ_DIR)%.o: $(EE_SRC_DIR)%.S | $(EE_OBJ_DIR)
+	@echo AS - $<
 	$(DIR_GUARD)
 	$(EE_CC) $(EE_CFLAGS) $(EE_INCS) -c $< -o $@
 
