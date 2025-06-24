@@ -62,8 +62,6 @@ struct gsContext
 	int MagV;            ///< Y Magnification Value (MAGV = DH / Height - 1)
 	int DW;              ///< Total Display Area Width (DW = Width * (MAGH + 1))
     int DH;              ///< Total Display Area Height (DH = Height * (MAGH + 1))
-	GSBGCOLOR *BGColor;  ///< Background Color Structure Pointer
-	void *dma_misc __attribute__ ((aligned (64)));	///< Misc 512 byte DMA Transfer Buffer (so we don't malloc at runtime)
 	int PSM;             ///< Pixel Storage Method (Color Mode)
 	int PSMZ;            ///< ZBuffer Pixel Storage Method
 	int PrimContext;     ///< Primitive Context

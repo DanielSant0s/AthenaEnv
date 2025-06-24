@@ -1241,37 +1241,32 @@ void init_screen(GSCONTEXT *gsGlobal)
 			gsGlobal->DW - 1,	// Display area width
 			gsGlobal->DH - 1);		// Display area height
 
-	GS_SET_BGCOLOR(	gsGlobal->BGColor->Red,		// Red
-			gsGlobal->BGColor->Green,	// Green
-			gsGlobal->BGColor->Blue);	// Blue
+	GS_SET_BGCOLOR(0, 0, 0);
 
     EIntr(); //enable interrupts
 
-	p_data = p_store = (u64 *)gsGlobal->dma_misc;
+	owl_packet *packet = owl_query_packet(CHANNEL_GIF, size+2);
 
-	*p_data++ = GIF_TAG( size - 1, 1, 0, 0, GSKIT_GIF_FLG_PACKED, 1 );
-	*p_data++ = GIF_AD;
+	owl_add_cnt_tag(packet, size+1, 0);
 
-	*p_data++ = 1;
-	*p_data++ = GS_PRMODECONT;
+	owl_add_tag(packet, GIF_AD, GIFTAG( size, 1, 0, 0, 0, 1 ));
 
-	*p_data++ = gs_reg_cache[GS_CACHE_FRAME] = GS_SETREG_FRAME_1( gsGlobal->ScreenBuffer[0] / 8192, gsGlobal->Width / 64, gsGlobal->PSM, 0 );
-	*p_data++ = GS_FRAME_1;
+	owl_add_tag(packet, GS_PRMODECONT, 1);
 
-	*p_data++ = gs_reg_cache[GS_CACHE_XYOFFSET] = GS_SETREG_XYOFFSET_1( gsGlobal->OffsetX,
-					  gsGlobal->OffsetY);
-	*p_data++ = GS_XYOFFSET_1;
+	gs_reg_cache[GS_CACHE_FRAME] = GS_SETREG_FRAME_1( gsGlobal->ScreenBuffer[0] / 8192, gsGlobal->Width / 64, gsGlobal->PSM, 0 );
+	owl_add_tag(packet, GS_FRAME, gs_reg_cache[GS_CACHE_FRAME]);
 
-	*p_data++ = gs_reg_cache[GS_CACHE_SCISSOR] = GS_SETREG_SCISSOR_1( 0, gsGlobal->Width - 1, 0, gsGlobal->Height - 1 );
-	*p_data++ = GS_SCISSOR_1;
+	gs_reg_cache[GS_CACHE_XYOFFSET] = GS_SETREG_XYOFFSET_1( gsGlobal->OffsetX, gsGlobal->OffsetY);
+	owl_add_tag(packet, GS_XYOFFSET_1, gs_reg_cache[GS_CACHE_XYOFFSET]);
 
-	*p_data++ = gs_reg_cache[GS_CACHE_TEST] = GS_SETREG_TEST(0, 1, 0x80, 0, 0, 0, 1, 2);
+	gs_reg_cache[GS_CACHE_SCISSOR] = GS_SETREG_SCISSOR_1( 0, gsGlobal->Width - 1, 0, gsGlobal->Height - 1 );
+	owl_add_tag(packet, GS_SCISSOR_1, gs_reg_cache[GS_CACHE_SCISSOR]);
 
-	*p_data++ = GS_TEST_1;
+	gs_reg_cache[GS_CACHE_TEST] = GS_SETREG_TEST(0, 1, 0x80, 0, 0, 0, 1, 2);
+	owl_add_tag(packet, GS_TEST_1, gs_reg_cache[GS_CACHE_TEST]);
 
-	*p_data++ = gs_reg_cache[GS_CACHE_CLAMP] = GS_SETREG_CLAMP(GS_CMODE_REPEAT, GS_CMODE_REPEAT, 0, 0, 0, 0);
-
-	*p_data++ = GS_CLAMP_1;
+	gs_reg_cache[GS_CACHE_CLAMP] = GS_SETREG_CLAMP(GS_CMODE_REPEAT, GS_CMODE_REPEAT, 0, 0, 0, 0);
+	owl_add_tag(packet, GS_CLAMP_1, gs_reg_cache[GS_CACHE_CLAMP]);
 
 	if(gsGlobal->ZBuffering == GS_SETTING_ON)
 	{
@@ -1280,58 +1275,53 @@ void init_screen(GSCONTEXT *gsGlobal)
         if((gsGlobal->PSM != GS_PSM_CT16) && (gsGlobal->PSMZ == GS_ZBUF_16))
             gsGlobal->PSMZ = GS_ZBUF_16S; // other depths don't seem to work with 16-bit non-S z depth
 
-		*p_data++ = gs_reg_cache[GS_CACHE_ZBUF] = GS_SETREG_ZBUF_1( gsGlobal->ZBuffer / 8192, gsGlobal->PSMZ, 0 );
+		gs_reg_cache[GS_CACHE_ZBUF] = GS_SETREG_ZBUF_1( gsGlobal->ZBuffer / 8192, gsGlobal->PSMZ, 0 );
 	} else {
-		*p_data++ = gs_reg_cache[GS_CACHE_ZBUF] = GS_SETREG_ZBUF_1( 0, gsGlobal->PSM, 1 );
+		gs_reg_cache[GS_CACHE_ZBUF] = GS_SETREG_ZBUF_1( 0, gsGlobal->PSM, 1 );
 	}
-	*p_data++ = GS_ZBUF_1;
+	owl_add_tag(packet, GS_ZBUF_1, gs_reg_cache[GS_CACHE_ZBUF]);
 
-	*p_data++ = gs_reg_cache[GS_CACHE_COLCLAMP] = GS_SETREG_COLCLAMP( 255 );
-	*p_data++ = GS_COLCLAMP;
+	gs_reg_cache[GS_CACHE_COLCLAMP] = GS_SETREG_COLCLAMP( 255 );
+	owl_add_tag(packet, GS_COLCLAMP, gs_reg_cache[GS_CACHE_COLCLAMP]);
 
-	*p_data++ = gs_reg_cache[GS_CACHE_FRAME_2] = GS_SETREG_FRAME_1( gsGlobal->ScreenBuffer[1] / 8192, gsGlobal->Width / 64, gsGlobal->PSM, 0 );
-	*p_data++ = GS_FRAME_2;
+	gs_reg_cache[GS_CACHE_FRAME_2] = GS_SETREG_FRAME_1( gsGlobal->ScreenBuffer[1] / 8192, gsGlobal->Width / 64, gsGlobal->PSM, 0 );
+	owl_add_tag(packet, GS_FRAME_2, gs_reg_cache[GS_CACHE_FRAME_2]);
 
-	*p_data++ = gs_reg_cache[GS_CACHE_XYOFFSET];
-	*p_data++ = GS_XYOFFSET_2;
+	gs_reg_cache[GS_CACHE_XYOFFSET_2] = gs_reg_cache[GS_CACHE_XYOFFSET];
+	owl_add_tag(packet, GS_XYOFFSET_2, gs_reg_cache[GS_CACHE_XYOFFSET_2]);
 
-	*p_data++ = gs_reg_cache[GS_CACHE_SCISSOR_2] = gs_reg_cache[GS_CACHE_SCISSOR];
-	*p_data++ = GS_SCISSOR_2;
+	gs_reg_cache[GS_CACHE_SCISSOR_2] = gs_reg_cache[GS_CACHE_SCISSOR];
+	owl_add_tag(packet, GS_SCISSOR_2, gs_reg_cache[GS_CACHE_SCISSOR_2]);
 
-	*p_data++ = gs_reg_cache[GS_CACHE_TEST_2] = gs_reg_cache[GS_CACHE_TEST];
-	*p_data++ = GS_TEST_2;
+	gs_reg_cache[GS_CACHE_TEST_2] = gs_reg_cache[GS_CACHE_TEST];
+	owl_add_tag(packet, GS_TEST_2, gs_reg_cache[GS_CACHE_TEST_2]);
 
-	*p_data++ = gs_reg_cache[GS_CACHE_CLAMP];
-	*p_data++ = GS_CLAMP_2;
+	gs_reg_cache[GS_CACHE_CLAMP_2] = gs_reg_cache[GS_CACHE_CLAMP];
+	owl_add_tag(packet, GS_CLAMP_2, gs_reg_cache[GS_CACHE_CLAMP_2]);
 
-	*p_data++ = gs_reg_cache[GS_CACHE_ZBUF_2] = gs_reg_cache[GS_CACHE_ZBUF];
-	*p_data++ = GS_ZBUF_2;
+	gs_reg_cache[GS_CACHE_ZBUF_2] = gs_reg_cache[GS_CACHE_ZBUF];
+	owl_add_tag(packet, GS_ZBUF_2, gs_reg_cache[GS_CACHE_ZBUF_2]);
 
-	*p_data++ = gs_reg_cache[GS_CACHE_ALPHA] = GS_ALPHA_BLEND_NORMAL;
-	*p_data++ = GS_ALPHA_1;
+	gs_reg_cache[GS_CACHE_ALPHA] = GS_ALPHA_BLEND_NORMAL;
+	owl_add_tag(packet, GS_ALPHA_1, gs_reg_cache[GS_CACHE_ALPHA]);
 
-	*p_data++ = gs_reg_cache[GS_CACHE_ALPHA_2] = gs_reg_cache[GS_CACHE_ALPHA];
-	*p_data++ = GS_ALPHA_2;
+	gs_reg_cache[GS_CACHE_ALPHA_2] = gs_reg_cache[GS_CACHE_ALPHA];
+	owl_add_tag(packet, GS_ALPHA_2, gs_reg_cache[GS_CACHE_ALPHA_2]);
 
-	*p_data++ = GS_SETREG_DIMX(gsGlobal->DitherMatrix[0],gsGlobal->DitherMatrix[1],
+	owl_add_tag(packet, GS_DIMX, 
+		GS_SETREG_DIMX(gsGlobal->DitherMatrix[0],gsGlobal->DitherMatrix[1],
                 gsGlobal->DitherMatrix[2],gsGlobal->DitherMatrix[3],gsGlobal->DitherMatrix[4],
                 gsGlobal->DitherMatrix[5],gsGlobal->DitherMatrix[6],gsGlobal->DitherMatrix[7],
                 gsGlobal->DitherMatrix[8],gsGlobal->DitherMatrix[9],gsGlobal->DitherMatrix[10],
                 gsGlobal->DitherMatrix[11],gsGlobal->DitherMatrix[12],gsGlobal->DitherMatrix[13],
-                gsGlobal->DitherMatrix[14],gsGlobal->DitherMatrix[15]); // 4x4 dither matrix
+                gsGlobal->DitherMatrix[14],gsGlobal->DitherMatrix[15]));
 
-	*p_data++ = GS_DIMX;
-
-	*p_data++ = GS_SETREG_TEXA(0x80, 0, 0x80);
-	*p_data++ = GS_TEXA;
+	owl_add_tag(packet, GS_TEXA, GS_SETREG_TEXA(0x80, 0, 0x80));
 
 	if((gsGlobal->Dithering == GS_SETTING_ON) && ((gsGlobal->PSM == GS_PSM_CT16) || (gsGlobal->PSM == GS_PSM_CT16S))) {
-        *p_data++ = 1;
-        *p_data++ = GS_DTHE;
+		owl_add_tag(packet, GS_DTHE, 1);
 	}
 
-	dmaKit_send_ucab(DMA_CHANNEL_GIF, p_store, size);
-	dmaKit_wait_fast();
 }
 
 GSCONTEXT *temp_init_global()
@@ -1341,8 +1331,6 @@ GSCONTEXT *temp_init_global()
     int i = 0;
 
 	GSCONTEXT *gsGlobal = calloc(1,sizeof(GSCONTEXT));
-	gsGlobal->BGColor = calloc(1,sizeof(GSBGCOLOR));
-	gsGlobal->dma_misc = ((uint32_t)memalign(128, 512)) | 0x30000000;
 
 	/* Generic Values */
 	_io_driver driver = posixIODriver;
@@ -1382,10 +1370,6 @@ GSCONTEXT *temp_init_global()
 	    gsGlobal->DitherMatrix[i] = dither_matrix[i];
 	}
 
-	/* BGColor Register Values */
-	gsGlobal->BGColor->Red = 0x00;
-	gsGlobal->BGColor->Green = 0x00;
-	gsGlobal->BGColor->Blue = 0x00;
 
 	return gsGlobal;
 }
@@ -1509,13 +1493,22 @@ void setVideoMode(s16 mode, int width, int height, int psm, s16 interlace, s16 f
 	set_display_offset(gsGlobal, -0.5f, -0.5f);
 }
  
-void init_graphics()
-{
+void init_graphics() {
+	dmaKit_init(D_CTRL_RELE_OFF, D_CTRL_MFD_OFF, D_CTRL_STS_UNSPEC, D_CTRL_STD_OFF, D_CTRL_RCYC_8, 1 << DMA_CHANNEL_GIF);
+	dmaKit_chan_init(DMA_CHANNEL_GIF);
+	dmaKit_chan_init(DMA_CHANNEL_VIF0);
+	dmaKit_chan_init(DMA_CHANNEL_VIF1);
+	dmaKit_wait(DMA_CHANNEL_GIF, 0);
+	dmaKit_wait(DMA_CHANNEL_VIF0, 0);
+	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
+
 	ee_sema_t sema; 
     sema.init_count = 0;
     sema.max_count = 1;
     sema.option = 0;
     vsync_sema_id = CreateSema(&sema);
+
+	owl_init(owl_packet_buffer, OWL_PACKET_BUFFER_SIZE);
 
 	gsGlobal = temp_init_global();
 
@@ -1528,14 +1521,6 @@ void init_graphics()
 	gsGlobal->DoubleBuffering = GS_SETTING_ON;
 	gsGlobal->PrimAlphaEnable = GS_SETTING_ON;
 	gsGlobal->Dithering = GS_SETTING_OFF;
-
-	dmaKit_init(D_CTRL_RELE_OFF, D_CTRL_MFD_OFF, D_CTRL_STS_UNSPEC, D_CTRL_STD_OFF, D_CTRL_RCYC_8, 1 << DMA_CHANNEL_GIF);
-	dmaKit_chan_init(DMA_CHANNEL_GIF);
-	dmaKit_chan_init(DMA_CHANNEL_VIF0);
-	dmaKit_chan_init(DMA_CHANNEL_VIF1);
-	dmaKit_wait(DMA_CHANNEL_GIF, 0);
-	dmaKit_wait(DMA_CHANNEL_VIF0, 0);
-	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
 
 	flipScreen = flipScreenDoubleBuffering;
 
@@ -1562,8 +1547,6 @@ void init_graphics()
 	// Unmask VSync interrupt
 	GsPutIMR(GsGetIMR() & ~0x0800);
 	EIntr();
-
-	owl_init(owl_packet_buffer, OWL_PACKET_BUFFER_SIZE);
 
 	for (int i = 0; i < 2; i++) {
     	clearScreen(BLACK_RGBAQ);	
