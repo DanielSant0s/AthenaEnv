@@ -36,6 +36,8 @@
 
 #include <macros.h>
 
+#include <excepHandler.h>
+
 char path_workbuffer[255] = { 0 };
 
 char boot_path[255] = { 0 };
@@ -101,15 +103,15 @@ static void export_symbols() {
     int i, prohibit;
     
     for (p = export_list; p->name; p++) {
-	prohibit = 0;
-	for (i = 0; prohibit_list[i]; i++) {
-	    if (!(strcmp(prohibit_list[i], p->name))) {
-		prohibit = 1;
-		break;
+	    prohibit = 0;
+	    for (i = 0; prohibit_list[i]; i++) {
+	        if (!(strcmp(prohibit_list[i], p->name))) {
+	    	prohibit = 1;
+	    	break;
+	        }
 	    }
-	}
-	if (!prohibit)
-	    erl_add_global_symbol(p->name, p->pointer);
+	    if (!prohibit)
+	        erl_add_global_symbol(p->name, p->pointer);
     }
 }
 
@@ -281,6 +283,8 @@ int main(int argc, char **argv) {
             readini_close(&ini);
         }
     }
+
+    installExceptionHandlers();
 
     #ifdef ATHENA_GRAPHICS
 	init_graphics();
