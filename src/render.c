@@ -379,7 +379,7 @@ void draw_vu1_with_colors(athena_object_data *obj, int pass_state) {
 		mpg_addr = vu_mpg_preload(vu1_colors, true);
 	}
 	
-	gsGlobal->PrimAAEnable = GS_SETTING_ON;
+	
 
 	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 8);
 
@@ -521,7 +521,7 @@ void draw_vu1_with_lights(athena_object_data *obj, int pass_state) {
 		mpg_addr = vu_mpg_preload(vu1_lights, true);
 	}
 		
-	gsGlobal->PrimAAEnable = GS_SETTING_ON;
+	
 
 	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 10); // 5 for unpack static data + 2 for flush with end
 
@@ -668,7 +668,7 @@ void draw_vu1_with_spec_lights(athena_object_data *obj, int pass_state) {
 		mpg_addr = vu_mpg_preload(vu1_specular, true);
 	}
 
-	gsGlobal->PrimAAEnable = GS_SETTING_ON;
+	
 
 	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 10);
 
@@ -813,7 +813,7 @@ void draw_vu1_with_lights_ref(athena_object_data *obj, int pass_state) {
 		mpg_addr = vu_mpg_preload(vu1_lights_reflection, true);
 	}
 		
-	gsGlobal->PrimAAEnable = GS_SETTING_ON;
+	
 
 	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 10); // 5 for unpack static data + 2 for flush with end
 

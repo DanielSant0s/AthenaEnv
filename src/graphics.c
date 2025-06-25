@@ -1322,6 +1322,8 @@ void init_screen(GSCONTEXT *gsGlobal)
 		owl_add_tag(packet, GS_DTHE, 1);
 	}
 
+	owl_flush_packet();
+
 }
 
 GSCONTEXT *temp_init_global()
