@@ -47,8 +47,7 @@ FIVECTOR screen_scale;
 void render_init() {
 	initCamera(&world_screen, &world_view, &view_screen);
 	
-	vu1_set_double_buffer_settings(274, 357); // Skinned layout
-	// vu1_set_double_buffer_settings(141, 400);
+	vu1_set_double_buffer_settings(270, 339); // Skinned layout
 	owl_flush_packet();
 
 	vu1_colors   = vu_mpg_load_buffer(embed_vu_code_ptr(VU1Draw3DCS),   embed_vu_code_size(VU1Draw3DCS),   VECTOR_UNIT_1, false); 
@@ -249,7 +248,7 @@ void draw_bbox(athena_object_data* obj, Color color) {
 
 void append_texture_tags(owl_packet* packet, GSSURFACE *texture, int texture_id, eColorFunctions func) {
 	if (texture_id != -1) {
-		owl_add_cnt_tag(packet, 8, 0); // 4 quadwords for vif
+		owl_add_cnt_tag(packet, 4, 0); // 4 quadwords for vif
 		owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0)); 
 		owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0)); 
 		owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSH, 0));
@@ -263,35 +262,7 @@ void append_texture_tags(owl_packet* packet, GSSURFACE *texture, int texture_id,
 		owl_add_uint(packet, VIF_CODE(texture_id, 0, VIF_MARK, 0));
 		owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 1));
 
-	} else {
-		owl_add_cnt_tag(packet, 4, 0);
-	}
-
-	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
-	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
-	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
-	owl_add_uint(packet, VIF_CODE(3, 0, VIF_DIRECT, 0)); 
-	
-	owl_add_tag(packet, GIF_AD, GIFTAG(2, 1, 0, 0, 0, 1));
-
-	int tw, th;
-	athena_set_tw_th(texture, &tw, &th);
-
-	owl_add_tag(packet, 
-		GS_TEX0_1+gsGlobal->PrimContext, 
-		GS_SETREG_TEX0((texture->Vram & ~TRANSFER_REQUEST_MASK)/256, 
-					  texture->TBW, 
-					  texture->PSM,
-					  tw, th, 
-					  gsGlobal->PrimAlphaEnable, 
-					  COLOR_MODULATE,
-					  (texture->VramClut & ~TRANSFER_REQUEST_MASK)/256, 
-					  texture->ClutPSM, 
-					  0, 0, 
-					  texture->VramClut? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD)
-	);
-	
-	owl_add_tag(packet, GS_TEX1_1+gsGlobal->PrimContext, GS_SETREG_TEX1(1, 0, texture->Filter, texture->Filter, 0, 0, 0));
+	} 
 }
 
 void process_animation(athena_object_data *obj) {
@@ -410,24 +381,17 @@ void draw_vu1_with_colors(athena_object_data *obj, int pass_state) {
 	
 	gsGlobal->PrimAAEnable = GS_SETTING_ON;
 
-	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 4);
-
-	owl_add_unpack_data(packet, 141, (void*)obj->transform, 4, 0);
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 8);
 
 	if (obj->bone_matrices) {
-		owl_add_unpack_data(packet, 145, (void*)obj->bone_matrices, data->skeleton->bone_count*4, 0);
+		owl_add_unpack_data(packet, 141, (void*)obj->bone_matrices, data->skeleton->bone_count*4, 0);
 	}
 
-	owl_add_unpack_data(packet, 273, (void*)obj->bump_offset_buffer, 1, 0);
+	owl_add_unpack_data(packet, 0, (void*)&screen_scale, 1, 0);
+	owl_add_unpack_data(packet, 1, (void*)world_screen, 4, 0);
+	owl_add_unpack_data(packet, 5, (void*)obj->transform, 4, 0);
 
-	unpack_list_open(packet, 0, false);
-	{
-		screen_scale.w = data->attributes.accurate_clipping;
-		unpack_list_append(packet, &screen_scale,       1);
-
-		unpack_list_append(packet, world_screen,       4);
-	}
-	unpack_list_close(packet);
+	owl_add_unpack_data(packet, 269, (void*)obj->bump_offset_buffer, 1, 0);
 
 	//owl_add_end_tag(packet);
 
@@ -493,10 +457,38 @@ void draw_vu1_with_colors(athena_object_data *obj, int pass_state) {
 			}
 			unpack_list_close(packet);
 
-			owl_add_cnt_tag(packet, 1, owl_vif_code_double(VIF_CODE(0, 0, VIF_NOP, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
+			owl_add_cnt_tag(packet, texture_mapping? 5 : 1, owl_vif_code_double(VIF_CODE(0, 0, VIF_NOP, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
+
+			if (texture_mapping) {
+				owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));
+				owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+				owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+				owl_add_uint(packet, VIF_CODE(3, 0, VIF_DIRECT, 0)); 
+
+				owl_add_tag(packet, GIF_AD, GIFTAG(2, 1, 0, 0, 0, 1));
+
+				int tw, th;
+				athena_set_tw_th(tex, &tw, &th);
+
+				owl_add_tag(packet, 
+					GS_TEX0_1+gsGlobal->PrimContext, 
+					GS_SETREG_TEX0((tex->Vram & ~TRANSFER_REQUEST_MASK)/256, 
+								  tex->TBW, 
+								  tex->PSM,
+								  tw, th, 
+								  gsGlobal->PrimAlphaEnable, 
+								  COLOR_MODULATE,
+								  (tex->VramClut & ~TRANSFER_REQUEST_MASK)/256, 
+								  tex->ClutPSM, 
+								  0, 0, 
+								  tex->VramClut? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD)
+				);
+
+				owl_add_tag(packet, GS_TEX1_1+gsGlobal->PrimContext, GS_SETREG_TEX1(1, 0, tex->Filter, tex->Filter, 0, 0, 0));
+			}
 			
-			owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
 			owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));
+			owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
 			owl_add_uint(packet, VIF_CODE(count, 0, VIF_ITOP, 0));
 			owl_add_uint(packet, VIF_CODE(mpg_addr, 0, (last_index == -1? VIF_MSCALF : VIF_MSCNT), 0)); 
 
@@ -507,12 +499,9 @@ void draw_vu1_with_colors(athena_object_data *obj, int pass_state) {
 		last_index = data->material_indices[i].end;
 	}
 
-	owl_add_vif_codes(packet,
-		VIF_CODE(0, 0, VIF_FLUSH, 0),
-		VIF_CODE(0, 0, VIF_FLUSH, 0),
-		VIF_CODE(0, 0, VIF_NOP, 0),
-		VIF_CODE(0, 0, VIF_NOP, 0)
-	);
+	owl_query_packet(CHANNEL_VIF1, 1);
+
+	owl_add_cnt_tag(packet, 0, owl_vif_code_double(VIF_CODE(0, 0, VIF_FLUSH, 0), VIF_CODE(0, 0, VIF_FLUSH, 0)));
 }
 
 void draw_vu1_with_lights(athena_object_data *obj, int pass_state) {
@@ -534,24 +523,19 @@ void draw_vu1_with_lights(athena_object_data *obj, int pass_state) {
 		
 	gsGlobal->PrimAAEnable = GS_SETTING_ON;
 
-	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 8); // 5 for unpack static data + 2 for flush with end
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 10); // 5 for unpack static data + 2 for flush with end
 
-	owl_add_unpack_data(packet, 141, (void*)obj->transform, 4, 0);
+	owl_add_cnt_tag(packet, 0, owl_vif_code_double(VIF_CODE(0, 0, VIF_FLUSHE, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
+
+	owl_add_unpack_data(packet, 0, (void*)&screen_scale, 1, 0);
+	owl_add_unpack_data(packet, 1, (void*)world_screen, 4, 0);
+	owl_add_unpack_data(packet, 5, (void*)obj->transform, 4, 0);
+	owl_add_unpack_data(packet, 9, (void*)getCameraPosition(), 1, 0);
+	owl_add_unpack_data(packet, 10, (void*)&dir_lights, 16, 0);
 
 	if (obj->bone_matrices) {
-		owl_add_unpack_data(packet, 145, (void*)obj->bone_matrices, data->skeleton->bone_count*4, 0);
+		owl_add_unpack_data(packet, 141, (void*)obj->bone_matrices, data->skeleton->bone_count*4, 0);
 	}
-
-	unpack_list_open(packet, 0, false);
-	{
-		unpack_list_append(packet, &screen_scale,       1); 
-
-		unpack_list_append(packet, world_screen,       8);
-
-		unpack_list_append(packet, getCameraPosition(), 1);
-		unpack_list_append(packet, &dir_lights,        16);
-	}
-	unpack_list_close(packet);
 
 	//owl_add_end_tag(packet);
 
@@ -590,7 +574,7 @@ void draw_vu1_with_lights(athena_object_data *obj, int pass_state) {
 		int idxs_drawn = 0;
 
 		while (idxs_to_draw > 0) {
-			owl_query_packet(CHANNEL_VIF1, texture_mapping? 19 : 9);
+			owl_query_packet(CHANNEL_VIF1, texture_mapping? 20 : 10);
 
 			int count = batch_size;
 			if (idxs_to_draw < batch_size)
@@ -618,8 +602,36 @@ void draw_vu1_with_lights(athena_object_data *obj, int pass_state) {
 					unpack_list_append(packet, &texcoords[idxs_drawn], count);
 			}
 			unpack_list_close(packet);
+			
+			owl_add_cnt_tag(packet, texture_mapping? 5 : 1, owl_vif_code_double(VIF_CODE(0, 0, VIF_NOP, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
 
-			owl_add_cnt_tag(packet, 1, owl_vif_code_double(VIF_CODE(0, 0, VIF_NOP, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
+			if (texture_mapping) {
+				owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));
+				owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+				owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+				owl_add_uint(packet, VIF_CODE(3, 0, VIF_DIRECT, 0)); 
+
+				owl_add_tag(packet, GIF_AD, GIFTAG(2, 1, 0, 0, 0, 1));
+
+				int tw, th;
+				athena_set_tw_th(tex, &tw, &th);
+
+				owl_add_tag(packet, 
+					GS_TEX0_1+gsGlobal->PrimContext, 
+					GS_SETREG_TEX0((tex->Vram & ~TRANSFER_REQUEST_MASK)/256, 
+								  tex->TBW, 
+								  tex->PSM,
+								  tw, th, 
+								  gsGlobal->PrimAlphaEnable, 
+								  COLOR_MODULATE,
+								  (tex->VramClut & ~TRANSFER_REQUEST_MASK)/256, 
+								  tex->ClutPSM, 
+								  0, 0, 
+								  tex->VramClut? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD)
+				);
+
+				owl_add_tag(packet, GS_TEX1_1+gsGlobal->PrimContext, GS_SETREG_TEX1(1, 0, tex->Filter, tex->Filter, 0, 0, 0));
+			}
 			
 			owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));
 			owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
@@ -634,12 +646,9 @@ void draw_vu1_with_lights(athena_object_data *obj, int pass_state) {
 		last_index = data->material_indices[i].end;
 	}
 
-	owl_add_vif_codes(packet,
-		VIF_CODE(0, 0, VIF_FLUSH, 0),
-		VIF_CODE(0, 0, VIF_FLUSH, 0),
-		VIF_CODE(0, 0, VIF_NOP, 0),
-		VIF_CODE(0, 0, VIF_NOP, 0)
-	);
+	owl_query_packet(CHANNEL_VIF1, 1);
+
+	owl_add_cnt_tag(packet, 0, owl_vif_code_double(VIF_CODE(0, 0, VIF_FLUSH, 0), VIF_CODE(0, 0, VIF_FLUSH, 0)));
 }
 
 void draw_vu1_with_spec_lights(athena_object_data *obj, int pass_state) {
@@ -661,24 +670,19 @@ void draw_vu1_with_spec_lights(athena_object_data *obj, int pass_state) {
 
 	gsGlobal->PrimAAEnable = GS_SETTING_ON;
 
-	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 8);
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 10);
 
-	owl_add_unpack_data(packet, 141, (void*)obj->transform, 4, 0);
+	owl_add_cnt_tag(packet, 0, owl_vif_code_double(VIF_CODE(0, 0, VIF_FLUSHE, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
 
 	if (obj->bone_matrices) {
-		owl_add_unpack_data(packet, 145, (void*)obj->bone_matrices, data->skeleton->bone_count*4, 0);
+		owl_add_unpack_data(packet, 141, (void*)obj->bone_matrices, data->skeleton->bone_count*4, 0);
 	}
 
-	unpack_list_open(packet, 0, false);
-	{
-		unpack_list_append(packet, &screen_scale,       1);
-
-		unpack_list_append(packet, world_screen,       8);
-
-		unpack_list_append(packet, getCameraPosition(), 1);
-		unpack_list_append(packet, &dir_lights,         16);
-	}
-	unpack_list_close(packet);
+	owl_add_unpack_data(packet, 0, (void*)&screen_scale, 1, 0);
+	owl_add_unpack_data(packet, 1, (void*)world_screen, 4, 0);
+	owl_add_unpack_data(packet, 5, (void*)obj->transform, 4, 0);
+	owl_add_unpack_data(packet, 9, (void*)getCameraPosition(), 1, 0);
+	owl_add_unpack_data(packet, 10, (void*)&dir_lights, 16, 0);
 
 	//owl_add_end_tag(packet);
 
@@ -745,7 +749,35 @@ void draw_vu1_with_spec_lights(athena_object_data *obj, int pass_state) {
 			}
 			unpack_list_close(packet);
 
-			owl_add_cnt_tag(packet, 1, owl_vif_code_double(VIF_CODE(0, 0, VIF_NOP, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
+			owl_add_cnt_tag(packet, texture_mapping? 5 : 1, owl_vif_code_double(VIF_CODE(0, 0, VIF_NOP, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
+
+			if (texture_mapping) {
+				owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));
+				owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+				owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+				owl_add_uint(packet, VIF_CODE(3, 0, VIF_DIRECT, 0)); 
+
+				owl_add_tag(packet, GIF_AD, GIFTAG(2, 1, 0, 0, 0, 1));
+
+				int tw, th;
+				athena_set_tw_th(tex, &tw, &th);
+
+				owl_add_tag(packet, 
+					GS_TEX0_1+gsGlobal->PrimContext, 
+					GS_SETREG_TEX0((tex->Vram & ~TRANSFER_REQUEST_MASK)/256, 
+								  tex->TBW, 
+								  tex->PSM,
+								  tw, th, 
+								  gsGlobal->PrimAlphaEnable, 
+								  COLOR_MODULATE,
+								  (tex->VramClut & ~TRANSFER_REQUEST_MASK)/256, 
+								  tex->ClutPSM, 
+								  0, 0, 
+								  tex->VramClut? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD)
+				);
+
+				owl_add_tag(packet, GS_TEX1_1+gsGlobal->PrimContext, GS_SETREG_TEX1(1, 0, tex->Filter, tex->Filter, 0, 0, 0));
+			}
 			
 			owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
 			owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
@@ -759,12 +791,9 @@ void draw_vu1_with_spec_lights(athena_object_data *obj, int pass_state) {
 		last_index = data->material_indices[i].end;
 	}
 
-	owl_add_vif_codes(packet,
-		VIF_CODE(0, 0, VIF_FLUSH, 0),
-		VIF_CODE(0, 0, VIF_FLUSH, 0),
-		VIF_CODE(0, 0, VIF_NOP, 0),
-		VIF_CODE(0, 0, VIF_NOP, 0)
-	);
+	owl_query_packet(CHANNEL_VIF1, 1);
+
+	owl_add_cnt_tag(packet, 0, owl_vif_code_double(VIF_CODE(0, 0, VIF_FLUSH, 0), VIF_CODE(0, 0, VIF_FLUSH, 0)));
 }
 
 void draw_vu1_with_lights_ref(athena_object_data *obj, int pass_state) {
@@ -786,24 +815,19 @@ void draw_vu1_with_lights_ref(athena_object_data *obj, int pass_state) {
 		
 	gsGlobal->PrimAAEnable = GS_SETTING_ON;
 
-	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 8); // 5 for unpack static data + 2 for flush with end
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 10); // 5 for unpack static data + 2 for flush with end
 
-	owl_add_unpack_data(packet, 141, (void*)obj->transform, 4, 0);
+	owl_add_cnt_tag(packet, 0, owl_vif_code_double(VIF_CODE(0, 0, VIF_FLUSHE, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
+
+	owl_add_unpack_data(packet, 0, (void*)&screen_scale, 1, 0);
+	owl_add_unpack_data(packet, 1, (void*)&world_screen, 4, 0);
+	owl_add_unpack_data(packet, 5, (void*)obj->transform, 4, 0);
+	owl_add_unpack_data(packet, 9, (void*)getCameraPosition(), 1, 0);
+	owl_add_unpack_data(packet, 10, (void*)&dir_lights, 16, 0);
 
 	if (obj->bone_matrices) {
-		owl_add_unpack_data(packet, 145, (void*)obj->bone_matrices, data->skeleton->bone_count*4, 0);
+		owl_add_unpack_data(packet, 141, (void*)obj->bone_matrices, data->skeleton->bone_count*4, 0);
 	}
-
-	unpack_list_open(packet, 0, false);
-	{
-		unpack_list_append(packet, &screen_scale,       1); 
-
-		unpack_list_append(packet, world_screen,       8);
-
-		unpack_list_append(packet, getCameraPosition(), 1);
-		unpack_list_append(packet, &dir_lights,        16);
-	}
-	unpack_list_close(packet);
 
 	//owl_add_end_tag(packet);
 
@@ -859,7 +883,35 @@ void draw_vu1_with_lights_ref(athena_object_data *obj, int pass_state) {
 			}
 			unpack_list_close(packet);
 
-			owl_add_cnt_tag(packet, 1, owl_vif_code_double(VIF_CODE(0, 0, VIF_NOP, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
+						owl_add_cnt_tag(packet, texture_mapping? 5 : 1, owl_vif_code_double(VIF_CODE(0, 0, VIF_NOP, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
+
+			if (texture_mapping) {
+				owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));
+				owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+				owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+				owl_add_uint(packet, VIF_CODE(3, 0, VIF_DIRECT, 0)); 
+
+				owl_add_tag(packet, GIF_AD, GIFTAG(2, 1, 0, 0, 0, 1));
+
+				int tw, th;
+				athena_set_tw_th(tex, &tw, &th);
+
+				owl_add_tag(packet, 
+					GS_TEX0_1+gsGlobal->PrimContext, 
+					GS_SETREG_TEX0((tex->Vram & ~TRANSFER_REQUEST_MASK)/256, 
+								  tex->TBW, 
+								  tex->PSM,
+								  tw, th, 
+								  gsGlobal->PrimAlphaEnable, 
+								  COLOR_MODULATE,
+								  (tex->VramClut & ~TRANSFER_REQUEST_MASK)/256, 
+								  tex->ClutPSM, 
+								  0, 0, 
+								  tex->VramClut? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD)
+				);
+
+				owl_add_tag(packet, GS_TEX1_1+gsGlobal->PrimContext, GS_SETREG_TEX1(1, 0, tex->Filter, tex->Filter, 0, 0, 0));
+			}
 			
 			owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));
 			owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
@@ -874,10 +926,7 @@ void draw_vu1_with_lights_ref(athena_object_data *obj, int pass_state) {
 		last_index = data->material_indices[i].end;
 	}
 
-	owl_add_vif_codes(packet,
-		VIF_CODE(0, 0, VIF_FLUSH, 0),
-		VIF_CODE(0, 0, VIF_FLUSH, 0),
-		VIF_CODE(0, 0, VIF_NOP, 0),
-		VIF_CODE(0, 0, VIF_NOP, 0)
-	);
+	owl_query_packet(CHANNEL_VIF1, 1);
+
+	owl_add_cnt_tag(packet, 0, owl_vif_code_double(VIF_CODE(0, 0, VIF_FLUSH, 0), VIF_CODE(0, 0, VIF_FLUSH, 0)));
 }

@@ -53,7 +53,6 @@ cull_init:
 
     ;//////////// --- Load data 1 --- /////////////
     ; Updated once per mesh
-    MatrixLoad	LocalLight,     LIGHT_MATRIX, vi00     ; load local light matrix
     ilw.w       dirLightQnt,    NUM_DIR_LIGHTS(vi00) ; load active directional lights
 
     ;//////////// --- Load data 2 --- /////////////

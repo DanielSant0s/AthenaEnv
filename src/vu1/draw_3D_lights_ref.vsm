@@ -7,21 +7,21 @@
 VU1Draw3DLCS_Ref_CodeStart:
 __v_src_vu1_draw_3D_lights_ref_vcl_4:
 ; _LNOPT_w=[ normal2 ] 22 [17 0] 22   [__v_src_vu1_draw_3D_lights_ref_vcl_4]
-         NOP                                                        lq            VF01,141(VI00)                      
+         NOP                                                        lq            VF01,5(VI00)                        
          NOP                                                        lq            VF07,1(VI00)                        
          NOP                                                        lq.w          VF08,26(VI00)                       
          NOP                                                        lq            VF11,2(VI00)                        
          NOP                                                        lq            VF10,3(VI00)                        
          mulax         ACC,VF07,VF01x                               lq            VF09,4(VI00)                        
-         ftoi0.w       VF12,VF08                                    lq            VF02,142(VI00)                      
+         ftoi0.w       VF12,VF08                                    lq            VF02,6(VI00)                        
          madday        ACC,VF11,VF01y                               NOP                                               
          maddaz        ACC,VF10,VF01z                               NOP                                               
          maddw         VF04,VF09,VF01w                              NOP                                               
-         mulax         ACC,VF07,VF02x                               lq            VF03,143(VI00)                      
+         mulax         ACC,VF07,VF02x                               lq            VF03,7(VI00)                        
          madday        ACC,VF11,VF02y                               NOP                                               
          maddaz        ACC,VF10,VF02z                               NOP                                               
          maddw         VF05,VF09,VF02w                              NOP                                               
-         mulax         ACC,VF07,VF03x                               lq            VF13,144(VI00)                      
+         mulax         ACC,VF07,VF03x                               lq            VF13,8(VI00)                        
          madday        ACC,VF11,VF03y                               NOP                                               
          maddaz        ACC,VF10,VF03z                               NOP                                               
          maddw         VF06,VF09,VF03w                              NOP                                               
@@ -143,7 +143,7 @@ init:
          NOP                                                        iaddiu        VI05,VI07,0x00000002                
          NOP                                                        iaddiu        VI09,VI12,0x00007fff                
          NOP                                                        iadd          VI06,VI05,VI12                      
-         NOP                                                        iaddiu        VI08,VI05,0x000000cc                
+         NOP                                                        iaddiu        VI08,VI05,0x000000c0                
          NOP                                                        iaddiu        VI09,VI09,0x00000001                
          NOP                                                        lq            VF11,1(VI07)                        
          NOP                                                        iadd          VI07,VI06,VI12                      

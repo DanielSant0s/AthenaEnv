@@ -47,7 +47,6 @@ const scene_object = new RenderObject(scene);
 
 const box = new RenderData("box_bump.gltf");
 box.face_culling = Render.CULL_FACE_NONE;
-box.pipeline = Render.PL_BUMPMAP;
 
 //box.getTexture(0).filter = LINEAR;
 //box.getTexture(1).filter = LINEAR;

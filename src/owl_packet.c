@@ -79,7 +79,7 @@ owl_controller *owl_get_controller() {
 
 void vu1_set_double_buffer_settings(uint32_t base, uint32_t offset)
 {
-	owl_packet *internal_packet = owl_query_packet(CHANNEL_VIF1, 2);
+	owl_packet *internal_packet = owl_query_packet(CHANNEL_VIF1, 1);
 
     owl_add_tag(internal_packet, (VIF_CODE(base, 0, VIF_BASE, 0) | (uint64_t)VIF_CODE(offset, 0, VIF_OFFSET, 0) << 32), 
                         DMA_TAG(0, 0, DMA_CNT, 0, 0 , 0));

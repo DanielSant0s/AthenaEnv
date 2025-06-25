@@ -4,6 +4,8 @@ const pad = Pads.get();
 
 const font = new Font("default");
 
+Screen.setParam(Screen.DEPTH_TEST_ENABLE, false);
+
 while(true) {
     Screen.clear(Color.new(0, 0, 0));
     pad.update();

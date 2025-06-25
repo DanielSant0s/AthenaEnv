@@ -7,21 +7,21 @@
 VU1Draw3DLCSS_Skin_CodeStart:
 __v_src_vu1_draw_3D_spec_skin_vcl_4:
 ; _LNOPT_w=[ normal2 ] 22 [17 0] 22   [__v_src_vu1_draw_3D_spec_skin_vcl_4]
-         NOP                                                        lq            VF01,141(VI00)                      
+         NOP                                                        lq            VF01,5(VI00)                        
          NOP                                                        lq            VF07,1(VI00)                        
          NOP                                                        lq.w          VF08,26(VI00)                       
          NOP                                                        lq            VF11,2(VI00)                        
          NOP                                                        lq            VF10,3(VI00)                        
          mulax         ACC,VF07,VF01x                               lq            VF09,4(VI00)                        
-         ftoi0.w       VF12,VF08                                    lq            VF02,142(VI00)                      
+         ftoi0.w       VF12,VF08                                    lq            VF02,6(VI00)                        
          madday        ACC,VF11,VF01y                               NOP                                               
          maddaz        ACC,VF10,VF01z                               NOP                                               
          maddw         VF04,VF09,VF01w                              NOP                                               
-         mulax         ACC,VF07,VF02x                               lq            VF03,143(VI00)                      
+         mulax         ACC,VF07,VF02x                               lq            VF03,7(VI00)                        
          madday        ACC,VF11,VF02y                               NOP                                               
          maddaz        ACC,VF10,VF02z                               NOP                                               
          maddw         VF05,VF09,VF02w                              NOP                                               
-         mulax         ACC,VF07,VF03x                               lq            VF13,144(VI00)                      
+         mulax         ACC,VF07,VF03x                               lq            VF13,8(VI00)                        
          madday        ACC,VF11,VF03y                               NOP                                               
          maddaz        ACC,VF10,VF03z                               NOP                                               
          maddw         VF06,VF09,VF03w                              NOP                                               
@@ -80,10 +80,10 @@ skinWeightLoop_cull:
          NOP                                                        NOP                                               
          NOP                                                        NOP                                               
          NOP                                                        mtir          VI11,VF19x                          
-         NOP                                                        lq            VF25,145(VI11)                      
-         NOP                                                        lq            VF24,146(VI11)                      
-         NOP                                                        lq            VF23,147(VI11)                      
-         NOP                                                        lq            VF26,148(VI11)                      
+         NOP                                                        lq            VF25,141(VI11)                      
+         NOP                                                        lq            VF24,142(VI11)                      
+         NOP                                                        lq            VF23,143(VI11)                      
+         NOP                                                        lq            VF26,144(VI11)                      
          mulax         ACC,VF25,VF15x                               mr32          VF19,VF19                           
          madday        ACC,VF24,VF15y                               NOP                                               
          maddaz        ACC,VF23,VF15z                               NOP                                               
@@ -185,7 +185,7 @@ init:
          NOP                                                        iaddiu        VI10,VI05,0x00007fff                
          NOP                                                        iadd          VI07,VI06,VI05                      
          NOP                                                        iadd          VI07,VI07,VI05                      
-         NOP                                                        iaddiu        VI08,VI07,0x000000cc                
+         NOP                                                        iaddiu        VI08,VI07,0x000000b4                
          NOP                                                        iaddiu        VI10,VI10,0x00000001                
          NOP                                                        lq            VF11,1(VI09)                        
          NOP                                                        sq            VF10,0(VI08)                        
@@ -211,10 +211,10 @@ skinWeightLoop:
          NOP                                                        NOP                                               
          NOP                                                        NOP                                               
          NOP                                                        mtir          VI14,VF20x                          
-         NOP                                                        lq            VF26,145(VI14)                      
-         NOP                                                        lq            VF25,146(VI14)                      
-         NOP                                                        lq            VF24,147(VI14)                      
-         NOP                                                        lq            VF27,148(VI14)                      
+         NOP                                                        lq            VF26,141(VI14)                      
+         NOP                                                        lq            VF25,142(VI14)                      
+         NOP                                                        lq            VF24,143(VI14)                      
+         NOP                                                        lq            VF27,144(VI14)                      
          mulax         ACC,VF26,VF16x                               mr32          VF20,VF20                           
          madday        ACC,VF25,VF16y                               NOP                                               
          maddaz        ACC,VF24,VF16z                               NOP                                               

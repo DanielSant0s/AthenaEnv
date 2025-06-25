@@ -13,7 +13,7 @@ font.outline = 1.0f;
 font.outline_color = Color.new(0, 0, 0);
 
 Screen.setFrameCounter(true);
-Screen.setVSync(false);
+Screen.setVSync(true);
 
 const canvas = Screen.getMode();
 
@@ -249,7 +249,7 @@ while(true) {
     Camera.target(0,  0, savedrz);
 
     //if (rx || ry) {
-    //    //Lights.set(light, Lights.DIRECTION, savedrx,  savedry, 1.0);
+    //    Lights.set(light, Lights.DIRECTION, savedrx,  savedry, 1.0);
     //}
 
     if(pad.justPressed(Pads.LEFT) && modeltodisplay > 0){

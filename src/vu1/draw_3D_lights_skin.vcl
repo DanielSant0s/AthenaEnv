@@ -61,7 +61,7 @@ culled_init:
     xtop    iBase
     xitop   vertCount
 
-    lq      primTag,        0(iBase) ; GIF tag - tell GS how many data we will send
+    lq      primTag,        0(iBase) ; GIF tag - tell GS how many data we will send 
     lq      matDiffuse,     1(iBase) ; RGBA 
                                      ; u32 : R, G, B, A (0-128)
     iaddiu  skinData,        iBase,      2           ; pointer to vertex data
@@ -73,7 +73,7 @@ culled_init:
     iadd      stqData,      colorData,  vertCount   ; pointer to colors
     iadd      dataPointers,   stqData,  vertCount
     
-    iaddiu     kickAddress,    vertexData, INBUF_SIZE
+    iaddiu     kickAddress,    vertexData, SKINNED_INBUF_SIZE 
     iaddiu    destAddress,    kickAddress,  1       ; helper pointer for data inserting
     ;////////////////////////////////////////////
 
@@ -249,7 +249,7 @@ init:
     iadd    vertexData,      skinData, vertCount    ; skin data takes 2 qw per value
     iadd    vertexData,      vertexData, vertCount
 
-    iaddiu     kickAddress,    vertexData, INBUF_SIZE
+    iaddiu     kickAddress,    vertexData, SKINNED_INBUF_SIZE
     ;////////////////////////////////////////////
 
     ;/////////// --- Store tags --- /////////////
