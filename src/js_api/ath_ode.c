@@ -5,7 +5,6 @@
 #include <ath_env.h>
 #include <ode/ode.h>
 
-// Estruturas para gerenciar objetos ODE no JavaScript
 typedef struct {
     dSpaceID space;
 } JSSpace;
@@ -21,23 +20,6 @@ typedef struct {
 
 #define MAX_CONTACTS 64
 
-static JSValue js_ode_cleanup(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
-static JSValue js_space_create(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
-static JSValue js_space_destroy(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
-static JSValue js_world_create(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
-static JSValue js_world_destroy(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
-static JSValue js_geom_create_box(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
-static JSValue js_geom_create_sphere(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
-static JSValue js_geom_create_plane(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
-static JSValue js_geom_destroy(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
-static JSValue js_geom_set_position(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
-static JSValue js_geom_set_rotation(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
-static JSValue js_geom_get_position(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
-static JSValue js_geom_get_rotation(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
-static JSValue js_space_collide(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
-static JSValue js_geom_collide(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
-
-// Finalizers para limpeza automática
 static void js_space_finalizer(JSRuntime *rt, JSValue val) {
     JSSpace *space = JS_GetOpaque(val, 0);
     if (space && space->space) {
@@ -62,12 +44,10 @@ static void js_world_finalizer(JSRuntime *rt, JSValue val) {
     }
 }
 
-// Class IDs para tipos ODE
 static JSClassID js_space_class_id;
 static JSClassID js_geom_class_id;
 static JSClassID js_world_class_id;
 
-// Definições de classes
 static JSClassDef js_space_class = {
     "ODESpace",
     .finalizer = js_space_finalizer,
@@ -172,9 +152,9 @@ static JSValue js_geom_create_box(JSContext *ctx, JSValueConst this_val, int arg
     }
     
     double width, height, depth;
-    if (JS_ToFloat64(ctx, &width, argv[1]) ||
-        JS_ToFloat64(ctx, &height, argv[2]) ||
-        JS_ToFloat64(ctx, &depth, argv[3])) {
+    if (JS_ToFloat32(ctx, &width, argv[1]) ||
+        JS_ToFloat32(ctx, &height, argv[2]) ||
+        JS_ToFloat32(ctx, &depth, argv[3])) {
         return JS_EXCEPTION;
     }
     
@@ -213,7 +193,7 @@ static JSValue js_geom_create_sphere(JSContext *ctx, JSValueConst this_val, int 
     }
     
     double radius;
-    if (JS_ToFloat64(ctx, &radius, argv[1])) {
+    if (JS_ToFloat32(ctx, &radius, argv[1])) {
         return JS_EXCEPTION;
     }
     
@@ -252,10 +232,10 @@ static JSValue js_geom_create_plane(JSContext *ctx, JSValueConst this_val, int a
     }
     
     double a, b, c, d;
-    if (JS_ToFloat64(ctx, &a, argv[1]) ||
-        JS_ToFloat64(ctx, &b, argv[2]) ||
-        JS_ToFloat64(ctx, &c, argv[3]) ||
-        JS_ToFloat64(ctx, &d, argv[4])) {
+    if (JS_ToFloat32(ctx, &a, argv[1]) ||
+        JS_ToFloat32(ctx, &b, argv[2]) ||
+        JS_ToFloat32(ctx, &c, argv[3]) ||
+        JS_ToFloat32(ctx, &d, argv[4])) {
         return JS_EXCEPTION;
     }
     
@@ -307,9 +287,9 @@ static JSValue js_geom_set_position(JSContext *ctx, JSValueConst this_val, int a
     }
     
     double x, y, z;
-    if (JS_ToFloat64(ctx, &x, argv[1]) ||
-        JS_ToFloat64(ctx, &y, argv[2]) ||
-        JS_ToFloat64(ctx, &z, argv[3])) {
+    if (JS_ToFloat32(ctx, &x, argv[1]) ||
+        JS_ToFloat32(ctx, &y, argv[2]) ||
+        JS_ToFloat32(ctx, &z, argv[3])) {
         return JS_EXCEPTION;
     }
     
@@ -326,8 +306,7 @@ static JSValue js_geom_set_rotation(JSContext *ctx, JSValueConst this_val, int a
     if (!geom || !geom->geom) {
         return JS_ThrowTypeError(ctx, "Expected valid ODEGeom object");
     }
-    
-    // Espera um array de 9 elementos (matriz 3x3)
+
     if (!JS_IsArray(ctx, argv[1])) {
         return JS_ThrowTypeError(ctx, "Expected array for rotation matrix");
     }
@@ -336,7 +315,7 @@ static JSValue js_geom_set_rotation(JSContext *ctx, JSValueConst this_val, int a
     for (int i = 0; i < 9; i++) {
         JSValue val = JS_GetPropertyUint32(ctx, argv[1], i);
         double v;
-        if (JS_ToFloat64(ctx, &v, val)) {
+        if (JS_ToFloat32(ctx, &v, val)) {
             JS_FreeValue(ctx, val);
             return JS_EXCEPTION;
         }
@@ -357,9 +336,9 @@ static JSValue js_geom_get_position(JSContext *ctx, JSValueConst this_val, int a
     const dReal *pos = dGeomGetPosition(geom->geom);
     JSValue arr = JS_NewArray(ctx);
     
-    JS_SetPropertyUint32(ctx, arr, 0, JS_NewFloat64(ctx, pos[0]));
-    JS_SetPropertyUint32(ctx, arr, 1, JS_NewFloat64(ctx, pos[1]));
-    JS_SetPropertyUint32(ctx, arr, 2, JS_NewFloat64(ctx, pos[2]));
+    JS_SetPropertyUint32(ctx, arr, 0, JS_NewFloat32(ctx, pos[0]));
+    JS_SetPropertyUint32(ctx, arr, 1, JS_NewFloat32(ctx, pos[1]));
+    JS_SetPropertyUint32(ctx, arr, 2, JS_NewFloat32(ctx, pos[2]));
     
     return arr;
 }
@@ -374,7 +353,7 @@ static JSValue js_geom_get_rotation(JSContext *ctx, JSValueConst this_val, int a
     JSValue arr = JS_NewArray(ctx);
     
     for (int i = 0; i < 9; i++) {
-        JS_SetPropertyUint32(ctx, arr, i, JS_NewFloat64(ctx, rot[i]));
+        JS_SetPropertyUint32(ctx, arr, i, JS_NewFloat32(ctx, rot[i]));
     }
     
     return arr;
@@ -399,20 +378,20 @@ static void collision_callback(void *data, dGeomID o1, dGeomID o2) {
             
             // Posição do contato
             JSValue pos_arr = JS_NewArray(cdata->ctx);
-            JS_SetPropertyUint32(cdata->ctx, pos_arr, 0, JS_NewFloat64(cdata->ctx, contact[i].geom.pos[0]));
-            JS_SetPropertyUint32(cdata->ctx, pos_arr, 1, JS_NewFloat64(cdata->ctx, contact[i].geom.pos[1]));
-            JS_SetPropertyUint32(cdata->ctx, pos_arr, 2, JS_NewFloat64(cdata->ctx, contact[i].geom.pos[2]));
+            JS_SetPropertyUint32(cdata->ctx, pos_arr, 0, JS_NewFloat32(cdata->ctx, contact[i].geom.pos[0]));
+            JS_SetPropertyUint32(cdata->ctx, pos_arr, 1, JS_NewFloat32(cdata->ctx, contact[i].geom.pos[1]));
+            JS_SetPropertyUint32(cdata->ctx, pos_arr, 2, JS_NewFloat32(cdata->ctx, contact[i].geom.pos[2]));
             JS_SetPropertyStr(cdata->ctx, contact_obj, "position", pos_arr);
             
             // Normal do contato
             JSValue normal_arr = JS_NewArray(cdata->ctx);
-            JS_SetPropertyUint32(cdata->ctx, normal_arr, 0, JS_NewFloat64(cdata->ctx, contact[i].geom.normal[0]));
-            JS_SetPropertyUint32(cdata->ctx, normal_arr, 1, JS_NewFloat64(cdata->ctx, contact[i].geom.normal[1]));
-            JS_SetPropertyUint32(cdata->ctx, normal_arr, 2, JS_NewFloat64(cdata->ctx, contact[i].geom.normal[2]));
+            JS_SetPropertyUint32(cdata->ctx, normal_arr, 0, JS_NewFloat32(cdata->ctx, contact[i].geom.normal[0]));
+            JS_SetPropertyUint32(cdata->ctx, normal_arr, 1, JS_NewFloat32(cdata->ctx, contact[i].geom.normal[1]));
+            JS_SetPropertyUint32(cdata->ctx, normal_arr, 2, JS_NewFloat32(cdata->ctx, contact[i].geom.normal[2]));
             JS_SetPropertyStr(cdata->ctx, contact_obj, "normal", normal_arr);
             
             // Profundidade
-            JS_SetPropertyStr(cdata->ctx, contact_obj, "depth", JS_NewFloat64(cdata->ctx, contact[i].geom.depth));
+            JS_SetPropertyStr(cdata->ctx, contact_obj, "depth", JS_NewFloat32(cdata->ctx, contact[i].geom.depth));
             
             // Adiciona ao array de contatos
             JSValue length_val = JS_GetPropertyStr(cdata->ctx, cdata->contacts_array, "length");
@@ -469,23 +448,20 @@ static JSValue js_geom_collide(JSContext *ctx, JSValueConst this_val, int argc, 
     
     for (int i = 0; i < n; i++) {
         JSValue contact_obj = JS_NewObject(ctx);
-        
-        // Posição do contato
+
         JSValue pos_arr = JS_NewArray(ctx);
-        JS_SetPropertyUint32(ctx, pos_arr, 0, JS_NewFloat64(ctx, contact[i].geom.pos[0]));
-        JS_SetPropertyUint32(ctx, pos_arr, 1, JS_NewFloat64(ctx, contact[i].geom.pos[1]));
-        JS_SetPropertyUint32(ctx, pos_arr, 2, JS_NewFloat64(ctx, contact[i].geom.pos[2]));
+        JS_SetPropertyUint32(ctx, pos_arr, 0, JS_NewFloat32(ctx, contact[i].geom.pos[0]));
+        JS_SetPropertyUint32(ctx, pos_arr, 1, JS_NewFloat32(ctx, contact[i].geom.pos[1]));
+        JS_SetPropertyUint32(ctx, pos_arr, 2, JS_NewFloat32(ctx, contact[i].geom.pos[2]));
         JS_SetPropertyStr(ctx, contact_obj, "position", pos_arr);
-        
-        // Normal do contato
+
         JSValue normal_arr = JS_NewArray(ctx);
-        JS_SetPropertyUint32(ctx, normal_arr, 0, JS_NewFloat64(ctx, contact[i].geom.normal[0]));
-        JS_SetPropertyUint32(ctx, normal_arr, 1, JS_NewFloat64(ctx, contact[i].geom.normal[1]));
-        JS_SetPropertyUint32(ctx, normal_arr, 2, JS_NewFloat64(ctx, contact[i].geom.normal[2]));
+        JS_SetPropertyUint32(ctx, normal_arr, 0, JS_NewFloat32(ctx, contact[i].geom.normal[0]));
+        JS_SetPropertyUint32(ctx, normal_arr, 1, JS_NewFloat32(ctx, contact[i].geom.normal[1]));
+        JS_SetPropertyUint32(ctx, normal_arr, 2, JS_NewFloat32(ctx, contact[i].geom.normal[2]));
         JS_SetPropertyStr(ctx, contact_obj, "normal", normal_arr);
-        
-        // Profundidade
-        JS_SetPropertyStr(ctx, contact_obj, "depth", JS_NewFloat64(ctx, contact[i].geom.depth));
+
+        JS_SetPropertyStr(ctx, contact_obj, "depth", JS_NewFloat32(ctx, contact[i].geom.depth));
         
         JS_SetPropertyUint32(ctx, contacts_array, i, contact_obj);
     }
@@ -493,7 +469,6 @@ static JSValue js_geom_collide(JSContext *ctx, JSValueConst this_val, int argc, 
     return contacts_array;
 }
 
-// Tabela de funções exportadas
 static const JSCFunctionListEntry js_ode_funcs[] = {
     JS_CFUNC_DEF("cleanup", 0, js_ode_cleanup),
     JS_CFUNC_DEF("createWorld", 0, js_world_create),
