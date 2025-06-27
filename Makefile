@@ -220,9 +220,9 @@ debug: $(DIR_GUARD) $(EXT_LIBS) $(EE_OBJS)
 	$(MAKE) -f Makefile.dl KEYBOARD=$(DYNAMIC_KEYBOARD)
 	$(MAKE) -f Makefile.dl MOUSE=$(DYNAMIC_MOUSE)
 
-	$(EE_CXX) -T$(EE_LINKFILE) $(EE_OPTFLAGS) -o $(EE_BIN_DIR)tmp.elf $(EE_OBJS) $(EE_LDFLAGS) $(EXTRA_LDFLAGS) $(EE_LIBS) $(EE_SRC_DIR)dummy-exports.c
+	$(EE_CXX) -T$(EE_LINKFILE) $(EE_OPTFLAGS) -o $(EE_BIN_DIR)tmp.elf $(EE_OBJS) $(EE_LDFLAGS) $(EXTRA_LDFLAGS) -Wno-write-strings $(EE_LIBS) $(EE_SRC_DIR)dummy-exports.c
 	./build-exports.sh
-	$(EE_CXX) -T$(EE_LINKFILE) $(EE_OPTFLAGS) -o bin/athena_debug.elf $(EE_OBJS) $(EE_LDFLAGS) $(EXTRA_LDFLAGS) $(EE_LIBS) $(EE_SRC_DIR)exports.c
+	$(EE_CXX) -T$(EE_LINKFILE) $(EE_OPTFLAGS) -o bin/athena_debug.elf $(EE_OBJS) $(EE_LDFLAGS) $(EXTRA_LDFLAGS) -fpermissive -Wno-write-strings $(EE_LIBS) $(EE_SRC_DIR)exports.c
 	rm $(EE_BIN_DIR)tmp.elf
 
 	echo "Building bin/athena_debug.elf with debug symbols..."

@@ -151,7 +151,7 @@ static JSValue js_geom_create_box(JSContext *ctx, JSValueConst this_val, int arg
         return JS_ThrowTypeError(ctx, "Expected ODESpace object");
     }
     
-    double width, height, depth;
+    float width, height, depth;
     if (JS_ToFloat32(ctx, &width, argv[1]) ||
         JS_ToFloat32(ctx, &height, argv[2]) ||
         JS_ToFloat32(ctx, &depth, argv[3])) {
@@ -192,7 +192,7 @@ static JSValue js_geom_create_sphere(JSContext *ctx, JSValueConst this_val, int 
         return JS_ThrowTypeError(ctx, "Expected ODESpace object");
     }
     
-    double radius;
+    float radius;
     if (JS_ToFloat32(ctx, &radius, argv[1])) {
         return JS_EXCEPTION;
     }
@@ -231,7 +231,7 @@ static JSValue js_geom_create_plane(JSContext *ctx, JSValueConst this_val, int a
         return JS_ThrowTypeError(ctx, "Expected ODESpace object");
     }
     
-    double a, b, c, d;
+    float a, b, c, d;
     if (JS_ToFloat32(ctx, &a, argv[1]) ||
         JS_ToFloat32(ctx, &b, argv[2]) ||
         JS_ToFloat32(ctx, &c, argv[3]) ||
@@ -286,7 +286,7 @@ static JSValue js_geom_set_position(JSContext *ctx, JSValueConst this_val, int a
         return JS_ThrowTypeError(ctx, "Expected valid ODEGeom object");
     }
     
-    double x, y, z;
+    float x, y, z;
     if (JS_ToFloat32(ctx, &x, argv[1]) ||
         JS_ToFloat32(ctx, &y, argv[2]) ||
         JS_ToFloat32(ctx, &z, argv[3])) {
@@ -314,7 +314,7 @@ static JSValue js_geom_set_rotation(JSContext *ctx, JSValueConst this_val, int a
     dMatrix3 R;
     for (int i = 0; i < 9; i++) {
         JSValue val = JS_GetPropertyUint32(ctx, argv[1], i);
-        double v;
+        float v;
         if (JS_ToFloat32(ctx, &v, val)) {
             JS_FreeValue(ctx, val);
             return JS_EXCEPTION;
