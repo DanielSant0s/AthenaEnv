@@ -118,6 +118,15 @@ $(EE_EMBED_DIR)ps2cam.c: $(PS2SDK)/iop/irx/ps2cam.irx | $(EE_EMBED_DIR)
 
 #-------------------- Embedded EE Modules ------------------------#
 
+ee_modules/ode/lib/libice.a: ee_modules/ode
+	$(MAKE) -C $<
+
+ee_modules/ode/lib/libode.a: ee_modules/ode
+	$(MAKE) -C $<
+
+ee_modules/ode/lib/libopcode.a: ee_modules/ode
+	$(MAKE) -C $<
+
 ee_modules/loader/loader.elf: ee_modules/loader
 	$(MAKE) -C $<
 

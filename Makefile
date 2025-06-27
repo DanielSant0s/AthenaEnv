@@ -83,7 +83,7 @@ APP_CORE = main.o bootlogo.o texture_manager.o owl_packet.o vif.o athena_math.o 
 
 INI_READER = readini/src/readini.o
 
-ATHENA_MODULES = ath_env.o ath_physics.o ath_vector.o ath_vector4.o ath_matrix.o ath_pads.o ath_system.o ath_iop.o ath_archive.o ath_timer.o ath_task.o
+ATHENA_MODULES = ath_env.o ath_vector.o ath_vector4.o ath_matrix.o ath_pads.o ath_system.o ath_iop.o ath_archive.o ath_timer.o ath_task.o
 
 IOP_MODULES = iomanx.o filexio.o sio2man.o mcman.o mcserv.o padman.o  \
 			  usbd.o bdm.o bdmfs_fatfs.o usbmass_bd.o cdfs.o \
@@ -110,13 +110,15 @@ ifeq ($(MX4SIO),1)
 endif
 
 ifeq ($(GRAPHICS),1)
-  EE_LIBS += -L$(PS2DEV)/gsKit/lib/ -ljpeg -lfreetype -ldmakit -lpng
-  EE_INCS += -I$(PS2DEV)/gsKit/include -I$(PS2SDK)/ports/include/freetype2
+  EE_LIBS += -L$(PS2DEV)/gsKit/lib/ -Lee_modules/ode/lib/ -ljpeg -lfreetype -ldmakit -lpng -lode
+  EE_INCS += -I$(PS2DEV)/gsKit/include -I$(PS2SDK)/ports/include/freetype2 -Iee_modules/ode/include
   EE_CFLAGS += -DATHENA_GRAPHICS
   APP_CORE += graphics.o image_font.o owl_draw.o image_loaders.o mesh_loaders.o atlas.o fntsys.o render.o camera.o skin_math.o calc_3d.o fast_obj/fast_obj.o
 
-  ATHENA_MODULES += ath_color.o ath_font.o ath_render.o ath_anim_3d.o ath_lights.o ath_3dcamera.o ath_screen.o ath_image.o ath_imagelist.o ath_shape.o
+  ATHENA_MODULES += ath_color.o ath_font.o ath_render.o ath_anim_3d.o ath_lights.o ath_3dcamera.o ath_screen.o ath_image.o ath_imagelist.o ath_shape.o ath_ode.o
   EE_OBJS += $(VU1_MPGS) $(VU0_MPGS)
+
+  EXT_LIBS += ee_modules/ode/lib/libice.a ee_modules/ode/lib/libode.a ee_modules/ode/lib/libopcode.a
 endif
 
 ifeq ($(PADEMU),1)
@@ -124,7 +126,7 @@ ifeq ($(PADEMU),1)
   EE_INCS += -Iiop_modules/ds34bt/ee -Iiop_modules/ds34usb/ee
   EE_LIBS += -Liop_modules/ds34bt/ee/ -Liop_modules/ds34usb/ee/ -lds34bt -lds34usb
   IOP_MODULES += ds34usb.o ds34bt.o
-	EXT_LIBS = iop_modules/ds34usb/ee/libds34usb.a iop_modules/ds34bt/ee/libds34bt.a
+	EXT_LIBS += iop_modules/ds34usb/ee/libds34usb.a iop_modules/ds34bt/ee/libds34bt.a
 endif
 
 ifeq ($(AUDIO),1)
@@ -200,9 +202,9 @@ all: $(DIR_GUARD) $(EXT_LIBS) $(EE_OBJS)
 	$(MAKE) -f Makefile.dl KEYBOARD=$(DYNAMIC_KEYBOARD)
 	$(MAKE) -f Makefile.dl MOUSE=$(DYNAMIC_MOUSE)
 
-	$(EE_CC) -T$(EE_LINKFILE) $(EE_OPTFLAGS) -o $(EE_BIN_DIR)tmp.elf $(EE_OBJS) $(EE_LDFLAGS) $(EXTRA_LDFLAGS) $(EE_LIBS) $(EE_SRC_DIR)dummy-exports.c
+	$(EE_CXX) -T$(EE_LINKFILE) $(EE_OPTFLAGS) -o $(EE_BIN_DIR)tmp.elf $(EE_OBJS) $(EE_LDFLAGS) $(EXTRA_LDFLAGS) -Wno-write-strings $(EE_LIBS) $(EE_SRC_DIR)dummy-exports.c
 	./build-exports.sh
-	$(EE_CC) -T$(EE_LINKFILE) $(EE_OPTFLAGS) -o $(EE_BIN) $(EE_OBJS) $(EE_LDFLAGS) $(EXTRA_LDFLAGS) $(EE_LIBS) $(EE_SRC_DIR)exports.c
+	$(EE_CXX) -T$(EE_LINKFILE) $(EE_OPTFLAGS) -o $(EE_BIN) $(EE_OBJS) $(EE_LDFLAGS) $(EXTRA_LDFLAGS) -fpermissive -Wno-write-strings $(EE_LIBS) $(EE_SRC_DIR)exports.c
 	rm $(EE_BIN_DIR)tmp.elf
 	@echo "$$HEADER"
 	
@@ -218,9 +220,9 @@ debug: $(DIR_GUARD) $(EXT_LIBS) $(EE_OBJS)
 	$(MAKE) -f Makefile.dl KEYBOARD=$(DYNAMIC_KEYBOARD)
 	$(MAKE) -f Makefile.dl MOUSE=$(DYNAMIC_MOUSE)
 
-	$(EE_CC) -T$(EE_LINKFILE) $(EE_OPTFLAGS) -o $(EE_BIN_DIR)tmp.elf $(EE_OBJS) $(EE_LDFLAGS) $(EXTRA_LDFLAGS) $(EE_LIBS) $(EE_SRC_DIR)dummy-exports.c
+	$(EE_CXX) -T$(EE_LINKFILE) $(EE_OPTFLAGS) -o $(EE_BIN_DIR)tmp.elf $(EE_OBJS) $(EE_LDFLAGS) $(EXTRA_LDFLAGS) $(EE_LIBS) $(EE_SRC_DIR)dummy-exports.c
 	./build-exports.sh
-	$(EE_CC) -T$(EE_LINKFILE) $(EE_OPTFLAGS) -o bin/athena_debug.elf $(EE_OBJS) $(EE_LDFLAGS) $(EXTRA_LDFLAGS) $(EE_LIBS) $(EE_SRC_DIR)exports.c
+	$(EE_CXX) -T$(EE_LINKFILE) $(EE_OPTFLAGS) -o bin/athena_debug.elf $(EE_OBJS) $(EE_LDFLAGS) $(EXTRA_LDFLAGS) $(EE_LIBS) $(EE_SRC_DIR)exports.c
 	rm $(EE_BIN_DIR)tmp.elf
 
 	echo "Building bin/athena_debug.elf with debug symbols..."
@@ -233,6 +235,7 @@ clean:
 	$(MAKE) -C iop_modules/ds34usb clean
 	$(MAKE) -C iop_modules/ds34bt clean
 	$(MAKE) -C ee_modules/loader clean
+	$(MAKE) -C ee_modules/ode clean
 
 	$(MAKE) -f Makefile.dl KEYBOARD=$(DYNAMIC_KEYBOARD) clean
 	$(MAKE) -f Makefile.dl MOUSE=$(DYNAMIC_MOUSE) clean
