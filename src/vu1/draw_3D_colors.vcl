@@ -22,7 +22,7 @@
 
     MatrixMultiply   ObjectToScreen, ObjectMatrix, ScreenMatrix
 
-    lq             st_offset, TEXCOORD_OFFSET(vi00)
+    lq             st_offset, BUMP_OFFSET(vi00)
 
     lq.w           bfc_multiplier, CLIPFAN_OFFSET(vi00)
 
@@ -63,11 +63,8 @@ culled_init:
     lq      primTag,        0(iBase) ; GIF tag - tell GS how many data we will send
     lq      matDiffuse,     1(iBase) ; RGBA
                                      ; u32 : R, G, B, A (0-128)
-    iaddiu  vertexData,     iBase,      2           ; pointer to vertex data
 
-    iadd    colorData,      vertexData, vertCount   ; pointer to stq
-    iadd    stqData,        colorData, vertCount   ; pointer to stq
-    iadd    kickAddress,    stqData,  vertCount       ; pointer for XGKICK
+    iaddiu    kickAddress,    iBase,  INBUF_SIZE       ; pointer for XGKICK
     iaddiu    destAddress,    kickAddress,  1       ; helper pointer for data inserting
     ;////////////////////////////////////////////
 
@@ -85,9 +82,9 @@ culled_init:
     vertexLoop:
 
         ;////////// --- Load loop data --- ////////// 
-        lq vertex,  0(vertexData)  
-        lq inColor, 0(colorData)  
-        lq stq,     0(stqData)          
+        lq vertex,  POSITION_OFFSET(iBase)  
+        lq inColor, COLOR_OFFSET(iBase)  
+        lq stq,     TEXCOORD_OFFSET(iBase)          
         ;////////////////////////////////////////////    
 
 
@@ -146,10 +143,8 @@ culled_init:
         sq intColor,    RGBA(destAddress)    ; q is grabbed from stq
         sq vertex,  XYZ2(destAddress)     
         ;////////////////////////////////////////////
-
-        iaddiu          vertexData,     vertexData,     1    
-        iaddiu          colorData,      colorData,      1                        
-        iaddiu          stqData,        stqData,        1   
+                 
+        iaddiu          iBase,        iBase,        1   
 
         iaddiu          destAddress,    destAddress,    3
 
@@ -179,11 +174,7 @@ init:
     lq      primTag,        0(iBase) ; GIF tag - tell GS how many data we will send
     lq      matDiffuse,     1(iBase) ; material diffuse color
 
-    iaddiu  vertexData,  iBase,      2           ; pointer to vertex data
-    iadd    colorData,   vertexData,    vertCount   ; pointer to colors
-    iadd    stqData,     colorData,     vertCount   ; pointer to colors
-
-    iaddiu     kickAddress,    vertexData, INBUF_SIZE
+    iaddiu     kickAddress,    iBase, INBUF_SIZE
     ;////////////////////////////////////////////
 
     ;/////////// --- Store tags --- /////////////
@@ -206,9 +197,9 @@ init:
     loop:
 
         ;////////// --- Load loop data --- //////////
-        lq inVert, 0(vertexData)   
-        lq inColor, 0(colorData)    
-        lq stq,    0(stqData)       
+        lq inVert, POSITION_OFFSET(iBase)   
+        lq inColor, COLOR_OFFSET(iBase)    
+        lq stq,    TEXCOORD_OFFSET(iBase)       
         ;////////////////////////////////////////////    
 
 
@@ -246,10 +237,8 @@ init:
         ;////////////////////////////////////////////
 
         .include "vu1/proc/process_scissor_clip_offset.i"
-
-        iaddiu          vertexData,     vertexData,        1     
-        iaddiu          colorData,       colorData,        1                       
-        iaddiu          stqData,           stqData,        1   
+                  
+        iaddiu          iBase,           iBase,        1   
 
         iaddiu          outputAddress,  outputAddress,  3
 

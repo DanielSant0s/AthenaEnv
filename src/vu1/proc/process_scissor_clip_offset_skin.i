@@ -168,9 +168,13 @@
         ;=====================================================================================
         ; Load the STQs from the original data and store them in the clipping work buffer.
         ;=====================================================================================
-        VectorLoad           TempSTQ1, -2, refMapData
-        VectorLoad           TempSTQ2, -1, refMapData
-        VectorLoad           TempSTQ3,  0, refMapData
+        VectorLoad           TempSTQ1, SKINNED_TEXCOORD_OFFSET-2, iBase
+        VectorLoad           TempSTQ2, SKINNED_TEXCOORD_OFFSET-1, iBase
+        VectorLoad           TempSTQ3, SKINNED_TEXCOORD_OFFSET-0, iBase
+
+        add.xy TempSTQ1, TempSTQ1, st_offset
+        add.xy TempSTQ2, TempSTQ2, st_offset
+        add.xy TempSTQ3, TempSTQ3, st_offset
 
         VectorSave           TempSTQ1,  0, ClipWorkBuf0
         VectorSave           TempSTQ2,  3, ClipWorkBuf0

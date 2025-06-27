@@ -119,7 +119,7 @@
         PushVertex           StackPtr, CSVertex1
         PushVertex           StackPtr, CSVertex2
         PushVertex           StackPtr, CSVertex3
-        PushInteger4         StackPtr, kickAddress, vertexData,  ClipFlag1, ClipFlag2
+        PushInteger4         StackPtr, kickAddress, iBase,  ClipFlag1, ClipFlag2
         PushInteger4         StackPtr, ClipFlag3, outputAddress, vertexCounter,  ClipTrigger
 
         ;-----------------------------------------------------------------------------------------------------------------------------------
@@ -168,9 +168,9 @@
         ;=====================================================================================
         ; Load the STQs from the original data and store them in the clipping work buffer.
         ;=====================================================================================
-        VectorLoad           TempSTQ1, -2, stqData
-        VectorLoad           TempSTQ2, -1, stqData
-        VectorLoad           TempSTQ3,  0, stqData
+        VectorLoad           TempSTQ1, TEXCOORD_OFFSET-2, iBase
+        VectorLoad           TempSTQ2, TEXCOORD_OFFSET-1, iBase
+        VectorLoad           TempSTQ3, TEXCOORD_OFFSET-0, iBase
 
         add.xy TempSTQ1, TempSTQ1, st_offset
         add.xy TempSTQ2, TempSTQ2, st_offset
@@ -499,7 +499,7 @@
         ; Restore context
         ;=====================================================================================
         PopInteger4          StackPtr, ClipFlag3, outputAddress, vertexCounter, ClipTrigger
-        PopInteger4          StackPtr, kickAddress, vertexData, ClipFlag1, ClipFlag2
+        PopInteger4          StackPtr, kickAddress, iBase, ClipFlag1, ClipFlag2
         PopVertex            StackPtr, CSVertex3
         PopVertex            StackPtr, CSVertex2
         PopVertex            StackPtr, CSVertex1

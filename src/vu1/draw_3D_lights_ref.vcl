@@ -61,17 +61,11 @@ culled_init:
     xtop    iBase
     xitop   vertCount
 
-    lq      primTag,        0(iBase) ; GIF tag - tell GS how many data we will send
-    lq      matDiffuse,     1(iBase) ; RGBA 
-                                     ; u32 : R, G, B, A (0-128)
-    iaddiu  vertexData,     iBase,      2           ; pointer to vertex data
+    lq      primTag,        GIFTAG_OFFSET(iBase) ; GIF tag - tell GS how many data we will send
+    lq      matDiffuse,     DIFF_MAT_OFFSET(iBase) ; RGBA 
     
-    iadd      normalData,     vertexData, vertCount   ; pointer to stq
-    iadd      colorData,      normalData, vertCount   ; pointer to stq
-    iadd      dataPointers,   colorData,  vertCount
-    
-    iaddiu    kickAddress,    dataPointers,  0       ; pointer for XGKICK
-    iaddiu    destAddress,    dataPointers,  1       ; helper pointer for data inserting
+    iaddiu    kickAddress,    iBase,  INBUF_SIZE       ; pointer for XGKICK
+    iaddiu    destAddress,    kickAddress,  1       ; helper pointer for data inserting
     ;////////////////////////////////////////////
 
     ;/////////// --- Store tags --- /////////////
@@ -88,11 +82,10 @@ culled_init:
     vertexLoop:
 
         ;////////// --- Load loop data --- //////////
-        lq inVert, 0(vertexData) 
-        lq.xyzw inNorm,  0(normalData)          
-        lq inColor, 0(colorData)           
+        lq inVert,       POSITION_OFFSET(iBase) 
+        lq.xyzw inNorm,  NORMAL_OFFSET(iBase)          
+        lq inColor,      COLOR_OFFSET(iBase)           
         ;////////////////////////////////////////////    
-
 
         ;////////////// --- Vertex --- //////////////
         MatrixMultiplyVertex	vertex, ObjectToScreen, inVert ; transform each vertex by the matrix
@@ -191,9 +184,7 @@ culled_init:
         iaddiu          destAddress,    destAddress,    3
 
     skip_rendering:
-        iaddiu          vertexData,     vertexData,     1                            
-        iaddiu          normalData,     normalData,     1
-        iaddiu          colorData,      colorData,      1
+        iaddiu          iBase,     iBase,     1                            
 
         iaddi   vertexCounter,  vertexCounter,  -1	; decrement the loop counter 
         ibgtz    vertexCounter,  vertexLoop	; and repeat if needed
@@ -218,14 +209,12 @@ init:
     xtop    iBase
     xitop   vertCount
 
-    lq      primTag,        0(iBase) ; GIF tag - tell GS how many data we will send
-    lq      matDiffuse,     1(iBase) ; material diffuse color
- 
-    iaddiu  vertexData,     iBase,      2           ; pointer to vertex data
-    iadd    normalData,     vertexData, vertCount   ; pointer to stq
-    iadd    colorData,     normalData, vertCount   ; pointer to stq
+    lq      primTag,        GIFTAG_OFFSET(iBase) ; GIF tag - tell GS how many data we will send
+    lq      matDiffuse,     DIFF_MAT_OFFSET(iBase) ; material diffuse color
 
-    iaddiu     kickAddress,    vertexData, INBUF_SIZE
+    iaddiu  refMapData, iBase, TEXCOORD_OFFSET ; Reflection map texture coordinates storage
+
+    iaddiu     kickAddress,    iBase, INBUF_SIZE
     ;////////////////////////////////////////////
 
     ;/////////// --- Store tags --- /////////////
@@ -248,11 +237,10 @@ init:
     loop:
 
         ;////////// --- Load loop data --- //////////
-        lq inVert,  0(vertexData)   
-        lq inNorm,  0(normalData) 
-        lq inColor, 0(colorData) 
+        lq inVert,  POSITION_OFFSET(iBase)   
+        lq inNorm,  NORMAL_OFFSET(iBase) 
+        lq inColor, COLOR_OFFSET(iBase) 
         ;////////////////////////////////////////////    
-
 
         ;////////////// --- Vertex --- //////////////
         MatrixMultiplyVertex	vertex, ObjectToScreen, inVert ; transform each vertex by the matrix
@@ -282,6 +270,8 @@ init:
 
         loi 0.5
         muli.xy tmp_stq, tmp_stq, I
+
+        sq.xyz tmp_stq, 0(refMapData)
 
         mulq modStq, tmp_stq, q
 
@@ -333,9 +323,8 @@ init:
 
         .include "vu1/proc/process_scissor_clip_ref.i"
 
-        iaddiu          vertexData,     vertexData,     1                          
-        iaddiu          normalData,     normalData,     1
-        iaddiu          colorData,      colorData,      1
+        iaddiu          iBase,          iBase,     1      
+        iaddiu          refMapData,     refMapData,     1                      
 
         iaddiu          outputAddress,  outputAddress,  3
  

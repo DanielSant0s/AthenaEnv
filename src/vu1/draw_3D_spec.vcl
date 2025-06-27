@@ -85,15 +85,8 @@ culled_init:
     lq      matDiffuse,     1(iBase) ; RGBA
                                      ; u32 : R, G, B, A (0-128)
 
-    iaddiu  vertexData,     iBase,      2           ; pointer to vertex data
-
-    iadd      normalData,        vertexData, vertCount   ; pointer to stq
-    iadd       colorData,     normalData, vertCount   ; pointer to stq
-    iadd      stqData,      colorData,  vertCount   ; pointer to colors
-    iadd      dataPointers,   stqData,  vertCount
-
-    iaddiu    kickAddress,    dataPointers,  0       ; pointer for XGKICK
-    iaddiu    destAddress,    dataPointers,  1       ; helper pointer for data inserting
+    iaddiu    kickAddress,    iBase,  INBUF_SIZE       ; pointer for XGKICK
+    iaddiu    destAddress,    kickAddress,  1       ; helper pointer for data inserting
     ;////////////////////////////////////////////
 
     ;/////////// --- Store tags --- /////////////
@@ -110,10 +103,10 @@ culled_init:
     vertexLoop:
 
         ;////////// --- Load loop data --- //////////
-        lq inVert, 0(vertexData)  
-        lq stq,    0(stqData)   
-        lq.xyzw inNorm,  0(normalData)     
-        lq inColor, 0(colorData)             
+        lq inVert, POSITION_OFFSET(iBase)  
+        lq stq,    TEXCOORD_OFFSET(iBase)   
+        lq inNorm, NORMAL_OFFSET(iBase)     
+        lq inColor, COLOR_OFFSET(iBase)             
         ;////////////////////////////////////////////    
 
 
@@ -207,10 +200,8 @@ culled_init:
         sq vertex,  XYZ2(destAddress)     
         ;////////////////////////////////////////////
 
-        iaddiu          vertexData,     vertexData,     1                         
-        iaddiu          stqData,        stqData,        1  
-        iaddiu          normalData,     normalData,     1
-        iaddiu          colorData,     colorData,     1
+        iaddiu          iBase,     iBase,     1                         
+
         iaddiu          destAddress,    destAddress,    3
 
         iaddi   vertexCounter,  vertexCounter,  -1	; decrement the loop counter 
@@ -240,12 +231,7 @@ init:
     lq      primTag,        0(iBase) ; GIF tag - tell GS how many data we will send
     lq      matDiffuse,     1(iBase) ; material diffuse color
 
-    iaddiu  vertexData,     iBase,      2           ; pointer to vertex data
-    iadd      normalData,        vertexData, vertCount   ; pointer to stq
-    iadd       colorData,     normalData, vertCount   ; pointer to stq
-    iadd      stqData,      colorData,  vertCount   ; pointer to colors
-
-    iaddiu     kickAddress,    vertexData, INBUF_SIZE
+    iaddiu     kickAddress,    iBase, INBUF_SIZE
     ;////////////////////////////////////////////
 
     ;/////////// --- Store tags --- /////////////
@@ -268,10 +254,10 @@ init:
     loop:
 
         ;////////// --- Load loop data --- //////////
-        lq inVert, 0(vertexData)   
-        lq stq,    0(stqData)       
-        lq inNorm, 0(normalData) 
-        lq inColor, 0(colorData)     
+        lq inVert, POSITION_OFFSET(iBase)  
+        lq stq,    TEXCOORD_OFFSET(iBase)   
+        lq inNorm, NORMAL_OFFSET(iBase)     
+        lq inColor, COLOR_OFFSET(iBase)       
         ;////////////////////////////////////////////    
 
 
@@ -366,10 +352,7 @@ init:
 
         .include "vu1/proc/process_scissor_clip.i"
 
-        iaddiu          vertexData,     vertexData,     1                         
-        iaddiu          stqData,        stqData,        1   
-        iaddiu          normalData,     normalData,     1
-        iaddiu          colorData,     colorData,     1
+        iaddiu          iBase,     iBase,     1                         
 
         iaddiu          outputAddress,  outputAddress,  3
 

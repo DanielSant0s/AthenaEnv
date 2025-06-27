@@ -64,16 +64,9 @@ culled_init:
     lq      primTag,        0(iBase) ; GIF tag - tell GS how many data we will send 
     lq      matDiffuse,     1(iBase) ; RGBA 
                                      ; u32 : R, G, B, A (0-128)
-    iaddiu  skinData,        iBase,      2           ; pointer to vertex data
-    iadd    vertexData,      skinData, vertCount    ; skin data takes 2 qw per value
-    iadd    vertexData,      vertexData, vertCount
+    iaddiu  skinData,        iBase,      0           ; pointer to vertex data
     
-    iadd      normalData,        vertexData, vertCount   ; pointer to stq
-    iadd      colorData,     normalData, vertCount   ; pointer to stq
-    iadd      stqData,      colorData,  vertCount   ; pointer to colors
-    iadd      dataPointers,   stqData,  vertCount
-    
-    iaddiu     kickAddress,    vertexData, SKINNED_INBUF_SIZE 
+    iaddiu     kickAddress,    iBase, SKINNED_INBUF_SIZE 
     iaddiu    destAddress,    kickAddress,  1       ; helper pointer for data inserting
     ;////////////////////////////////////////////
 
@@ -91,19 +84,16 @@ culled_init:
     vertexLoop:
 
         ;////////// --- Load loop data --- //////////
-        lq inVert,  0(vertexData)    
-        iadd tmpPtr, vertexData, vertCount
-        lq inNorm,  0(tmpPtr)    
-        iadd tmpPtr, tmpPtr, vertCount    
-        lq inColor, 0(tmpPtr)  
-        iadd stqData, tmpPtr, vertCount   ; will be used later on clipping
-        lq stq,     0(stqData)    
+        lq inVert,  SKINNED_POSITION_OFFSET(iBase)    
+        lq inNorm,  SKINNED_NORMAL_OFFSET(iBase)    
+        lq inColor, SKINNED_COLOR_OFFSET(iBase)  
+        lq stq,     SKINNED_TEXCOORD_OFFSET(iBase)    
         ;////////////////////////////////////////////    
 
         iaddiu  currentWeight, vi00, 4
 
-        lq boneIndices,    0(skinData) 
-        lq boneWeights,    1(skinData) 
+        lq boneIndices,    SKINNED_SKELETON_OFFSET(skinData) 
+        lq boneWeights,    SKINNED_SKELETON_OFFSET+1(skinData) 
 
         move final_vertex, vf00
         move final_normal, vf00
@@ -215,9 +205,8 @@ culled_init:
         iaddiu          destAddress,    destAddress,    3
 
     skip_rendering:
-        iaddiu          vertexData,     vertexData,     1                         
-
-        iaddiu         skinData,         skinData,     2   
+        iaddiu         iBase,     iBase,     1                         
+        iaddiu         skinData,  skinData,  2   
 
         iaddi   vertexCounter,  vertexCounter,  -1	; decrement the loop counter 
         ibgtz    vertexCounter,  vertexLoop	; and repeat if needed
@@ -245,11 +234,9 @@ init:
     lq      primTag,        0(iBase) ; GIF tag - tell GS how many data we will send
     lq      matDiffuse,     1(iBase) ; material diffuse color
  
-    iaddiu  skinData,        iBase,      2           ; pointer to vertex data
-    iadd    vertexData,      skinData, vertCount    ; skin data takes 2 qw per value
-    iadd    vertexData,      vertexData, vertCount
+    iaddiu  skinData,        iBase,      0           ; pointer to vertex data
 
-    iaddiu     kickAddress,    vertexData, SKINNED_INBUF_SIZE
+    iaddiu     kickAddress,    iBase, SKINNED_INBUF_SIZE
     ;////////////////////////////////////////////
 
     ;/////////// --- Store tags --- /////////////
@@ -272,19 +259,16 @@ init:
     loop:
 
         ;////////// --- Load loop data --- //////////
-        lq inVert,  0(vertexData)    
-        iadd tmpPtr, vertexData, vertCount
-        lq inNorm,  0(tmpPtr)    
-        iadd tmpPtr, tmpPtr, vertCount    
-        lq inColor, 0(tmpPtr)  
-        iadd stqData, tmpPtr, vertCount   ; will be used later on clipping
-        lq stq,     0(stqData)     
+        lq inVert,  SKINNED_POSITION_OFFSET(iBase)    
+        lq inNorm,  SKINNED_NORMAL_OFFSET(iBase)      
+        lq inColor, SKINNED_COLOR_OFFSET(iBase)  
+        lq stq,     SKINNED_TEXCOORD_OFFSET(iBase)     
         ;////////////////////////////////////////////    
 
         iaddiu  currentWeight, vi00, 4
 
-        lq boneIndices,    0(skinData) 
-        lq boneWeights,    1(skinData) 
+        lq boneIndices,    SKINNED_SKELETON_OFFSET(skinData) 
+        lq boneWeights,    SKINNED_SKELETON_OFFSET+1(skinData) 
 
         move final_vertex, vf00
         move final_normal, vf00
@@ -372,11 +356,10 @@ init:
         sq vertex,      XYZ2(outputAddress)      
         ;////////////////////////////////////////////
 
-        .include "vu1/proc/process_scissor_clip.i"
+        .include "vu1/proc/process_scissor_clip_skin.i"
 
-        iaddiu          vertexData,     vertexData,     1                         
-
-        iaddiu         skinData,          skinData,     2   
+        iaddiu         iBase,     iBase,     1                         
+        iaddiu         skinData,  skinData,  2   
 
         iaddiu          outputAddress,  outputAddress,  3
  
