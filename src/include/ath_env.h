@@ -94,6 +94,8 @@ JSModuleDef *athena_shape_init(JSContext* ctx);
 JSModuleDef *athena_font_init(JSContext* ctx);
 JSModuleDef *athena_image_init(JSContext* ctx);
 JSModuleDef *athena_imagelist_init(JSContext* ctx);
+JSModuleDef *athena_imagelist_init(JSContext* ctx);
+JSModuleDef *athena_ode_init(JSContext* ctx);
 #endif
 
 #ifdef ATHENA_NETWORK

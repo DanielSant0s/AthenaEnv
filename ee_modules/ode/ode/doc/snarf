@@ -1,0 +1,364 @@
+#!/usr/bin/perl -w
+#
+#########################################################################
+#                                                                       #
+# Open Dynamics Engine, Copyright (C) 2001,2002 Russell L. Smith.       #
+# All rights reserved.  Email: russ@q12.org   Web: www.q12.org          #
+#                                                                       #
+# This library is free software; you can redistribute it and/or         #
+# modify it under the terms of EITHER:                                  #
+#   (1) The GNU Lesser General Public License as published by the Free  #
+#       Software Foundation; either version 2.1 of the License, or (at  #
+#       your option) any later version. The text of the GNU Lesser      #
+#       General Public License is included with this library in the     #
+#       file LICENSE.TXT.                                               #
+#   (2) The BSD-style license that is included with this library in     #
+#       the file LICENSE-BSD.TXT.                                       #
+#                                                                       #
+# This library is distributed in the hope that it will be useful,       #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of        #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the files    #
+# LICENSE.TXT and LICENSE-BSD.TXT for more details.                     #
+#                                                                       #
+#########################################################################
+
+# this is a perl package which is part of the REALM documentation system.
+# it exports two subroutines "Snarf1" and "Snarf2". they are used to take a
+# block of text containing formatting codes and return the HTML formatted
+# equivalent. here is how you use them:
+#
+# * start with some text containing `snarf' formatting commands and possibly
+#   some `external' formatting commands using the @cmd{...} syntax.
+#
+#     $a = "@foo{some} @b{text} ...";
+#
+# * run the text through Snarf1.
+#
+#     $a = Snarf1 ($a);
+#
+#   now $a contains HTML for the snarf formatting commands. some commands are
+#   not converted, to enable a simple search and replace for the external
+#   formatting commands without worrying about character conflicts.
+#
+# * tidy up the resulting HTML and finalize the snarf formatting.
+#
+#     $a = Snarf2 ($a);
+#
+# To use this package, say "require ('snarf')".
+#
+# Formatting commands
+# -------------------
+#
+# A blank line is treated as a paragraph break.
+# Commands have one of two forms:
+#    1. @<symbol>    (commands with no arguments)
+#    2. @command{arguments or affected text}
+# Curly braces are like TeX, they remember the external state and restore it
+# on exit. Comments can be written with a `#' at the start of the line.
+#
+# Formatting commands:
+#
+#	@[ ... @]		bracket verbatim text, no substitutions made
+#	@code{...}		source code. internal whitespace preserved
+#	@emph{...}		add emphasis to text
+#	@m{...}			mathematical stuff (^ and _ work like TeX)
+#	@c{...}			code (in a fixed width `courier' font)
+#	@c{...}			bold
+#	@list{unordered list}
+#	@numlist{numbered list}
+#	@link{URL}{anchortext}
+#	@indent{text}
+#	@center{...}
+#
+# Definitions
+#
+#	@funcdef{function_name}{description}
+#	@constdef{constant_name}{description}
+#
+#    the description can be blank to just mention the name for the first time.
+#
+#    consecutive definitions of the same type may be concatenated together
+#    into a single table - for this to happen, you must not leave any blank
+#    lines between the definitions.
+#
+# Reference things
+#	@arg{...}		argument of a function
+#	@header{...}		header file
+#	@func{...}		function
+#	@const{...}		constant symbol (enums, defines etc)
+#	@struct{...}		structure (no member functions)
+#	@class{...}		class (has member functions)
+#	@member{...}		member of a class or struct
+#	@var{...}		variable
+#
+#	@date{format}		current date
+#	@picture{filename}	Include the given picture
+#
+# No-argument commands
+#	@*			prefixes each item in a list
+#	@_			explicit line break
+#
+# Single character commands
+#	@@			@
+#	@{			{
+#	@}			}
+#	``  ''			quotes
+#	\<end of line>		continuation with the next line
+#
+# Junkyard
+#	@end			Prevents processing of any subsequent text
+#	@?			line break
+#	@space			a space - can be used at the end of the above
+#				  commands
+
+package snarf;
+
+
+# Add the high bit to all characters
+sub AddHi
+{
+  my $a = $_[0];
+  my $i;
+  for ($i=0; $i < length($a); $i++) {
+    substr($a,$i,1) = chr(ord(substr($a,$i,1)) | 128)
+  }
+  return $a;
+}
+
+
+# subtract the high bit from all characters
+sub SubHi
+{
+  my $a = $_[0];
+  my $i;
+  for ($i=0; $i < length($a); $i++) {
+    substr($a,$i,1) = chr(ord(substr($a,$i,1)) & 127)
+  }
+  return $a;
+}
+
+
+# Do mathematics conversions. The input should contain no {}'s
+sub ConvertMath
+{
+  my $x = $_[0];
+
+  # For all &...; and <...> sequences, set the top bit so that italicization
+  # of letters doesnt affect them. They are converted back later.
+  $x =~ s/(&[A-Za-z0-9]+;)/&AddHi($1)/gse;
+  $x =~ s/(<[A-Za-z0-9\/]+>)/&AddHi($1)/gse;
+
+  $x =~ s/\^(.)/^\{$1\}/gs;			# convert ^x to ^{x}
+  $x =~ s/_(.)/_\{$1\}/gs;			# convert _x to _{x}
+  $x =~ s/([A-Za-z]+)/<i>$1<\/i>/gs;		# italicize all letters
+  $x =~ s/\^\{([^}]*)\}/<sup>$1<\/sup>/gs;	# convert ^{x} to html
+  $x =~ s/_\{([^}]*)\}/<sub>$1<\/sub>/gs;	# convert _{x} to html
+  return &SubHi($x);
+}
+
+
+# Used to handle @[ / @] commands
+sub StoreVerbatim {
+  my $a = $_[0];
+  $a =~ s/[<]/&lt;/g;
+  $a =~ s/[>]/&gt;/g;
+
+  $verbchunks[$num_chunks++]=$a;
+
+  # Use a special @verbatim(n) directive in place of the text.
+  # Note that ()'s are used instead of {}'s becase otherwise it would
+  # screw up the processing of {} commands below.
+  return "\@verbatim(".($num_chunks-1).")\n";
+}
+
+
+# handle @code commands
+sub HandleCode
+{
+  my $a=$_[0];
+  $a =~ s/\n$//;		# remove termating \n
+  return "<table border=0 cellspacing=5 cellpadding=5 cols=1 width=\"100%\" bgcolor=\#c0ffff><tr><td><font color=\"#0000ff\"><pre>$a</td></tr></table>";
+}
+
+
+# handle @funcdef commands
+sub HandleFuncdef
+{
+  my $func=$_[0];
+  my $desc=$_[1];
+
+  # try to make anchor for pure function name
+  my $a = $func;
+  my $b = '';
+  while ($a =~ s/(\w+)\s*\(.*//) {
+    if ($1 ne '') {
+      $b .= "<a name=\"func_$1\">\n" 
+    }
+  }
+  return "$b<pre><font color=\"#0000ff\">$func</font></pre><blockquote>$desc</blockquote>";
+}
+
+
+# handle @func commands
+sub HandleFunc
+{
+  my $func = $_[0];
+  my $a = $func;
+  $a =~ s/(\w+)\s*\(.*//;
+  $a = $1;
+  if ($a eq '') {
+    $a1 = '';
+    $a2 = '';
+  }
+  else {
+    $a1 = "<a class=\"func\" href=\"\#func_$a\">";
+    $a2 = "</a>";
+  }
+  return "$a1<tt>$func</tt>$a2";
+}
+
+
+# handle @constdef commands
+sub HandleConstdef
+{
+  my $const = $_[0];
+  my $desc = $_[1];
+  my $a = "<a name=\"const_$const\"><font color=\"#c00000\"><tt>$const</tt></font>";
+  return $a if $desc eq '';
+  return "\@constdef_tablestart() <tr valign=\"top\"><td>$a</td><td>$desc</td> </tr> \@constdef_tableend()";
+}
+
+
+# handle @const commands
+sub HandleConst
+{
+  return "<tt><a class=\"const\" href=\"\#const_$_[0]\">$_[0]</a></tt>"
+}
+
+
+# return the current date
+sub TheDate
+{
+  my $format=$_[0];		# currently unused
+  my @monthnames=('January','February','March','April','May','June','July',
+	'August','September','October','November','December');
+  my @daynames=('Sunday','Monday','Tuesday','Wednesday','Thursday',
+	'Friday','Saturday');
+  my @t = localtime (time);
+  return "$daynames[$t[6]] $t[3] $monthnames[$t[4]], ".(1900+$t[5])." ";
+}
+
+
+# Process links
+sub DoLink
+{
+  my $link = $_[0];
+  my $text = $_[1];
+  return "<a href=\"$link\">$text<\/a>";
+}
+
+
+sub main::Snarf1
+{
+  $_ = $_[0];
+
+  # remove comments
+  s/^#.*$//gm;
+
+  # remove whitespace at the end of lines
+  s/[ \t]*$//gm;
+
+  # replace \<end of line> with line continuation
+  s/\\\n//g;
+
+  # handle @[ / @] pairs before anything else because the enclosed text may
+  # contain special characters which we want to temporarily obscure
+  @verbchunks=();
+  $num_chunks=0;
+  s/\@\[(.*?)\@\]/StoreVerbatim($1)/gse;
+
+  # replace < and > symbols (must do this before any html is inserted)
+  s/[<]/&lt;/gs;
+  s/[>]/&gt;/gs;
+
+  # replace @@,@{ and @} with commands for @,{ and }, they will be changed
+  # back later
+  s/\@\@/\@at{}/g;
+  s/\@\{/\@openbrace{}/g;
+  s/\@\}/\@closebrace{}/g;
+
+  # turn blank lines into paragraph breaks
+  s/\n[\n]+/<\/p><p>\n/gs;
+
+  # no-argument commands
+  s/\@_/<br>\n/g;		# forced line break
+  s/\@\*/<li>/g;		# list item
+
+  # convert commands where the arguments do not contain formatted text
+  s/\@picture\{([^{]*?)\}/<img border=1 src=\"$1\">/gs;
+  s/\@date\{([^{]*?)\}/&TheDate($1)/ge;
+  s/\@arg\{([^{]*?)\}/<font color=\"#0000ff\"><tt>$1<\/tt><\/font>/gs;
+  s/\@header\{([^{]*?)\}/<tt>$1<\/tt>/gs;
+  s/\@func\{([^{]*?)\}/&HandleFunc($1)/gse;
+  s/\@const\{([^{]*?)\}/&HandleConst($1)/gse;
+  s/\@struct\{([^{]*?)\}/<tt>$1<\/tt>/gs;
+  s/\@class\{([^{]*?)\}/<tt>$1<\/tt>/gs;
+  s/\@member\{([^{]*?)\}/<tt>$1<\/tt>/gs;
+  s/\@var\{([^{]*?)\}/<tt>$1<\/tt>/gs;
+
+  # convert commands where the arguments *can* contain formatted text.
+  # convert command heirarchies until none left.
+  $n=1;
+  while($n > 0) {
+    $n=0;
+
+    # text format commands
+    $n += s/\@emph\{([^{]*?)\}/<i>$1<\/i>/gs;
+    $n += s/\@c\{([^{]*?)\}/<tt>$1<\/tt>/gs;
+    $n += s/\@b\{([^{]*?)\}/<b>$1<\/b>/gs;
+    $n += s/\@m\{([^{]*?)\}/ConvertMath($1)/gse;
+    $n += s/\@code\{([^{]*?)\}/HandleCode($1)/gse;
+    $n += s/\@funcdef\{([^{]*?)\}\{([^{]*?)\}/HandleFuncdef($1,$2)/gse;
+    $n += s/\@constdef\{([^{]*?)\}\{([^{]*?)\}/HandleConstdef($1,$2)/gse;
+
+    # other
+    $n += s/\@link\{([^{]*?)\}\{([^{]*?)\}/&DoLink($1,$2)/e;
+    $n += s/\@list\{([^{]*?)\}/<ul>$1<\/ul>/gs;
+    $n += s/\@numlist\{([^{]*?)\}/<ol>$1<\/ol>/gs;
+    $n += s/\@indent\{([^{]*?)\}/<blockquote>$1<\/blockquote>/gs;
+    $n += s/\@center\{([^{]*?)\}/<center>$1<\/center>/gs;
+  }
+
+  # concatenate constant tables
+
+  $const_table = "<center><table border=1 cellspacing=0 cellpadding=6 ".
+		 "bgcolor=\#ffffc0>";
+  s/\@constdef_tableend\(\)\s*\@constdef_tablestart\(\)//g;
+  s/\@constdef_tablestart\(\)/$const_table/g;
+  s/\@constdef_tableend\(\)/<\/table><\/center>/g;
+
+  return $_;
+}
+
+
+# do some special character replacements
+sub main::Snarf2
+{
+  $_ = $_[0];
+
+  # do some special character replacements
+  s/\@at\{\}/\@/g;
+  s/\@openbrace\{\}/\{/g;
+  s/\@closebrace\{\}/\}/g;
+
+  # change <br><br>...<hr> to just <hr>
+  s/(<br>\s*)*<hr>/<hr>/gs;
+
+  # put code chunks back in verbatim
+  s/\@verbatim\((\d+)\)/$verbchunks[$1]/gse;
+
+  return $_;
+}
+
+
+1;
