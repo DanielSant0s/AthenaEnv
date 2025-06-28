@@ -13,6 +13,7 @@
 
 #ifdef ATHENA_GRAPHICS
 #include <graphics.h>
+#include <render.h>
 #endif
 
 #include <dbgprintf.h>
@@ -46,8 +47,13 @@ typedef struct JSImgList {
 	int thread_id;
 } JSImgList;
 
+typedef struct {
+	athena_object_data obj;
+} JSRenderObject;
+
 JSClassID get_img_class_id();
 JSClassID get_imglist_class_id();
+extern JSClassID js_render_object_class_id;
 #endif
 
 JSClassID get_matrix4_class_id();

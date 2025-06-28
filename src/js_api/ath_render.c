@@ -20,6 +20,9 @@ static void athena_render_data_dtor(JSRuntime *rt, JSValue val){
 	if (!ro)
 		return;
 
+	if (ro->m.indices)
+		free(ro->m.indices); 
+
 	if (ro->m.positions)
 		free(ro->m.positions); 
 	
@@ -703,12 +706,7 @@ static const JSCFunctionListEntry js_render_data_proto_funcs[] = {
 
 };
 
-
-static JSClassID js_render_object_class_id;
-
-typedef struct {
-	athena_object_data obj;
-} JSRenderObject;
+JSClassID js_render_object_class_id;
 
 static void athena_render_object_dtor(JSRuntime *rt, JSValue val){
 	JSRenderObject* ro = JS_GetOpaque(val, js_render_object_class_id);

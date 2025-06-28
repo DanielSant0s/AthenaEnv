@@ -109,8 +109,7 @@ static JSValue js_space_create(JSContext *ctx, JSValueConst this_val, int argc, 
     if (!space) {
         return JS_EXCEPTION;
     }
-    
-    // Cria um hash space por padrão
+
     space->space = dHashSpaceCreate(0);
     if (!space->space) {
         free(space);
@@ -203,6 +202,41 @@ static JSValue js_geom_create_sphere(JSContext *ctx, JSValueConst this_val, int 
     }
     
     geom->geom = dCreateSphere(space->space, radius);
+    geom->parent_space = space->space;
+    
+    if (!geom->geom) {
+        free(geom);
+        return JS_ThrowInternalError(ctx, "Failed to create sphere geometry");
+    }
+    
+    JSValue obj = JS_NewObjectClass(ctx, js_geom_class_id);
+    if (JS_IsException(obj)) {
+        dGeomDestroy(geom->geom);
+        free(geom);
+        return obj;
+    }
+    
+    JS_SetOpaque(obj, geom);
+    return obj;
+}
+
+static JSValue js_geom_create_from_render_object(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSSpace *space = JS_GetOpaque(argv[0], js_space_class_id);
+    
+    JSRenderObject *ro = JS_GetOpaque(argv[1], js_render_object_class_id);
+
+    dTriMeshDataID tm_id = dGeomTriMeshDataCreate();
+    
+    dGeomTriMeshDataBuildSingle(tm_id, ro->obj.data->positions, sizeof(VECTOR), ro->obj.data->index_count, ro->obj.data->indices, ro->obj.data->index_count, 3*sizeof(uint32_t));
+    
+    JSGeom *geom = malloc(sizeof(JSGeom));
+    if (!geom) {
+        return JS_EXCEPTION;
+    }
+    
+    geom->geom = dCreateTriMesh(space->space, tm_id, NULL, NULL, NULL);
+    dGeomSetData(geom->geom, tm_id); 
+
     geom->parent_space = space->space;
     
     if (!geom->geom) {
@@ -375,33 +409,28 @@ static void collision_callback(void *data, dGeomID o1, dGeomID o2) {
     if (n > 0) {
         for (int i = 0; i < n; i++) {
             JSValue contact_obj = JS_NewObject(cdata->ctx);
-            
-            // Posição do contato
+
             JSValue pos_arr = JS_NewArray(cdata->ctx);
             JS_SetPropertyUint32(cdata->ctx, pos_arr, 0, JS_NewFloat32(cdata->ctx, contact[i].geom.pos[0]));
             JS_SetPropertyUint32(cdata->ctx, pos_arr, 1, JS_NewFloat32(cdata->ctx, contact[i].geom.pos[1]));
             JS_SetPropertyUint32(cdata->ctx, pos_arr, 2, JS_NewFloat32(cdata->ctx, contact[i].geom.pos[2]));
             JS_SetPropertyStr(cdata->ctx, contact_obj, "position", pos_arr);
-            
-            // Normal do contato
+
             JSValue normal_arr = JS_NewArray(cdata->ctx);
             JS_SetPropertyUint32(cdata->ctx, normal_arr, 0, JS_NewFloat32(cdata->ctx, contact[i].geom.normal[0]));
             JS_SetPropertyUint32(cdata->ctx, normal_arr, 1, JS_NewFloat32(cdata->ctx, contact[i].geom.normal[1]));
             JS_SetPropertyUint32(cdata->ctx, normal_arr, 2, JS_NewFloat32(cdata->ctx, contact[i].geom.normal[2]));
             JS_SetPropertyStr(cdata->ctx, contact_obj, "normal", normal_arr);
-            
-            // Profundidade
+
             JS_SetPropertyStr(cdata->ctx, contact_obj, "depth", JS_NewFloat32(cdata->ctx, contact[i].geom.depth));
-            
-            // Adiciona ao array de contatos
+
             JSValue length_val = JS_GetPropertyStr(cdata->ctx, cdata->contacts_array, "length");
             uint32_t length;
             JS_ToUint32(cdata->ctx, &length, length_val);
             JS_SetPropertyUint32(cdata->ctx, cdata->contacts_array, length, contact_obj);
             JS_FreeValue(cdata->ctx, length_val);
         }
-        
-        // Chama callback se fornecido
+
         if (!JS_IsUndefined(cdata->callback)) {
             JSValue args[1] = { cdata->contacts_array };
             JS_Call(cdata->ctx, cdata->callback, JS_UNDEFINED, 1, args);
@@ -475,6 +504,7 @@ static const JSCFunctionListEntry js_ode_funcs[] = {
     JS_CFUNC_DEF("destroyWorld", 1, js_world_destroy),
     JS_CFUNC_DEF("createSpace", 0, js_space_create),
     JS_CFUNC_DEF("destroySpace", 1, js_space_destroy),
+    JS_CFUNC_DEF("fromRenderObject", 2, js_geom_create_from_render_object),
     JS_CFUNC_DEF("createBox", 4, js_geom_create_box),
     JS_CFUNC_DEF("createSphere", 2, js_geom_create_sphere),
     JS_CFUNC_DEF("createPlane", 5, js_geom_create_plane),

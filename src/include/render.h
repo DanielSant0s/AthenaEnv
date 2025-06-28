@@ -175,6 +175,8 @@ typedef struct {
 typedef struct athena_render_data {
     uint32_t index_count;
 
+    uint32_t *indices;
+
     VECTOR* positions;
 	VECTOR* texcoords;
 	VECTOR* normals;

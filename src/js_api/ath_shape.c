@@ -128,14 +128,9 @@ typedef enum {
     PRIM_TYPE_SPRITE
 } ePrimitiveTypes;
 
-typedef enum {
-    SHADE_FLAT,
-    SHADE_GOURAUD
-} ePrimitiveShading;
-
 typedef struct {
     ePrimitiveTypes type;
-    ePrimitiveShading shade;
+    int shade;
 
     void *vert_list;
     uint32_t size;

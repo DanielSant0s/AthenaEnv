@@ -135,111 +135,53 @@ void loadOBJ(athena_render_data* res_m, const char* path, GSSURFACE* text) {
 	char* old_tex = NULL;
 	char* cur_tex = NULL;
 
-	res_m->tristrip = m->strip_count > 0;
+	res_m->tristrip = false;
 
-	if (res_m->tristrip) {
-		res_m->index_count = m->index_count + (2 * m->strip_count) + (((m->index_count + (2 * m->strip_count)) / (BATCH_SIZE - 2)) * 2) + 1;
+	res_m->index_count = m->index_count;
 
-		res_m->positions = alloc_vectors(res_m->index_count);
-    	res_m->texcoords = alloc_vectors(res_m->index_count);
-    	res_m->normals =   alloc_vectors(res_m->index_count);
-		res_m->colours =   alloc_vectors(res_m->index_count); 
+    res_m->positions = alloc_vectors(res_m->index_count);
+    res_m->texcoords = alloc_vectors(res_m->index_count);
+    res_m->normals =   alloc_vectors(res_m->index_count);
+	res_m->colours =   alloc_vectors(res_m->index_count);
 
-		int unified_strip_count = 0;  
-		int* unified_strip_indices = malloc(sizeof(int) * (m->index_count + 2 * m->strip_count));
+    res_m->indices = (uint32_t*)malloc(res_m->index_count * sizeof(uint32_t));
 
-		for (int i = 0; i < m->strip_count; i++) {
-		    int strip_start = m->strips[i];
-		    int strip_end = (i + 1 < m->strip_count) ? m->strips[i + 1] : m->index_count;
+	uint32_t added_material_indices = 0;
+	for (int i = 0; i < res_m->index_count; i++) {
+		obj_transfer_vertex(res_m, i, m, i);
 
-		    for (int j = strip_start; j < strip_end; j++) {
-		        unified_strip_indices[unified_strip_count++] = j;
+        res_m->indices[i] = i;
 
-		        if (j == strip_end - 1 && i + 1 < m->strip_count) {
-		            unified_strip_indices[unified_strip_count++] = j;
-		            unified_strip_indices[unified_strip_count++] = m->strips[i + 1];
-		        }
-		    }
-		}
+    	res_m->colours[i][0] = 0.0f; 
+    	res_m->colours[i][1] = 0.0f;
+    	res_m->colours[i][2] = 0.0f;
+    	res_m->colours[i][3] = 0.0f;
 
-		int batch_index = 0;
-		int index = 0;
+		if (m->material_count > 0) {
+			if (m->face_materials[i / 3] != cur_mat_index) {
+				added_material_indices++;
 
-		for (int i = 0; i < unified_strip_count; i++) {
-		    obj_transfer_vertex(res_m, index, m, unified_strip_indices[i]);
-
-        	res_m->colours[index][0] = 1.0f;
-        	res_m->colours[index][1] = 1.0f;
-        	res_m->colours[index][2] = 1.0f;
-        	res_m->colours[index][3] = 1.0f;
-
-		    index++;
-		    batch_index++;
-
-		    if (batch_index == BATCH_SIZE) {
-				copy_vector(&res_m->positions[index], &res_m->positions[index - 2]);
-				copy_vector(&res_m->texcoords[index], &res_m->texcoords[index - 2]);
-				copy_vector(&res_m->normals[index],   &res_m->normals[index - 2]);
-				copy_vector(&res_m->colours[index],   &res_m->colours[index - 2]);
-        	    index++;
-
-				copy_vector(&res_m->positions[index], &res_m->positions[index - 2]);
-				copy_vector(&res_m->texcoords[index], &res_m->texcoords[index - 2]);
-				copy_vector(&res_m->normals[index],   &res_m->normals[index - 2]);
-				copy_vector(&res_m->colours[index],   &res_m->colours[index - 2]);
-        	    index++;
-
-        	    batch_index = 2;
-		    }
-		}
-
-		free(unified_strip_indices);
-
-		res_m->index_count = index-1;
-	} else {
-		res_m->index_count = m->index_count;
-
-    	res_m->positions = alloc_vectors(res_m->index_count);
-    	res_m->texcoords = alloc_vectors(res_m->index_count);
-    	res_m->normals =   alloc_vectors(res_m->index_count);
-		res_m->colours =   alloc_vectors(res_m->index_count);
-
-
-		uint32_t added_material_indices = 0;
-		for (int i = 0; i < res_m->index_count; i++) {
-			obj_transfer_vertex(res_m, i, m, i);
-
-        	res_m->colours[i][0] = 0.0f; 
-        	res_m->colours[i][1] = 0.0f;
-        	res_m->colours[i][2] = 0.0f;
-        	res_m->colours[i][3] = 0.0f;
-
-			if (m->material_count > 0) {
-				if (m->face_materials[i / 3] != cur_mat_index) {
-					added_material_indices++;
-
-					if (added_material_indices > res_m->material_index_count) {
-						res_m->material_indices = (material_index*)realloc(res_m->material_indices, added_material_indices);
-						res_m->material_index_count++;
-					}
-
-					res_m->material_indices[added_material_indices-1].index = cur_mat_index;
-					res_m->material_indices[added_material_indices-1].end = i-1;
-					cur_mat_index = m->face_materials[i / 3];
+				if (added_material_indices > res_m->material_index_count) {
+					res_m->material_indices = (material_index*)realloc(res_m->material_indices, added_material_indices);
+					res_m->material_index_count++;
 				}
+
+				res_m->material_indices[added_material_indices-1].index = cur_mat_index;
+				res_m->material_indices[added_material_indices-1].end = i-1;
+				cur_mat_index = m->face_materials[i / 3];
 			}
-    	}
-
-		added_material_indices++;
-
-		if (added_material_indices > res_m->material_index_count) {
-			res_m->material_indices = (material_index*)realloc(res_m->material_indices, added_material_indices);
-			res_m->material_index_count++;
 		}
+    }
 
-		res_m->material_indices[added_material_indices-1].index = cur_mat_index;
-		res_m->material_indices[added_material_indices-1].end = res_m->index_count;
+	added_material_indices++;
+
+	if (added_material_indices > res_m->material_index_count) {
+		res_m->material_indices = (material_index*)realloc(res_m->material_indices, added_material_indices);
+		res_m->material_index_count++;
 	}
+
+	res_m->material_indices[added_material_indices-1].index = cur_mat_index;
+	res_m->material_indices[added_material_indices-1].end = res_m->index_count;
 
     calculate_bbox(res_m);
 
@@ -600,6 +542,8 @@ void loadGLTF(athena_render_data* res_m, const char* path, GSSURFACE* text) {
     res_m->normals = alloc_vectors(res_m->index_count);
     res_m->colours = alloc_vectors(res_m->index_count);
 
+    res_m->indices = (uint32_t*)malloc(res_m->index_count * sizeof(uint32_t));
+
     if (data->skins_count > 0) {
         res_m->skin_data = (vertex_skin_data*)malloc(res_m->index_count * sizeof(vertex_skin_data));
     }
@@ -676,6 +620,8 @@ void loadGLTF(athena_render_data* res_m, const char* path, GSSURFACE* text) {
                     uint32_t index = cgltf_accessor_read_index(indices_accessor, i);
                     load_gltf_skinning_data(res_m, joints, weights, current_vertex, index);
                     gltf_transfer_vertex(res_m, current_vertex, positions, texcoords, normals, colors, index, worldTransform, worldMatrixNormals);
+
+                    res_m->indices[current_vertex] = current_vertex;
                     current_vertex++;
                 }
             }
@@ -683,6 +629,8 @@ void loadGLTF(athena_render_data* res_m, const char* path, GSSURFACE* text) {
                 for (uint32_t i = 0; i < vertex_count; ++i) {
                     load_gltf_skinning_data(res_m, joints, weights, current_vertex, i);
                     gltf_transfer_vertex(res_m, current_vertex, positions, texcoords, normals, colors, i, worldTransform, worldMatrixNormals);
+
+                    res_m->indices[current_vertex] = current_vertex;
                     current_vertex++;
                 }
             }
