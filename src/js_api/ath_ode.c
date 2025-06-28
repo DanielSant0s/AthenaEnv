@@ -7,6 +7,7 @@
 
 typedef struct {
     dSpaceID space;
+    dSpaceID parent;
 } JSSpace;
 
 typedef struct {
@@ -110,7 +111,14 @@ static JSValue js_space_create(JSContext *ctx, JSValueConst this_val, int argc, 
         return JS_EXCEPTION;
     }
 
-    space->space = dHashSpaceCreate(0);
+    space->parent = NULL;
+
+    if (argc > 0) {
+        JSSpace *space = JS_GetOpaque(argv[0], js_space_class_id);
+        space->parent = space->space;
+    }
+
+    space->space = dHashSpaceCreate(space->parent);
     if (!space->space) {
         free(space);
         return JS_ThrowInternalError(ctx, "Failed to create ODE space");
@@ -316,6 +324,7 @@ static JSValue js_geom_set_position(JSContext *ctx, JSValueConst this_val, int a
     }
     
     JSGeom *geom = JS_GetOpaque(argv[0], js_geom_class_id);
+    if (!geom) geom = JS_GetOpaque(argv[0], js_space_class_id);
     if (!geom || !geom->geom) {
         return JS_ThrowTypeError(ctx, "Expected valid ODEGeom object");
     }
@@ -337,6 +346,7 @@ static JSValue js_geom_set_rotation(JSContext *ctx, JSValueConst this_val, int a
     }
     
     JSGeom *geom = JS_GetOpaque(argv[0], js_geom_class_id);
+    if (!geom) geom = JS_GetOpaque(argv[0], js_space_class_id);
     if (!geom || !geom->geom) {
         return JS_ThrowTypeError(ctx, "Expected valid ODEGeom object");
     }
@@ -363,6 +373,7 @@ static JSValue js_geom_set_rotation(JSContext *ctx, JSValueConst this_val, int a
 
 static JSValue js_geom_get_position(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     JSGeom *geom = JS_GetOpaque(argv[0], js_geom_class_id);
+    if (!geom) geom = JS_GetOpaque(argv[0], js_space_class_id);
     if (!geom || !geom->geom) {
         return JS_ThrowTypeError(ctx, "Expected valid ODEGeom object");
     }
@@ -379,6 +390,7 @@ static JSValue js_geom_get_position(JSContext *ctx, JSValueConst this_val, int a
 
 static JSValue js_geom_get_rotation(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     JSGeom *geom = JS_GetOpaque(argv[0], js_geom_class_id);
+    if (!geom) geom = JS_GetOpaque(argv[0], js_space_class_id);
     if (!geom || !geom->geom) {
         return JS_ThrowTypeError(ctx, "Expected valid ODEGeom object");
     }
@@ -393,7 +405,6 @@ static JSValue js_geom_get_rotation(JSContext *ctx, JSValueConst this_val, int a
     return arr;
 }
 
-// Callback para colisões
 typedef struct {
     JSContext *ctx;
     JSValue callback;
@@ -464,7 +475,9 @@ static JSValue js_geom_collide(JSContext *ctx, JSValueConst this_val, int argc, 
     }
     
     JSGeom *geom1 = JS_GetOpaque(argv[0], js_geom_class_id);
+    if (!geom1) geom1 = JS_GetOpaque(argv[0], js_space_class_id);
     JSGeom *geom2 = JS_GetOpaque(argv[1], js_geom_class_id);
+    if (!geom2) geom2 = JS_GetOpaque(argv[1], js_space_class_id);
     
     if (!geom1 || !geom1->geom || !geom2 || !geom2->geom) {
         return JS_ThrowTypeError(ctx, "Expected valid ODEGeom objects");
