@@ -26,6 +26,11 @@ awk '{
     hidden_symbols["_ZZN12_GLOBAL__N_115get_static_condEvE4once"] = 1
     hidden_symbols["_ZZN12_GLOBAL__N_116get_atomic_mutexEvE12atomic_mutex"] = 1
     hidden_symbols["_ZZN12_GLOBAL__N_116get_static_mutexEvE4once"] = 1
+    hidden_symbols["_GLOBAL__sub_I_SRand"] = 1
+    hidden_symbols["_GLOBAL__sub_I__ZN13dxTriMeshDataC2Ev"] = 1
+    hidden_symbols["_GLOBAL__sub_I__ZN6Opcode13MeshInterface11VertexCacheE"] = 1
+    hidden_symbols["_GLOBAL__sub_I__ZSt7nothrow"] = 1
+    hidden_symbols["_ZN12_GLOBAL__N_113__new_handlerE"] = 1
 
     if (!($0 in hidden_symbols)) {
         t[++count] = $0
