@@ -135,6 +135,9 @@ void (*render_funcs[])(athena_object_data *obj, int pass_state) = {
 };
 
 void render_object(athena_object_data *obj) {
+	if (obj->update_physics)
+		obj->update_physics(obj);
+
 	uint64_t old_alpha = get_screen_param(ALPHA_BLEND_EQUATION);
 	uint64_t old_colclamp = get_screen_param(COLOR_CLAMP_MODE);
 
@@ -209,6 +212,15 @@ void new_render_object(athena_object_data *obj, athena_render_data *data) {
 	obj->scale[1] = 1.0f;
 	obj->scale[2] = 1.0f;
 	obj->scale[3] = 1.0f;
+
+	obj->userdata = NULL;
+	obj->update_userdata = NULL;
+
+	obj->collision = NULL;
+	obj->update_collision = NULL;
+
+	obj->physics = NULL;
+	obj->update_physics = NULL;
 
 	update_object_space(obj);
 }
@@ -294,6 +306,9 @@ void update_object_space(athena_object_data *obj) {
   	matrix_functions->rotate(obj->transform, obj->transform, obj->rotation);
 	matrix_functions->scale(obj->transform, obj->transform, obj->scale);
   	matrix_functions->translate(obj->transform, obj->transform, obj->position);
+
+	if (obj->update_collision)
+		obj->update_collision(obj);
 }
 
 void bake_giftags(owl_packet *packet, athena_render_data *data, bool texture_mapping, int mat_id) {
