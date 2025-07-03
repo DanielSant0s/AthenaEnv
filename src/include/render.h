@@ -219,7 +219,17 @@ typedef struct athena_object_data {
 
     athena_render_data *data;
 
+    void *collision;
+    void (*update_collision)(struct athena_object_data *obj);
+
+    void *physics;
+    void (*update_physics)(struct athena_object_data *obj);
+
 } athena_object_data qw_aligned;
+
+void updateGeomPosRot(athena_object_data *obj);
+
+void updateBodyPosRot(athena_object_data *obj);
 
 void initCamera(MATRIX *ws, MATRIX *wv, MATRIX *vs);
 

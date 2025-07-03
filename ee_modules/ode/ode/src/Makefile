@@ -2,9 +2,9 @@ EE_LIB_DIR=../../lib/
 LIB_ODE=$(EE_LIB_DIR)libode.a
 ERL_ODE=$(EE_LIB_DIR)libode.erl
 
-EE_CFLAGS += -DDISABLE_TIMERS
-EE_CFLAGS += -DNO_SIGNAL_H -DDEBUG_ERROR -DUSE_MATH_H
-EE_CFLAGS += -DENABLE_PS2SDK -DdTRIMESH_ENABLED
+EE_CXXFLAGS += -DDISABLE_TIMERS
+EE_CXXFLAGS += -DNO_SIGNAL_H -DDEBUG_ERROR -DUSE_MATH_H
+EE_CXXFLAGS += -DENABLE_PS2SDK -DdTRIMESH_ENABLED
 
 ODE_OBJS  = fastdot.o fastldlt.o fastlsolve.o fastltsolve.o array.o collision_kernel.o \
 	collision_quadtreespace.o collision_space.o collision_std.o collision_transform.o \

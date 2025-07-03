@@ -54,6 +54,39 @@ typedef struct {
 JSClassID get_img_class_id();
 JSClassID get_imglist_class_id();
 extern JSClassID js_render_object_class_id;
+
+#include <ode/ode.h>
+
+typedef struct {
+    dSpaceID space;
+    dSpaceID parent;
+} JSSpace;
+
+typedef struct {
+    dGeomID geom;
+    dSpaceID parent_space;
+} JSGeom;
+
+typedef struct {
+    dWorldID world;
+} JSWorld;
+
+typedef struct {
+    dBodyID body;
+    dWorldID parent_world;
+} JSBody;
+
+typedef struct {
+    dJointID joint;
+    dWorldID parent_world;
+} JSJoint;
+
+typedef struct {
+    dJointGroupID group;
+} JSJointGroup;
+
+extern JSClassID js_geom_class_id;
+extern JSClassID js_body_class_id;
 #endif
 
 JSClassID get_matrix4_class_id();
