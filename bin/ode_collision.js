@@ -46,11 +46,11 @@ skin_object.rotation = {x:Math.PI/2, y:0.0, z:0.0};
 
 const skin_sphere = ODE.createSphere(undefined, 1.0f);
 const skin_col_transform = ODE.createTransform(space, skin_sphere);
-ODE.setPosition(skin_sphere, 0, -0.5f, 0);
+skin_sphere.setPosition(0, -0.5f, 0);
 
 
 const skin_body = ODE.createBody(world);
-ODE.setGeomBody(skin_col_transform, skin_body);
+skin_col_transform.setBody(skin_body);
 //ODE.setBodyMass(skin_body, 1.0f);
 
 skin_object.setCollision(skin_col_transform);
