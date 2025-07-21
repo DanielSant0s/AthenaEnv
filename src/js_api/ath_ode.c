@@ -348,12 +348,12 @@ static JSValue js_geom_destroy(JSContext *ctx, JSValueConst this_val, int argc, 
 }
 
 static JSValue js_geom_set_position(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    JSGeom *geom = JS_GetOpaque(argv[0], js_geom_class_id);
+    JSGeom *geom = JS_GetOpaque(this_val, js_geom_class_id);
     
     float x, y, z;
-    if (JS_ToFloat32(ctx, &x, argv[1]) ||
-        JS_ToFloat32(ctx, &y, argv[2]) ||
-        JS_ToFloat32(ctx, &z, argv[3])) {
+    if (JS_ToFloat32(ctx, &x, argv[0]) ||
+        JS_ToFloat32(ctx, &y, argv[1]) ||
+        JS_ToFloat32(ctx, &z, argv[2])) {
         return JS_EXCEPTION;
     }
     
@@ -362,15 +362,15 @@ static JSValue js_geom_set_position(JSContext *ctx, JSValueConst this_val, int a
 }
 
 static JSValue js_geom_set_rotation(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    JSGeom *geom = JS_GetOpaque(argv[0], js_geom_class_id);
+    JSGeom *geom = JS_GetOpaque(this_val, js_geom_class_id);
 
-    if (!JS_IsArray(ctx, argv[1])) {
+    if (!JS_IsArray(ctx, argv[0])) {
         return JS_ThrowTypeError(ctx, "Expected array for rotation matrix");
     }
-    
+     
     dMatrix3 R;
     for (int i = 0; i < 9; i++) {
-        JSValue val = JS_GetPropertyUint32(ctx, argv[1], i);
+        JSValue val = JS_GetPropertyUint32(ctx, argv[0], i);
         float v;
         if (JS_ToFloat32(ctx, &v, val)) {
             JS_FreeValue(ctx, val);
@@ -385,7 +385,7 @@ static JSValue js_geom_set_rotation(JSContext *ctx, JSValueConst this_val, int a
 }
 
 static JSValue js_geom_get_position(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    JSGeom *geom = JS_GetOpaque(argv[0], js_geom_class_id);
+    JSGeom *geom = JS_GetOpaque(this_val, js_geom_class_id);
 
     const dReal *pos = dGeomGetPosition(geom->geom);
     JSValue arr = JS_NewArray(ctx);
@@ -398,7 +398,7 @@ static JSValue js_geom_get_position(JSContext *ctx, JSValueConst this_val, int a
 }
 
 static JSValue js_geom_get_rotation(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    JSGeom *geom = JS_GetOpaque(argv[0], js_geom_class_id);
+    JSGeom *geom = JS_GetOpaque(this_val, js_geom_class_id);
     
     const dReal *rot = dGeomGetRotation(geom->geom);
     JSValue arr = JS_NewArray(ctx);
@@ -892,15 +892,15 @@ static const JSCFunctionListEntry js_body_proto_funcs[] = {
 };
 
 static JSValue js_geom_set_body(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    JSGeom *geom = JS_GetOpaque(argv[0], js_geom_class_id);
-    JSBody *body = JS_GetOpaque(argv[1], js_body_class_id);
+    JSGeom *geom = JS_GetOpaque(this_val, js_geom_class_id);
+    JSBody *body = JS_GetOpaque(argv[0], js_body_class_id);
     
     dGeomSetBody(geom->geom, body->body);
     return JS_UNDEFINED;
 }
 
 static JSValue js_geom_get_body(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    JSGeom *geom = JS_GetOpaque(argv[0], js_geom_class_id);
+    JSGeom *geom = JS_GetOpaque(this_val, js_geom_class_id);
     
     dBodyID body_id = dGeomGetBody(geom->geom);
     if (!body_id) {
@@ -1046,6 +1046,16 @@ void updateBodyPosRot(athena_object_data *obj) {
     update_object_space(obj);
 }
 
+static const JSCFunctionListEntry js_geom_proto_funcs[] = {
+    JS_CFUNC_DEF("setPosition", 3, js_geom_set_position),
+    JS_CFUNC_DEF("setRotation", 1, js_geom_set_rotation),
+    JS_CFUNC_DEF("getPosition", 0, js_geom_get_position),
+    JS_CFUNC_DEF("getRotation", 0, js_geom_get_rotation),
+
+    JS_CFUNC_DEF("setBody", 1, js_geom_set_body),
+    JS_CFUNC_DEF("getBody", 0, js_geom_get_body),
+};
+
 static const JSCFunctionListEntry js_ode_funcs[] = {
     JS_CFUNC_DEF("cleanup", 0, js_ode_cleanup),
     JS_CFUNC_DEF("createWorld", 0, js_world_create),
@@ -1058,10 +1068,6 @@ static const JSCFunctionListEntry js_ode_funcs[] = {
     JS_CFUNC_DEF("createPlane", 5, js_geom_create_plane),
     JS_CFUNC_DEF("createTransform", 2, js_geom_create_transform),
     JS_CFUNC_DEF("destroyGeom", 1, js_geom_destroy),
-    JS_CFUNC_DEF("setPosition", 4, js_geom_set_position),
-    JS_CFUNC_DEF("setRotation", 2, js_geom_set_rotation),
-    JS_CFUNC_DEF("getPosition", 1, js_geom_get_position),
-    JS_CFUNC_DEF("getRotation", 1, js_geom_get_rotation),
     JS_CFUNC_DEF("spaceCollide", 2, js_space_collide),
     JS_CFUNC_DEF("geomCollide", 2, js_geom_collide),
 
@@ -1077,9 +1083,6 @@ static const JSCFunctionListEntry js_ode_funcs[] = {
     JS_CFUNC_DEF("createBody", 1, js_body_create),
     JS_CFUNC_DEF("destroyBody", 1, js_body_destroy),
     
-    JS_CFUNC_DEF("setGeomBody", 2, js_geom_set_body),
-    JS_CFUNC_DEF("getGeomBody", 1, js_geom_get_body),
-    
     JS_CFUNC_DEF("createJointGroup", 0, js_joint_group_create),
     JS_CFUNC_DEF("emptyJointGroup", 1, js_joint_group_empty),
     JS_CFUNC_DEF("destroyJointGroup", 1, js_joint_group_destroy),
@@ -1093,6 +1096,9 @@ static int js_ode_init_module(JSContext *ctx, JSModuleDef *m) {
 
     JS_NewClassID(&js_geom_class_id);
     JS_NewClass(JS_GetRuntime(ctx), js_geom_class_id, &js_geom_class);
+    proto = JS_NewObject(ctx);
+    JS_SetPropertyFunctionList(ctx, proto, js_geom_proto_funcs, countof(js_geom_proto_funcs));
+    JS_SetClassProto(ctx, js_geom_class_id, proto);
 
     JS_NewClassID(&js_world_class_id);
     JS_NewClass(JS_GetRuntime(ctx), js_world_class_id, &js_world_class);
