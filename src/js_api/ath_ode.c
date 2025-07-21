@@ -662,12 +662,12 @@ static JSValue js_body_destroy(JSContext *ctx, JSValueConst this_val, int argc, 
 }
 
 static JSValue js_body_set_position(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    JSBody *body = JS_GetOpaque(argv[0], js_body_class_id);
+    JSBody *body = JS_GetOpaque(this_val, js_body_class_id);
     
     float x, y, z;
-    if (JS_ToFloat32(ctx, &x, argv[1]) ||
-        JS_ToFloat32(ctx, &y, argv[2]) ||
-        JS_ToFloat32(ctx, &z, argv[3])) {
+    if (JS_ToFloat32(ctx, &x, argv[0]) ||
+        JS_ToFloat32(ctx, &y, argv[1]) ||
+        JS_ToFloat32(ctx, &z, argv[2])) {
         return JS_EXCEPTION;
     }
     
@@ -676,7 +676,7 @@ static JSValue js_body_set_position(JSContext *ctx, JSValueConst this_val, int a
 }
 
 static JSValue js_body_get_position(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    JSBody *body = JS_GetOpaque(argv[0], js_body_class_id);
+    JSBody *body = JS_GetOpaque(this_val, js_body_class_id);
     
     const dReal *pos = dBodyGetPosition(body->body);
     JSValue arr = JS_NewArray(ctx);
@@ -689,15 +689,15 @@ static JSValue js_body_get_position(JSContext *ctx, JSValueConst this_val, int a
 }
 
 static JSValue js_body_set_rotation(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    JSBody *body = JS_GetOpaque(argv[0], js_body_class_id);
+    JSBody *body = JS_GetOpaque(this_val, js_body_class_id);
     
-    if (!JS_IsArray(ctx, argv[1])) {
+    if (!JS_IsArray(ctx, argv[0])) {
         return JS_ThrowTypeError(ctx, "Expected array for rotation matrix");
     }
     
     dMatrix3 R;
     for (int i = 0; i < 9; i++) {
-        JSValue val = JS_GetPropertyUint32(ctx, argv[1], i);
+        JSValue val = JS_GetPropertyUint32(ctx, argv[0], i);
         float v;
         if (JS_ToFloat32(ctx, &v, val)) {
             JS_FreeValue(ctx, val);
@@ -712,7 +712,7 @@ static JSValue js_body_set_rotation(JSContext *ctx, JSValueConst this_val, int a
 }
 
 static JSValue js_body_get_rotation(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    JSBody *body = JS_GetOpaque(argv[0], js_body_class_id);
+    JSBody *body = JS_GetOpaque(this_val, js_body_class_id);
     
     const dReal *rot = dBodyGetRotation(body->body);
     JSValue arr = JS_NewArray(ctx);
@@ -725,12 +725,12 @@ static JSValue js_body_get_rotation(JSContext *ctx, JSValueConst this_val, int a
 }
 
 static JSValue js_body_set_linear_vel(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    JSBody *body = JS_GetOpaque(argv[0], js_body_class_id);
+    JSBody *body = JS_GetOpaque(this_val, js_body_class_id);
     
     float x, y, z;
-    if (JS_ToFloat32(ctx, &x, argv[1]) ||
-        JS_ToFloat32(ctx, &y, argv[2]) ||
-        JS_ToFloat32(ctx, &z, argv[3])) {
+    if (JS_ToFloat32(ctx, &x, argv[0]) ||
+        JS_ToFloat32(ctx, &y, argv[1]) ||
+        JS_ToFloat32(ctx, &z, argv[2])) {
         return JS_EXCEPTION;
     }
     
@@ -739,7 +739,7 @@ static JSValue js_body_set_linear_vel(JSContext *ctx, JSValueConst this_val, int
 }
 
 static JSValue js_body_get_linear_vel(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    JSBody *body = JS_GetOpaque(argv[0], js_body_class_id);
+    JSBody *body = JS_GetOpaque(this_val, js_body_class_id);
     
     const dReal *vel = dBodyGetLinearVel(body->body);
     JSValue arr = JS_NewArray(ctx);
@@ -752,12 +752,12 @@ static JSValue js_body_get_linear_vel(JSContext *ctx, JSValueConst this_val, int
 }
 
 static JSValue js_body_set_angular_vel(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    JSBody *body = JS_GetOpaque(argv[0], js_body_class_id);
+    JSBody *body = JS_GetOpaque(this_val, js_body_class_id);
     
     float x, y, z;
-    if (JS_ToFloat32(ctx, &x, argv[1]) ||
-        JS_ToFloat32(ctx, &y, argv[2]) ||
-        JS_ToFloat32(ctx, &z, argv[3])) {
+    if (JS_ToFloat32(ctx, &x, argv[0]) ||
+        JS_ToFloat32(ctx, &y, argv[1]) ||
+        JS_ToFloat32(ctx, &z, argv[2])) {
         return JS_EXCEPTION;
     }
     
@@ -766,7 +766,7 @@ static JSValue js_body_set_angular_vel(JSContext *ctx, JSValueConst this_val, in
 }
 
 static JSValue js_body_get_angular_vel(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    JSBody *body = JS_GetOpaque(argv[0], js_body_class_id);
+    JSBody *body = JS_GetOpaque(this_val, js_body_class_id);
     
     const dReal *vel = dBodyGetAngularVel(body->body);
     JSValue arr = JS_NewArray(ctx);
@@ -779,10 +779,10 @@ static JSValue js_body_get_angular_vel(JSContext *ctx, JSValueConst this_val, in
 }
 
 static JSValue js_body_set_mass(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    JSBody *body = JS_GetOpaque(argv[0], js_body_class_id);
+    JSBody *body = JS_GetOpaque(this_val, js_body_class_id);
     
     float mass;
-    if (JS_ToFloat32(ctx, &mass, argv[1])) {
+    if (JS_ToFloat32(ctx, &mass, argv[0])) {
         return JS_EXCEPTION;
     }
     
@@ -794,13 +794,13 @@ static JSValue js_body_set_mass(JSContext *ctx, JSValueConst this_val, int argc,
 }
 
 static JSValue js_body_set_mass_box(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    JSBody *body = JS_GetOpaque(argv[0], js_body_class_id);
+    JSBody *body = JS_GetOpaque(this_val, js_body_class_id);
     
     float mass, lx, ly, lz;
-    if (JS_ToFloat32(ctx, &mass, argv[1]) ||
-        JS_ToFloat32(ctx, &lx, argv[2]) ||
-        JS_ToFloat32(ctx, &ly, argv[3]) ||
-        JS_ToFloat32(ctx, &lz, argv[4])) {
+    if (JS_ToFloat32(ctx, &mass, argv[0]) ||
+        JS_ToFloat32(ctx, &lx, argv[1]) ||
+        JS_ToFloat32(ctx, &ly, argv[2]) ||
+        JS_ToFloat32(ctx, &lz, argv[3])) {
         return JS_EXCEPTION;
     }
     
@@ -812,11 +812,11 @@ static JSValue js_body_set_mass_box(JSContext *ctx, JSValueConst this_val, int a
 }
 
 static JSValue js_body_set_mass_sphere(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    JSBody *body = JS_GetOpaque(argv[0], js_body_class_id);
+    JSBody *body = JS_GetOpaque(this_val, js_body_class_id);
     
     float mass, radius;
-    if (JS_ToFloat32(ctx, &mass, argv[1]) ||
-        JS_ToFloat32(ctx, &radius, argv[2])) {
+    if (JS_ToFloat32(ctx, &mass, argv[0]) ||
+        JS_ToFloat32(ctx, &radius, argv[1])) {
         return JS_EXCEPTION;
     }
     
@@ -828,12 +828,12 @@ static JSValue js_body_set_mass_sphere(JSContext *ctx, JSValueConst this_val, in
 }
 
 static JSValue js_body_add_force(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    JSBody *body = JS_GetOpaque(argv[0], js_body_class_id);
+    JSBody *body = JS_GetOpaque(this_val, js_body_class_id);
     
     float fx, fy, fz;
-    if (JS_ToFloat32(ctx, &fx, argv[1]) ||
-        JS_ToFloat32(ctx, &fy, argv[2]) ||
-        JS_ToFloat32(ctx, &fz, argv[3])) {
+    if (JS_ToFloat32(ctx, &fx, argv[0]) ||
+        JS_ToFloat32(ctx, &fy, argv[1]) ||
+        JS_ToFloat32(ctx, &fz, argv[2])) {
         return JS_EXCEPTION;
     }
     
@@ -842,12 +842,12 @@ static JSValue js_body_add_force(JSContext *ctx, JSValueConst this_val, int argc
 }
 
 static JSValue js_body_add_torque(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    JSBody *body = JS_GetOpaque(argv[0], js_body_class_id);
+    JSBody *body = JS_GetOpaque(this_val, js_body_class_id);
     
     float fx, fy, fz;
-    if (JS_ToFloat32(ctx, &fx, argv[1]) ||
-        JS_ToFloat32(ctx, &fy, argv[2]) ||
-        JS_ToFloat32(ctx, &fz, argv[3])) {
+    if (JS_ToFloat32(ctx, &fx, argv[0]) ||
+        JS_ToFloat32(ctx, &fy, argv[1]) ||
+        JS_ToFloat32(ctx, &fz, argv[2])) {
         return JS_EXCEPTION;
     }
     
@@ -856,21 +856,40 @@ static JSValue js_body_add_torque(JSContext *ctx, JSValueConst this_val, int arg
 }
 
 static JSValue js_body_enable(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    JSBody *body = JS_GetOpaque(argv[0], js_body_class_id);
+    JSBody *body = JS_GetOpaque(this_val, js_body_class_id);
     dBodyEnable(body->body);
     return JS_UNDEFINED;
 }
 
 static JSValue js_body_disable(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    JSBody *body = JS_GetOpaque(argv[0], js_body_class_id);
+    JSBody *body = JS_GetOpaque(this_val, js_body_class_id);
     dBodyDisable(body->body);
     return JS_UNDEFINED;
 }
 
 static JSValue js_body_is_enabled(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    JSBody *body = JS_GetOpaque(argv[0], js_body_class_id);
+    JSBody *body = JS_GetOpaque(this_val, js_body_class_id);
     return JS_NewBool(ctx, dBodyIsEnabled(body->body));
 }
+
+static const JSCFunctionListEntry js_body_proto_funcs[] = {
+    JS_CFUNC_DEF("setPosition", 3, js_body_set_position),
+    JS_CFUNC_DEF("getPosition", 0, js_body_get_position),
+    JS_CFUNC_DEF("setRotation", 1, js_body_set_rotation),
+    JS_CFUNC_DEF("getRotation", 0, js_body_get_rotation),
+    JS_CFUNC_DEF("setLinearVel", 3, js_body_set_linear_vel),
+    JS_CFUNC_DEF("getLinearVel", 0, js_body_get_linear_vel),
+    JS_CFUNC_DEF("setAngularVel", 3, js_body_set_angular_vel),
+    JS_CFUNC_DEF("getAngularVel", 0, js_body_get_angular_vel),
+    JS_CFUNC_DEF("setMass", 1, js_body_set_mass),
+    JS_CFUNC_DEF("setMassBox", 4, js_body_set_mass_box),
+    JS_CFUNC_DEF("setMassSphere", 2, js_body_set_mass_sphere),
+    JS_CFUNC_DEF("addForce", 3, js_body_add_force),
+    JS_CFUNC_DEF("addTorque", 3, js_body_add_torque),
+    JS_CFUNC_DEF("enable", 0, js_body_enable),
+    JS_CFUNC_DEF("disable", 0, js_body_disable),
+    JS_CFUNC_DEF("enabled", 0, js_body_is_enabled),
+};
 
 static JSValue js_geom_set_body(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     JSGeom *geom = JS_GetOpaque(argv[0], js_geom_class_id);
@@ -1057,22 +1076,6 @@ static const JSCFunctionListEntry js_ode_funcs[] = {
     
     JS_CFUNC_DEF("createBody", 1, js_body_create),
     JS_CFUNC_DEF("destroyBody", 1, js_body_destroy),
-    JS_CFUNC_DEF("setBodyPosition", 4, js_body_set_position),
-    JS_CFUNC_DEF("getBodyPosition", 1, js_body_get_position),
-    JS_CFUNC_DEF("setBodyRotation", 2, js_body_set_rotation),
-    JS_CFUNC_DEF("getBodyRotation", 1, js_body_get_rotation),
-    JS_CFUNC_DEF("setBodyLinearVel", 4, js_body_set_linear_vel),
-    JS_CFUNC_DEF("getBodyLinearVel", 1, js_body_get_linear_vel),
-    JS_CFUNC_DEF("setBodyAngularVel", 4, js_body_set_angular_vel),
-    JS_CFUNC_DEF("getBodyAngularVel", 1, js_body_get_angular_vel),
-    JS_CFUNC_DEF("setBodyMass", 2, js_body_set_mass),
-    JS_CFUNC_DEF("setBodyMassBox", 5, js_body_set_mass_box),
-    JS_CFUNC_DEF("setBodyMassSphere", 3, js_body_set_mass_sphere),
-    JS_CFUNC_DEF("addForce", 4, js_body_add_force),
-    JS_CFUNC_DEF("addTorque", 4, js_body_add_torque),
-    JS_CFUNC_DEF("enableBody", 1, js_body_enable),
-    JS_CFUNC_DEF("disableBody", 1, js_body_disable),
-    JS_CFUNC_DEF("isBodyEnabled", 1, js_body_is_enabled),
     
     JS_CFUNC_DEF("setGeomBody", 2, js_geom_set_body),
     JS_CFUNC_DEF("getGeomBody", 1, js_geom_get_body),
@@ -1083,20 +1086,27 @@ static const JSCFunctionListEntry js_ode_funcs[] = {
 };
 
 static int js_ode_init_module(JSContext *ctx, JSModuleDef *m) {
-    JS_NewClassID(&js_space_class_id);
-    JS_NewClassID(&js_geom_class_id);
-    JS_NewClassID(&js_world_class_id);
+    JSValue proto;
 
-    JS_NewClassID(&js_body_class_id);
-    JS_NewClassID(&js_joint_class_id);
-    JS_NewClassID(&js_joint_group_class_id);
-    
+    JS_NewClassID(&js_space_class_id);
     JS_NewClass(JS_GetRuntime(ctx), js_space_class_id, &js_space_class);
+
+    JS_NewClassID(&js_geom_class_id);
     JS_NewClass(JS_GetRuntime(ctx), js_geom_class_id, &js_geom_class);
+
+    JS_NewClassID(&js_world_class_id);
     JS_NewClass(JS_GetRuntime(ctx), js_world_class_id, &js_world_class);
 
+    JS_NewClassID(&js_body_class_id);
     JS_NewClass(JS_GetRuntime(ctx), js_body_class_id, &js_body_class);
+    proto = JS_NewObject(ctx);
+    JS_SetPropertyFunctionList(ctx, proto, js_body_proto_funcs, countof(js_body_proto_funcs));
+    JS_SetClassProto(ctx, js_body_class_id, proto);
+
+    JS_NewClassID(&js_joint_class_id);
     JS_NewClass(JS_GetRuntime(ctx), js_joint_class_id, &js_joint_class);
+
+    JS_NewClassID(&js_joint_group_class_id);
     JS_NewClass(JS_GetRuntime(ctx), js_joint_group_class_id, &js_joint_group_class);
 
     JS_SetModuleExportList(ctx, m, js_ode_funcs, countof(js_ode_funcs));

@@ -511,12 +511,10 @@ static int js_pads_init(JSContext *ctx, JSModuleDef *m)
     /* the class is created once per runtime */
     JS_NewClass(JS_GetRuntime(ctx), js_pads_class_id, &js_pads_class);
     proto = JS_NewObject(ctx);
-    JS_SetPropertyFunctionList(ctx, proto, js_pad_proto_funcs,
-                               countof(js_pad_proto_funcs));
+    JS_SetPropertyFunctionList(ctx, proto, js_pad_proto_funcs, countof(js_pad_proto_funcs));
     JS_SetClassProto(ctx, js_pads_class_id, proto);
 
-    return JS_SetModuleExportList(ctx, m, module_funcs,
-                           countof(module_funcs));
+    return JS_SetModuleExportList(ctx, m, module_funcs, countof(module_funcs));
 }
 
 JSModuleDef *athena_pads_init(JSContext* ctx){
