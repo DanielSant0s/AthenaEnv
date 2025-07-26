@@ -44,8 +44,8 @@ const skin_object = new RenderObject(gltf_skin);
 skin_object.position = {x:0.0, y:8.0, z:0.0};
 skin_object.rotation = {x:Math.PI/2, y:0.0, z:0.0};
 
-const skin_sphere = ODE.createSphere(undefined, 1.0f);
-const skin_col_transform = ODE.createTransform(space, skin_sphere);
+const skin_sphere = ODE.GeomSphere(undefined, 1.0f);
+const skin_col_transform = ODE.GeomTransform(space, skin_sphere);
 skin_sphere.setPosition(0, -0.5f, 0);
 
 
@@ -65,7 +65,7 @@ scene.pipeline = Render.PL_DEFAULT;
 scene.getTexture(0).filter = LINEAR;
 
 const scene_object = new RenderObject(scene);
-const scene_collision = ODE.fromRenderObject(space, scene_object);
+const scene_collision = ODE.GeomRenderObject(space, scene_object);
 
 //const scene_body = ODE.createBody(world);
 //ODE.setGeomBody(scene_collision, scene_body);
@@ -83,7 +83,7 @@ const box_object = new RenderObject(box);
 box_object.position = {x:2.0, y:0.2, z:2.0};
 box_object.scale = {x:0.2, y:0.2, z:0.2};
 
-const box_col = ODE.fromRenderObject(space, box_object);
+const box_col = ODE.GeomRenderObject(space, box_object);
 box_object.setCollision(box_col);
 
 Camera.position(0.0f, 0.0f, 20.0f);
