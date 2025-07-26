@@ -122,7 +122,7 @@ static JSValue js_world_create(JSContext *ctx, JSValueConst this_val, int argc, 
 }
 
 static JSValue js_world_destroy(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    JSWorld *world = JS_GetOpaque(argv[0], js_world_class_id);
+    JSWorld *world = JS_GetOpaque(this_val, js_world_class_id);
     
     if (world->world) {
         dWorldDestroy(world->world);
@@ -338,7 +338,7 @@ static JSValue js_geom_create_transform(JSContext *ctx, JSValueConst this_val, i
 }
 
 static JSValue js_geom_destroy(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    JSGeom *geom = JS_GetOpaque(argv[0], js_geom_class_id);
+    JSGeom *geom = JS_GetOpaque(this_val, js_geom_class_id);
     
     if (geom->geom) {
         dGeomDestroy(geom->geom);
@@ -687,6 +687,8 @@ static const JSCFunctionListEntry js_world_proto_funcs[] = {
     JS_CFUNC_DEF("quickStep", 1, js_world_quick_step),
     JS_CFUNC_DEF("setQuickStepIterations", 1, js_world_set_quick_step_iterations),
     JS_CFUNC_DEF("stepWithContacts", 3, js_world_step_with_contacts),
+
+    JS_CFUNC_DEF("destroyWorld", 0, js_world_destroy),
 };
 
 static JSValue js_body_create(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
@@ -717,7 +719,7 @@ static JSValue js_body_create(JSContext *ctx, JSValueConst this_val, int argc, J
 }
 
 static JSValue js_body_destroy(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    JSBody *body = JS_GetOpaque(argv[0], js_body_class_id);
+    JSBody *body = JS_GetOpaque(this_val, js_body_class_id);
     
     if (body->body) {
         dBodyDestroy(body->body);
@@ -954,6 +956,8 @@ static const JSCFunctionListEntry js_body_proto_funcs[] = {
     JS_CFUNC_DEF("enable", 0, js_body_enable),
     JS_CFUNC_DEF("disable", 0, js_body_disable),
     JS_CFUNC_DEF("enabled", 0, js_body_is_enabled),
+
+    JS_CFUNC_DEF("free", 0, js_body_destroy),
 };
 
 static JSValue js_geom_set_body(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
@@ -1066,27 +1070,26 @@ static const JSCFunctionListEntry js_geom_proto_funcs[] = {
 
     JS_CFUNC_DEF("setBody", 1, js_geom_set_body),
     JS_CFUNC_DEF("getBody", 0, js_geom_get_body),
+
+    JS_CFUNC_DEF("free", 0, js_geom_destroy),
 };
 
 static const JSCFunctionListEntry js_ode_funcs[] = {
     JS_CFUNC_DEF("cleanup", 0, js_ode_cleanup),
-    JS_CFUNC_DEF("createWorld", 0, js_world_create),
-    JS_CFUNC_DEF("destroyWorld", 1, js_world_destroy),
-    JS_CFUNC_DEF("createSpace", 0, js_space_create),
+    JS_CFUNC_DEF("World", 0, js_world_create),
+    JS_CFUNC_DEF("Space", 0, js_space_create),
     JS_CFUNC_DEF("destroySpace", 1, js_space_destroy),
     JS_CFUNC_DEF("fromRenderObject", 2, js_geom_create_from_render_object),
     JS_CFUNC_DEF("createBox", 4, js_geom_create_box),
     JS_CFUNC_DEF("createSphere", 2, js_geom_create_sphere),
     JS_CFUNC_DEF("createPlane", 5, js_geom_create_plane),
     JS_CFUNC_DEF("createTransform", 2, js_geom_create_transform),
-    JS_CFUNC_DEF("destroyGeom", 1, js_geom_destroy),
     JS_CFUNC_DEF("spaceCollide", 2, js_space_collide),
     JS_CFUNC_DEF("geomCollide", 2, js_geom_collide),
     
-    JS_CFUNC_DEF("createBody", 1, js_body_create),
-    JS_CFUNC_DEF("destroyBody", 1, js_body_destroy),
+    JS_CFUNC_DEF("Body", 1, js_body_create),
     
-    JS_CFUNC_DEF("createJointGroup", 0, js_joint_group_create),
+    JS_CFUNC_DEF("JointGroup", 0, js_joint_group_create),
     JS_CFUNC_DEF("emptyJointGroup", 1, js_joint_group_empty),
     JS_CFUNC_DEF("destroyJointGroup", 1, js_joint_group_destroy),
 };

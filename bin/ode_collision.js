@@ -26,13 +26,13 @@ const sky = new Image("sky.png");
 sky.width = canvas.width;
 sky.height = canvas.height;
 
-const world = ODE.createWorld();
+const world = ODE.World();
 
-const jgroup = ODE.createJointGroup();
+const jgroup = ODE.JointGroup();
 
 world.setGravity(0, -9.81f, 0);
 
-const space = ODE.createSpace();
+const space = ODE.Space();
 
 const skin_anims = new AnimCollection("Twerk.gltf");
 const gltf_skin = new RenderData("Twerk.gltf");
@@ -49,7 +49,7 @@ const skin_col_transform = ODE.createTransform(space, skin_sphere);
 skin_sphere.setPosition(0, -0.5f, 0);
 
 
-const skin_body = ODE.createBody(world);
+const skin_body = ODE.Body(world);
 skin_col_transform.setBody(skin_body);
 //ODE.setBodyMass(skin_body, 1.0f);
 
