@@ -162,7 +162,7 @@ static JSValue js_space_create(JSContext *ctx, JSValueConst this_val, int argc, 
 }
 
 static JSValue js_space_destroy(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    JSSpace *space = JS_GetOpaque(argv[0], js_space_class_id);
+    JSSpace *space = JS_GetOpaque(this_val, js_space_class_id);
     
     if (space->space) {
         dSpaceDestroy(space->space);
@@ -455,11 +455,11 @@ static void collision_callback(void *data, dGeomID o1, dGeomID o2) {
 }
 
 static JSValue js_space_collide(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    JSSpace *space = JS_GetOpaque(argv[0], js_space_class_id);
+    JSSpace *space = JS_GetOpaque(this_val, js_space_class_id);
     
     collision_data cdata;
     cdata.ctx = ctx;
-    cdata.callback = (argc > 1) ? argv[1] : JS_UNDEFINED;
+    cdata.callback = (argc > 0) ? argv[0] : JS_UNDEFINED;
     cdata.contacts_array = JS_NewArray(ctx);
     
     dSpaceCollide(space->space, &cdata, collision_callback);
@@ -1019,13 +1019,13 @@ static JSValue js_joint_group_create(JSContext *ctx, JSValueConst this_val, int 
 }
 
 static JSValue js_joint_group_empty(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    JSJointGroup *group = JS_GetOpaque(argv[0], js_joint_group_class_id);
+    JSJointGroup *group = JS_GetOpaque(this_val, js_joint_group_class_id);
     dJointGroupEmpty(group->group);
     return JS_UNDEFINED;
 }
 
 static JSValue js_joint_group_destroy(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    JSJointGroup *group = JS_GetOpaque(argv[0], js_joint_group_class_id);
+    JSJointGroup *group = JS_GetOpaque(this_val, js_joint_group_class_id);
     
     if (group->group) {
         dJointGroupDestroy(group->group);
@@ -1074,24 +1074,29 @@ static const JSCFunctionListEntry js_geom_proto_funcs[] = {
     JS_CFUNC_DEF("free", 0, js_geom_destroy),
 };
 
+static const JSCFunctionListEntry js_space_proto_funcs[] = {
+    JS_CFUNC_DEF("collide", 1, js_space_collide),
+    JS_CFUNC_DEF("free", 0, js_space_destroy),
+};
+
+static const JSCFunctionListEntry js_joint_group_proto_funcs[] = {
+    JS_CFUNC_DEF("empty", 0, js_joint_group_empty),
+    JS_CFUNC_DEF("free", 0, js_joint_group_destroy),
+};
+
 static const JSCFunctionListEntry js_ode_funcs[] = {
     JS_CFUNC_DEF("cleanup", 0, js_ode_cleanup),
+
     JS_CFUNC_DEF("World", 0, js_world_create),
     JS_CFUNC_DEF("Space", 0, js_space_create),
-    JS_CFUNC_DEF("destroySpace", 1, js_space_destroy),
-    JS_CFUNC_DEF("fromRenderObject", 2, js_geom_create_from_render_object),
-    JS_CFUNC_DEF("createBox", 4, js_geom_create_box),
-    JS_CFUNC_DEF("createSphere", 2, js_geom_create_sphere),
-    JS_CFUNC_DEF("createPlane", 5, js_geom_create_plane),
-    JS_CFUNC_DEF("createTransform", 2, js_geom_create_transform),
-    JS_CFUNC_DEF("spaceCollide", 2, js_space_collide),
+    JS_CFUNC_DEF("GeomRenderObject", 2, js_geom_create_from_render_object),
+    JS_CFUNC_DEF("GeomBox", 4, js_geom_create_box),
+    JS_CFUNC_DEF("GeomSphere", 2, js_geom_create_sphere),
+    JS_CFUNC_DEF("GeomPlane", 5, js_geom_create_plane),
+    JS_CFUNC_DEF("GeomTransform", 2, js_geom_create_transform),
     JS_CFUNC_DEF("geomCollide", 2, js_geom_collide),
-    
     JS_CFUNC_DEF("Body", 1, js_body_create),
-    
     JS_CFUNC_DEF("JointGroup", 0, js_joint_group_create),
-    JS_CFUNC_DEF("emptyJointGroup", 1, js_joint_group_empty),
-    JS_CFUNC_DEF("destroyJointGroup", 1, js_joint_group_destroy),
 };
 
 static int js_ode_init_module(JSContext *ctx, JSModuleDef *m) {
@@ -1099,6 +1104,9 @@ static int js_ode_init_module(JSContext *ctx, JSModuleDef *m) {
 
     JS_NewClassID(&js_space_class_id);
     JS_NewClass(JS_GetRuntime(ctx), js_space_class_id, &js_space_class);
+    proto = JS_NewObject(ctx);
+    JS_SetPropertyFunctionList(ctx, proto, js_space_proto_funcs, countof(js_space_proto_funcs));
+    JS_SetClassProto(ctx, js_space_class_id, proto);
 
     JS_NewClassID(&js_geom_class_id);
     JS_NewClass(JS_GetRuntime(ctx), js_geom_class_id, &js_geom_class);
@@ -1123,6 +1131,9 @@ static int js_ode_init_module(JSContext *ctx, JSModuleDef *m) {
 
     JS_NewClassID(&js_joint_group_class_id);
     JS_NewClass(JS_GetRuntime(ctx), js_joint_group_class_id, &js_joint_group_class);
+    proto = JS_NewObject(ctx);
+    JS_SetPropertyFunctionList(ctx, proto, js_joint_group_proto_funcs, countof(js_joint_group_proto_funcs));
+    JS_SetClassProto(ctx, js_joint_group_class_id, proto);
 
     JS_SetModuleExportList(ctx, m, js_ode_funcs, countof(js_ode_funcs));
     
