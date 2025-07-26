@@ -30,7 +30,7 @@ const world = ODE.createWorld();
 
 const jgroup = ODE.createJointGroup();
 
-ODE.setGravity(world, 0, -9.81f, 0);
+world.setGravity(0, -9.81f, 0);
 
 const space = ODE.createSpace();
 
@@ -177,7 +177,7 @@ while(true) {
 
     font.print(10, 10, Screen.getFPS(360) + " FPS");
 
-    ODE.stepWithContacts(world, space, jgroup, 0.01f);
+    world.stepWithContacts(space, jgroup, 0.01f);
 
     Screen.flip();
 }
