@@ -537,12 +537,12 @@ void updateGeomPosRot(athena_object_data *obj) {
 }
 
 static JSValue js_world_set_gravity(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    JSWorld *world = JS_GetOpaque(argv[0], js_world_class_id);
+    JSWorld *world = JS_GetOpaque(this_val, js_world_class_id);
     
     float x, y, z;
-    if (JS_ToFloat32(ctx, &x, argv[1]) ||
-        JS_ToFloat32(ctx, &y, argv[2]) ||
-        JS_ToFloat32(ctx, &z, argv[3])) {
+    if (JS_ToFloat32(ctx, &x, argv[0]) ||
+        JS_ToFloat32(ctx, &y, argv[1]) ||
+        JS_ToFloat32(ctx, &z, argv[2])) {
         return JS_EXCEPTION;
     }
     
@@ -551,7 +551,7 @@ static JSValue js_world_set_gravity(JSContext *ctx, JSValueConst this_val, int a
 }
 
 static JSValue js_world_get_gravity(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    JSWorld *world = JS_GetOpaque(argv[0], js_world_class_id);
+    JSWorld *world = JS_GetOpaque(this_val, js_world_class_id);
     
     dVector3 gravity;
     dWorldGetGravity(world->world, gravity);
@@ -565,10 +565,10 @@ static JSValue js_world_get_gravity(JSContext *ctx, JSValueConst this_val, int a
 }
 
 static JSValue js_world_set_cfm(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    JSWorld *world = JS_GetOpaque(argv[0], js_world_class_id);
+    JSWorld *world = JS_GetOpaque(this_val, js_world_class_id);
     
     float cfm;
-    if (JS_ToFloat32(ctx, &cfm, argv[1])) {
+    if (JS_ToFloat32(ctx, &cfm, argv[0])) {
         return JS_EXCEPTION;
     }
     
@@ -577,10 +577,10 @@ static JSValue js_world_set_cfm(JSContext *ctx, JSValueConst this_val, int argc,
 }
 
 static JSValue js_world_set_erp(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    JSWorld *world = JS_GetOpaque(argv[0], js_world_class_id);
+    JSWorld *world = JS_GetOpaque(this_val, js_world_class_id);
     
     float erp;
-    if (JS_ToFloat32(ctx, &erp, argv[1])) {
+    if (JS_ToFloat32(ctx, &erp, argv[0])) {
         return JS_EXCEPTION;
     }
     
@@ -589,10 +589,10 @@ static JSValue js_world_set_erp(JSContext *ctx, JSValueConst this_val, int argc,
 }
 
 static JSValue js_world_step(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    JSWorld *world = JS_GetOpaque(argv[0], js_world_class_id);
+    JSWorld *world = JS_GetOpaque(this_val, js_world_class_id);
     
     float step_size;
-    if (JS_ToFloat32(ctx, &step_size, argv[1])) {
+    if (JS_ToFloat32(ctx, &step_size, argv[0])) {
         return JS_EXCEPTION;
     }
     
@@ -601,10 +601,10 @@ static JSValue js_world_step(JSContext *ctx, JSValueConst this_val, int argc, JS
 }
 
 static JSValue js_world_quick_step(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    JSWorld *world = JS_GetOpaque(argv[0], js_world_class_id);
+    JSWorld *world = JS_GetOpaque(this_val, js_world_class_id);
     
     float step_size;
-    if (JS_ToFloat32(ctx, &step_size, argv[1])) {
+    if (JS_ToFloat32(ctx, &step_size, argv[0])) {
         return JS_EXCEPTION;
     }
     
@@ -613,16 +613,81 @@ static JSValue js_world_quick_step(JSContext *ctx, JSValueConst this_val, int ar
 }
 
 static JSValue js_world_set_quick_step_iterations(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    JSWorld *world = JS_GetOpaque(argv[0], js_world_class_id);
+    JSWorld *world = JS_GetOpaque(this_val, js_world_class_id);
     
     uint32_t iterations;
-    if (JS_ToUint32(ctx, &iterations, argv[1])) {
+    if (JS_ToUint32(ctx, &iterations, argv[0])) {
         return JS_EXCEPTION;
     }
     
     dWorldSetQuickStepNumIterations(world->world, iterations);
     return JS_UNDEFINED;
 }
+
+
+typedef struct {
+    dWorldID world;
+    dJointGroupID joint_group;
+} physics_world_data;
+
+static void contact_callback(void *data, dGeomID o1, dGeomID o2) {
+    physics_world_data *cdata = (physics_world_data*)data;
+    
+    dContact contact[MAX_CONTACTS];
+    int n = dCollide(o1, o2, MAX_CONTACTS, &contact[0].geom, sizeof(dContact));
+    
+    if (n > 0) {
+        dBodyID b1 = dGeomGetBody(o1);
+        dBodyID b2 = dGeomGetBody(o2);
+        
+        if (b1 && b2 && dAreConnectedExcluding(b1, b2, dJointTypeContact)) {
+            return;
+        }
+        
+        for (int i = 0; i < n; i++) {
+            contact[i].surface.mode = dContactBounce | dContactSoftCFM;
+            contact[i].surface.mu = 0.5;
+            contact[i].surface.bounce = 0.1;
+            contact[i].surface.bounce_vel = 0.1;
+            contact[i].surface.soft_cfm = 0.01;
+            
+            dJointID c = dJointCreateContact(cdata->world, cdata->joint_group, &contact[i]);
+            dJointAttach(c, b1, b2);
+        }
+    }
+}
+
+static JSValue js_world_step_with_contacts(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSWorld *world = JS_GetOpaque(this_val, js_world_class_id);
+    JSSpace *space = JS_GetOpaque(argv[0], js_space_class_id);
+    JSJointGroup *contact_group = JS_GetOpaque(argv[1], js_joint_group_class_id);
+    
+    float step_size;
+    if (JS_ToFloat32(ctx, &step_size, argv[2])) {
+        return JS_EXCEPTION;
+    }
+    
+    physics_world_data cdata;
+    cdata.world = world->world;
+    cdata.joint_group = contact_group->group;
+    
+    dSpaceCollide(space->space, &cdata, contact_callback);
+    dWorldStep(world->world, step_size);
+    dJointGroupEmpty(contact_group->group);
+    
+    return JS_UNDEFINED;
+}
+
+static const JSCFunctionListEntry js_world_proto_funcs[] = {
+    JS_CFUNC_DEF("setGravity", 3, js_world_set_gravity),
+    JS_CFUNC_DEF("getGravity", 0, js_world_get_gravity),
+    JS_CFUNC_DEF("setCFM", 1, js_world_set_cfm),
+    JS_CFUNC_DEF("setERP", 1, js_world_set_erp),
+    JS_CFUNC_DEF("step", 1, js_world_step),
+    JS_CFUNC_DEF("quickStep", 1, js_world_quick_step),
+    JS_CFUNC_DEF("setQuickStepIterations", 1, js_world_set_quick_step_iterations),
+    JS_CFUNC_DEF("stepWithContacts", 3, js_world_step_with_contacts),
+};
 
 static JSValue js_body_create(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     JSWorld *world = JS_GetOpaque(argv[0], js_world_class_id);
@@ -965,59 +1030,6 @@ static JSValue js_joint_group_destroy(JSContext *ctx, JSValueConst this_val, int
     return JS_UNDEFINED;
 }
 
-typedef struct {
-    dWorldID world;
-    dJointGroupID joint_group;
-} physics_world_data;
-
-static void contact_callback(void *data, dGeomID o1, dGeomID o2) {
-    physics_world_data *cdata = (physics_world_data*)data;
-    
-    dContact contact[MAX_CONTACTS];
-    int n = dCollide(o1, o2, MAX_CONTACTS, &contact[0].geom, sizeof(dContact));
-    
-    if (n > 0) {
-        dBodyID b1 = dGeomGetBody(o1);
-        dBodyID b2 = dGeomGetBody(o2);
-        
-        if (b1 && b2 && dAreConnectedExcluding(b1, b2, dJointTypeContact)) {
-            return;
-        }
-        
-        for (int i = 0; i < n; i++) {
-            contact[i].surface.mode = dContactBounce | dContactSoftCFM;
-            contact[i].surface.mu = 0.5;
-            contact[i].surface.bounce = 0.1;
-            contact[i].surface.bounce_vel = 0.1;
-            contact[i].surface.soft_cfm = 0.01;
-            
-            dJointID c = dJointCreateContact(cdata->world, cdata->joint_group, &contact[i]);
-            dJointAttach(c, b1, b2);
-        }
-    }
-}
-
-static JSValue js_world_step_with_contacts(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    JSWorld *world = JS_GetOpaque(argv[0], js_world_class_id);
-    JSSpace *space = JS_GetOpaque(argv[1], js_space_class_id);
-    JSJointGroup *contact_group = JS_GetOpaque(argv[2], js_joint_group_class_id);
-    
-    float step_size;
-    if (JS_ToFloat32(ctx, &step_size, argv[3])) {
-        return JS_EXCEPTION;
-    }
-    
-    physics_world_data cdata;
-    cdata.world = world->world;
-    cdata.joint_group = contact_group->group;
-    
-    dSpaceCollide(space->space, &cdata, contact_callback);
-    dWorldStep(world->world, step_size);
-    dJointGroupEmpty(contact_group->group);
-    
-    return JS_UNDEFINED;
-}
-
 void updateBodyPosRot(athena_object_data *obj) {
     dBodyID body = (dBodyID)obj->physics;
     
@@ -1070,15 +1082,6 @@ static const JSCFunctionListEntry js_ode_funcs[] = {
     JS_CFUNC_DEF("destroyGeom", 1, js_geom_destroy),
     JS_CFUNC_DEF("spaceCollide", 2, js_space_collide),
     JS_CFUNC_DEF("geomCollide", 2, js_geom_collide),
-
-    JS_CFUNC_DEF("setGravity", 4, js_world_set_gravity),
-    JS_CFUNC_DEF("getGravity", 1, js_world_get_gravity),
-    JS_CFUNC_DEF("setCFM", 2, js_world_set_cfm),
-    JS_CFUNC_DEF("setERP", 2, js_world_set_erp),
-    JS_CFUNC_DEF("step", 2, js_world_step),
-    JS_CFUNC_DEF("quickStep", 2, js_world_quick_step),
-    JS_CFUNC_DEF("setQuickStepIterations", 2, js_world_set_quick_step_iterations),
-    JS_CFUNC_DEF("stepWithContacts", 4, js_world_step_with_contacts),
     
     JS_CFUNC_DEF("createBody", 1, js_body_create),
     JS_CFUNC_DEF("destroyBody", 1, js_body_destroy),
@@ -1102,6 +1105,9 @@ static int js_ode_init_module(JSContext *ctx, JSModuleDef *m) {
 
     JS_NewClassID(&js_world_class_id);
     JS_NewClass(JS_GetRuntime(ctx), js_world_class_id, &js_world_class);
+    proto = JS_NewObject(ctx);
+    JS_SetPropertyFunctionList(ctx, proto, js_world_proto_funcs, countof(js_world_proto_funcs));
+    JS_SetClassProto(ctx, js_world_class_id, proto);
 
     JS_NewClassID(&js_body_class_id);
     JS_NewClass(JS_GetRuntime(ctx), js_body_class_id, &js_body_class);
