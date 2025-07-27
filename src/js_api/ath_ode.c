@@ -1084,19 +1084,321 @@ static const JSCFunctionListEntry js_joint_group_proto_funcs[] = {
     JS_CFUNC_DEF("free", 0, js_joint_group_destroy),
 };
 
+typedef enum {
+    JOINT_BALL,
+    JOINT_HINGE,
+    JOINT_SLIDER,
+    JOINT_HINGE2,
+    JOINT_UNIVERSAL,
+    JOINT_FIXED, 
+    JOINT_NULL,
+    JOINT_AMOTOR
+} eJointTypes;
+
+static const dJointID (*joint_funcs[])(dWorldID, dJointGroupID) = {
+    dJointCreateBall,
+    dJointCreateHinge,
+    dJointCreateSlider,
+    dJointCreateHinge2,
+    dJointCreateUniversal,
+    dJointCreateFixed,
+    dJointCreateNull,
+    dJointCreateAMotor
+};
+
+static JSValue js_joint_create(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv, int magic) {
+    JSJoint *joint = malloc(sizeof(JSJoint));
+    if (!joint) {
+        return JS_EXCEPTION;
+    }
+
+    JSWorld *world = JS_GetOpaque(argv[0], js_world_class_id);
+    JSJointGroup *group = JS_GetOpaque(argv[1], js_joint_group_class_id);
+
+    joint->joint = joint_funcs[magic](world->world, group->group);
+
+    if (!joint->joint) {
+        free(joint);
+        return JS_ThrowInternalError(ctx, "Failed to create joint");
+    }
+    
+    JSValue obj = JS_NewObjectClass(ctx, js_joint_group_class_id);
+    if (JS_IsException(obj)) {
+        dJointDestroy(joint->joint);
+        free(joint);
+        return obj;
+    }
+    
+    JS_SetOpaque(obj, joint);
+    return obj;
+}
+
+static JSValue js_joint_destroy(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+    
+    if (joint->joint) {
+        dJointDestroy(joint->joint);
+        joint->joint = NULL;
+    }
+    return JS_UNDEFINED;
+}
+
+static JSValue js_joint_attach(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+    JSBody *body1 = JS_GetOpaque(argv[0], js_body_class_id);
+    JSBody *body2 = JS_GetOpaque(argv[1], js_body_class_id);
+
+    dJointAttach (joint->joint, body1->body, body2->body);
+
+    return JS_UNDEFINED;
+}
+
+static JSValue js_joint_set_ball_anchor(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+    
+    float x, y, z;
+    if (JS_ToFloat32(ctx, &x, argv[0]) ||
+        JS_ToFloat32(ctx, &y, argv[1]) ||
+        JS_ToFloat32(ctx, &z, argv[2])) {
+        return JS_EXCEPTION;
+    }
+    
+    dJointSetBallAnchor(joint->joint, x, y, z);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_joint_set_hinge_anchor(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+    
+    float x, y, z;
+    if (JS_ToFloat32(ctx, &x, argv[0]) ||
+        JS_ToFloat32(ctx, &y, argv[1]) ||
+        JS_ToFloat32(ctx, &z, argv[2])) {
+        return JS_EXCEPTION;
+    }
+    
+    dJointSetHingeAnchor(joint->joint, x, y, z);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_joint_set_hinge_axis(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+    
+    float x, y, z;
+    if (JS_ToFloat32(ctx, &x, argv[0]) ||
+        JS_ToFloat32(ctx, &y, argv[1]) ||
+        JS_ToFloat32(ctx, &z, argv[2])) {
+        return JS_EXCEPTION;
+    }
+    
+    dJointSetHingeAxis(joint->joint, x, y, z);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_joint_add_hinge_torque(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+    
+    float x;
+    if (JS_ToFloat32(ctx, &x, argv[0])) {
+        return JS_EXCEPTION;
+    }
+    
+    dJointAddHingeTorque(joint->joint, x);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_joint_set_slider_axis(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+    
+    float x, y, z;
+    if (JS_ToFloat32(ctx, &x, argv[0]) ||
+        JS_ToFloat32(ctx, &y, argv[1]) ||
+        JS_ToFloat32(ctx, &z, argv[2])) {
+        return JS_EXCEPTION;
+    }
+    
+    dJointSetSliderAxis(joint->joint, x, y, z);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_joint_add_slider_force(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+    
+    float x;
+    if (JS_ToFloat32(ctx, &x, argv[0])) {
+        return JS_EXCEPTION;
+    }
+    
+    dJointAddSliderForce(joint->joint, x);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_joint_set_hinge2_anchor(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+    
+    float x, y, z;
+    if (JS_ToFloat32(ctx, &x, argv[0]) ||
+        JS_ToFloat32(ctx, &y, argv[1]) ||
+        JS_ToFloat32(ctx, &z, argv[2])) {
+        return JS_EXCEPTION;
+    }
+    
+    dJointSetHinge2Anchor(joint->joint, x, y, z);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_joint_set_hinge2_axis1(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+    
+    float x, y, z;
+    if (JS_ToFloat32(ctx, &x, argv[0]) ||
+        JS_ToFloat32(ctx, &y, argv[1]) ||
+        JS_ToFloat32(ctx, &z, argv[2])) {
+        return JS_EXCEPTION;
+    }
+    
+    dJointSetHinge2Axis1(joint->joint, x, y, z);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_joint_set_hinge2_axis2(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+    
+    float x, y, z;
+    if (JS_ToFloat32(ctx, &x, argv[0]) ||
+        JS_ToFloat32(ctx, &y, argv[1]) ||
+        JS_ToFloat32(ctx, &z, argv[2])) {
+        return JS_EXCEPTION;
+    }
+    
+    dJointSetHinge2Axis2(joint->joint, x, y, z);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_joint_add_hinge2_torques(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+    
+    float t1, t2;
+    if (JS_ToFloat32(ctx, &t1, argv[0]) || JS_ToFloat32(ctx, &t2, argv[1])) {
+        return JS_EXCEPTION;
+    }
+    
+    dJointAddHinge2Torques(joint->joint, t1, t2);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_joint_set_universal_anchor(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+    
+    float x, y, z;
+    if (JS_ToFloat32(ctx, &x, argv[0]) ||
+        JS_ToFloat32(ctx, &y, argv[1]) ||
+        JS_ToFloat32(ctx, &z, argv[2])) {
+        return JS_EXCEPTION;
+    }
+    
+    dJointSetUniversalAnchor(joint->joint, x, y, z);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_joint_set_universal_axis1(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+    
+    float x, y, z;
+    if (JS_ToFloat32(ctx, &x, argv[0]) ||
+        JS_ToFloat32(ctx, &y, argv[1]) ||
+        JS_ToFloat32(ctx, &z, argv[2])) {
+        return JS_EXCEPTION;
+    }
+    
+    dJointSetUniversalAxis1(joint->joint, x, y, z);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_joint_set_universal_axis2(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+    
+    float x, y, z;
+    if (JS_ToFloat32(ctx, &x, argv[0]) ||
+        JS_ToFloat32(ctx, &y, argv[1]) ||
+        JS_ToFloat32(ctx, &z, argv[2])) {
+        return JS_EXCEPTION;
+    }
+    
+    dJointSetUniversalAxis2(joint->joint, x, y, z);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_joint_add_universal_torques(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+    
+    float t1, t2;
+    if (JS_ToFloat32(ctx, &t1, argv[0]) || JS_ToFloat32(ctx, &t2, argv[1])) {
+        return JS_EXCEPTION;
+    }
+    
+    dJointAddUniversalTorques(joint->joint, t1, t2);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_joint_set_fixed(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+    
+    dJointSetFixed(joint->joint);
+    return JS_UNDEFINED;
+}
+
+static const JSCFunctionListEntry js_joint_proto_funcs[] = {
+    JS_CFUNC_DEF("free", 0, js_joint_destroy),
+    JS_CFUNC_DEF("attach", 2, js_joint_attach),
+
+    JS_CFUNC_DEF("setBallAnchor", 3, js_joint_set_ball_anchor),
+
+    JS_CFUNC_DEF("setHingeAnchor", 3, js_joint_set_hinge_anchor),
+    JS_CFUNC_DEF("setHingeAxis", 3, js_joint_set_hinge_axis),
+    JS_CFUNC_DEF("addHingeTorque", 1, js_joint_add_hinge_torque),
+
+    JS_CFUNC_DEF("setSliderAxis", 3, js_joint_set_slider_axis),
+    JS_CFUNC_DEF("addSliderForce", 1, js_joint_add_slider_force),
+
+    JS_CFUNC_DEF("setHinge2Anchor", 3, js_joint_set_hinge2_anchor),
+    JS_CFUNC_DEF("setHinge2Axis1", 3, js_joint_set_hinge2_axis1),
+    JS_CFUNC_DEF("setHinge2Axis2", 3, js_joint_set_hinge2_axis2),
+    JS_CFUNC_DEF("AddHinge2Torques", 2, js_joint_add_hinge2_torques),
+
+    JS_CFUNC_DEF("setUniversalAnchor", 3, js_joint_set_universal_anchor),
+    JS_CFUNC_DEF("setUniversalAxis1", 3, js_joint_set_universal_axis1),
+    JS_CFUNC_DEF("setUniversalAxis2", 3, js_joint_set_universal_axis2),
+    JS_CFUNC_DEF("setUniversalTorques", 2, js_joint_add_universal_torques),
+
+    JS_CFUNC_DEF("setFixed", 0, js_joint_set_fixed),
+};
+
+
 static const JSCFunctionListEntry js_ode_funcs[] = {
     JS_CFUNC_DEF("cleanup", 0, js_ode_cleanup),
 
-    JS_CFUNC_DEF("World", 0, js_world_create),
-    JS_CFUNC_DEF("Space", 0, js_space_create),
     JS_CFUNC_DEF("GeomRenderObject", 2, js_geom_create_from_render_object),
     JS_CFUNC_DEF("GeomBox", 4, js_geom_create_box),
     JS_CFUNC_DEF("GeomSphere", 2, js_geom_create_sphere),
     JS_CFUNC_DEF("GeomPlane", 5, js_geom_create_plane),
     JS_CFUNC_DEF("GeomTransform", 2, js_geom_create_transform),
-    JS_CFUNC_DEF("geomCollide", 2, js_geom_collide),
+
+    JS_CFUNC_MAGIC_DEF("JointBall", 2, js_joint_create, JOINT_BALL),
+    JS_CFUNC_MAGIC_DEF("JointHinge", 2, js_joint_create, JOINT_HINGE),
+    JS_CFUNC_MAGIC_DEF("JointSlider", 2, js_joint_create, JOINT_SLIDER),
+    JS_CFUNC_MAGIC_DEF("JointHinge2", 2, js_joint_create, JOINT_HINGE2),
+    JS_CFUNC_MAGIC_DEF("JointUniversal", 2, js_joint_create, JOINT_UNIVERSAL),
+    JS_CFUNC_MAGIC_DEF("JointFixed", 2, js_joint_create, JOINT_FIXED),
+    JS_CFUNC_MAGIC_DEF("JointNull", 2, js_joint_create, JOINT_NULL),
+    JS_CFUNC_MAGIC_DEF("JointAMotor", 2, js_joint_create, JOINT_AMOTOR),
+
+    JS_CFUNC_DEF("World", 0, js_world_create),
+    JS_CFUNC_DEF("Space", 0, js_space_create),
     JS_CFUNC_DEF("Body", 1, js_body_create),
     JS_CFUNC_DEF("JointGroup", 0, js_joint_group_create),
+
+    JS_CFUNC_DEF("geomCollide", 2, js_geom_collide),
 };
 
 static int js_ode_init_module(JSContext *ctx, JSModuleDef *m) {
@@ -1128,6 +1430,9 @@ static int js_ode_init_module(JSContext *ctx, JSModuleDef *m) {
 
     JS_NewClassID(&js_joint_class_id);
     JS_NewClass(JS_GetRuntime(ctx), js_joint_class_id, &js_joint_class);
+    proto = JS_NewObject(ctx);
+    JS_SetPropertyFunctionList(ctx, proto, js_joint_proto_funcs, countof(js_joint_proto_funcs));
+    JS_SetClassProto(ctx, js_joint_class_id, proto);
 
     JS_NewClassID(&js_joint_group_class_id);
     JS_NewClass(JS_GetRuntime(ctx), js_joint_group_class_id, &js_joint_group_class);
