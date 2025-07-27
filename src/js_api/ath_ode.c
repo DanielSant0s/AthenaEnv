@@ -1348,6 +1348,75 @@ static JSValue js_joint_set_fixed(JSContext *ctx, JSValueConst this_val, int arg
     return JS_UNDEFINED;
 }
 
+static JSValue js_joint_set_amotor_num_axes(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+    
+    int num;
+    if (JS_ToInt32(ctx, &num, argv[0])) {
+        return JS_EXCEPTION;
+    }
+    
+    dJointSetAMotorNumAxes(joint->joint, num);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_joint_set_amotor_axis(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+    
+    int anum, rel;
+    float x, y, z;
+    if (JS_ToInt32(ctx, &anum, argv[0]) ||
+        JS_ToInt32(ctx, &rel, argv[1]) ||
+        JS_ToFloat32(ctx, &x, argv[2]) ||
+        JS_ToFloat32(ctx, &y, argv[3]) ||
+        JS_ToFloat32(ctx, &z, argv[4])
+    ) {
+        return JS_EXCEPTION;
+    }
+    
+    dJointSetAMotorAxis(joint->joint, anum, rel, x, y, z);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_joint_set_amotor_angle(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+    
+    int anum;
+    float a;
+    if (JS_ToInt32(ctx, &anum, argv[0]) ||
+        JS_ToFloat32(ctx, &a, argv[1])
+    ) {
+        return JS_EXCEPTION;
+    }
+    
+    dJointSetAMotorAngle(joint->joint, anum, a);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_joint_set_amotor_mode(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+    
+    int mode;
+    if (JS_ToInt32(ctx, &mode, argv[0])) {
+        return JS_EXCEPTION;
+    }
+    
+    dJointSetAMotorMode(joint->joint, mode);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_joint_add_amotor_torques(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+    
+    float t1, t2, t3;
+    if (JS_ToFloat32(ctx, &t1, argv[0]) || JS_ToFloat32(ctx, &t2, argv[1]) || JS_ToFloat32(ctx, &t3, argv[2])) {
+        return JS_EXCEPTION;
+    }
+    
+    dJointAddAMotorTorques(joint->joint, t1, t2, t3);
+    return JS_UNDEFINED;
+}
+
 static const JSCFunctionListEntry js_joint_proto_funcs[] = {
     JS_CFUNC_DEF("free", 0, js_joint_destroy),
     JS_CFUNC_DEF("attach", 2, js_joint_attach),
@@ -1372,6 +1441,12 @@ static const JSCFunctionListEntry js_joint_proto_funcs[] = {
     JS_CFUNC_DEF("setUniversalTorques", 2, js_joint_add_universal_torques),
 
     JS_CFUNC_DEF("setFixed", 0, js_joint_set_fixed),
+
+    JS_CFUNC_DEF("setAMotorNumAxes", 1,  js_joint_set_amotor_num_axes),
+    JS_CFUNC_DEF("setAMotorAxis", 5,   js_joint_set_amotor_axis),
+    JS_CFUNC_DEF("setAMotorAngle", 2,   js_joint_set_amotor_angle),
+    JS_CFUNC_DEF("setAMotorMode", 1, js_joint_set_amotor_mode),
+    JS_CFUNC_DEF("setAMotorTorques", 3, js_joint_add_amotor_torques),
 };
 
 
