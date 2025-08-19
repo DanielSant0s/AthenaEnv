@@ -25,68 +25,70 @@
 extern bool boot_logo, dark_mode;
 
 #ifdef ATHENA_GRAPHICS
-typedef struct {
-	const char* path;
-    GSSURFACE *tex;
-	bool delayed;
-	bool loaded;
-    Color color;
-	float width;
-	float height;
-	float startx;
-	float starty;
-	float endx;
-	float endy;
-    float angle;
-} JSImageData;
+    typedef struct {
+    	const char* path;
+        GSSURFACE *tex;
+    	bool delayed;
+    	bool loaded;
+        Color color;
+    	float width;
+    	float height;
+    	float startx;
+    	float starty;
+    	float endx;
+    	float endy;
+        float angle;
+    } JSImageData;
 
-typedef struct JSImgList {
-    JSImageData** list;
-	int size;
-	int sema_id;
-	int thread_id;
-} JSImgList;
+    typedef struct JSImgList {
+        JSImageData** list;
+    	int size;
+    	int sema_id;
+    	int thread_id;
+    } JSImgList;
 
-typedef struct {
-	athena_object_data obj;
-} JSRenderObject;
+    typedef struct {
+    	athena_object_data obj;
+    } JSRenderObject;
 
-JSClassID get_img_class_id();
-JSClassID get_imglist_class_id();
-extern JSClassID js_render_object_class_id;
+    JSClassID get_img_class_id();
+    JSClassID get_imglist_class_id();
+    extern JSClassID js_render_object_class_id;
+#endif
 
-#include <ode/ode.h>
+#ifdef ATHENA_ODE
+    #include <ode/ode.h>
 
-typedef struct {
-    dSpaceID space;
-    dSpaceID parent;
-} JSSpace;
+    typedef struct {
+        dSpaceID space;
+        dSpaceID parent;
+    } JSSpace;
 
-typedef struct {
-    dGeomID geom;
-    dSpaceID parent_space;
-} JSGeom;
+    typedef struct {
+        dGeomID geom;
+        dSpaceID parent_space;
+    } JSGeom;
 
-typedef struct {
-    dWorldID world;
-} JSWorld;
+    typedef struct {
+        dWorldID world;
+    } JSWorld;
 
-typedef struct {
-    dBodyID body;
-    dWorldID parent_world;
-} JSBody;
+    typedef struct {
+        dBodyID body;
+        dWorldID parent_world;
+    } JSBody;
 
-typedef struct {
-    dJointID joint;
-    dWorldID parent_world;
-} JSJoint;
+    typedef struct {
+        dJointID joint;
+        dWorldID parent_world;
+    } JSJoint;
 
-typedef struct {
-    dJointGroupID group;
-} JSJointGroup;
+    typedef struct {
+        dJointGroupID group;
+    } JSJointGroup;
 
-extern JSClassID js_geom_class_id;
-extern JSClassID js_body_class_id;
+    extern JSClassID js_geom_class_id;
+    extern JSClassID js_body_class_id;
 #endif
 
 JSClassID get_matrix4_class_id();

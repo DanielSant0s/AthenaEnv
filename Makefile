@@ -43,6 +43,7 @@ EE_SIO ?= 0
 
 PADEMU ?= 1
 GRAPHICS ?= 1
+ODE_PHYSICS_COLLISION ?= 1
 AUDIO ?= 1
 
 # Module linking control
@@ -109,16 +110,24 @@ ifeq ($(MX4SIO),1)
   IOP_MODULES += mx4sio_bd.o
 endif
 
+ifeq ($(ODE_PHYSICS_COLLISION),1)
+  EE_LIBS += -Lee_modules/ode/lib/ -lopcode -lice -lode
+  EE_INCS += -Iee_modules/ode/include
+  EE_CFLAGS += -DATHENA_ODE
+
+  ATHENA_MODULES += ath_ode.o
+
+  EXT_LIBS += ee_modules/ode/lib/libice.a ee_modules/ode/lib/libopcode.a ee_modules/ode/lib/libode.a
+endif
+
 ifeq ($(GRAPHICS),1)
-  EE_LIBS += -L$(PS2DEV)/gsKit/lib/ -Lee_modules/ode/lib/ -ljpeg -lfreetype -ldmakit -lpng -lopcode -lice -lode
-  EE_INCS += -I$(PS2DEV)/gsKit/include -I$(PS2SDK)/ports/include/freetype2 -Iee_modules/ode/include
+  EE_LIBS += -L$(PS2DEV)/gsKit/lib/ -ljpeg -lfreetype -ldmakit -lpng
+  EE_INCS += -I$(PS2DEV)/gsKit/include -I$(PS2SDK)/ports/include/freetype2
   EE_CFLAGS += -DATHENA_GRAPHICS
   APP_CORE += graphics.o image_font.o owl_draw.o image_loaders.o mesh_loaders.o atlas.o fntsys.o render.o camera.o skin_math.o calc_3d.o fast_obj/fast_obj.o
 
-  ATHENA_MODULES += ath_color.o ath_font.o ath_render.o ath_anim_3d.o ath_lights.o ath_3dcamera.o ath_screen.o ath_image.o ath_imagelist.o ath_shape.o ath_ode.o
+  ATHENA_MODULES += ath_color.o ath_font.o ath_render.o ath_anim_3d.o ath_lights.o ath_3dcamera.o ath_screen.o ath_image.o ath_imagelist.o ath_shape.o
   EE_OBJS += $(VU1_MPGS) $(VU0_MPGS)
-
-  EXT_LIBS += ee_modules/ode/lib/libice.a ee_modules/ode/lib/libopcode.a ee_modules/ode/lib/libode.a
 endif
 
 ifeq ($(PADEMU),1)
