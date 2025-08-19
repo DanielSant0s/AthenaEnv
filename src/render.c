@@ -213,9 +213,6 @@ void new_render_object(athena_object_data *obj, athena_render_data *data) {
 	obj->scale[2] = 1.0f;
 	obj->scale[3] = 1.0f;
 
-	obj->userdata = NULL;
-	obj->update_userdata = NULL;
-
 	obj->collision = NULL;
 	obj->update_collision = NULL;
 

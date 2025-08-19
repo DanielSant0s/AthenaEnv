@@ -158,7 +158,6 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"import * as AnimCollection from 'AnimCollection';\n"
 				"import * as Lights from 'Lights';\n"
 				"import * as Camera from 'Camera';\n"
-				"import * as ODE from 'ODE';\n"
 				"globalThis.Color = Color;\n"
 				"globalThis.Screen = Screen;\n"
 				"globalThis.Draw = Draw;\n"
@@ -180,8 +179,11 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 
 				"globalThis.Camera = Camera;\n"
 
-				"globalThis.ODE = ODE;\n"
+				#endif
 
+				#ifdef ATHENA_ODE
+				"import * as ODE from 'ODE';\n"
+				"globalThis.ODE = ODE;\n"
 				#endif
 
 				"import * as std from 'std';\n"
@@ -278,6 +280,10 @@ static JSContext *JS_NewCustomContext(JSRuntime *rt)
 	athena_lights_init(ctx);
 	athena_3dcamera_init(ctx);
 	athena_anim_3d_init(ctx);
+	
+	#endif
+
+	#ifdef ATHENA_ODE
 	athena_ode_init(ctx);
 	#endif
 
