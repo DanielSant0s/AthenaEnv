@@ -678,19 +678,6 @@ static JSValue js_world_step_with_contacts(JSContext *ctx, JSValueConst this_val
     return JS_UNDEFINED;
 }
 
-static const JSCFunctionListEntry js_world_proto_funcs[] = {
-    JS_CFUNC_DEF("setGravity", 3, js_world_set_gravity),
-    JS_CFUNC_DEF("getGravity", 0, js_world_get_gravity),
-    JS_CFUNC_DEF("setCFM", 1, js_world_set_cfm),
-    JS_CFUNC_DEF("setERP", 1, js_world_set_erp),
-    JS_CFUNC_DEF("step", 1, js_world_step),
-    JS_CFUNC_DEF("quickStep", 1, js_world_quick_step),
-    JS_CFUNC_DEF("setQuickStepIterations", 1, js_world_set_quick_step_iterations),
-    JS_CFUNC_DEF("stepWithContacts", 3, js_world_step_with_contacts),
-
-    JS_CFUNC_DEF("destroyWorld", 0, js_world_destroy),
-};
-
 static JSValue js_body_create(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     JSWorld *world = JS_GetOpaque(argv[0], js_world_class_id);
     
@@ -939,27 +926,6 @@ static JSValue js_body_is_enabled(JSContext *ctx, JSValueConst this_val, int arg
     return JS_NewBool(ctx, dBodyIsEnabled(body->body));
 }
 
-static const JSCFunctionListEntry js_body_proto_funcs[] = {
-    JS_CFUNC_DEF("setPosition", 3, js_body_set_position),
-    JS_CFUNC_DEF("getPosition", 0, js_body_get_position),
-    JS_CFUNC_DEF("setRotation", 1, js_body_set_rotation),
-    JS_CFUNC_DEF("getRotation", 0, js_body_get_rotation),
-    JS_CFUNC_DEF("setLinearVel", 3, js_body_set_linear_vel),
-    JS_CFUNC_DEF("getLinearVel", 0, js_body_get_linear_vel),
-    JS_CFUNC_DEF("setAngularVel", 3, js_body_set_angular_vel),
-    JS_CFUNC_DEF("getAngularVel", 0, js_body_get_angular_vel),
-    JS_CFUNC_DEF("setMass", 1, js_body_set_mass),
-    JS_CFUNC_DEF("setMassBox", 4, js_body_set_mass_box),
-    JS_CFUNC_DEF("setMassSphere", 2, js_body_set_mass_sphere),
-    JS_CFUNC_DEF("addForce", 3, js_body_add_force),
-    JS_CFUNC_DEF("addTorque", 3, js_body_add_torque),
-    JS_CFUNC_DEF("enable", 0, js_body_enable),
-    JS_CFUNC_DEF("disable", 0, js_body_disable),
-    JS_CFUNC_DEF("enabled", 0, js_body_is_enabled),
-
-    JS_CFUNC_DEF("free", 0, js_body_destroy),
-};
-
 static JSValue js_geom_set_body(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     JSGeom *geom = JS_GetOpaque(this_val, js_geom_class_id);
     JSBody *body = JS_GetOpaque(argv[0], js_body_class_id);
@@ -1061,28 +1027,6 @@ void updateBodyPosRot(athena_object_data *obj) {
 
     update_object_space(obj);
 }
-
-static const JSCFunctionListEntry js_geom_proto_funcs[] = {
-    JS_CFUNC_DEF("setPosition", 3, js_geom_set_position),
-    JS_CFUNC_DEF("setRotation", 1, js_geom_set_rotation),
-    JS_CFUNC_DEF("getPosition", 0, js_geom_get_position),
-    JS_CFUNC_DEF("getRotation", 0, js_geom_get_rotation),
-
-    JS_CFUNC_DEF("setBody", 1, js_geom_set_body),
-    JS_CFUNC_DEF("getBody", 0, js_geom_get_body),
-
-    JS_CFUNC_DEF("free", 0, js_geom_destroy),
-};
-
-static const JSCFunctionListEntry js_space_proto_funcs[] = {
-    JS_CFUNC_DEF("collide", 1, js_space_collide),
-    JS_CFUNC_DEF("free", 0, js_space_destroy),
-};
-
-static const JSCFunctionListEntry js_joint_group_proto_funcs[] = {
-    JS_CFUNC_DEF("empty", 0, js_joint_group_empty),
-    JS_CFUNC_DEF("free", 0, js_joint_group_destroy),
-};
 
 typedef enum {
     JOINT_BALL,
@@ -1417,10 +1361,350 @@ static JSValue js_joint_add_amotor_torques(JSContext *ctx, JSValueConst this_val
     return JS_UNDEFINED;
 }
 
+static JSValue js_joint_get_ball_anchor(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+
+    JSValue arr = JS_NewArray(ctx);
+
+    dVector3 vel;
+
+    dJointGetBallAnchor (joint->joint, vel);
+    
+    JS_SetPropertyUint32(ctx, arr, 0, JS_NewFloat32(ctx, vel[0]));
+    JS_SetPropertyUint32(ctx, arr, 1, JS_NewFloat32(ctx, vel[1]));
+    JS_SetPropertyUint32(ctx, arr, 2, JS_NewFloat32(ctx, vel[2]));
+    
+    return arr;
+}
+
+static JSValue js_joint_get_hinge_anchor(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+
+    JSValue arr = JS_NewArray(ctx);
+
+    dVector3 vel;
+
+    dJointGetHingeAnchor (joint->joint, vel);
+    
+    JS_SetPropertyUint32(ctx, arr, 0, JS_NewFloat32(ctx, vel[0]));
+    JS_SetPropertyUint32(ctx, arr, 1, JS_NewFloat32(ctx, vel[1]));
+    JS_SetPropertyUint32(ctx, arr, 2, JS_NewFloat32(ctx, vel[2]));
+    
+    return arr;
+}
+
+static JSValue js_joint_get_hinge_axis(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+
+    JSValue arr = JS_NewArray(ctx);
+
+    dVector3 vel;
+
+    dJointGetHingeAxis (joint->joint, vel);
+    
+    JS_SetPropertyUint32(ctx, arr, 0, JS_NewFloat32(ctx, vel[0]));
+    JS_SetPropertyUint32(ctx, arr, 1, JS_NewFloat32(ctx, vel[1]));
+    JS_SetPropertyUint32(ctx, arr, 2, JS_NewFloat32(ctx, vel[2]));
+    
+    return arr;
+}
+static JSValue js_joint_get_hinge_angle(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+
+    return JS_NewFloat32(ctx, dJointGetHingeAngle(joint->joint));
+}
+
+static JSValue js_joint_get_hinge_angle_rate(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+
+    return JS_NewFloat32(ctx, dJointGetHingeAngleRate(joint->joint));
+}
+
+static JSValue js_joint_get_slider_position(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+
+    return JS_NewFloat32(ctx, dJointGetSliderPosition(joint->joint));
+}
+
+static JSValue js_joint_get_slider_position_rate(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+
+    return JS_NewFloat32(ctx, dJointGetSliderPositionRate(joint->joint));
+}
+
+static JSValue js_joint_get_slider_axis(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+
+    JSValue arr = JS_NewArray(ctx);
+
+    dVector3 vel;
+
+    dJointGetSliderAxis (joint->joint, vel);
+    
+    JS_SetPropertyUint32(ctx, arr, 0, JS_NewFloat32(ctx, vel[0]));
+    JS_SetPropertyUint32(ctx, arr, 1, JS_NewFloat32(ctx, vel[1]));
+    JS_SetPropertyUint32(ctx, arr, 2, JS_NewFloat32(ctx, vel[2]));
+    
+    return arr;
+}
+
+static JSValue js_joint_get_hinge2_anchor(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+
+    JSValue arr = JS_NewArray(ctx);
+
+    dVector3 vel;
+
+    dJointGetHinge2Anchor (joint->joint, vel);
+    
+    JS_SetPropertyUint32(ctx, arr, 0, JS_NewFloat32(ctx, vel[0]));
+    JS_SetPropertyUint32(ctx, arr, 1, JS_NewFloat32(ctx, vel[1]));
+    JS_SetPropertyUint32(ctx, arr, 2, JS_NewFloat32(ctx, vel[2]));
+    
+    return arr;
+}
+
+static JSValue js_joint_get_hinge2_axis1(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+
+    JSValue arr = JS_NewArray(ctx);
+
+    dVector3 vel;
+
+    dJointGetHinge2Axis1 (joint->joint, vel);
+    
+    JS_SetPropertyUint32(ctx, arr, 0, JS_NewFloat32(ctx, vel[0]));
+    JS_SetPropertyUint32(ctx, arr, 1, JS_NewFloat32(ctx, vel[1]));
+    JS_SetPropertyUint32(ctx, arr, 2, JS_NewFloat32(ctx, vel[2]));
+    
+    return arr;
+}
+
+static JSValue js_joint_get_hinge2_axis2(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+
+    JSValue arr = JS_NewArray(ctx);
+
+    dVector3 vel;
+
+    dJointGetHinge2Axis2 (joint->joint, vel);
+    
+    JS_SetPropertyUint32(ctx, arr, 0, JS_NewFloat32(ctx, vel[0]));
+    JS_SetPropertyUint32(ctx, arr, 1, JS_NewFloat32(ctx, vel[1]));
+    JS_SetPropertyUint32(ctx, arr, 2, JS_NewFloat32(ctx, vel[2]));
+    
+    return arr;
+}
+
+static JSValue js_joint_get_hinge2_angle1(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+
+    return JS_NewFloat32(ctx, dJointGetHinge2Angle1(joint->joint));
+}
+
+static JSValue js_joint_get_hinge2_angle1_rate(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+
+    return JS_NewFloat32(ctx, dJointGetHinge2Angle1Rate(joint->joint));
+}
+
+static JSValue js_joint_get_hinge2_angle2_rate(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+
+    return JS_NewFloat32(ctx, dJointGetHinge2Angle2Rate(joint->joint));
+}
+
+static JSValue js_joint_get_universal_anchor(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+
+    JSValue arr = JS_NewArray(ctx);
+
+    dVector3 vel;
+
+    dJointGetUniversalAnchor (joint->joint, vel);
+    
+    JS_SetPropertyUint32(ctx, arr, 0, JS_NewFloat32(ctx, vel[0]));
+    JS_SetPropertyUint32(ctx, arr, 1, JS_NewFloat32(ctx, vel[1]));
+    JS_SetPropertyUint32(ctx, arr, 2, JS_NewFloat32(ctx, vel[2]));
+    
+    return arr;
+}
+
+static JSValue js_joint_get_universal_axis1(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+
+    JSValue arr = JS_NewArray(ctx);
+
+    dVector3 vel;
+
+    dJointGetUniversalAxis1 (joint->joint, vel);
+    
+    JS_SetPropertyUint32(ctx, arr, 0, JS_NewFloat32(ctx, vel[0]));
+    JS_SetPropertyUint32(ctx, arr, 1, JS_NewFloat32(ctx, vel[1]));
+    JS_SetPropertyUint32(ctx, arr, 2, JS_NewFloat32(ctx, vel[2]));
+    
+    return arr;
+}
+
+static JSValue js_joint_get_universal_axis2(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+
+    JSValue arr = JS_NewArray(ctx);
+
+    dVector3 vel;
+
+    dJointGetUniversalAxis2 (joint->joint, vel);
+    
+    JS_SetPropertyUint32(ctx, arr, 0, JS_NewFloat32(ctx, vel[0]));
+    JS_SetPropertyUint32(ctx, arr, 1, JS_NewFloat32(ctx, vel[1]));
+    JS_SetPropertyUint32(ctx, arr, 2, JS_NewFloat32(ctx, vel[2]));
+    
+    return arr;
+}
+
+static JSValue js_joint_get_universal_angle1(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+
+    return JS_NewFloat32(ctx, dJointGetUniversalAngle1(joint->joint));
+}
+
+static JSValue js_joint_get_universal_angle2(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+
+    return JS_NewFloat32(ctx, dJointGetUniversalAngle2(joint->joint));
+}
+
+static JSValue js_joint_get_universal_angle1_rate(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+
+    return JS_NewFloat32(ctx, dJointGetUniversalAngle1Rate(joint->joint));
+}
+
+static JSValue js_joint_get_universal_angle2_rate(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+
+    return JS_NewFloat32(ctx, dJointGetUniversalAngle2Rate(joint->joint));
+}
+
+static JSValue js_joint_get_amotor_num_axes(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+
+    return JS_NewInt32(ctx, dJointGetAMotorNumAxes(joint->joint));
+}
+
+static JSValue js_joint_get_amotor_axis(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+
+    int anum;
+    JS_ToInt32(ctx, &anum, argv[0]);
+
+    JSValue arr = JS_NewArray(ctx);
+
+    dVector3 res;
+
+    dJointGetAMotorAxis(joint->joint, anum, res);
+    
+    JS_SetPropertyUint32(ctx, arr, 0, JS_NewFloat32(ctx, res[0]));
+    JS_SetPropertyUint32(ctx, arr, 1, JS_NewFloat32(ctx, res[1]));
+    JS_SetPropertyUint32(ctx, arr, 2, JS_NewFloat32(ctx, res[2]));
+    
+    return arr;
+}
+
+static JSValue js_joint_get_amotor_axis_rel(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+
+    int anum;
+    JS_ToInt32(ctx, &anum, argv[0]);
+
+    return JS_NewInt32(ctx, dJointGetAMotorAxisRel(joint->joint, anum));
+}
+
+static JSValue js_joint_get_amotor_angle(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+
+    int anum;
+    JS_ToInt32(ctx, &anum, argv[0]);
+
+    return JS_NewFloat32(ctx, dJointGetAMotorAngle(joint->joint, anum));
+}
+
+static JSValue js_joint_get_amotor_angle_rate(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+
+    int anum;
+    JS_ToInt32(ctx, &anum, argv[0]);
+
+    return JS_NewFloat32(ctx, dJointGetAMotorAngleRate(joint->joint, anum));
+}
+
+static JSValue js_joint_get_amotor_mode(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+
+    return JS_NewInt32(ctx, dJointGetAMotorMode(joint->joint));
+}
+
+static const JSCFunctionListEntry js_world_proto_funcs[] = {
+    JS_CFUNC_DEF("setGravity", 3, js_world_set_gravity),
+    JS_CFUNC_DEF("getGravity", 0, js_world_get_gravity),
+    JS_CFUNC_DEF("setCFM", 1, js_world_set_cfm),
+    JS_CFUNC_DEF("setERP", 1, js_world_set_erp),
+    JS_CFUNC_DEF("step", 1, js_world_step),
+    JS_CFUNC_DEF("quickStep", 1, js_world_quick_step),
+    JS_CFUNC_DEF("setQuickStepIterations", 1, js_world_set_quick_step_iterations),
+    JS_CFUNC_DEF("stepWithContacts", 3, js_world_step_with_contacts),
+
+    JS_CFUNC_DEF("destroyWorld", 0, js_world_destroy),
+};
+
+static const JSCFunctionListEntry js_body_proto_funcs[] = {
+    JS_CFUNC_DEF("setPosition", 3, js_body_set_position),
+    JS_CFUNC_DEF("getPosition", 0, js_body_get_position),
+    JS_CFUNC_DEF("setRotation", 1, js_body_set_rotation),
+    JS_CFUNC_DEF("getRotation", 0, js_body_get_rotation),
+    JS_CFUNC_DEF("setLinearVel", 3, js_body_set_linear_vel),
+    JS_CFUNC_DEF("getLinearVel", 0, js_body_get_linear_vel),
+    JS_CFUNC_DEF("setAngularVel", 3, js_body_set_angular_vel),
+    JS_CFUNC_DEF("getAngularVel", 0, js_body_get_angular_vel),
+    JS_CFUNC_DEF("setMass", 1, js_body_set_mass),
+    JS_CFUNC_DEF("setMassBox", 4, js_body_set_mass_box),
+    JS_CFUNC_DEF("setMassSphere", 2, js_body_set_mass_sphere),
+    JS_CFUNC_DEF("addForce", 3, js_body_add_force),
+    JS_CFUNC_DEF("addTorque", 3, js_body_add_torque),
+    JS_CFUNC_DEF("enable", 0, js_body_enable),
+    JS_CFUNC_DEF("disable", 0, js_body_disable),
+    JS_CFUNC_DEF("enabled", 0, js_body_is_enabled),
+
+    JS_CFUNC_DEF("free", 0, js_body_destroy),
+};
+
+static const JSCFunctionListEntry js_geom_proto_funcs[] = {
+    JS_CFUNC_DEF("setPosition", 3, js_geom_set_position),
+    JS_CFUNC_DEF("setRotation", 1, js_geom_set_rotation),
+    JS_CFUNC_DEF("getPosition", 0, js_geom_get_position),
+    JS_CFUNC_DEF("getRotation", 0, js_geom_get_rotation),
+
+    JS_CFUNC_DEF("setBody", 1, js_geom_set_body),
+    JS_CFUNC_DEF("getBody", 0, js_geom_get_body),
+
+    JS_CFUNC_DEF("free", 0, js_geom_destroy),
+};
+
+static const JSCFunctionListEntry js_space_proto_funcs[] = {
+    JS_CFUNC_DEF("collide", 1, js_space_collide),
+    JS_CFUNC_DEF("free", 0, js_space_destroy),
+};
+
+static const JSCFunctionListEntry js_joint_group_proto_funcs[] = {
+    JS_CFUNC_DEF("empty", 0, js_joint_group_empty),
+    JS_CFUNC_DEF("free", 0, js_joint_group_destroy),
+};
+
 static const JSCFunctionListEntry js_joint_proto_funcs[] = {
     JS_CFUNC_DEF("free", 0, js_joint_destroy),
     JS_CFUNC_DEF("attach", 2, js_joint_attach),
 
+    // SET
     JS_CFUNC_DEF("setBallAnchor", 3, js_joint_set_ball_anchor),
 
     JS_CFUNC_DEF("setHingeAnchor", 3, js_joint_set_hinge_anchor),
@@ -1447,6 +1731,40 @@ static const JSCFunctionListEntry js_joint_proto_funcs[] = {
     JS_CFUNC_DEF("setAMotorAngle", 2,   js_joint_set_amotor_angle),
     JS_CFUNC_DEF("setAMotorMode", 1, js_joint_set_amotor_mode),
     JS_CFUNC_DEF("setAMotorTorques", 3, js_joint_add_amotor_torques),
+
+    // GET
+    JS_CFUNC_DEF("getBallAnchor", 0, js_joint_get_ball_anchor),
+
+    JS_CFUNC_DEF("getHingeAnchor", 0, js_joint_get_hinge_anchor),
+    JS_CFUNC_DEF("getHingeAxis", 0, js_joint_get_hinge_axis),
+    JS_CFUNC_DEF("getHingeAngle", 0, js_joint_get_hinge_angle),
+    JS_CFUNC_DEF("getHingeAngleRate", 0, js_joint_get_hinge_angle_rate),
+
+    JS_CFUNC_DEF("getSliderPosition", 0, js_joint_get_slider_position),
+    JS_CFUNC_DEF("getSliderPositionRate", 0, js_joint_get_slider_position_rate),
+    JS_CFUNC_DEF("getSliderAxis", 0, js_joint_get_slider_axis),
+
+    JS_CFUNC_DEF("getHinge2Anchor", 0, js_joint_get_hinge2_anchor),
+    JS_CFUNC_DEF("getHinge2Axis1", 0, js_joint_get_hinge2_axis1),
+    JS_CFUNC_DEF("getHinge2Axis2", 0, js_joint_get_hinge2_axis2),
+    JS_CFUNC_DEF("getHinge2Angle1", 0, js_joint_get_hinge2_angle1),
+    JS_CFUNC_DEF("getHinge2Angle1Rate", 0, js_joint_get_hinge2_angle1_rate),
+    JS_CFUNC_DEF("getHinge2Angle2Rate", 0, js_joint_get_hinge2_angle2_rate),
+
+    JS_CFUNC_DEF("getUniversalAnchor", 0, js_joint_get_universal_anchor),
+    JS_CFUNC_DEF("getUniversalAxis1", 0, js_joint_get_universal_axis1),
+    JS_CFUNC_DEF("getUniversalAxis2", 0, js_joint_get_universal_axis2),
+    JS_CFUNC_DEF("getUniversalAngle1", 0, js_joint_get_universal_angle1),
+    JS_CFUNC_DEF("getUniversalAngle2", 0, js_joint_get_universal_angle2),
+    JS_CFUNC_DEF("getUniversalAngle1Rate1", 0, js_joint_get_universal_angle1_rate),
+    JS_CFUNC_DEF("getUniversalAngle2Rate2", 0, js_joint_get_universal_angle2_rate),
+
+    JS_CFUNC_DEF("getAMotorNumAxes", 0, js_joint_get_amotor_num_axes),
+    JS_CFUNC_DEF("getAMotorAxis", 1, js_joint_get_amotor_axis),
+    JS_CFUNC_DEF("getAMotorAxisRel", 1, js_joint_get_amotor_axis_rel),
+    JS_CFUNC_DEF("getAMotorAngle", 1, js_joint_get_amotor_angle),
+    JS_CFUNC_DEF("getAMotorAngleRate", 1, js_joint_get_amotor_angle_rate),
+    JS_CFUNC_DEF("getAMotorMode", 0, js_joint_get_amotor_mode),
 };
 
 
