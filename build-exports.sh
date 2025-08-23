@@ -32,6 +32,17 @@ awk '{
     hidden_symbols["_GLOBAL__sub_I__ZSt7nothrow"] = 1
     hidden_symbols["_ZN12_GLOBAL__N_113__new_handlerE"] = 1
 
+    hidden_symbols["_ZGVZN12_GLOBAL__N_1L16get_atomic_mutexEvE12atomic_mutex"] = 1
+    hidden_symbols["_ZN12_GLOBAL__N_1L10eh_globalsE"] = 1
+    hidden_symbols["_ZN12_GLOBAL__N_1L10fake_mutexE"] = 1
+    hidden_symbols["_ZN12_GLOBAL__N_1L13__new_handlerE"] = 1
+    hidden_symbols["_ZN12_GLOBAL__N_1L14emergency_poolE"] = 1
+    hidden_symbols["_ZN12_GLOBAL__N_1L2mxE"] = 1
+    hidden_symbols["_ZN12_GLOBAL__N_1L9fake_condE"] = 1
+    hidden_symbols["_ZZN12_GLOBAL__N_1L15get_static_condEvE4once"] = 1
+    hidden_symbols["_ZZN12_GLOBAL__N_1L16get_atomic_mutexEvE12atomic_mutex"] = 1
+    hidden_symbols["_ZZN12_GLOBAL__N_1L16get_static_mutexEvE4once"] = 1
+
     if (!($0 in hidden_symbols)) {
         t[++count] = $0
     }
