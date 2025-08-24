@@ -849,6 +849,7 @@ static JSValue athena_drawobject(JSContext *ctx, JSValue this_val, int argc, JSV
 	return JS_UNDEFINED;
 }
 
+#ifdef ATHENA_ODE
 static JSValue athena_ro_collision(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	JSRenderObject* ro = JS_GetOpaque2(ctx, this_val, js_render_object_class_id);
 
@@ -883,6 +884,7 @@ static JSValue athena_ro_physics(JSContext *ctx, JSValue this_val, int argc, JSV
 
 	return JS_UNDEFINED;
 }
+#endif
 
 static JSValue athena_drawbbox(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	Color color;
@@ -973,8 +975,10 @@ static const JSCFunctionListEntry js_render_object_proto_funcs[] = {
 	JS_CFUNC_DEF("renderBounds",  0,    athena_drawbbox),
 	JS_CFUNC_DEF("free",  0,    athena_drawfree),
 
+	#ifdef ATHENA_ODE
 	JS_CFUNC_DEF("setCollision",        1,  athena_ro_collision),
 	JS_CFUNC_DEF("setPhysics",        1,  athena_ro_physics),
+	#endif
 
 	JS_CGETSET_MAGIC_DEF("position",          js_render_object_get, js_render_object_set, 0),
 	JS_CGETSET_MAGIC_DEF("rotation",          js_render_object_get, js_render_object_set, 1),
