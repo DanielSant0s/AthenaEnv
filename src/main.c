@@ -134,6 +134,7 @@ int main(int argc, char **argv) {
     char newCWD[255];
 
     init_memory_manager();
+    init_lockman();
     init_taskman();
 
     register_iop_modules();

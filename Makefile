@@ -80,11 +80,11 @@ VU1_MPGS = draw_3D_colors.o \
 
 # VU0_MPGS = matrix_multiply.o
 
-APP_CORE = main.o bootlogo.o texture_manager.o owl_packet.o vif.o athena_math.o memory.o ee_tools.o module_system.o iop_manager.o taskman.o pad.o system.o strUtils.o mpg_manager.o matrix.o vector.o excepHandler.o exceptions.o 
+APP_CORE = main.o bootlogo.o texture_manager.o owl_packet.o vif.o athena_math.o memory.o ee_tools.o module_system.o iop_manager.o taskman.o lockman.o pad.o system.o strUtils.o mpg_manager.o matrix.o vector.o excepHandler.o exceptions.o 
 
 INI_READER = readini/src/readini.o
 
-ATHENA_MODULES = ath_env.o ath_vector.o ath_vector4.o ath_matrix.o ath_pads.o ath_system.o ath_iop.o ath_archive.o ath_timer.o ath_task.o
+ATHENA_MODULES = ath_env.o ath_vector.o ath_vector4.o ath_matrix.o ath_pads.o ath_system.o ath_iop.o ath_archive.o ath_timer.o ath_task.o ath_mutex.o
 
 IOP_MODULES = iomanx.o filexio.o sio2man.o mcman.o mcserv.o padman.o  \
 			  usbd.o bdm.o bdmfs_fatfs.o usbmass_bd.o cdfs.o \
