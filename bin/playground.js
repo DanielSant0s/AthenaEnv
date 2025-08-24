@@ -38,6 +38,11 @@ if (m1 != test_matrix) {
     console.log("Matrix equal check for different matrix values");
 }
 
+const OsdConfigParam = new ArrayBuffer(4);
+System.nativeCall(System.findRelocObject("GetOsdConfigParam"), [{type: System.JS_BUFFER, value: OsdConfigParam}]);
+
+console.log((new Uint32Array(OsdConfigParam))[0].toString());
+
 pad.setEventHandler();
 
 Pads.newEvent(Pads.LEFT, Pads.JUST_PRESSED, () => { 

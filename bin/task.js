@@ -19,6 +19,8 @@ const thread = Threads.new(() => {
     }
 });
 
+//throw SyntaxError("receba");
+
 const font = new Font("default");
 
 const pad = Pads.get();
