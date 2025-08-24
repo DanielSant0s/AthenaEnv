@@ -118,6 +118,7 @@ JSModuleDef *athena_archive_init(JSContext* ctx);
 JSModuleDef *athena_timer_init(JSContext* ctx);
 JSModuleDef *athena_task_init(JSContext* ctx);
 JSModuleDef *athena_pads_init(JSContext* ctx);
+JSModuleDef *athena_mutex_init(JSContext* ctx);
 
 JSModuleDef *athena_vector_init(JSContext *ctx);
 JSModuleDef *athena_vector4_init(JSContext *ctx);

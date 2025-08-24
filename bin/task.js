@@ -1,5 +1,9 @@
 // {"name": "Task sample", "author": "Daniel Santos", "version": "04232025", "icon": "render_icon.png", "file": "task.js"}
 
+Screen.setParam(Screen.DEPTH_TEST_ENABLE, false);
+
+const timerMutex = new Mutex();
+
 let counter = 0;
 
 const timer = Timer.new();
@@ -9,6 +13,8 @@ let counting = true;
 
 const thread = Threads.new(() => {
     while (true) {
+        timerMutex.lock();
+
         if (counting) {
             if (Timer.getTime(timer) > time) {
                 time = Timer.getTime(timer) + 2000000; // 2 seconds, since timer uses microsseconds
@@ -16,6 +22,8 @@ const thread = Threads.new(() => {
                 counter++;
             }
         }
+
+        timerMutex.unlock();
     }
 });
 
@@ -34,5 +42,9 @@ Pads.newEvent(Pads.CROSS, Pads.JUST_PRESSED, () => {
 thread.start();
 
 Screen.display(() => {
+    timerMutex.lock();
+
     font.print(0, 0, `Hello from main thread! Counter from aux thread: ${counter}`);
+
+    timerMutex.unlock();
 });

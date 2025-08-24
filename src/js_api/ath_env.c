@@ -210,7 +210,10 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"globalThis.Vector2 = Vector2.Vector2;\n"
 				"globalThis.Vector3 = Vector3.Vector3;\n"
 				"globalThis.Vector4 = Vector4.Vector4;\n"
-				"globalThis.Matrix4 = Matrix4.Matrix4;\n";
+				"globalThis.Matrix4 = Matrix4.Matrix4;\n"
+
+				"import Mutex from 'Mutex';\n"
+				"globalThis.Mutex = Mutex;\n";
 
 				
             rc = qjs_eval_buf(ctx, str, strlen(str), "<input>", JS_EVAL_TYPE_MODULE);
@@ -260,6 +263,7 @@ static JSContext *JS_NewCustomContext(JSRuntime *rt)
 	athena_archive_init(ctx);
 	athena_timer_init(ctx);
 	athena_task_init(ctx);
+	athena_mutex_init(ctx);
 	athena_pads_init(ctx);
 	athena_vector_init(ctx);
 	athena_vector4_init(ctx);
