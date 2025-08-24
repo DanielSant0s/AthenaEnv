@@ -8,6 +8,12 @@
 
 #include <taskman.h>
 
+typedef enum {
+    JS_THREAD_STOPPED,
+    JS_THREAD_RUNNING,
+    JS_THREAD_PAUSED
+} eJSThreadStates;
+
 typedef struct {
     int id;
     JSContext *ctx;
@@ -16,6 +22,7 @@ typedef struct {
     int argc;
     JSValue *argv;
     JSValue ret;
+    eJSThreadStates state;
 } thread_info_t;
 
 static JSClassID js_thread_class_id;
@@ -23,17 +30,19 @@ static JSClassID js_thread_class_id;
 void worker_thread(void *arg) {
     thread_info_t *tinfo = (thread_info_t *)arg;
 
+    //JS_DupValue(tinfo->ctx, tinfo->func);
+
     JS_UpdateStackTop(JS_GetRuntime(tinfo->ctx));
 
     if (JS_IsFunction(tinfo->ctx, tinfo->func)) {
         tinfo->ret = JS_Call(tinfo->ctx, tinfo->func, tinfo->this_obj, tinfo->argc, tinfo->argv);
     }
 
-    for (int i = 0; i < tinfo->argc; i++) {
-        JS_FreeValue(tinfo->ctx, tinfo->argv[i]);
-    }
+    //for (int i = 0; i < tinfo->argc; i++) {
+    //    JS_FreeValue(tinfo->ctx, tinfo->argv[i]);
+    //}
 
-    JS_FreeValue(tinfo->ctx, tinfo->func);
+    //JS_FreeValue(tinfo->ctx, tinfo->func);
 }
 
 static JSValue athena_newtask(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
@@ -49,17 +58,18 @@ static JSValue athena_newtask(JSContext *ctx, JSValueConst this_val, int argc, J
     if (!tinfo)
         return JS_EXCEPTION;
 
-    JS_DupValue(ctx, argv[0]);
-
     tinfo->ctx = ctx;
     tinfo->func = argv[0];
     tinfo->this_obj = this_val;
     tinfo->argc = argc - 1;
     tinfo->argv = (JSValue *)malloc(sizeof(JSValue) * tinfo->argc);
     memcpy(tinfo->argv, argv + 1, sizeof(JSValue) * tinfo->argc);
+    tinfo->state = JS_THREAD_STOPPED;
+
+    JS_DupValue(ctx, tinfo->func);
 
     for (int i = 0; i < tinfo->argc; i++) {
-        JS_DupValue(ctx, argv[i]);
+        JS_DupValue(ctx, tinfo->argv[i]);
     }
 
 	tinfo->id = create_task("Athena: Worker thread", worker_thread, 16000, 16);
@@ -119,12 +129,20 @@ static JSValue athena_start_thread(JSContext *ctx, JSValue this_val, int argc, J
 
     init_task(tinfo->id, tinfo);
 
+    tinfo->state = JS_THREAD_RUNNING;
+
+    JS_DupValue(ctx, this_val); // Lock the thread context so it doesn't get collected 
+
     return JS_UNDEFINED;
 }
 
 static JSValue athena_stop_thread(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
     thread_info_t *tinfo = JS_GetOpaque2(ctx, this_val, js_thread_class_id);
     kill_task(tinfo->id);
+
+    tinfo->state = JS_THREAD_STOPPED;
+
+    JS_FreeValue(ctx, this_val);
 
     return JS_UNDEFINED;
 }
@@ -135,9 +153,24 @@ static const JSCFunctionListEntry js_thread_proto_funcs[] = {
     JS_CFUNC_DEF("stop", 0, athena_stop_thread),
 };
 
+static void js_thread_finalizer(JSRuntime *rt, JSValue val) {
+    thread_info_t *tinfo = JS_GetOpaque(val, js_thread_class_id);
+
+    if (tinfo) {
+        JS_FreeValueRT(rt, tinfo->func);
+
+        for (int i = 0; i < tinfo->argc; i++) {
+            JS_FreeValueRT(rt, tinfo->argv[i]);
+        }
+            
+        js_free_rt(rt, tinfo);
+        JS_SetOpaque(val, NULL);
+    }
+}
+
 static JSClassDef js_thread_class = {
     "Thread",
-    //.finalizer = js_std_file_finalizer,
+    .finalizer = js_thread_finalizer,
 };
 
 static int task_init(JSContext *ctx, JSModuleDef *m)

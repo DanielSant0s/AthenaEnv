@@ -772,6 +772,9 @@ static JSValue athena_call_native(JSContext *ctx, JSValue this_val, int argc, JS
 		JSValue val = JS_GetPropertyStr(ctx, obj, "value");
 
 		JS_FreeValue(ctx, val);
+		JS_FreeValue(ctx, val);
+		
+		JS_FreeValue(ctx, obj);
 		JS_FreeValue(ctx, obj);
 	}
 
