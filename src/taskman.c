@@ -151,6 +151,7 @@ void exit_task(){
     ExitThread();
 }
 
+// for internal use
 void exit_kill_task() {
     for(int i = 0; i < MAX_THREADS; i++){
         if (tasks[i].id == GetThreadId()) {
