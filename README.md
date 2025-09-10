@@ -174,7 +174,7 @@ Oh, and I also have to mention that an essential prerequisite for using AthenaEn
 
 ## Quick start with Athena
 
-Hello World:  
+**Hello World:**  
 ```js
 const font = new Font("default");
 
@@ -213,13 +213,13 @@ Athena is basically a JavaScript loader, so it loads .js files. It runs "main.js
 
 Athena has a consistent error system, has two levels. 
 
-Runtime error:  
+**Runtime error:**  
 A runtime error occurs on JavaScript side, it can be rich in debug data and easily fixable. It is capable of pointing the error type, custom message, files, lines and it even has
 a color code.  
   
 <img src="https://user-images.githubusercontent.com/47725160/230756861-94df60f8-8550-43a3-ac43-56d150e94145.png" width=50% height=50%>
 
-Core error:  
+**Core error:**  
 A core error happens when AthenaEnv is interrupted due to a critical exception (null pointer, invalid address, bus error, overflow etc). It is a lot harder to debug and require low-level programming skills to figure out, from that screen you can get the exception cause, processor register dump, the bad address (if it is related with addresses), return function name(+offset) and the function that caused the error(+offset). It is highly recommended to contact the author to get proper support.  
   
 <img src="https://github.com/user-attachments/assets/25da3350-cd53-4302-bf5e-3b7fdebcb4bb" width=50% height=50%>
@@ -276,7 +276,7 @@ The std module provides wrappers to the libc stdlib.h and stdio.h and a few othe
   
 **FILE prototype:**
 
-Construction:  
+**Construction:**  
 
 * let file = std.open(filename, flags);  
   filename - Path to the file, E.g.: "samples/test.txt".  
@@ -365,14 +365,14 @@ Constants to interpret the mode property returned by stat(). They have the same 
 
 ### Vector4 Module  
 
-Construction:  
+**Construction:**  
 
 * let vec = new Vector4(x, y, z, w);  
 ```js
 let test = new Vector4(0.0, 0.0, 0.0, 1.0); 
 ``` 
 
-Properties:
+**Properties:**
 
 * x, y, z, w - Vector components.
 
@@ -384,7 +384,7 @@ Methods:
 * distance(vec2) - Calculate vector distances.
 * distance2(vec2) - Calculate vector squared distances.
 
-Operators: 
+**Operators:** 
 
 * add: +
 * sub: -
@@ -395,7 +395,7 @@ Operators:
 
 ### Matrix4 Module  
 
-Construction:  
+**Construction:**  
 
 * let mat = new Matrix4(m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16)  
 or
@@ -404,11 +404,11 @@ or
 let test = new Matrix4(); 
 ``` 
 
-Properties:
+**Properties:**
 
 * length - 16.
 
-Methods:
+**Methods:**
 
 * toArray() - Returns an array from the matrix.
 * fromArray() - Puts the first 16 numbers of the array as the matrix elements.
@@ -418,7 +418,7 @@ Methods:
 * invert() - Calculate matrix inverse.
 * identity() - Put matrix identity.
 
-Operators: 
+**Operators:** 
 
 * mul: *
 * eq: ==
@@ -437,10 +437,10 @@ P.S.: Matrix4 module components can be accessed as an array, so... mat[n] from 0
 * Color.setA(col, a) - Set alpha intensity of the color.
 
 ### Image Module  
-Functions:  
+**Functions:**  
 * Image.copyVRAMBlock(src_buffer, src_x, src_y, dest_buffer, dest_x, dest_y) - Copies a VRAM block from src_buffer to dest_buffer.
   
-Construction:  
+**Construction:**  
 
 * let image = new Image(*path*, *async_list*);  
   *path* - Path to the file, E.g.: "images/test.png".  
@@ -449,7 +449,7 @@ Construction:
 let test = new Image("owl.png"); 
 ``` 
 
-Properties:
+**Properties:**
 
 * width, height - Image drawing size, default value is the original image size.
 * startx, starty - Beginning of the area that will be drawn from the image, the default value is 0.0.
@@ -464,7 +464,7 @@ Properties:
 * texWidth, texHeight - The real texture area in memory.
 * renderable - Set if the texture can be used as a rendering buffer.
 
-Methods:
+**Methods:**
 
 * draw(x, y) - Draw loaded image onscreen(call it every frame). Example: image.draw(15.0, 100.0);
 * optimize() - If your image has 24 bits per-pixel (aka RGB), you can use this to make it 16 bits per-pixel, saving some memory!
@@ -476,12 +476,12 @@ Methods:
   
 **ImageList**
 
-Construction:
+**Construction:**
 
 ```js
 let async_list = new ImageList(); // This constructor creates a new thread and a queue to load images in background, avoid building multiple ImageList objects.
 ```
-Methods:
+**Methods:**
 
 * process() - This method starts the thread and loads added images on the queue. 
 ```js
@@ -540,7 +540,7 @@ Screen.setMode(canvas);
   
 ### RenderData module
 
-Construction:
+**Construction:**
 
 ```js
 let data = new RenderData(mesh, *texture*)
@@ -549,13 +549,13 @@ MTL is supported on OBJs (including per-vertex colors and multi-texturing).
 If you don't have a MTL file but you want to bind a texture on it,
 just pass the image as a second argument if you want to use it. */
 ```
-Methods:  
+**Methods:**  
 
 * getTexture(id) - Gets the nth texture object from the model.
 * setTexture(id, texture) - Changes or sets the nth texture on models.
 * free() - Free asset content immediately. P.S.: This is a way to quick free stuff from memory, but you can also wait for the garbage collector so it's not mandatory.
   
-Properties:
+**Properties:**
 
 * positions - Float32Array with x, y, z, adc for each vertex.
 * normals - Float32Array with n1, n2, n3, adc for each vertex.
@@ -580,7 +580,7 @@ Properties:
 * texture_mapping - Toggle texture mapping. (it can be used to disable texturing on a whole textured model)
 * shade_model - Flat = 0, Gouraud = 1.  
   
-Properties(skinned):
+**Properties(skinned):**
 * bones: Array - Skeleton bones data.  
   • position: Vector4 - Bone local position.  
   • rotation: Vector4 - Bone local rotation.  
@@ -589,7 +589,7 @@ Properties(skinned):
 
 ### AnimCollection module
 
-Construction:
+**Construction:**
 
 ```js
 let walk_anims = new AnimCollection("walk_anims.gltf");
@@ -604,32 +604,32 @@ character.playAnim(walk_anims[0], true);
   
 ### RenderObject module
 
-Construction:
+**Construction:**
 
 ```js
 let model = new RenderObject(render_data)
 /* You need to build a RenderData first, RenderObject keeps with position, rotation   
 and the individual object matrices */
 ```
-Methods:  
+**Methods:**  
 
 * render() - Draws the object on screen.
 * renderBounds() - Draws object bounding box.
 * free() - Free asset content immediately. P.S.: This is a way to quick free stuff from memory, but you can also wait for the garbage collector so it's not mandatory.  
   
-Methods(skinned):
+**Methods(skinned):**
 
 * playAnim(anim, loop) - Play animation on a skinned RenderObject.
 * isPlayingAnim(anim) -  Returns true if anim is being played.  
 
-Properties:  
+**Properties:**  
 
 * position - Object with x, y and z keys that stores the object position. Default is {x:0, y:0, z:0}.
 * rotation - Object with x, y and z keys that stores the object rotation. Default is {x:0, y:0, z:0}.
 * scale - Object with x, y and z keys that stores the object scale. Default is {x:0, y:0, z:0}.
 * transform: Matrix4 - Object RTS transform matrix.  
 
-Properties(skinned):
+**Properties(skinned):**
 * bone_matrices: Matrix4[] - Array of Matrix4 containing the current bone state.
 * bones: Array - Current bones current data.  
   • position: Vector4 - Current bone local position.  
@@ -691,7 +691,7 @@ You have 4 lights to use in 3D scenes, use set to configure them.
 * Screen.setParam(param, value) - Set screen/rendering parameters  
 * let current_ctx = Screen.switchContext() - Athena has two drawing contexts, one tipically for screen drawing and other for off-screen drawing mostly, this function switches between them so you can give a draw buffer, alpha and test attributes for your second context without the need for calling setBuffer everytime you need off-screen drawing.
   
-Parameters below:  
+**Parameters below:**  
   
 * Screen.ALPHA_BLEND_EQUATION - Set alpha blending mode based on a fixed coefficient equation.  
   • Screen.SRC_RGB - Source RGB  
@@ -754,8 +754,7 @@ The alpha bit tested depends on the framebuffer format. If the format is CT32, b
 
 ### Font module
 
-Construction:  
-
+**Construction:**  
 ```js
 let font = new Font(path);  // It supports png, bmp, jpg, otf, ttf.
 ```
@@ -764,7 +763,7 @@ let font = new Font(path);  // It supports png, bmp, jpg, otf, ttf.
 let font = new Font("Segoe UI.ttf"); //Load trueType font 
 ``` 
 
-Properties:
+**Properties:**
 * color - Define font tinting, default value is Color.new(255, 255, 255, 128).
 * scale - Proportional scale, default: 1.0f
 * outline_color - Define outline tinting, default value is Color.new(0, 0, 0, 128).
@@ -784,7 +783,7 @@ Properties:
 
 P.S.: outline and drop shadow do not coexist, so one of them must be 0.0f.
 
-Methods:
+**Methods:**
 * print(x, y, text) - Draw text on screen(call it every frame). Example: font.print(10.0, 10.0, "Hello world!);
 * getTextSize(text) - Returns text absolute size in pixels (width, height). Example: const size = font.getTextSize("Hello world!");
 
@@ -809,7 +808,7 @@ Methods:
   • Pads.R3  
 
 * let pad = Pads.get(*port*) - Returns a pad object:  
-Properties:  
+**Properties:**  
   • pad.btns - Button state on the current check.  
   • pad.old_btns = Button state on the last check.  
   • pad.lx - Left analog horizontal position (left = -127, default = 0, right = 128).  
@@ -819,7 +818,7 @@ Properties:
     
   ![analog_graph](https://user-images.githubusercontent.com/47725160/154816009-99d7e5da-badf-409b-9a3b-3618fd372f09.png)  
   
-Methods:  
+**Methods:**  
   • update() - Updates all pads pressed and stick positions data.  
   • pressed(button) - Checks if a button is being pressed (continuously).  
   • justPressed(button) - Checks if a button was pressed only once.  
@@ -930,6 +929,33 @@ Asynchronous functions:
 * let progress = System.getFileProgress()  
   • progress.current  
   • progress.final  
+  
+### Mutex module
+
+**Construction:**
+```js
+const mutex = new Mutex();
+```
+**Methods:**
+* lock() - Acquire the lock.
+* unlock() - Release the lock.
+
+### Thread module
+**Functions:**
+* Thread.list() - List all system threads (OS level, not JavaScript itself). List[Object[id, name, status, stack_size]]
+* Thread.kill(id) - Force kill a thread from an internal ID.
+
+**Construction:**
+```js
+const thread = new Thread(() => console.log("Hello from a thread!"), "Thread: Hello World!"); // Thread name is an optional parameter with 64 characters maximum size, useful to be tracked from Thread.list()
+```
+**Methods:**
+* start() - Set the thread to an active state
+* stop() - Finish thread execution, changing it to the state before calling start().
+
+**Properties:**
+* id - Thread internal ID
+* name - Thread name
 
 ### Timer module
 
@@ -1002,28 +1028,28 @@ Network.init(); //DHCP Mode, dynamic.
   
 ### Request module
 
-Construction:  
+**Construction:**  
 
 * let r = new Request()  
 ```js
 let r = new Request();
 ```
 
-Properties:
+**Properties:**
 
 * keepalive - bool
 * useragent - string
 * userpwd - string
 * headers - string array
 
-Methods:
+**Methods:**
 
 * get(url)
 * head(url)
 * post(url, data)
 * download(url, fname)  
   
-Asynchronous methods:  
+**Asynchronous methods:**  
 * asyncGet(url)
 * asyncDownload(url, fname)
 * ready(*timeout*, *conn_timeout*)
@@ -1033,21 +1059,21 @@ Asynchronous methods:
 
 ### Socket module
 
-Properties:
+**Properties:**
 
 * Socket.AF_INET
 * Socket.SOCK_STREAM
 * Socket.SOCK_DGRAM
 * Socket.SOCK_RAW
 
-Construction:  
+**Construction:**  
 
 * let s = new Socket(domain, type)  
 ```js
 let s = new Socket(Socket.AF_INET, Socket.SOCK_STREAM);
 ```
 
-Methods:
+**Methods:**
 
 * connect(host, port)
 * bind(host, port)
@@ -1059,14 +1085,14 @@ Methods:
 
 ### WebSocket module
 
-Construction:  
+**Construction:**  
 
 * let s = new WebSocket(url)  
 ```js
 let s = new WebSocket("wss://example.com");
 ```
 
-Methods:
+**Methods:**
 
 * send(data) - Send data with Buffer
 * recv() - Receive data to a buffer
