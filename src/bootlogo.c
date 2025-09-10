@@ -93,7 +93,7 @@ void bootlogoThread(void* data) {
 
     texture_manager_free(&bootlogo);
 
-    exitkill_task();
+    exit_kill_task();
 }
 
 void init_bootlogo() {

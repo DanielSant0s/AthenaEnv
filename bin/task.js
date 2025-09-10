@@ -5,11 +5,18 @@ Screen.setParam(Screen.DEPTH_TEST_ENABLE, false);
 const timerMutex = new Mutex();
 
 let counter = 0;
+let pulse_counter = 0;
 
 const timer = Timer.new();
 let time = 0;
 
 let counting = true;
+
+const pulse_thread = Threads.new(() => {
+    if (counting) {
+        pulse_counter++;
+    }
+});
 
 const thread = Threads.new(() => {
     while (true) {
@@ -23,9 +30,11 @@ const thread = Threads.new(() => {
             }
         }
 
-        timerMutex.unlock();
+        //timerMutex.unlock();
     }
 });
+
+timerMutex.lock();
 
 thread.start();
 
@@ -37,7 +46,7 @@ const pad = Pads.get();
 
 pad.setEventHandler();
 
-globalThis.activeObjects = [thread]; // keep it in memory, since the code execution will be asynchronous and independent from GC
+globalThis.activeObjects = [thread, pulse_thread]; // keep it in memory, since the code execution will be asynchronous and independent from GC
 
 Pads.newEvent(Pads.CROSS, Pads.JUST_PRESSED, () => { 
     counting ^= 1;
@@ -45,15 +54,15 @@ Pads.newEvent(Pads.CROSS, Pads.JUST_PRESSED, () => {
 
 Pads.newEvent(Pads.TRIANGLE, Pads.JUST_PRESSED, () => { 
     globalThis.activeObjects = null;
-})
+});
 
-//thread.start();
+os.setInterval(() => {
+    pulse_thread.start();
+}, 1000);
 
 Screen.display(() => {
-    timerMutex.lock();
-
     font.print(0, 0, `Hello from main thread! Counter from aux thread: ${counter}`);
+    font.print(0, 100, `Pulse counter: ${pulse_counter}`);
 
     timerMutex.unlock();
 });
-
