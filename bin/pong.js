@@ -14,6 +14,8 @@ const dark_gray = Color.new(32, 32, 32);
 const gray = Color.new(64, 64, 64);
 const white = Color.new(255, 255, 255);
 
+Screen.setParam(Screen.DEPTH_TEST_ENABLE, false);
+
 function rectRect(rect1, rect2) {
     return rect1.x < rect2.x + rect2.w && rect1.x + rect1.w > rect2.x && rect1.y < rect2.y + rect2.h && rect1.h + rect1.y > rect2.y;
 }

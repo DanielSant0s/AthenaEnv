@@ -8,21 +8,10 @@
 
 #include <taskman.h>
 
-typedef enum {
-    JS_THREAD_STOPPED,
-    JS_THREAD_RUNNING,
-    JS_THREAD_PAUSED
-} eJSThreadStates;
-
 typedef struct {
     int id;
     JSContext *ctx;
     JSValue func;
-    JSValue this_obj;
-    int argc;
-    JSValue *argv;
-    JSValue ret;
-    eJSThreadStates state;
 } thread_info_t;
 
 static JSClassID js_thread_class_id;
@@ -30,19 +19,17 @@ static JSClassID js_thread_class_id;
 void worker_thread(void *arg) {
     thread_info_t *tinfo = (thread_info_t *)arg;
 
-    //JS_DupValue(tinfo->ctx, tinfo->func);
+    JSRuntime *rt = JS_GetRuntime(tinfo->ctx);
 
-    JS_UpdateStackTop(JS_GetRuntime(tinfo->ctx));
+    JS_UpdateStackTop(rt);
 
-    if (JS_IsFunction(tinfo->ctx, tinfo->func)) {
-        tinfo->ret = JS_Call(tinfo->ctx, tinfo->func, tinfo->this_obj, tinfo->argc, tinfo->argv);
-    }
+    JSValue ret, func1;
 
-    //for (int i = 0; i < tinfo->argc; i++) {
-    //    JS_FreeValue(tinfo->ctx, tinfo->argv[i]);
-    //}
+    func1 = JS_DupValueRT(rt, tinfo->func);
+    ret = JS_Call(tinfo->ctx, func1, JS_UNDEFINED, 0, NULL);
 
-    //JS_FreeValue(tinfo->ctx, tinfo->func);
+    JS_FreeValueRT(rt, func1);
+    JS_FreeValueRT(rt, ret);
 }
 
 static JSValue athena_newtask(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
@@ -59,18 +46,7 @@ static JSValue athena_newtask(JSContext *ctx, JSValueConst this_val, int argc, J
         return JS_EXCEPTION;
 
     tinfo->ctx = ctx;
-    tinfo->func = argv[0];
-    tinfo->this_obj = this_val;
-    tinfo->argc = argc - 1;
-    tinfo->argv = (JSValue *)malloc(sizeof(JSValue) * tinfo->argc);
-    memcpy(tinfo->argv, argv + 1, sizeof(JSValue) * tinfo->argc);
-    tinfo->state = JS_THREAD_STOPPED;
-
-    JS_DupValue(ctx, tinfo->func);
-
-    for (int i = 0; i < tinfo->argc; i++) {
-        JS_DupValue(ctx, tinfo->argv[i]);
-    }
+    tinfo->func = JS_DupValue(ctx, argv[0]);
 
 	tinfo->id = create_task("Athena: Worker thread", worker_thread, 16000, 16);
 
@@ -119,7 +95,7 @@ static JSValue athena_gettasklist(JSContext *ctx, JSValue this_val, int argc, JS
 }
 
 static const JSCFunctionListEntry module_funcs[] = {
-    JS_CFUNC_DEF("new", 32, athena_newtask),
+    JS_CFUNC_DEF("new", 1, athena_newtask),
 	JS_CFUNC_DEF("get", 0, athena_gettasklist),
 	JS_CFUNC_DEF("kill", 1, athena_killtask),
 };
@@ -129,20 +105,12 @@ static JSValue athena_start_thread(JSContext *ctx, JSValue this_val, int argc, J
 
     init_task(tinfo->id, tinfo);
 
-    tinfo->state = JS_THREAD_RUNNING;
-
-    JS_DupValue(ctx, this_val); // Lock the thread context so it doesn't get collected 
-
     return JS_UNDEFINED;
 }
 
 static JSValue athena_stop_thread(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
     thread_info_t *tinfo = JS_GetOpaque2(ctx, this_val, js_thread_class_id);
     kill_task(tinfo->id);
-
-    tinfo->state = JS_THREAD_STOPPED;
-
-    JS_FreeValue(ctx, this_val);
 
     return JS_UNDEFINED;
 }
@@ -153,24 +121,37 @@ static const JSCFunctionListEntry js_thread_proto_funcs[] = {
     JS_CFUNC_DEF("stop", 0, athena_stop_thread),
 };
 
+static void athena_thread_free(JSRuntime *rt, thread_info_t *thread) {
+    kill_task(thread->id);
+
+    JS_FreeValueRT(rt, thread->func);
+    js_free_rt(rt, thread);
+}
+
 static void js_thread_finalizer(JSRuntime *rt, JSValue val) {
     thread_info_t *tinfo = JS_GetOpaque(val, js_thread_class_id);
 
     if (tinfo) {
-        JS_FreeValueRT(rt, tinfo->func);
-
-        for (int i = 0; i < tinfo->argc; i++) {
-            JS_FreeValueRT(rt, tinfo->argv[i]);
-        }
-            
-        js_free_rt(rt, tinfo);
+        athena_thread_free(rt, tinfo);
         JS_SetOpaque(val, NULL);
+    }
+
+    
+}
+
+void js_thread_mark(JSRuntime *rt, JSValueConst val, JS_MarkFunc *mark_func) {
+    thread_info_t *tinfo = JS_GetOpaque(val, js_thread_class_id);
+
+    if (tinfo) {
+        JS_MarkValue(rt, tinfo->func, mark_func);
     }
 }
 
 static JSClassDef js_thread_class = {
     "Thread",
     .finalizer = js_thread_finalizer,
+    .gc_mark = js_thread_mark,
+
 };
 
 static int task_init(JSContext *ctx, JSModuleDef *m)
@@ -188,6 +169,9 @@ static int task_init(JSContext *ctx, JSModuleDef *m)
     return JS_SetModuleExportList(ctx, m, module_funcs, countof(module_funcs));
 }
 
-JSModuleDef *athena_task_init(JSContext* ctx){
+JSModuleDef *athena_task_init(JSContext* ctx) {
     return athena_push_module(ctx, task_init, module_funcs, countof(module_funcs), "Threads");
+}
+
+void athena_task_free(JSContext *ctx) {
 }

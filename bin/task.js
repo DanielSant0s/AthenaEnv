@@ -27,7 +27,9 @@ const thread = Threads.new(() => {
     }
 });
 
-//throw SyntaxError("receba");
+thread.start();
+
+//throw SyntaxError("receba"); // throw de teste
 
 const font = new Font("default");
 
@@ -35,11 +37,17 @@ const pad = Pads.get();
 
 pad.setEventHandler();
 
+globalThis.activeObjects = [thread]; // keep it in memory, since the code execution will be asynchronous and independent from GC
+
 Pads.newEvent(Pads.CROSS, Pads.JUST_PRESSED, () => { 
     counting ^= 1;
 });
 
-thread.start();
+Pads.newEvent(Pads.TRIANGLE, Pads.JUST_PRESSED, () => { 
+    globalThis.activeObjects = null;
+})
+
+//thread.start();
 
 Screen.display(() => {
     timerMutex.lock();
@@ -48,3 +56,4 @@ Screen.display(() => {
 
     timerMutex.unlock();
 });
+

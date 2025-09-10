@@ -51,7 +51,7 @@ void js_std_promise_rejection_tracker(JSContext *ctx, JSValueConst promise,
                                       JS_BOOL is_handled, void *opaque);
 void js_std_set_worker_new_context_func(JSContext *(*func)(JSRuntime *rt));
 
-void js_set_render_loop_func(JSValue func);
+void js_set_render_loop_func(JSContext *ctx, JSValue func);
 void js_set_clear_color(uint64_t color);
 
 typedef enum {

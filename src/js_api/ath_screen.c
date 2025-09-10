@@ -16,7 +16,7 @@ static JSValue athena_set_clear_color(JSContext *ctx, JSValue this_val, int argc
 }
 
 static JSValue athena_displayfunc(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-	js_set_render_loop_func(JS_DupValue(ctx, argv[0]));
+	js_set_render_loop_func(ctx, JS_DupValue(ctx, argv[0]));
 	return JS_UNDEFINED;
 }
 
