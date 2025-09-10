@@ -120,6 +120,8 @@ JSModuleDef *athena_task_init(JSContext* ctx);
 JSModuleDef *athena_pads_init(JSContext* ctx);
 JSModuleDef *athena_mutex_init(JSContext* ctx);
 
+void athena_task_free(JSContext *ctx);
+
 JSModuleDef *athena_vector_init(JSContext *ctx);
 JSModuleDef *athena_vector4_init(JSContext *ctx);
 JSModuleDef *athena_matrix_init(JSContext *ctx);
@@ -135,7 +137,6 @@ JSModuleDef *athena_color_init(JSContext* ctx);
 JSModuleDef *athena_shape_init(JSContext* ctx);
 JSModuleDef *athena_font_init(JSContext* ctx);
 JSModuleDef *athena_image_init(JSContext* ctx);
-JSModuleDef *athena_imagelist_init(JSContext* ctx);
 JSModuleDef *athena_imagelist_init(JSContext* ctx);
 JSModuleDef *athena_ode_init(JSContext* ctx);
 #endif

@@ -3607,9 +3607,15 @@ void js_std_promise_rejection_tracker(JSContext *ctx, JSValueConst promise,
 /* main loop which calls the user JS callbacks */
 
 static JSValueConst render_loop_func = JS_UNDEFINED;
+static JSValueConst global_obj_ref = JS_UNDEFINED;
 static uint64_t clear_color = GS_SETREG_RGBAQ(0x00, 0x00, 0x00, 0x80, 0x00);
 
-void js_set_render_loop_func(JSValueConst func) {
+void js_set_render_loop_func(JSContext *ctx, JSValueConst func) {
+    if (func == JS_UNDEFINED || func == JS_NULL) {
+        js_destroy_render_loop(ctx);
+        return;
+    }
+
     render_loop_func = func;
 }
 
@@ -3653,8 +3659,9 @@ void js_delete_input_event(int id) {
 }
 
 void js_destroy_render_loop(JSContext *ctx) {
-    if (render_loop_func != JS_UNDEFINED)
+    if (render_loop_func != JS_UNDEFINED) {
         JS_FreeValue(ctx, render_loop_func);
+    }
 
     render_loop_func = JS_UNDEFINED;
 }

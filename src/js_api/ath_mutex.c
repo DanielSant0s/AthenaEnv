@@ -13,9 +13,9 @@ static JSClassID js_mutex_class_id;
 static void athena_mutex_dtor(JSRuntime *rt, JSValue val) {  
     int id = (int)JS_GetOpaque(val, js_mutex_class_id);
 
-    if (id) {
+    if (id != -1) {
         delete_mutex(id);
-        JS_SetOpaque(val, NULL);
+        JS_SetOpaque(val, ((int)-1));
     }
 }
 

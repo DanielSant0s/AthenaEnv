@@ -317,6 +317,9 @@ static char error_buf[4096];
 
 void destroy_vm(JSContext* ctx) {
 	JSRuntime* rt = JS_GetRuntime(ctx);
+
+	athena_task_free(ctx);
+
 	js_std_free_handlers(rt);
 	JS_FreeContext(ctx);
 	JS_FreeRuntime(rt);
