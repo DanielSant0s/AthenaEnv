@@ -10,6 +10,7 @@
 
 typedef struct {
     int id;
+    char name[64];
     JSContext *ctx;
     JSValue func;
     bool exit;
@@ -37,7 +38,7 @@ void worker_thread(void *arg) {
     }
 }
 
-static JSValue athena_newtask(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+static JSValue athena_new_thread(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     thread_info_t *tinfo;
     
     JSValue obj = JS_UNDEFINED;
@@ -55,10 +56,15 @@ static JSValue athena_newtask(JSContext *ctx, JSValueConst this_val, int argc, J
     tinfo->exit = true;
 
     if (argc > 1) {
-        tinfo->exit = JS_ToBool(ctx, argv[1]);
+        const char *name = JS_ToCString(ctx, argv[1]);
+        
+        strcpy(tinfo->name, name);
+        JS_FreeCString(ctx, name);
+    } else {
+        strcpy(tinfo->name, "Athena: Worker thread");
     }
 
-	tinfo->id = create_task("Athena: Worker thread", worker_thread, 16000, 16);
+	tinfo->id = create_task(tinfo->name, worker_thread, 16384, 16);
 
     if (tinfo->id < 0) {
         return JS_ThrowInternalError(ctx, "Failed to create thread");
@@ -105,8 +111,7 @@ static JSValue athena_gettasklist(JSContext *ctx, JSValue this_val, int argc, JS
 }
 
 static const JSCFunctionListEntry module_funcs[] = {
-    JS_CFUNC_DEF("new", 1, athena_newtask),
-	JS_CFUNC_DEF("get", 0, athena_gettasklist),
+	JS_CFUNC_DEF("list", 0, athena_gettasklist),
 	JS_CFUNC_DEF("kill", 1, athena_killtask),
 };
 
@@ -125,24 +130,42 @@ static JSValue athena_stop_thread(JSContext *ctx, JSValue this_val, int argc, JS
     return JS_UNDEFINED;
 }
 
-static JSValue athena_exit_set(JSContext *ctx, JSValueConst this_val, JSValue val){
+static JSValue athena_thread_set(JSContext *ctx, JSValueConst this_val, JSValue val, int magic){
     thread_info_t *tinfo = JS_GetOpaque2(ctx, this_val, js_thread_class_id);
 
-    tinfo->exit = JS_ToBool(ctx, val);
+    switch (magic) {
+        case 0:
+            {
+                const char *name = JS_ToCString(ctx, val);
+                strcpy(tinfo->name, name);
+                JS_FreeCString(ctx, name);
+            }
+            break;
+    }
+
+    
     return JS_UNDEFINED;
 }
 
-static JSValue athena_exit_get(JSContext *ctx, JSValueConst this_val){
+static JSValue athena_thread_get(JSContext *ctx, JSValueConst this_val, int magic){
     thread_info_t *tinfo = JS_GetOpaque2(ctx, this_val, js_thread_class_id);
 
-    return JS_NewBool(ctx, tinfo->exit);
+    switch (magic) {
+        case 0:
+            return JS_NewString(ctx, tinfo->name);
+        case 1:
+            return JS_NewInt32(ctx, tinfo->id);
+    }
+
+    return JS_UNDEFINED;
 }
 
 
 static const JSCFunctionListEntry js_thread_proto_funcs[] = {
     JS_CFUNC_DEF("start", 0, athena_start_thread),
     JS_CFUNC_DEF("stop", 0, athena_stop_thread),
-    JS_CGETSET_DEF("exit", athena_exit_get, athena_exit_set)
+    JS_CGETSET_MAGIC_DEF("name", athena_thread_get, athena_thread_set, 0),
+    JS_CGETSET_MAGIC_DEF("id", athena_thread_get, NULL, 1),
 };
 
 static void athena_thread_free(JSRuntime *rt, thread_info_t *thread) {
@@ -159,8 +182,6 @@ static void js_thread_finalizer(JSRuntime *rt, JSValue val) {
         athena_thread_free(rt, tinfo);
         JS_SetOpaque(val, NULL);
     }
-
-    
 }
 
 void js_thread_mark(JSRuntime *rt, JSValueConst val, JS_MarkFunc *mark_func) {
@@ -175,12 +196,11 @@ static JSClassDef js_thread_class = {
     "Thread",
     .finalizer = js_thread_finalizer,
     .gc_mark = js_thread_mark,
-
 };
 
 static int task_init(JSContext *ctx, JSModuleDef *m)
 {
-    JSValue proto;
+    JSValue proto, thread_class;
 
     /* the class ID is created once */
     JS_NewClassID(&js_thread_class_id);
@@ -188,13 +208,24 @@ static int task_init(JSContext *ctx, JSModuleDef *m)
     JS_NewClass(JS_GetRuntime(ctx), js_thread_class_id, &js_thread_class);
     proto = JS_NewObject(ctx);
     JS_SetPropertyFunctionList(ctx, proto, js_thread_proto_funcs, countof(js_thread_proto_funcs));
+
+    thread_class = JS_NewCFunction2(ctx, athena_new_thread, "Thread", 2, JS_CFUNC_constructor_or_func, 0);
+
+    JS_SetConstructor(ctx, thread_class, proto);
     JS_SetClassProto(ctx, js_thread_class_id, proto);
 
-    return JS_SetModuleExportList(ctx, m, module_funcs, countof(module_funcs));
+    JS_SetPropertyFunctionList(ctx, thread_class, module_funcs, countof(module_funcs));
+
+    return JS_SetModuleExport(ctx, m, "default", thread_class);
 }
 
 JSModuleDef *athena_task_init(JSContext* ctx) {
-    return athena_push_module(ctx, task_init, module_funcs, countof(module_funcs), "Threads");
+    JSModuleDef *m;
+    m = JS_NewCModule(ctx, "Thread", task_init);
+    if (!m)
+        return NULL;
+    JS_AddModuleExport(ctx, m, "default");
+    return m;
 }
 
 void athena_task_free(JSContext *ctx) {

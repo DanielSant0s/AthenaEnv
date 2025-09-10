@@ -12,13 +12,13 @@ let time = 0;
 
 let counting = true;
 
-const pulse_thread = Threads.new(() => {
+const pulse_thread = new Thread(() => {
     if (counting) {
         pulse_counter++;
     }
-});
+}, "Thread: Pulse counter");
 
-const thread = Threads.new(() => {
+const thread = new Thread(() => {
     while (true) {
         timerMutex.lock();
 
@@ -32,7 +32,7 @@ const thread = Threads.new(() => {
 
         //timerMutex.unlock();
     }
-});
+}, "Thread: Loop counter");
 
 timerMutex.lock();
 
@@ -59,6 +59,8 @@ Pads.newEvent(Pads.TRIANGLE, Pads.JUST_PRESSED, () => {
 os.setInterval(() => {
     pulse_thread.start();
 }, 1000);
+
+console.log(JSON.stringify(Thread.list()));
 
 Screen.display(() => {
     font.print(0, 0, `Hello from main thread! Counter from aux thread: ${counter}`);

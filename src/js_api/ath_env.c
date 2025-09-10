@@ -189,7 +189,6 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"import * as std from 'std';\n"
                 "import * as os from 'os';\n"
 				"import * as Timer from 'Timer';\n"
-				"import * as Threads from 'Threads';\n"
 				"import * as Pads from 'Pads';\n"
 				"import * as System from 'System';\n"
 				"import * as IOP from 'IOP';\n"
@@ -202,7 +201,6 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
                 "globalThis.std = std;\n"
                 "globalThis.os = os;\n"
 				"globalThis.Timer = Timer;\n"
-				"globalThis.Threads = Threads;\n"
 				"globalThis.Pads = Pads;\n"
 				"globalThis.System = System;\n"
 				"globalThis.Archive = Archive;\n"
@@ -211,6 +209,9 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"globalThis.Vector3 = Vector3.Vector3;\n"
 				"globalThis.Vector4 = Vector4.Vector4;\n"
 				"globalThis.Matrix4 = Matrix4.Matrix4;\n"
+
+				"import Thread from 'Thread';\n"
+				"globalThis.Thread = Thread;\n"
 
 				"import Mutex from 'Mutex';\n"
 				"globalThis.Mutex = Mutex;\n";
