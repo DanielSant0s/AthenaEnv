@@ -405,7 +405,7 @@ static int copyThread(void* data)
     close(in);
     close(out);
 	free(paths);
-	exitkill_task();
+	exit_kill_task();
     return JS_UNDEFINED;
 }
 

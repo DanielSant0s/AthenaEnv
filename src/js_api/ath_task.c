@@ -12,6 +12,7 @@ typedef struct {
     int id;
     JSContext *ctx;
     JSValue func;
+    bool exit;
 } thread_info_t;
 
 static JSClassID js_thread_class_id;
@@ -30,6 +31,10 @@ void worker_thread(void *arg) {
 
     JS_FreeValueRT(rt, func1);
     JS_FreeValueRT(rt, ret);
+
+    if (tinfo->exit) {
+        exit_task();
+    }
 }
 
 static JSValue athena_newtask(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
@@ -47,6 +52,11 @@ static JSValue athena_newtask(JSContext *ctx, JSValueConst this_val, int argc, J
 
     tinfo->ctx = ctx;
     tinfo->func = JS_DupValue(ctx, argv[0]);
+    tinfo->exit = true;
+
+    if (argc > 1) {
+        tinfo->exit = JS_ToBool(ctx, argv[1]);
+    }
 
 	tinfo->id = create_task("Athena: Worker thread", worker_thread, 16000, 16);
 
@@ -115,14 +125,28 @@ static JSValue athena_stop_thread(JSContext *ctx, JSValue this_val, int argc, JS
     return JS_UNDEFINED;
 }
 
+static JSValue athena_exit_set(JSContext *ctx, JSValueConst this_val, JSValue val){
+    thread_info_t *tinfo = JS_GetOpaque2(ctx, this_val, js_thread_class_id);
+
+    tinfo->exit = JS_ToBool(ctx, val);
+    return JS_UNDEFINED;
+}
+
+static JSValue athena_exit_get(JSContext *ctx, JSValueConst this_val){
+    thread_info_t *tinfo = JS_GetOpaque2(ctx, this_val, js_thread_class_id);
+
+    return JS_NewBool(ctx, tinfo->exit);
+}
+
 
 static const JSCFunctionListEntry js_thread_proto_funcs[] = {
     JS_CFUNC_DEF("start", 0, athena_start_thread),
     JS_CFUNC_DEF("stop", 0, athena_stop_thread),
+    JS_CGETSET_DEF("exit", athena_exit_get, athena_exit_set)
 };
 
 static void athena_thread_free(JSRuntime *rt, thread_info_t *thread) {
-    kill_task(thread->id);
+    free_task(thread->id);
 
     JS_FreeValueRT(rt, thread->func);
     js_free_rt(rt, thread);

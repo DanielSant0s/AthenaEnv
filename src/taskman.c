@@ -53,7 +53,7 @@ s32 AthenaCreateThread(ee_thread_t *thread) {
     return CreateThread(thread);
 }
 
-void del_task(int id){
+void free_task(int id){
     for(int i = 0; i < MAX_THREADS; i++){
         if (tasks[i].id == id){
             tasks[i].id = -1;
@@ -62,11 +62,13 @@ void del_task(int id){
             tasks[i].title = NULL;
             free(tasks[i].stack);
             tasks[i].stack = NULL;
+
+            tasks_size--;
+
+            DeleteThread(id);
             break;
         }
     }
-
-    tasks_size--;
 }
 
 
@@ -141,15 +143,30 @@ void init_task(int id, void* args){
     StartThread(id, args);
 }
 
-void kill_task(int id){
+void kill_task(int id) {
     TerminateThread(id);
-    DeleteThread(id);
-    del_task(id);
 }
 
-void exitkill_task(){
-    del_task(GetThreadId());
-    ExitDeleteThread();
+void exit_task(){
+    ExitThread();
+}
+
+void exit_kill_task() {
+    for(int i = 0; i < MAX_THREADS; i++){
+        if (tasks[i].id == GetThreadId()) {
+            tasks[i].id = -1;
+            tasks[i].stack_size = 0;
+            tasks[i].status = -1;
+            tasks[i].title = NULL;
+            free(tasks[i].stack);
+            tasks[i].stack = NULL;
+
+            tasks_size--;
+
+            ExitDeleteThread();
+            break;
+        }
+    }
 }
 
 Task* get_tasks() {
