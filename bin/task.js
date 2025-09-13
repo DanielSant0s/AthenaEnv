@@ -46,8 +46,6 @@ const pad = Pads.get();
 
 pad.setEventHandler();
 
-globalThis.activeObjects = [thread, pulse_thread]; // keep it in memory, since the code execution will be asynchronous and independent from GC
-
 Pads.newEvent(Pads.CROSS, Pads.JUST_PRESSED, () => { 
     counting ^= 1;
 });

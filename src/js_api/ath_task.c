@@ -12,30 +12,50 @@ typedef struct {
     int id;
     char name[64];
     JSContext *ctx;
+    JSValue this;
     JSValue func;
-    bool exit;
+
+    bool locked;
 } thread_info_t;
 
 static JSClassID js_thread_class_id;
 
+JSValue athena_thread_lock(thread_info_t *tinfo) { 
+    if (tinfo->locked) return JS_UNDEFINED;
+
+    tinfo->locked = true;
+    
+    return JS_DupValue(tinfo->ctx, tinfo->this); 
+}
+
+JSValue athena_thread_unlock(thread_info_t *tinfo) { 
+    if (!tinfo->locked) return;
+
+    tinfo->locked = false;
+
+    JS_FreeValue(tinfo->ctx, tinfo->this); 
+}
+
 void worker_thread(void *arg) {
     thread_info_t *tinfo = (thread_info_t *)arg;
 
-    JSRuntime *rt = JS_GetRuntime(tinfo->ctx);
+    if (JS_IsFunction(tinfo->ctx, tinfo->func)) {
+        JSRuntime *rt = JS_GetRuntime(tinfo->ctx);
 
-    JS_UpdateStackTop(rt);
+        JS_UpdateStackTop(rt);
 
-    JSValue ret, func1;
+        JSValue ret, func1;
 
-    func1 = JS_DupValueRT(rt, tinfo->func);
-    ret = JS_Call(tinfo->ctx, func1, JS_UNDEFINED, 0, NULL);
+        func1 = JS_DupValueRT(rt, tinfo->func);
+        ret = JS_Call(tinfo->ctx, func1, JS_UNDEFINED, 0, NULL);
 
-    JS_FreeValueRT(rt, func1);
-    JS_FreeValueRT(rt, ret);
-
-    if (tinfo->exit) {
-        exit_task();
+        JS_FreeValueRT(rt, func1);
+        JS_FreeValueRT(rt, ret);
     }
+
+    athena_thread_unlock(tinfo);
+
+    exit_task();
 }
 
 static JSValue athena_new_thread(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
@@ -53,7 +73,7 @@ static JSValue athena_new_thread(JSContext *ctx, JSValueConst this_val, int argc
 
     tinfo->ctx = ctx;
     tinfo->func = JS_DupValue(ctx, argv[0]);
-    tinfo->exit = true;
+    tinfo->locked = false;
 
     if (argc > 1) {
         const char *name = JS_ToCString(ctx, argv[1]);
@@ -118,6 +138,8 @@ static const JSCFunctionListEntry module_funcs[] = {
 static JSValue athena_start_thread(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
     thread_info_t *tinfo = JS_GetOpaque2(ctx, this_val, js_thread_class_id);
 
+    athena_thread_lock(tinfo);
+
     init_task(tinfo->id, tinfo);
 
     return JS_UNDEFINED;
@@ -126,6 +148,8 @@ static JSValue athena_start_thread(JSContext *ctx, JSValue this_val, int argc, J
 static JSValue athena_stop_thread(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
     thread_info_t *tinfo = JS_GetOpaque2(ctx, this_val, js_thread_class_id);
     kill_task(tinfo->id);
+
+    athena_thread_unlock(tinfo);
 
     return JS_UNDEFINED;
 }
