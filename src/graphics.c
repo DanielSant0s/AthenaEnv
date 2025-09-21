@@ -415,14 +415,16 @@ void gs_channel_shuffle_slow(GSSURFACE *dst, uint32_t in, uint32_t out, uint32_t
 }
 
 void set_screen_buffer(eScreenBuffers id, GSSURFACE *buf, uint32_t mask) {
+	buf->Mask = mask;
+
 	switch (id) {
 		case DRAW_BUFFER:
-			set_register(GS_CACHE_FRAME+gsGlobal->PrimContext, GS_SETREG_FRAME_1( buf->Vram / 8192, buf->TBW, buf->PSM, mask ));
+			set_register(GS_CACHE_FRAME+gsGlobal->PrimContext, GS_SETREG_FRAME_1( buf->Vram / 8192, buf->TBW, buf->PSM, buf->Mask ));
 			break;
 		case DISPLAY_BUFFER:
 			break;
 		case DEPTH_BUFFER:
-			set_register(GS_CACHE_ZBUF+gsGlobal->PrimContext, GS_SETREG_ZBUF_1( buf->Vram / 8192, buf->PSM-0x30, mask ));
+			set_register(GS_CACHE_ZBUF+gsGlobal->PrimContext, GS_SETREG_ZBUF_1( buf->Vram / 8192, buf->PSM-0x30, buf->Mask ));
 			break;
 	}
 
@@ -694,7 +696,7 @@ void setactive(GSCONTEXT *gsGlobal)
 	display_buffer.Vram = gsGlobal->ScreenBuffer[gsGlobal->ActiveBuffer];
 
 	gs_reg_cache[GS_CACHE_SCISSOR] = GS_SETREG_SCISSOR_1( 0, gsGlobal->Width - 1, 0, gsGlobal->Height - 1 );
-	gs_reg_cache[GS_CACHE_FRAME] = GS_SETREG_FRAME_1( draw_buffer.Vram / 8192, gsGlobal->Width / 64, gsGlobal->PSM, 0 );
+	gs_reg_cache[GS_CACHE_FRAME] = GS_SETREG_FRAME_1( draw_buffer.Vram / 8192, gsGlobal->Width / 64, gsGlobal->PSM, draw_buffer.Mask );
 
 	// Context 1
 	owl_add_tag(packet, GS_SCISSOR_1, gs_reg_cache[GS_CACHE_SCISSOR]);
