@@ -418,12 +418,12 @@ void set_screen_buffer(eScreenBuffers id, GSSURFACE *buf, uint32_t mask) {
 	buf->Mask = mask;
 	switch (id) {
 		case DRAW_BUFFER:
-			set_register(GS_CACHE_FRAME+gsGlobal->PrimContext, GS_SETREG_FRAME_1( buf->Vram / 8192, buf->TBW, buf->PSM, mask ));
+			set_register(GS_CACHE_FRAME+gsGlobal->PrimContext, GS_SETREG_FRAME_1( buf->Vram / 8192, buf->TBW, buf->PSM, buf->Mask ));
 			break;
 		case DISPLAY_BUFFER:
 			break;
 		case DEPTH_BUFFER:
-			set_register(GS_CACHE_ZBUF+gsGlobal->PrimContext, GS_SETREG_ZBUF_1( buf->Vram / 8192, buf->PSM-0x30, mask ));
+			set_register(GS_CACHE_ZBUF+gsGlobal->PrimContext, GS_SETREG_ZBUF_1( buf->Vram / 8192, buf->PSM-0x30, buf->Mask ));
 			break;
 	}
 
