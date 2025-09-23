@@ -364,10 +364,10 @@ void gltf_transfer_vertex(athena_render_data* res_m, uint32_t dst_idx, float* po
         res_m->colours[dst_idx][2] = colors[src_idx * 3 + 2];
         res_m->colours[dst_idx][3] = 1.0f;
     } else {
-        res_m->colours[dst_idx][0] = 1.0f;
-        res_m->colours[dst_idx][1] = 1.0f;
-        res_m->colours[dst_idx][2] = 1.0f;
-        res_m->colours[dst_idx][3] = 1.0f;
+        res_m->colours[dst_idx][0] = 0.0f;
+        res_m->colours[dst_idx][1] = 0.0f;
+        res_m->colours[dst_idx][2] = 0.0f;
+        res_m->colours[dst_idx][3] = 0.0f;
     }
 }
 
