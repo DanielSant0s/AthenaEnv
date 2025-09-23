@@ -7,6 +7,7 @@
 #include <ath_env.h>
 
 #include <taskman.h>
+#include <lockman.h>
 
 typedef struct {
     int id;
@@ -36,14 +37,15 @@ JSValue athena_thread_unlock(thread_info_t *tinfo) {
     JS_FreeValue(tinfo->ctx, tinfo->this); 
 }
 
+static int threads_mutex_id = -1;
+
 void worker_thread(void *arg) {
     thread_info_t *tinfo = (thread_info_t *)arg;
 
+    JSRuntime *rt = JS_GetRuntime(tinfo->ctx);
+    JS_UpdateStackTop(rt);
+
     if (JS_IsFunction(tinfo->ctx, tinfo->func)) {
-        JSRuntime *rt = JS_GetRuntime(tinfo->ctx);
-
-        JS_UpdateStackTop(rt);
-
         JSValue ret, func1;
 
         func1 = JS_DupValueRT(rt, tinfo->func);
@@ -74,6 +76,7 @@ static JSValue athena_new_thread(JSContext *ctx, JSValueConst this_val, int argc
     tinfo->ctx = ctx;
     tinfo->func = JS_DupValue(ctx, argv[0]);
     tinfo->locked = false;
+    tinfo->this = obj;
 
     if (argc > 1) {
         const char *name = JS_ToCString(ctx, argv[1]);
@@ -249,6 +252,9 @@ JSModuleDef *athena_task_init(JSContext* ctx) {
     if (!m)
         return NULL;
     JS_AddModuleExport(ctx, m, "default");
+
+    threads_mutex_id = create_mutex();
+
     return m;
 }
 
