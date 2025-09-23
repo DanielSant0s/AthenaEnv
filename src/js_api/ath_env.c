@@ -354,6 +354,10 @@ const char* run_script(const char* script, bool isBuffer)
 
     int s = qjs_handle_file(ctx, script, NULL);
 
+	if (s >= 0) {
+		s = js_std_loop(ctx);
+	}
+
     if (s < 0) { 
 		if (s == JSFILE_NOTFOUND) {
 			sprintf(error_buf, "AthenaError: Fail when opening %s\n"
@@ -374,27 +378,9 @@ const char* run_script(const char* script, bool isBuffer)
 		destroy_vm(ctx);
 
 		return error_buf; 
-	} else {
-		s = js_std_loop(ctx);
-
-		if (s < 0) {
-			JSValue exception_val = JS_GetException(ctx);
-			const char* exception = JS_ToCString(ctx, exception_val);
-			JSValue stack_val = JS_GetPropertyStr(ctx, exception_val, "stack");
-			const char* stack = JS_ToCString(ctx, stack_val);
-			JS_FreeValue(ctx, exception_val);
-			JS_FreeValue(ctx, stack_val);
-
-			strcpy(error_buf, exception);
-			strcat(error_buf, "\n");
-			strcat(error_buf, stack);
-
-			destroy_vm(ctx);
-
-			return error_buf; 
-		}
 	}
 	
 	destroy_vm(ctx);
+
     return NULL;
 }
