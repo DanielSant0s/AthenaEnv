@@ -1319,6 +1319,32 @@ Represents a constraint between two bodies.
 * `GeomSphere(space, radius)`
 * `GeomPlane(space, a, b, c, d)` — Defines a plane `Ax + By + Cz = D`.
 * `GeomTransform(space, geom)`
+* `GeomRay(space, length)` — Creates a ray geometry for raycasting. See [Ray Methods](#ray-methods) below.
+
+---
+
+### Ray Methods
+
+Ray geometries support specialized methods for raycasting and collision detection:
+
+* `raySetLength(length)` — Set the ray length.
+* `rayGetLength()` — Returns the current ray length.
+* `raySet(px, py, pz, dx, dy, dz)` — Set ray position `(px, py, pz)` and direction `(dx, dy, dz)`.
+* `rayGet()` — Returns an object with `start` and `direction` arrays: `{start: [x,y,z], direction: [dx,dy,dz]}`.
+* `raySetParams(firstContact, backfaceCull)` — Configure ray behavior:
+  * `firstContact` — If `true`, returns only the first contact found.
+  * `backfaceCull` — If `true`, ignores back-facing surfaces.
+* `rayGetParams()` — Returns current parameters: `{firstContact: boolean, backfaceCull: boolean}`.
+* `raySetClosestHit(closestHit)` — If `true`, returns only the closest hit.
+* `rayGetClosestHit()` — Returns whether closest hit mode is enabled.
+
+**Ray Contact Information:**
+
+When a ray collides with another geometry, contact data follows special conventions:
+
+* **position** — Point where the ray intersects the surface.
+* **normal** — Surface normal at the contact point (oriented for reflection if ray is first argument).
+* **depth** — Distance from ray start to contact point.
 
 ---
 

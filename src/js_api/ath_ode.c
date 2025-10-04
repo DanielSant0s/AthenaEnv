@@ -171,6 +171,156 @@ static JSValue js_space_destroy(JSContext *ctx, JSValueConst this_val, int argc,
     return JS_UNDEFINED;
 }
 
+
+// Ray-specific functions - Setters
+static JSValue js_geom_ray_set_length(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSGeom *geom = JS_GetOpaque(this_val, js_geom_class_id);
+    
+    float length;
+    if (JS_ToFloat32(ctx, &length, argv[0])) {
+        return JS_EXCEPTION;
+    }
+    
+    dGeomRaySetLength(geom->geom, length);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_geom_ray_get_length(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSGeom *geom = JS_GetOpaque(this_val, js_geom_class_id);
+    
+    dReal length = dGeomRayGetLength(geom->geom);
+    return JS_NewFloat32(ctx, length);
+}
+
+static JSValue js_geom_ray_set(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSGeom *geom = JS_GetOpaque(this_val, js_geom_class_id);
+    
+    float px, py, pz, dx, dy, dz;
+    if (JS_ToFloat32(ctx, &px, argv[0]) ||
+        JS_ToFloat32(ctx, &py, argv[1]) ||
+        JS_ToFloat32(ctx, &pz, argv[2]) ||
+        JS_ToFloat32(ctx, &dx, argv[3]) ||
+        JS_ToFloat32(ctx, &dy, argv[4]) ||
+        JS_ToFloat32(ctx, &dz, argv[5])) {
+        return JS_EXCEPTION;
+    }
+    
+    dGeomRaySet(geom->geom, px, py, pz, dx, dy, dz);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_geom_ray_get(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSGeom *geom = JS_GetOpaque(this_val, js_geom_class_id);
+    
+    dVector3 start, dir;
+    dGeomRayGet(geom->geom, start, dir);
+    
+    JSValue result = JS_NewObject(ctx);
+    
+    JSValue start_arr = JS_NewArray(ctx);
+    JS_SetPropertyUint32(ctx, start_arr, 0, JS_NewFloat32(ctx, start[0]));
+    JS_SetPropertyUint32(ctx, start_arr, 1, JS_NewFloat32(ctx, start[1]));
+    JS_SetPropertyUint32(ctx, start_arr, 2, JS_NewFloat32(ctx, start[2]));
+    JS_SetPropertyStr(ctx, result, "start", start_arr);
+    
+    JSValue dir_arr = JS_NewArray(ctx);
+    JS_SetPropertyUint32(ctx, dir_arr, 0, JS_NewFloat32(ctx, dir[0]));
+    JS_SetPropertyUint32(ctx, dir_arr, 1, JS_NewFloat32(ctx, dir[1]));
+    JS_SetPropertyUint32(ctx, dir_arr, 2, JS_NewFloat32(ctx, dir[2]));
+    JS_SetPropertyStr(ctx, result, "direction", dir_arr);
+    
+    return result;
+}
+
+static JSValue js_geom_ray_set_params(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSGeom *geom = JS_GetOpaque(this_val, js_geom_class_id);
+    
+    int firstContact, backfaceCull;
+    if (JS_ToInt32(ctx, &firstContact, argv[0]) ||
+        JS_ToInt32(ctx, &backfaceCull, argv[1])) {
+        return JS_EXCEPTION;
+    }
+    
+    dGeomRaySetParams(geom->geom, firstContact, backfaceCull);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_geom_ray_get_params(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSGeom *geom = JS_GetOpaque(this_val, js_geom_class_id);
+    
+    int firstContact, backfaceCull;
+    dGeomRayGetParams(geom->geom, &firstContact, &backfaceCull);
+    
+    JSValue result = JS_NewObject(ctx);
+    JS_SetPropertyStr(ctx, result, "firstContact", JS_NewBool(ctx, firstContact));
+    JS_SetPropertyStr(ctx, result, "backfaceCull", JS_NewBool(ctx, backfaceCull));
+    
+    return result;
+}
+
+static JSValue js_geom_ray_set_closest_hit(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSGeom *geom = JS_GetOpaque(this_val, js_geom_class_id);
+    
+    int closestHit;
+    if (JS_ToInt32(ctx, &closestHit, argv[0])) {
+        return JS_EXCEPTION;
+    }
+    
+    dGeomRaySetClosestHit(geom->geom, closestHit);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_geom_ray_get_closest_hit(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSGeom *geom = JS_GetOpaque(this_val, js_geom_class_id);
+    
+    int closestHit = dGeomRayGetClosestHit(geom->geom);
+    return JS_NewBool(ctx, closestHit);
+}
+
+static JSValue js_geom_create_ray(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSSpace *space = JS_GetOpaque(argv[0], js_space_class_id);
+    
+    float length;
+    if (JS_ToFloat32(ctx, &length, argv[1])) {
+        return JS_EXCEPTION;
+    }
+    
+    JSGeom *geom = malloc(sizeof(JSGeom));
+    if (!geom) {
+        return JS_EXCEPTION;
+    }
+    
+    geom->geom = dCreateRay(space? space->space : NULL, length);
+    geom->parent_space = space? space->space : NULL;
+    
+    if (!geom->geom) {
+        free(geom);
+        return JS_ThrowInternalError(ctx, "Failed to create ray geometry");
+    }
+    
+    JSValue obj = JS_NewObjectClass(ctx, js_geom_class_id);
+    if (JS_IsException(obj)) {
+        dGeomDestroy(geom->geom);
+        free(geom);
+        return obj;
+    }
+    
+    JS_SetOpaque(obj, geom);
+    dGeomSetData(geom->geom, obj);
+
+    // Add ray-specific methods
+    JS_SetPropertyStr(ctx, obj, "raySetLength", JS_NewCFunction(ctx, js_geom_ray_set_length, "raySetLength", 1));
+    JS_SetPropertyStr(ctx, obj, "rayGetLength", JS_NewCFunction(ctx, js_geom_ray_get_length, "rayGetLength", 0));
+    JS_SetPropertyStr(ctx, obj, "raySet", JS_NewCFunction(ctx, js_geom_ray_set, "raySet", 6));
+    JS_SetPropertyStr(ctx, obj, "rayGet", JS_NewCFunction(ctx, js_geom_ray_get, "rayGet", 0));
+    JS_SetPropertyStr(ctx, obj, "raySetParams", JS_NewCFunction(ctx, js_geom_ray_set_params, "raySetParams", 2));
+    JS_SetPropertyStr(ctx, obj, "rayGetParams", JS_NewCFunction(ctx, js_geom_ray_get_params, "rayGetParams", 0));
+    JS_SetPropertyStr(ctx, obj, "raySetClosestHit", JS_NewCFunction(ctx, js_geom_ray_set_closest_hit, "raySetClosestHit", 1));
+    JS_SetPropertyStr(ctx, obj, "rayGetClosestHit", JS_NewCFunction(ctx, js_geom_ray_get_closest_hit, "rayGetClosestHit", 0));
+
+    return obj;
+}
+
 static JSValue js_geom_create_box(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     JSSpace *space = JS_GetOpaque(argv[0], js_space_class_id);
     
@@ -202,6 +352,9 @@ static JSValue js_geom_create_box(JSContext *ctx, JSValueConst this_val, int arg
     }
     
     JS_SetOpaque(obj, geom);
+
+    dGeomSetData(geom->geom, obj);
+
     return obj;
 }
 
@@ -234,6 +387,9 @@ static JSValue js_geom_create_sphere(JSContext *ctx, JSValueConst this_val, int 
     }
     
     JS_SetOpaque(obj, geom);
+
+    dGeomSetData(geom->geom, obj);
+
     return obj;
 }
 
@@ -269,6 +425,9 @@ static JSValue js_geom_create_from_render_object(JSContext *ctx, JSValueConst th
     }
     
     JS_SetOpaque(obj, geom);
+
+    dGeomSetData(geom->geom, obj);
+
     return obj;
 }
 
@@ -304,6 +463,9 @@ static JSValue js_geom_create_plane(JSContext *ctx, JSValueConst this_val, int a
     }
     
     JS_SetOpaque(obj, geom);
+
+    dGeomSetData(geom->geom, obj);
+
     return obj;
 }
 
@@ -334,6 +496,9 @@ static JSValue js_geom_create_transform(JSContext *ctx, JSValueConst this_val, i
     }
     
     JS_SetOpaque(obj, geom);
+
+    dGeomSetData(geom->geom, obj);
+
     return obj;
 }
 
@@ -410,6 +575,7 @@ static JSValue js_geom_get_rotation(JSContext *ctx, JSValueConst this_val, int a
     return arr;
 }
 
+
 typedef struct {
     JSContext *ctx;
     JSValue callback;
@@ -440,16 +606,19 @@ static void collision_callback(void *data, dGeomID o1, dGeomID o2) {
 
             JS_SetPropertyStr(cdata->ctx, contact_obj, "depth", JS_NewFloat32(cdata->ctx, contact[i].geom.depth));
 
+            JS_SetPropertyStr(cdata->ctx, contact_obj, "geom1", dGeomGetData(contact[i].geom.g1));
+            JS_SetPropertyStr(cdata->ctx, contact_obj, "geom2", dGeomGetData(contact[i].geom.g2));
+
             JSValue length_val = JS_GetPropertyStr(cdata->ctx, cdata->contacts_array, "length");
             uint32_t length;
             JS_ToUint32(cdata->ctx, &length, length_val);
             JS_SetPropertyUint32(cdata->ctx, cdata->contacts_array, length, contact_obj);
             JS_FreeValue(cdata->ctx, length_val);
-        }
 
-        if (!JS_IsUndefined(cdata->callback)) {
-            JSValue args[1] = { cdata->contacts_array };
-            JS_Call(cdata->ctx, cdata->callback, JS_UNDEFINED, 1, args);
+            if (!JS_IsUndefined(cdata->callback)) {
+                JSValue args[1] = { contact_obj };
+                JS_Call(cdata->ctx, cdata->callback, JS_UNDEFINED, 1, args);
+            }
         }
     }
 }
@@ -628,6 +797,10 @@ static JSValue js_world_set_quick_step_iterations(JSContext *ctx, JSValueConst t
 typedef struct {
     dWorldID world;
     dJointGroupID joint_group;
+
+    JSContext *ctx;
+    JSValue callback;
+    JSValue contacts_array;
 } physics_world_data;
 
 static void contact_callback(void *data, dGeomID o1, dGeomID o2) {
@@ -650,12 +823,42 @@ static void contact_callback(void *data, dGeomID o1, dGeomID o2) {
             contact[i].surface.bounce = 0.1;
             contact[i].surface.bounce_vel = 0.1;
             contact[i].surface.soft_cfm = 0.01;
+
+            JSValue contact_obj = JS_NewObject(cdata->ctx);
+
+            JSValue pos_arr = JS_NewArray(cdata->ctx);
+            JS_SetPropertyUint32(cdata->ctx, pos_arr, 0, JS_NewFloat32(cdata->ctx, contact[i].geom.pos[0]));
+            JS_SetPropertyUint32(cdata->ctx, pos_arr, 1, JS_NewFloat32(cdata->ctx, contact[i].geom.pos[1]));
+            JS_SetPropertyUint32(cdata->ctx, pos_arr, 2, JS_NewFloat32(cdata->ctx, contact[i].geom.pos[2]));
+            JS_SetPropertyStr(cdata->ctx, contact_obj, "position", pos_arr);
+
+            JSValue normal_arr = JS_NewArray(cdata->ctx);
+            JS_SetPropertyUint32(cdata->ctx, normal_arr, 0, JS_NewFloat32(cdata->ctx, contact[i].geom.normal[0]));
+            JS_SetPropertyUint32(cdata->ctx, normal_arr, 1, JS_NewFloat32(cdata->ctx, contact[i].geom.normal[1]));
+            JS_SetPropertyUint32(cdata->ctx, normal_arr, 2, JS_NewFloat32(cdata->ctx, contact[i].geom.normal[2]));
+            JS_SetPropertyStr(cdata->ctx, contact_obj, "normal", normal_arr);
+
+            JS_SetPropertyStr(cdata->ctx, contact_obj, "depth", JS_NewFloat32(cdata->ctx, contact[i].geom.depth));
+
+            JS_SetPropertyStr(cdata->ctx, contact_obj, "geom1", dGeomGetData(contact[i].geom.g1));
+            JS_SetPropertyStr(cdata->ctx, contact_obj, "geom2", dGeomGetData(contact[i].geom.g2));
+
+            JSValue length_val = JS_GetPropertyStr(cdata->ctx, cdata->contacts_array, "length");
+            uint32_t length;
+            JS_ToUint32(cdata->ctx, &length, length_val);
+            JS_SetPropertyUint32(cdata->ctx, cdata->contacts_array, length, contact_obj);
+            JS_FreeValue(cdata->ctx, length_val);
+
+            if (!JS_IsUndefined(cdata->callback)) {
+                JSValue args[1] = { contact_obj };
+                JS_Call(cdata->ctx, cdata->callback, JS_UNDEFINED, 1, args);
+            }
             
             dJointID c = dJointCreateContact(cdata->world, cdata->joint_group, &contact[i]);
             dJointAttach(c, b1, b2);
         }
     }
-}
+}       
 
 static JSValue js_world_step_with_contacts(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     JSWorld *world = JS_GetOpaque(this_val, js_world_class_id);
@@ -670,12 +873,15 @@ static JSValue js_world_step_with_contacts(JSContext *ctx, JSValueConst this_val
     physics_world_data cdata;
     cdata.world = world->world;
     cdata.joint_group = contact_group->group;
+    cdata.contacts_array = JS_NewArray(ctx);
+    cdata.callback = (argc > 0) ? argv[3] : JS_UNDEFINED;
+    cdata.ctx = ctx;
     
     dSpaceCollide(space->space, &cdata, contact_callback);
     dWorldStep(world->world, step_size);
     dJointGroupEmpty(contact_group->group);
     
-    return JS_UNDEFINED;
+    return cdata.contacts_array;
 }
 
 static JSValue js_body_create(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
@@ -1773,6 +1979,7 @@ static const JSCFunctionListEntry js_ode_funcs[] = {
 
     JS_CFUNC_DEF("GeomRenderObject", 2, js_geom_create_from_render_object),
     JS_CFUNC_DEF("GeomBox", 4, js_geom_create_box),
+    JS_CFUNC_DEF("GeomRay", 2, js_geom_create_ray),
     JS_CFUNC_DEF("GeomSphere", 2, js_geom_create_sphere),
     JS_CFUNC_DEF("GeomPlane", 5, js_geom_create_plane),
     JS_CFUNC_DEF("GeomTransform", 2, js_geom_create_transform),
