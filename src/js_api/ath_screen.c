@@ -7,6 +7,7 @@
 #include <graphics.h>
 #include <fntsys.h>
 #include <ath_env.h>
+#include <owl_packet.h>
 
 static JSValue athena_set_clear_color(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	static Color clear_color = GS_SETREG_RGBAQ(0x00, 0x00, 0x00, 0x80, 0x00);
@@ -329,6 +330,11 @@ static JSValue athena_switch_context(JSContext *ctx, JSValue this_val, int argc,
 	return JS_NewInt32(ctx, screen_switch_context());
 }
 
+static JSValue athena_flush(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	owl_flush_packet();
+	return JS_UNDEFINED;
+}
+
 static const JSCFunctionListEntry module_funcs[] = {
     JS_CFUNC_DEF("flip", 0, athena_flip),
     JS_CFUNC_DEF("clear", 1, athena_clear),
@@ -434,6 +440,7 @@ static const JSCFunctionListEntry module_funcs[] = {
 	JS_PROP_INT32_DEF("DEPTH_BUFFER", DEPTH_BUFFER, JS_PROP_CONFIGURABLE),
 
 	JS_CFUNC_DEF("switchContext", 0, athena_switch_context),
+	JS_CFUNC_DEF("flush", 0, athena_flush),
 };
 
 static int screen_init(JSContext *ctx, JSModuleDef *m)
