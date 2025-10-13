@@ -14,6 +14,7 @@
 #ifdef ATHENA_GRAPHICS
 #include <graphics.h>
 #include <render.h>
+#include <shadows.h>
 #endif
 
 #include <dbgprintf.h>
@@ -89,6 +90,7 @@ extern bool boot_logo, dark_mode;
 
     extern JSClassID js_geom_class_id;
     extern JSClassID js_body_class_id;
+    extern JSClassID js_space_class_id;
 #endif
 
 JSClassID get_matrix4_class_id();
@@ -138,6 +140,7 @@ JSModuleDef *athena_shape_init(JSContext* ctx);
 JSModuleDef *athena_font_init(JSContext* ctx);
 JSModuleDef *athena_image_init(JSContext* ctx);
 JSModuleDef *athena_imagelist_init(JSContext* ctx);
+JSModuleDef *athena_shadows_init(JSContext* ctx);
 JSModuleDef *athena_ode_init(JSContext* ctx);
 #endif
 

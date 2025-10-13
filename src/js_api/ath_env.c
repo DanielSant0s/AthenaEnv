@@ -146,6 +146,7 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				#endif
 
 				#ifdef ATHENA_GRAPHICS
+				"import * as Shadows from 'Shadows';\n"
 				"import * as Color from 'Color';\n"
 				"import * as Screen from 'Screen';\n"
 				"import * as Draw from 'Draw';\n"
@@ -178,6 +179,7 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"globalThis.Lights = Lights;\n"
 
 				"globalThis.Camera = Camera;\n"
+				"globalThis.Shadows = Shadows;\n"
 
 				#endif
 
@@ -285,6 +287,7 @@ static JSContext *JS_NewCustomContext(JSRuntime *rt)
 	athena_lights_init(ctx);
 	athena_3dcamera_init(ctx);
 	athena_anim_3d_init(ctx);
+	athena_shadows_init(ctx);
 	
 	#endif
 

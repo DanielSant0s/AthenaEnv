@@ -8,7 +8,7 @@
 #define MAX_CONTACTS 64
 
 JSClassID js_geom_class_id;
-static JSClassID js_space_class_id;
+JSClassID js_space_class_id;
 static JSClassID js_world_class_id;
 
 JSClassID js_body_class_id;

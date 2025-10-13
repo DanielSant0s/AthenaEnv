@@ -12,7 +12,7 @@
 
 #include <mpg_manager.h>
 
-#include <texture_manager.h>z
+#include <texture_manager.h>
 
 #include <vector.h>
 

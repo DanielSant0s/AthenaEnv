@@ -126,7 +126,8 @@ ifeq ($(GRAPHICS),1)
   EE_CFLAGS += -DATHENA_GRAPHICS
   APP_CORE += graphics.o image_font.o owl_draw.o image_loaders.o mesh_loaders.o atlas.o fntsys.o render.o camera.o skin_math.o calc_3d.o fast_obj/fast_obj.o
 
-  ATHENA_MODULES += ath_color.o ath_font.o ath_render.o ath_anim_3d.o ath_lights.o ath_3dcamera.o ath_screen.o ath_image.o ath_imagelist.o ath_shape.o
+  ATHENA_MODULES += ath_color.o ath_font.o ath_render.o ath_anim_3d.o ath_lights.o ath_3dcamera.o ath_screen.o ath_image.o ath_imagelist.o ath_shape.o ath_shadows.o
+  APP_CORE += shadows.o
   EE_OBJS += $(VU1_MPGS) $(VU0_MPGS)
 endif
 
