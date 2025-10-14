@@ -36,6 +36,24 @@ void cameraUpdate() {
 	matrix_functions->multiply(world_screen, world_view, view_screen);
 }
 
+void cameraSave(athena_camera_state *out)
+{
+    if (!out) return;
+    copy_vector(out->position, camera_position);
+    copy_vector(out->target,   camera_target);
+    copy_vector(out->up,       camera_up);
+    copy_vector(out->local_up, local_up);
+}
+
+void cameraRestore(const athena_camera_state *state)
+{
+    if (!state) return;
+    copy_vector(camera_position, state->position);
+    copy_vector(camera_target,   state->target);
+    copy_vector(camera_up,       state->up);
+    copy_vector(local_up,        state->local_up);
+}
+
 void setCameraPosition(float x, float y, float z){
 	camera_position[0] = x;
 	camera_position[1] = y;
