@@ -65,13 +65,17 @@ const jgroup = ODE.JointGroup();
 
 // Shadow projector for skinned character
 const projSkin = new Shadows.Projector(shadowRT);
-projSkin.setSize(3.0, 3.0);
+projSkin.setSize(2.0, 2.0);
 projSkin.setGrid(12, 12);
-projSkin.setLightDir(0, 1, 1);
+// Share light direction between projector and shadow camera
+const lightDir = { x: 0.0f, y: 1.0f, z: 1.0f };
+projSkin.setLightDir(lightDir.x, lightDir.y, lightDir.z);
 projSkin.setBias(-0.02);
-projSkin.setColor(0.0, 0.0, 0.0, 0.6);
+projSkin.setColor(0.0, 0.0, 0.0, 0.65);
 projSkin.setBlend(Shadows.SHADOW_BLEND_DARKEN);
-projSkin.enableRaycast(space, 1, 12.0);
+projSkin.enableRaycast(space, 4, 12.0);
+projSkin.setLightOffset(1.0);
+projSkin.setUVRect(1.0, 0.0, 0.0, 1.0);
 
 Screen.switchContext();
 Screen.setBuffer(Screen.DRAW_BUFFER, shadowRT);
@@ -181,18 +185,40 @@ while(true) {
         switch_anim ^= 1;
     }
 
-    // Offscreen pass: render skin into shadowRT
+    // Offscreen pass: render skin into shadowRT from light-aligned camera
+    const _mainCam = Camera.save();
     Screen.switchContext();
     Screen.setParam(Screen.DEPTH_TEST_ENABLE, false);
     Draw.rect(0, 0, shadowRT.width, shadowRT.height, Color.new(0, 0, 0, 0));
     Screen.setParam(Screen.DEPTH_TEST_ENABLE, true);
     Screen.setParam(Screen.DEPTH_TEST_METHOD, Screen.DEPTH_GEQUAL);
     Render.setView(60.0, 1.0, 4000.0, shadowRT.width, shadowRT.height);
+    // Build light camera looking at the skinned character
+    {
+        let tx = skin_object.position.x;
+        let ty = skin_object.position.y; // aim slightly above ground
+        let tz = skin_object.position.z + 0.1f;
+        // normalize lightDir
+        let len = Math.sqrt(lightDir.x*lightDir.x + lightDir.y*lightDir.y + lightDir.z*lightDir.z);
+        let dx = (len > 0)? lightDir.x/len : 0.0f;
+        let dy = (len > 0)? lightDir.y/len : 1.0f;
+        let dz = (len > 0)? lightDir.z/len : 0.0f;
+        // place camera some distance opposite the light directionS
+        const dist = 1.0f;
+        let px = tx - dx * dist;
+        let py = ty - dy * dist;
+        let pz = tz - dz * dist;
+        Camera.position(px, py, pz);
+        Camera.target(tx, ty, tz);
+        Camera.update();
+    }
     gltf_skin.texture_mapping = false;
     gltf_skin.shade_model = Render.SHADE_FLAT;
     gltf_skin.pipeline = Render.PL_NO_LIGHTS;
     skin_object.render();
-    // Restore main context and view
+    // Restore main camera and context
+    Camera.restore(_mainCam);
+    Camera.update();
     Screen.switchContext();
 
     Screen.flush();
@@ -221,8 +247,6 @@ while(true) {
     skin_object.render();
 
     Screen.setParam(Screen.DEPTH_TEST_ENABLE, false);
-
-    shadowRT.draw(0, 0);
 
     font.print(10, 10, Screen.getFPS(360) + " FPS | " + free_mem + " | Free VRAM: " + free_vram + "KB");
     font.print(10, 25, gltf_skin.size + " Vertices");
