@@ -312,7 +312,7 @@ void bake_giftags(owl_packet *packet, athena_render_data *data, bool texture_map
 	prim_reg_t prim_data = {
 		.PRIM = GS_PRIM_PRIM_TRIFAN,
 		.IIP = data->attributes.shade_model,
-		.TME = 1,
+		.TME = texture_mapping,
 		.FGE = gsGlobal->PrimFogEnable,
 		.ABE = gsGlobal->PrimAlphaEnable,
 		.AA1 = gsGlobal->PrimAAEnable,
@@ -320,9 +320,6 @@ void bake_giftags(owl_packet *packet, athena_render_data *data, bool texture_map
 		.CTXT = gsGlobal->PrimContext,
 		.FIX = 0
 	};
-
-	prim_reg_t notm_prim_data = prim_data;
-	notm_prim_data.TME = 0;
 
 	giftag_t clip_tag = {
 		.NLOOP = 0,
@@ -333,11 +330,7 @@ void bake_giftags(owl_packet *packet, athena_render_data *data, bool texture_map
 		.NREG = 3
 	};
 
-	giftag_t notm_clip_tag = clip_tag;
-	notm_clip_tag.PRIM = notm_prim_data.data;
-
 	prim_data.PRIM = (data->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE);
-	notm_prim_data.PRIM = prim_data.PRIM;
 
 	giftag_t prim_tag = {
 		.NLOOP = 0,
@@ -348,34 +341,14 @@ void bake_giftags(owl_packet *packet, athena_render_data *data, bool texture_map
 		.NREG = 3
 	};
 
-	giftag_t notm_prim_tag = prim_tag;
-	notm_prim_tag.PRIM = notm_prim_data.data;
-
-	data->materials[data->material_indices[mat_id].index].prim_tag.dword[1] = DRAW_STQ2_REGLIST;
-	data->materials[data->material_indices[mat_id].index].prim_tag.dword[0] = prim_tag.data;
-
-	data->materials[data->material_indices[mat_id].index].notm_prim_tag.dword[1] = DRAW_STQ2_REGLIST;
-	data->materials[data->material_indices[mat_id].index].notm_prim_tag.dword[0] = notm_prim_tag.data;
-
-	data->materials[data->material_indices[mat_id].index].clip_tag.f[3] = data->attributes.face_culling;
-	data->materials[data->material_indices[mat_id].index].clip_tag.sword[2] = data->tristrip;
-	data->materials[data->material_indices[mat_id].index].clip_tag.sword[1] = data->attributes.accurate_clipping? (clip_tag.data >> 32) : 0;
-
-	data->materials[data->material_indices[mat_id].index].notm_clip_tag.f[3] = data->attributes.face_culling;
-	data->materials[data->material_indices[mat_id].index].notm_clip_tag.sword[2] = data->tristrip;
-	data->materials[data->material_indices[mat_id].index].notm_clip_tag.sword[1] = data->attributes.accurate_clipping? (notm_clip_tag.data >> 32) : 0;
-
-	if (texture_mapping) {
-		owl_add_unpack_data_cnt(packet, 26, 1, 0);
-		owl_add_uquad_ptr(packet, (void*)&data->materials[data->material_indices[mat_id].index].clip_tag);
-		owl_add_unpack_data_cnt(packet, 0, 1, 1);
-		owl_add_uquad_ptr(packet, (void*)&data->materials[data->material_indices[mat_id].index].prim_tag);
-	} else {
-		owl_add_unpack_data_cnt(packet, 26, 1, 0);
-		owl_add_uquad_ptr(packet, (void*)&data->materials[data->material_indices[mat_id].index].notm_clip_tag);
-		owl_add_unpack_data_cnt(packet, 0, 1, 1);
-		owl_add_uquad_ptr(packet, (void*)&data->materials[data->material_indices[mat_id].index].notm_prim_tag);
-	}
+	owl_add_unpack_data_cnt(packet, 26, 1, 0);
+	owl_add_uint(packet, 0);
+	owl_add_uint(packet, data->attributes.accurate_clipping? (clip_tag.data >> 32) : 0);
+	owl_add_uint(packet, data->tristrip);
+	owl_add_uint(packet, data->attributes.face_culling);
+	owl_add_unpack_data_cnt(packet, 0, 1, 1);
+	owl_add_ulong(packet, prim_tag.data);
+	owl_add_ulong(packet, DRAW_STQ2_REGLIST);
 }
 
 void draw_vu1_with_colors(athena_object_data *obj, int pass_state) {

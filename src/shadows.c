@@ -5,6 +5,61 @@
 #include <shadows.h>
 #include <vector.h>
 
+// Helper function to create transform matrix specifically for shadows
+// This avoids modifying shared functions that could break other systems
+void shadow_create_transform_matrix(MATRIX result, const VECTOR position, 
+                                  const VECTOR rotation, const VECTOR scale) {
+    MATRIX scale_matrix;
+    matrix_functions->identity(scale_matrix);
+    scale_matrix[0] =  scale[0] * 1.0f;
+    scale_matrix[5] =  scale[1] * 1.0f;
+    scale_matrix[10] = scale[2] * 1.0f;
+
+    MATRIX rotation_matrix;
+    // Convert quaternion to matrix
+    float x = rotation[0];
+    float y = rotation[1];
+    float z = rotation[2];
+    float w = rotation[3];
+    
+    float x2 = x * 2.0f;
+    float y2 = y * 2.0f;
+    float z2 = z * 2.0f;
+    float xx = x * x2;
+    float xy = x * y2;
+    float xz = x * z2;
+    float yy = y * y2;
+    float yz = y * z2;
+    float zz = z * z2;
+    float wx = w * x2;
+    float wy = w * y2;
+    float wz = w * z2;
+    
+    matrix_functions->identity(rotation_matrix);
+    
+    rotation_matrix[0] = 1.0f - (yy + zz);
+    rotation_matrix[1] = xy - wz;
+    rotation_matrix[2] = xz + wy;
+    
+    rotation_matrix[4] = xy + wz;
+    rotation_matrix[5] = 1.0f - (xx + zz);
+    rotation_matrix[6] = yz - wx;
+    
+    rotation_matrix[8] = xz - wy;
+    rotation_matrix[9] = yz + wx;
+    rotation_matrix[10] = 1.0f - (xx + yy);
+
+    MATRIX translation_matrix;
+    matrix_functions->identity(translation_matrix);
+    translation_matrix[12] = position[0];
+    translation_matrix[13] = position[1];
+    translation_matrix[14] = position[2];
+
+    MATRIX temp;
+    matrix_functions->multiply(temp, rotation_matrix, scale_matrix);
+    matrix_functions->multiply(result, translation_matrix, temp);
+}
+
 // forward declaration from render.c
 void draw_vu1_with_colors(athena_object_data *obj, int pass_state);
 
@@ -45,6 +100,24 @@ void shadow_projector_init(ath_shadow_projector *p, GSSURFACE *tex) {
 
     memset(&p->data, 0, sizeof(p->data));
     memset(&p->obj, 0, sizeof(p->obj));
+    
+    // Initialize position to origin
+    p->obj.position[0] = 0.0f;
+    p->obj.position[1] = 0.0f;
+    p->obj.position[2] = 0.0f;
+    p->obj.position[3] = 1.0f;
+    
+    // Initialize rotation to identity quaternion
+    p->obj.rotation[0] = 0.0f;
+    p->obj.rotation[1] = 0.0f;
+    p->obj.rotation[2] = 0.0f;
+    p->obj.rotation[3] = 1.0f;
+    
+    // Initialize scale to identity
+    p->obj.scale[0] = 1.0f;
+    p->obj.scale[1] = 1.0f;
+    p->obj.scale[2] = 1.0f;
+    p->obj.scale[3] = 1.0f;
 
     // Build initial geometry for default grid
     shadow_projector_rebuild_geometry(p);
@@ -173,7 +246,7 @@ void shadow_projector_render(ath_shadow_projector *p) {
             matrix_functions->apply(world, p->transform, local);
             // shift along -lightDir to move decal relative to light direction
             world[0] -= p->lightDir[0] * p->lightOffset;
-            world[1] -= p->lightDir[1] * p->lightOffset;
+            world[1] -= p->lightDir[1];
             world[2] -= p->lightDir[2] * p->lightOffset;
 
 #ifdef ATHENA_ODE
@@ -247,9 +320,8 @@ void shadow_projector_render(ath_shadow_projector *p) {
         copy_vector(data->positions[v], p->nodes[n]);
     }
 
-    // Update object transform
-    copy_vector(p->obj.position, p->transform + 12);
-    for (int r = 0; r < 16; r++) p->obj.transform[r] = p->transform[r];
+    // Update object transform - keep position as set by JavaScript, update transform matrix
+    //for (int r = 0; r < 16; r++) p->obj.transform[r] = p->transform[r];
 
     uint64_t old_alpha = get_screen_param(ALPHA_BLEND_EQUATION);
 
@@ -389,7 +461,7 @@ void shadow_projector_rebuild_geometry(ath_shadow_projector *p) {
 
     // Init object and bind render data once
     new_render_object(&p->obj, data);
-    copy_vector(p->obj.position, p->transform + 12);
+    // Position will be set by JavaScript, just update transform matrix
     for (int r = 0; r < 16; r++) p->obj.transform[r] = p->transform[r];
 }
 
