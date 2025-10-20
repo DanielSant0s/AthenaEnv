@@ -160,7 +160,8 @@ static JSValue js_shadow_set(JSContext *ctx, JSValueConst this_val, JSValue val,
             JS_ToFloat32(ctx, &s->proj.obj.scale[2], JS_GetPropertyStr(ctx, val, "z"));
             break;
     }
-    create_transform_matrix(s->proj.transform, s->proj.obj.position, s->proj.obj.rotation, s->proj.obj.scale);
+    // Use shadow-specific transform matrix creation to avoid breaking other systems
+    shadow_create_transform_matrix(s->proj.transform, s->proj.obj.position, s->proj.obj.rotation, s->proj.obj.scale);
     return JS_UNDEFINED;
 }
 

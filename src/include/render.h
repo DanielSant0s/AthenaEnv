@@ -150,12 +150,6 @@ typedef struct vertex_skin_data {
 
 typedef struct
 {
-	owl_qword prim_tag;
-	owl_qword clip_tag;
-
-	owl_qword notm_prim_tag;
-	owl_qword notm_clip_tag;
-
     VECTOR ambient; 
     VECTOR diffuse;
     VECTOR specular;  

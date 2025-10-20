@@ -231,7 +231,8 @@ while(true) {
     scene_object.render();
 
     // Projector follows the skinned character on XZ, projected on ground (y=0)
-    projSkin.position = { x: skin_object.position.x, y: 0.0f, z: skin_object.position.z-1.0f };
+    projSkin.position = { x: skin_object.position.x, y: 0.0f, z: skin_object.position.z };
+    projSkin.setLightOffset(1.0);
     projSkin.render();
     // step ODE (harmless if no dynamics)
     world.stepWithContacts(space, jgroup, 0.01f);
@@ -241,9 +242,54 @@ while(true) {
     gltf_skin.pipeline = Render.PL_DEFAULT;
     skin_object.render();
 
+    Screen.switchContext();
+    Draw.rect(0, 0, shadowRT.width, shadowRT.height, Color.new(0, 0, 0, 0));
+    Render.setView(60.0, 1.0, 4000.0, shadowRT.width, shadowRT.height);
+    //// Build light camera looking at the skinned character
+    {
+        let tx = box_object.position.x;
+        let ty = box_object.position.y; // aim slightly above ground
+        let tz = box_object.position.z;
+        // normalize lightDir
+        let len = Math.sqrt(lightDir.x*lightDir.x + lightDir.y*lightDir.y + lightDir.z*lightDir.z);
+        let dx = (len > 0)? lightDir.x/len : 0.0f;
+        let dy = (len > 0)? lightDir.y/len : 1.0f;
+        let dz = (len > 0)? lightDir.z/len : 0.0f;
+        // place camera some distance opposite the light directionS
+        const dist = 1.0f;
+        let px = tx - dx * dist;
+        let py = ty - dy * dist;
+        let pz = tz - dz * dist;
+        Camera.position(px, py, pz);
+        Camera.target(tx, ty, tz);
+        Camera.update();
+    }
+    box.texture_mapping = false;
+    box.shade_model = Render.SHADE_FLAT;
+    box.pipeline = Render.PL_NO_LIGHTS;
+    box_object.scale = {x:0.23, y:0.23, z:0.23};
+    box_object.render();
+    //// Restore main camera and context
+    Screen.switchContext();
+
+    Screen.flush();
+
+    Camera.restore(_mainCam);
+    Camera.update();
+//
+    Render.setView(60.0, 1.0, 4000.0);
+//
+    // Projector follows the skinned character on XZ, projected on ground (y=0)
+    projSkin.position = { x: box_object.position.x, y: 0.0f, z: box_object.position.z };
+    projSkin.setLightOffset(1.2);
+    projSkin.render();
+    // step ODE (harmless if no dynamics)
+    world.stepWithContacts(space, jgroup, 0.01f);
+
     box.texture_mapping = true;
     box.shade_model = Render.SHADE_GOURAUD;
     box.pipeline = Render.PL_DEFAULT;
+    box_object.scale = {x:0.2, y:0.2, z:0.2};
     box_object.render();
 
     Screen.setParam(Screen.DEPTH_TEST_ENABLE, false);

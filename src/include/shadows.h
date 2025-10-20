@@ -74,6 +74,10 @@ void shadow_projector_free(ath_shadow_projector *p);
 // Rebuild internal geometry when grid changes
 void shadow_projector_rebuild_geometry(ath_shadow_projector *p);
 
+// Shadow-specific transform matrix creation (avoids modifying shared functions)
+void shadow_create_transform_matrix(MATRIX result, const VECTOR position, 
+                                  const VECTOR rotation, const VECTOR scale);
+
 #endif
 
 
