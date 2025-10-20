@@ -7,6 +7,13 @@
 //3D math
 
 typedef struct {
+	VECTOR position;
+	VECTOR target;
+	VECTOR up;
+	VECTOR local_up;
+} athena_camera_state;
+
+typedef struct {
 	float    x;
 	float    y;
 	float    z;
@@ -234,16 +241,6 @@ void updateBodyPosRot(athena_object_data *obj);
 void initCamera(MATRIX *ws, MATRIX *wv, MATRIX *vs);
 
 void cameraUpdate();
-
-typedef struct athena_camera_state {
-    VECTOR position;
-    VECTOR target;
-    VECTOR up;
-    VECTOR local_up;
-} athena_camera_state;
-
-void cameraSave(athena_camera_state *out);
-void cameraRestore(const athena_camera_state *state);
 
 #define BATCH_SIZE 48
 #define BATCH_SIZE_SKINNED 30

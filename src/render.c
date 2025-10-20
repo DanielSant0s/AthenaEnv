@@ -366,11 +366,15 @@ void bake_giftags(owl_packet *packet, athena_render_data *data, bool texture_map
 	data->materials[data->material_indices[mat_id].index].notm_clip_tag.sword[1] = data->attributes.accurate_clipping? (notm_clip_tag.data >> 32) : 0;
 
 	if (texture_mapping) {
-		owl_add_unpack_data(packet, 26, (void*)&data->materials[data->material_indices[mat_id].index].clip_tag, 1, 0);
-		owl_add_unpack_data(packet, 0, (void*)&data->materials[data->material_indices[mat_id].index].prim_tag, 1, 1);
+		owl_add_unpack_data_cnt(packet, 26, 1, 0);
+		owl_add_uquad_ptr(packet, (void*)&data->materials[data->material_indices[mat_id].index].clip_tag);
+		owl_add_unpack_data_cnt(packet, 0, 1, 1);
+		owl_add_uquad_ptr(packet, (void*)&data->materials[data->material_indices[mat_id].index].prim_tag);
 	} else {
-		owl_add_unpack_data(packet, 26, (void*)&data->materials[data->material_indices[mat_id].index].notm_clip_tag, 1, 0);
-		owl_add_unpack_data(packet, 0, (void*)&data->materials[data->material_indices[mat_id].index].notm_prim_tag, 1, 1);
+		owl_add_unpack_data_cnt(packet, 26, 1, 0);
+		owl_add_uquad_ptr(packet, (void*)&data->materials[data->material_indices[mat_id].index].notm_clip_tag);
+		owl_add_unpack_data_cnt(packet, 0, 1, 1);
+		owl_add_uquad_ptr(packet, (void*)&data->materials[data->material_indices[mat_id].index].notm_prim_tag);
 	}
 }
 
@@ -396,14 +400,14 @@ void draw_vu1_with_colors(athena_object_data *obj, int pass_state) {
 	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 8);
 
 	if (obj->bone_matrices) {
-		owl_add_unpack_data(packet, 141, (void*)obj->bone_matrices, data->skeleton->bone_count*4, 0);
+		owl_add_unpack_data_ref(packet, 141, (void*)obj->bone_matrices, data->skeleton->bone_count*4, 0);
 	}
 
-	owl_add_unpack_data(packet, 0, (void*)&screen_scale, 1, 0);
-	owl_add_unpack_data(packet, 1, (void*)world_screen, 4, 0);
-	owl_add_unpack_data(packet, 5, (void*)obj->transform, 4, 0);
+	owl_add_unpack_data_ref(packet, 0, (void*)&screen_scale, 1, 0);
+	owl_add_unpack_data_ref(packet, 1, (void*)world_screen, 4, 0);
+	owl_add_unpack_data_ref(packet, 5, (void*)obj->transform, 4, 0);
 
-	owl_add_unpack_data(packet, 269, (void*)obj->bump_offset_buffer, 1, 0);
+	owl_add_unpack_data_ref(packet, 269, (void*)obj->bump_offset_buffer, 1, 0);
 
 	//owl_add_end_tag(packet);
 
@@ -441,7 +445,7 @@ void draw_vu1_with_colors(athena_object_data *obj, int pass_state) {
 		int idxs_drawn = 0;
 
 		while (idxs_to_draw > 0) {
-			owl_query_packet(CHANNEL_VIF1, texture_mapping? 18 : 8);    
+			owl_query_packet(CHANNEL_VIF1, texture_mapping? 20 : 10);    
 
 			int count = batch_size;
 			if (idxs_to_draw < batch_size)
@@ -452,20 +456,20 @@ void draw_vu1_with_colors(athena_object_data *obj, int pass_state) {
 			if (texture_mapping) {
 				append_texture_tags(packet, tex, texture_id, COLOR_MODULATE);
 			}
-
+  
 			bake_giftags(packet, data, texture_mapping, i);
 
-			owl_add_unpack_data(packet, 1, (void*)&data->materials[data->material_indices[i].index].diffuse, 1, 1);
+			owl_add_unpack_data_ref(packet, 1, (void*)&data->materials[data->material_indices[i].index].diffuse, 1, 1);
 
 			if (data->skin_data) 
-				owl_add_unpack_data(packet, 2, &skin_data[idxs_drawn], count*2, 1);
+				owl_add_unpack_data_ref(packet, 2, &skin_data[idxs_drawn], count*2, 1);
 
-			owl_add_unpack_data(packet, 2+batch_size*(data->skin_data? 2 : 0), &positions[idxs_drawn], count, 1);
-			//owl_add_unpack_data(packet, 2+batch_size*(data->skin_data? 3 : 1), &normals[idxs_drawn], count, 1);
-			owl_add_unpack_data(packet, 2+batch_size*(data->skin_data? 4 : 2), &colours[idxs_drawn], count, 1);
+			owl_add_unpack_data_ref(packet, 2+batch_size*(data->skin_data? 2 : 0), &positions[idxs_drawn], count, 1);
+			//owl_add_unpack_data_ref(packet, 2+batch_size*(data->skin_data? 3 : 1), &normals[idxs_drawn], count, 1);
+			owl_add_unpack_data_ref(packet, 2+batch_size*(data->skin_data? 4 : 2), &colours[idxs_drawn], count, 1);
 
 			if (texcoords) 
-				owl_add_unpack_data(packet, 2+batch_size*(data->skin_data? 5 : 3), &texcoords[idxs_drawn], count, 1);
+				owl_add_unpack_data_ref(packet, 2+batch_size*(data->skin_data? 5 : 3), &texcoords[idxs_drawn], count, 1);
 
 			owl_add_cnt_tag(packet, texture_mapping? 5 : 1, owl_vif_code_double(VIF_CODE(0, 0, VIF_NOP, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
 
@@ -497,7 +501,7 @@ void draw_vu1_with_colors(athena_object_data *obj, int pass_state) {
 				owl_add_tag(packet, GS_TEX1_1+gsGlobal->PrimContext, GS_SETREG_TEX1(1, 0, tex->Filter, tex->Filter, 0, 0, 0));
 			}
 			
-			owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));
+			owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));  
 			owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
 			owl_add_uint(packet, VIF_CODE(count, 0, VIF_ITOP, 0));
 			owl_add_uint(packet, VIF_CODE(mpg_addr, 0, (last_index == -1? VIF_MSCALF : VIF_MSCNT), 0)); 
@@ -537,14 +541,14 @@ void draw_vu1_with_lights(athena_object_data *obj, int pass_state) {
 
 	owl_add_cnt_tag(packet, 0, owl_vif_code_double(VIF_CODE(0, 0, VIF_FLUSHE, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
 
-	owl_add_unpack_data(packet, 0, (void*)&screen_scale, 1, 0);
-	owl_add_unpack_data(packet, 1, (void*)world_screen, 4, 0);
-	owl_add_unpack_data(packet, 5, (void*)obj->transform, 4, 0);
-	owl_add_unpack_data(packet, 9, (void*)getCameraPosition(), 1, 0);
-	owl_add_unpack_data(packet, 10, (void*)&dir_lights, 16, 0);
+	owl_add_unpack_data_ref(packet, 0, (void*)&screen_scale, 1, 0);
+	owl_add_unpack_data_ref(packet, 1, (void*)world_screen, 4, 0);
+	owl_add_unpack_data_ref(packet, 5, (void*)obj->transform, 4, 0);
+	owl_add_unpack_data_ref(packet, 9, (void*)getCameraPosition(), 1, 0);
+	owl_add_unpack_data_ref(packet, 10, (void*)&dir_lights, 16, 0);
 
 	if (obj->bone_matrices) {
-		owl_add_unpack_data(packet, 141, (void*)obj->bone_matrices, data->skeleton->bone_count*4, 0);
+		owl_add_unpack_data_ref(packet, 141, (void*)obj->bone_matrices, data->skeleton->bone_count*4, 0);
 	}
 
 	//owl_add_end_tag(packet);
@@ -584,7 +588,7 @@ void draw_vu1_with_lights(athena_object_data *obj, int pass_state) {
 		int idxs_drawn = 0;
 
 		while (idxs_to_draw > 0) {
-			owl_query_packet(CHANNEL_VIF1, texture_mapping? 20 : 10);
+			owl_query_packet(CHANNEL_VIF1, texture_mapping? 22 : 12);
 
 			int count = batch_size;
 			if (idxs_to_draw < batch_size)
@@ -598,17 +602,17 @@ void draw_vu1_with_lights(athena_object_data *obj, int pass_state) {
 
 			bake_giftags(packet, data, texture_mapping, i);
 			
-			owl_add_unpack_data(packet, 1, (void*)&data->materials[data->material_indices[i].index].diffuse, 1, 1);
+			owl_add_unpack_data_ref(packet, 1, (void*)&data->materials[data->material_indices[i].index].diffuse, 1, 1);
 
 			if (data->skin_data) 
-				owl_add_unpack_data(packet, 2, &skin_data[idxs_drawn], count*2, 1);
+				owl_add_unpack_data_ref(packet, 2, &skin_data[idxs_drawn], count*2, 1);
 
-			owl_add_unpack_data(packet, 2+batch_size*(data->skin_data? 2 : 0), &positions[idxs_drawn], count, 1);
-			owl_add_unpack_data(packet, 2+batch_size*(data->skin_data? 3 : 1), &normals[idxs_drawn], count, 1);
-			owl_add_unpack_data(packet, 2+batch_size*(data->skin_data? 4 : 2), &colours[idxs_drawn], count, 1);
+			owl_add_unpack_data_ref(packet, 2+batch_size*(data->skin_data? 2 : 0), &positions[idxs_drawn], count, 1);
+			owl_add_unpack_data_ref(packet, 2+batch_size*(data->skin_data? 3 : 1), &normals[idxs_drawn], count, 1);
+			owl_add_unpack_data_ref(packet, 2+batch_size*(data->skin_data? 4 : 2), &colours[idxs_drawn], count, 1);
 
 			if (texcoords) 
-				owl_add_unpack_data(packet, 2+batch_size*(data->skin_data? 5 : 3), &texcoords[idxs_drawn], count, 1);
+				owl_add_unpack_data_ref(packet, 2+batch_size*(data->skin_data? 5 : 3), &texcoords[idxs_drawn], count, 1);
 			
 			owl_add_cnt_tag(packet, texture_mapping? 5 : 1, owl_vif_code_double(VIF_CODE(0, 0, VIF_NOP, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
 
@@ -680,14 +684,14 @@ void draw_vu1_with_spec_lights(athena_object_data *obj, int pass_state) {
 	owl_add_cnt_tag(packet, 0, owl_vif_code_double(VIF_CODE(0, 0, VIF_FLUSHE, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
 
 	if (obj->bone_matrices) {
-		owl_add_unpack_data(packet, 141, (void*)obj->bone_matrices, data->skeleton->bone_count*4, 0);
+		owl_add_unpack_data_ref(packet, 141, (void*)obj->bone_matrices, data->skeleton->bone_count*4, 0);
 	}
 
-	owl_add_unpack_data(packet, 0, (void*)&screen_scale, 1, 0);
-	owl_add_unpack_data(packet, 1, (void*)world_screen, 4, 0);
-	owl_add_unpack_data(packet, 5, (void*)obj->transform, 4, 0);
-	owl_add_unpack_data(packet, 9, (void*)getCameraPosition(), 1, 0);
-	owl_add_unpack_data(packet, 10, (void*)&dir_lights, 16, 0);
+	owl_add_unpack_data_ref(packet, 0, (void*)&screen_scale, 1, 0);
+	owl_add_unpack_data_ref(packet, 1, (void*)world_screen, 4, 0);
+	owl_add_unpack_data_ref(packet, 5, (void*)obj->transform, 4, 0);
+	owl_add_unpack_data_ref(packet, 9, (void*)getCameraPosition(), 1, 0);
+	owl_add_unpack_data_ref(packet, 10, (void*)&dir_lights, 16, 0);
 
 	//owl_add_end_tag(packet);
 
@@ -726,7 +730,7 @@ void draw_vu1_with_spec_lights(athena_object_data *obj, int pass_state) {
 		int idxs_drawn = 0;
 
 		while (idxs_to_draw > 0) {
-			owl_query_packet(CHANNEL_VIF1, texture_mapping? 19 : 9);
+			owl_query_packet(CHANNEL_VIF1, texture_mapping? 21 : 11);
 
 			int count = batch_size;
 			if (idxs_to_draw < batch_size)
@@ -739,17 +743,17 @@ void draw_vu1_with_spec_lights(athena_object_data *obj, int pass_state) {
 
 			bake_giftags(packet, data, texture_mapping, i);
 			
-			owl_add_unpack_data(packet, 1, (void*)&data->materials[data->material_indices[i].index].diffuse, 1, 1);
+			owl_add_unpack_data_ref(packet, 1, (void*)&data->materials[data->material_indices[i].index].diffuse, 1, 1);
 
 			if (data->skin_data) 
-				owl_add_unpack_data(packet, 2, &skin_data[idxs_drawn], count*2, 1);
+				owl_add_unpack_data_ref(packet, 2, &skin_data[idxs_drawn], count*2, 1);
 
-			owl_add_unpack_data(packet, 2+batch_size*(data->skin_data? 2 : 0), &positions[idxs_drawn], count, 1);
-			owl_add_unpack_data(packet, 2+batch_size*(data->skin_data? 3 : 1), &normals[idxs_drawn], count, 1);
-			owl_add_unpack_data(packet, 2+batch_size*(data->skin_data? 4 : 2), &colours[idxs_drawn], count, 1);
+			owl_add_unpack_data_ref(packet, 2+batch_size*(data->skin_data? 2 : 0), &positions[idxs_drawn], count, 1);
+			owl_add_unpack_data_ref(packet, 2+batch_size*(data->skin_data? 3 : 1), &normals[idxs_drawn], count, 1);
+			owl_add_unpack_data_ref(packet, 2+batch_size*(data->skin_data? 4 : 2), &colours[idxs_drawn], count, 1);
 
 			if (texcoords) 
-				owl_add_unpack_data(packet, 2+batch_size*(data->skin_data? 5 : 3), &texcoords[idxs_drawn], count, 1);
+				owl_add_unpack_data_ref(packet, 2+batch_size*(data->skin_data? 5 : 3), &texcoords[idxs_drawn], count, 1);
 
 			owl_add_cnt_tag(packet, texture_mapping? 5 : 1, owl_vif_code_double(VIF_CODE(0, 0, VIF_NOP, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
 
@@ -821,14 +825,14 @@ void draw_vu1_with_lights_ref(athena_object_data *obj, int pass_state) {
 
 	owl_add_cnt_tag(packet, 0, owl_vif_code_double(VIF_CODE(0, 0, VIF_FLUSHE, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
 
-	owl_add_unpack_data(packet, 0, (void*)&screen_scale, 1, 0);
-	owl_add_unpack_data(packet, 1, (void*)&world_screen, 4, 0);
-	owl_add_unpack_data(packet, 5, (void*)obj->transform, 4, 0);
-	owl_add_unpack_data(packet, 9, (void*)getCameraPosition(), 1, 0);
-	owl_add_unpack_data(packet, 10, (void*)&dir_lights, 16, 0);
+	owl_add_unpack_data_ref(packet, 0, (void*)&screen_scale, 1, 0);
+	owl_add_unpack_data_ref(packet, 1, (void*)&world_screen, 4, 0);
+	owl_add_unpack_data_ref(packet, 5, (void*)obj->transform, 4, 0);
+	owl_add_unpack_data_ref(packet, 9, (void*)getCameraPosition(), 1, 0);
+	owl_add_unpack_data_ref(packet, 10, (void*)&dir_lights, 16, 0);
 
 	if (obj->bone_matrices) {
-		owl_add_unpack_data(packet, 141, (void*)obj->bone_matrices, data->skeleton->bone_count*4, 0);
+		owl_add_unpack_data_ref(packet, 141, (void*)obj->bone_matrices, data->skeleton->bone_count*4, 0);
 	}
 
 	//owl_add_end_tag(packet);
@@ -858,7 +862,7 @@ void draw_vu1_with_lights_ref(athena_object_data *obj, int pass_state) {
 		int idxs_drawn = 0;
 
 		while (idxs_to_draw > 0) {
-			owl_query_packet(CHANNEL_VIF1, texture_mapping? 19 : 9);
+			owl_query_packet(CHANNEL_VIF1, texture_mapping? 21 : 11);
 
 			int count = batch_size;
 			if (idxs_to_draw < batch_size)
@@ -872,15 +876,15 @@ void draw_vu1_with_lights_ref(athena_object_data *obj, int pass_state) {
 
 			bake_giftags(packet, data, texture_mapping, i);
 			
-			owl_add_unpack_data(packet, 1, (void*)&data->materials[data->material_indices[i].index].diffuse, 1, 1);
+			owl_add_unpack_data_ref(packet, 1, (void*)&data->materials[data->material_indices[i].index].diffuse, 1, 1);
 
 			if (data->skin_data) {
 				// unpack_list_append(packet, &skin_data[idxs_drawn], count*2);
 			}
 
-			owl_add_unpack_data(packet, 2,                &positions[idxs_drawn], count, 1);
-			owl_add_unpack_data(packet, 2+batch_size,     &normals[idxs_drawn], count, 1);
-			owl_add_unpack_data(packet, 2+(batch_size*2), &colours[idxs_drawn], count, 1);
+			owl_add_unpack_data_ref(packet, 2,                &positions[idxs_drawn], count, 1);
+			owl_add_unpack_data_ref(packet, 2+batch_size,     &normals[idxs_drawn], count, 1);
+			owl_add_unpack_data_ref(packet, 2+(batch_size*2), &colours[idxs_drawn], count, 1);
 
 			owl_add_cnt_tag(packet, texture_mapping? 5 : 1, owl_vif_code_double(VIF_CODE(0, 0, VIF_NOP, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
 

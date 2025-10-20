@@ -79,9 +79,9 @@ projSkin.setUVRect(1.0, 0.0, 0.0, 1.0);
 
 Screen.switchContext();
 Screen.setBuffer(Screen.DRAW_BUFFER, shadowRT);
+Screen.setBuffer(Screen.DEPTH_BUFFER, depth_buffer, 1); //mask z buffer on context 2, we doesnt need it for now
+Screen.setParam(Screen.DEPTH_TEST_ENABLE, false);
 Screen.switchContext();
-
-Screen.flush();
 
 const scene = new RenderData("scene.gltf");
 scene.face_culling = Render.CULL_FACE_NONE;
@@ -185,13 +185,15 @@ while(true) {
         switch_anim ^= 1;
     }
 
+    Screen.setParam(Screen.DEPTH_TEST_ENABLE, false);
+
+    sky.draw(0, 0);
+
     // Offscreen pass: render skin into shadowRT from light-aligned camera
     const _mainCam = Camera.save();
+    
     Screen.switchContext();
-    Screen.setParam(Screen.DEPTH_TEST_ENABLE, false);
     Draw.rect(0, 0, shadowRT.width, shadowRT.height, Color.new(0, 0, 0, 0));
-    Screen.setParam(Screen.DEPTH_TEST_ENABLE, true);
-    Screen.setParam(Screen.DEPTH_TEST_METHOD, Screen.DEPTH_GEQUAL);
     Render.setView(60.0, 1.0, 4000.0, shadowRT.width, shadowRT.height);
     // Build light camera looking at the skinned character
     {
@@ -221,19 +223,12 @@ while(true) {
     Camera.update();
     Screen.switchContext();
 
-    Screen.flush();
-    
     Render.setView(60.0, 1.0, 4000.0);
-
-    Screen.setParam(Screen.DEPTH_TEST_ENABLE, false);
-
-    sky.draw(0, 0);
 
     Screen.setParam(Screen.DEPTH_TEST_ENABLE, true);
     Screen.setParam(Screen.DEPTH_TEST_METHOD, Screen.DEPTH_GEQUAL);
 
     scene_object.render();
-    box_object.render();
 
     // Projector follows the skinned character on XZ, projected on ground (y=0)
     projSkin.position = { x: skin_object.position.x, y: 0.0f, z: skin_object.position.z-1.0f };
@@ -245,6 +240,11 @@ while(true) {
     gltf_skin.shade_model = Render.SHADE_GOURAUD;
     gltf_skin.pipeline = Render.PL_DEFAULT;
     skin_object.render();
+
+    box.texture_mapping = true;
+    box.shade_model = Render.SHADE_GOURAUD;
+    box.pipeline = Render.PL_DEFAULT;
+    box_object.render();
 
     Screen.setParam(Screen.DEPTH_TEST_ENABLE, false);
 
