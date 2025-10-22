@@ -370,17 +370,29 @@ void draw_vu1_with_colors(athena_object_data *obj, int pass_state) {
 	
 	
 
-	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 8);
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 14);
 
 	if (obj->bone_matrices) {
 		owl_add_unpack_data_ref(packet, 141, (void*)obj->bone_matrices, data->skeleton->bone_count*4, 0);
 	}
 
-	owl_add_unpack_data_ref(packet, 0, (void*)&screen_scale, 1, 0);
-	owl_add_unpack_data_ref(packet, 1, (void*)world_screen, 4, 0);
-	owl_add_unpack_data_ref(packet, 5, (void*)obj->transform, 4, 0);
+	owl_add_unpack_data_cnt(packet, 0, 1, 0);
+	owl_add_uquad_ptr(packet, &screen_scale);
 
-	owl_add_unpack_data_ref(packet, 269, (void*)obj->bump_offset_buffer, 1, 0);
+	owl_add_unpack_data_cnt(packet, 1, 4, 0);
+	owl_add_uquad_ptr(packet, &(world_screen[0]));
+	owl_add_uquad_ptr(packet, &(world_screen[4]));
+	owl_add_uquad_ptr(packet, &(world_screen[8]));
+	owl_add_uquad_ptr(packet, &(world_screen[12]));
+
+	owl_add_unpack_data_cnt(packet, 5, 4, 0);
+	owl_add_uquad_ptr(packet, &(obj->transform[0]));
+	owl_add_uquad_ptr(packet, &(obj->transform[4]));
+	owl_add_uquad_ptr(packet, &(obj->transform[8]));
+	owl_add_uquad_ptr(packet, &(obj->transform[12]));
+
+	owl_add_unpack_data_cnt(packet, 269, 1, 0);
+	owl_add_uquad_ptr(packet, obj->bump_offset_buffer);
 
 	//owl_add_end_tag(packet);
 
@@ -507,24 +519,50 @@ void draw_vu1_with_lights(athena_object_data *obj, int pass_state) {
 	} else {
 		mpg_addr = vu_mpg_preload(vu1_lights, true);
 	}
-		
-	
 
-	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 10); // 5 for unpack static data + 2 for flush with end
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 33); // 5 for unpack static data + 2 for flush with end
 
 	owl_add_cnt_tag(packet, 0, owl_vif_code_double(VIF_CODE(0, 0, VIF_FLUSHE, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
 
-	owl_add_unpack_data_ref(packet, 0, (void*)&screen_scale, 1, 0);
-	owl_add_unpack_data_ref(packet, 1, (void*)world_screen, 4, 0);
-	owl_add_unpack_data_ref(packet, 5, (void*)obj->transform, 4, 0);
-	owl_add_unpack_data_ref(packet, 9, (void*)getCameraPosition(), 1, 0);
-	owl_add_unpack_data_ref(packet, 10, (void*)&dir_lights, 16, 0);
+	owl_add_unpack_data_cnt(packet, 0, 1, 0);
+	owl_add_uquad_ptr(packet, &screen_scale);
+
+	owl_add_unpack_data_cnt(packet, 1, 4, 0);
+	owl_add_uquad_ptr(packet, &(world_screen[0]));
+	owl_add_uquad_ptr(packet, &(world_screen[4]));
+	owl_add_uquad_ptr(packet, &(world_screen[8]));
+	owl_add_uquad_ptr(packet, &(world_screen[12]));
+
+	owl_add_unpack_data_cnt(packet, 5, 4, 0);
+	owl_add_uquad_ptr(packet, &(obj->transform[0]));
+	owl_add_uquad_ptr(packet, &(obj->transform[4]));
+	owl_add_uquad_ptr(packet, &(obj->transform[8]));
+	owl_add_uquad_ptr(packet, &(obj->transform[12]));
+
+	owl_add_unpack_data_cnt(packet, 9, 1, 0);
+	owl_add_uquad_ptr(packet, getCameraPosition());
+
+	owl_add_unpack_data_cnt(packet, 10, 16, 0);
+	owl_add_uquad_ptr(packet, (dir_lights.direction[0]));
+	owl_add_uquad_ptr(packet, (dir_lights.direction[1]));
+	owl_add_uquad_ptr(packet, (dir_lights.direction[2]));
+	owl_add_uquad_ptr(packet, (dir_lights.direction[3]));
+	owl_add_uquad_ptr(packet, &(dir_lights.ambient[0]));
+	owl_add_uquad_ptr(packet, &(dir_lights.ambient[1]));
+	owl_add_uquad_ptr(packet, &(dir_lights.ambient[2]));
+	owl_add_uquad_ptr(packet, &(dir_lights.ambient[3]));
+	owl_add_uquad_ptr(packet, (dir_lights.diffuse[0]));
+	owl_add_uquad_ptr(packet, (dir_lights.diffuse[1]));
+	owl_add_uquad_ptr(packet, (dir_lights.diffuse[2]));
+	owl_add_uquad_ptr(packet, (dir_lights.diffuse[3]));
+	owl_add_uquad_ptr(packet, (dir_lights.specular[0]));
+	owl_add_uquad_ptr(packet, (dir_lights.specular[1]));
+	owl_add_uquad_ptr(packet, (dir_lights.specular[2]));
+	owl_add_uquad_ptr(packet, (dir_lights.specular[3]));
 
 	if (obj->bone_matrices) {
 		owl_add_unpack_data_ref(packet, 141, (void*)obj->bone_matrices, data->skeleton->bone_count*4, 0);
 	}
-
-	//owl_add_end_tag(packet);
 
 	int last_index = -1;
 	GSSURFACE* tex = NULL;
@@ -652,19 +690,49 @@ void draw_vu1_with_spec_lights(athena_object_data *obj, int pass_state) {
 		mpg_addr = vu_mpg_preload(vu1_specular, true);
 	}
 
-	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 10);
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 33); // 5 for unpack static data + 2 for flush with end
 
 	owl_add_cnt_tag(packet, 0, owl_vif_code_double(VIF_CODE(0, 0, VIF_FLUSHE, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
+
+	owl_add_unpack_data_cnt(packet, 0, 1, 0);
+	owl_add_uquad_ptr(packet, &screen_scale);
+
+	owl_add_unpack_data_cnt(packet, 1, 4, 0);
+	owl_add_uquad_ptr(packet, &(world_screen[0]));
+	owl_add_uquad_ptr(packet, &(world_screen[4]));
+	owl_add_uquad_ptr(packet, &(world_screen[8]));
+	owl_add_uquad_ptr(packet, &(world_screen[12]));
+
+	owl_add_unpack_data_cnt(packet, 5, 4, 0);
+	owl_add_uquad_ptr(packet, &(obj->transform[0]));
+	owl_add_uquad_ptr(packet, &(obj->transform[4]));
+	owl_add_uquad_ptr(packet, &(obj->transform[8]));
+	owl_add_uquad_ptr(packet, &(obj->transform[12]));
+
+	owl_add_unpack_data_cnt(packet, 9, 1, 0);
+	owl_add_uquad_ptr(packet, getCameraPosition());
+
+	owl_add_unpack_data_cnt(packet, 10, 16, 0);
+	owl_add_uquad_ptr(packet, (dir_lights.direction[0]));
+	owl_add_uquad_ptr(packet, (dir_lights.direction[1]));
+	owl_add_uquad_ptr(packet, (dir_lights.direction[2]));
+	owl_add_uquad_ptr(packet, (dir_lights.direction[3]));
+	owl_add_uquad_ptr(packet, &(dir_lights.ambient[0]));
+	owl_add_uquad_ptr(packet, &(dir_lights.ambient[1]));
+	owl_add_uquad_ptr(packet, &(dir_lights.ambient[2]));
+	owl_add_uquad_ptr(packet, &(dir_lights.ambient[3]));
+	owl_add_uquad_ptr(packet, (dir_lights.diffuse[0]));
+	owl_add_uquad_ptr(packet, (dir_lights.diffuse[1]));
+	owl_add_uquad_ptr(packet, (dir_lights.diffuse[2]));
+	owl_add_uquad_ptr(packet, (dir_lights.diffuse[3]));
+	owl_add_uquad_ptr(packet, (dir_lights.specular[0]));
+	owl_add_uquad_ptr(packet, (dir_lights.specular[1]));
+	owl_add_uquad_ptr(packet, (dir_lights.specular[2]));
+	owl_add_uquad_ptr(packet, (dir_lights.specular[3]));
 
 	if (obj->bone_matrices) {
 		owl_add_unpack_data_ref(packet, 141, (void*)obj->bone_matrices, data->skeleton->bone_count*4, 0);
 	}
-
-	owl_add_unpack_data_ref(packet, 0, (void*)&screen_scale, 1, 0);
-	owl_add_unpack_data_ref(packet, 1, (void*)world_screen, 4, 0);
-	owl_add_unpack_data_ref(packet, 5, (void*)obj->transform, 4, 0);
-	owl_add_unpack_data_ref(packet, 9, (void*)getCameraPosition(), 1, 0);
-	owl_add_unpack_data_ref(packet, 10, (void*)&dir_lights, 16, 0);
 
 	//owl_add_end_tag(packet);
 
@@ -794,15 +862,45 @@ void draw_vu1_with_lights_ref(athena_object_data *obj, int pass_state) {
 		
 	
 
-	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 10); // 5 for unpack static data + 2 for flush with end
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 33); // 5 for unpack static data + 2 for flush with end
 
 	owl_add_cnt_tag(packet, 0, owl_vif_code_double(VIF_CODE(0, 0, VIF_FLUSHE, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
 
-	owl_add_unpack_data_ref(packet, 0, (void*)&screen_scale, 1, 0);
-	owl_add_unpack_data_ref(packet, 1, (void*)&world_screen, 4, 0);
-	owl_add_unpack_data_ref(packet, 5, (void*)obj->transform, 4, 0);
-	owl_add_unpack_data_ref(packet, 9, (void*)getCameraPosition(), 1, 0);
-	owl_add_unpack_data_ref(packet, 10, (void*)&dir_lights, 16, 0);
+	owl_add_unpack_data_cnt(packet, 0, 1, 0);
+	owl_add_uquad_ptr(packet, &screen_scale);
+
+	owl_add_unpack_data_cnt(packet, 1, 4, 0);
+	owl_add_uquad_ptr(packet, &(world_screen[0]));
+	owl_add_uquad_ptr(packet, &(world_screen[4]));
+	owl_add_uquad_ptr(packet, &(world_screen[8]));
+	owl_add_uquad_ptr(packet, &(world_screen[12]));
+
+	owl_add_unpack_data_cnt(packet, 5, 4, 0);
+	owl_add_uquad_ptr(packet, &(obj->transform[0]));
+	owl_add_uquad_ptr(packet, &(obj->transform[4]));
+	owl_add_uquad_ptr(packet, &(obj->transform[8]));
+	owl_add_uquad_ptr(packet, &(obj->transform[12]));
+
+	owl_add_unpack_data_cnt(packet, 9, 1, 0);
+	owl_add_uquad_ptr(packet, getCameraPosition());
+
+	owl_add_unpack_data_cnt(packet, 10, 16, 0);
+	owl_add_uquad_ptr(packet, (dir_lights.direction[0]));
+	owl_add_uquad_ptr(packet, (dir_lights.direction[1]));
+	owl_add_uquad_ptr(packet, (dir_lights.direction[2]));
+	owl_add_uquad_ptr(packet, (dir_lights.direction[3]));
+	owl_add_uquad_ptr(packet, &(dir_lights.ambient[0]));
+	owl_add_uquad_ptr(packet, &(dir_lights.ambient[1]));
+	owl_add_uquad_ptr(packet, &(dir_lights.ambient[2]));
+	owl_add_uquad_ptr(packet, &(dir_lights.ambient[3]));
+	owl_add_uquad_ptr(packet, (dir_lights.diffuse[0]));
+	owl_add_uquad_ptr(packet, (dir_lights.diffuse[1]));
+	owl_add_uquad_ptr(packet, (dir_lights.diffuse[2]));
+	owl_add_uquad_ptr(packet, (dir_lights.diffuse[3]));
+	owl_add_uquad_ptr(packet, (dir_lights.specular[0]));
+	owl_add_uquad_ptr(packet, (dir_lights.specular[1]));
+	owl_add_uquad_ptr(packet, (dir_lights.specular[2]));
+	owl_add_uquad_ptr(packet, (dir_lights.specular[3]));
 
 	if (obj->bone_matrices) {
 		owl_add_unpack_data_ref(packet, 141, (void*)obj->bone_matrices, data->skeleton->bone_count*4, 0);
