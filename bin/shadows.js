@@ -272,8 +272,6 @@ while(true) {
     //// Restore main camera and context
     Screen.switchContext();
 
-    Screen.flush();
-
     Camera.restore(_mainCam);
     Camera.update();
 //
