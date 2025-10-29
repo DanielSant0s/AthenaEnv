@@ -190,8 +190,10 @@ Lights.set(light, Lights.AMBIENT,   0.12, 0.15, 0.2);
 Lights.set(light, Lights.DIFFUSE,   0.5, 0.5, 0.5);
 Lights.set(light, Lights.SPECULAR,  1.0, 1.0, 1.0);
 
-//Lights.set(1, Lights.DIRECTION, 0.0,  1.0, 1.0);
-//Lights.set(1, Lights.DIFFUSE, 0.4, 0.0, 0.8);
+//const light1 = Lights.new();
+//Lights.set(light1, Lights.DIRECTION, 0.0,  1.0, 1.0);
+//Lights.set(light1, Lights.AMBIENT,   0.12, 0.15, 0.2);
+//Lights.set(light1, Lights.DIFFUSE, 0.4, 0.0, 0.8);
 
 let pad = Pads.get();
 let modeltodisplay = 0;
