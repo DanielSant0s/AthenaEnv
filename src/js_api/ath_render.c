@@ -990,6 +990,11 @@ static JSValue athena_r_init(JSContext *ctx, JSValue this_val, int argc, JSValue
 	return JS_UNDEFINED;
 }
 
+static JSValue athena_r_begin(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
+  	render_begin();
+	return JS_UNDEFINED;
+}
+
 static JSValue athena_set_view(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
 	float fov = 60.0f, near = 1.0f, far = 2000.0f, width = 0.0f, height = 0.0f;
 
@@ -1064,6 +1069,7 @@ static JSValue athena_newvertex(JSContext *ctx, JSValue this_val, int argc, JSVa
 
 static const JSCFunctionListEntry render_funcs[] = {
 	JS_CFUNC_DEF( "init",            0,                athena_r_init),
+	JS_CFUNC_DEF( "begin",            0,               athena_r_begin),
     JS_CFUNC_DEF( "setView",         6,                athena_set_view),
 	JS_CFUNC_DEF( "vertexList",      6,                 athena_newvertex),
 	JS_CFUNC_DEF( "materialColor",   3,             athena_materialcolor),

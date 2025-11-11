@@ -55,7 +55,6 @@ void render_init() {
 	initCamera(&world_screen, &world_view, &view_screen);
 	
 	vu1_set_double_buffer_settings(270, 339); // Skinned layout
-	owl_flush_packet();
 
 	vu1_colors   = vu_mpg_load_buffer(embed_vu_code_ptr(VU1Draw3DCS),   embed_vu_code_size(VU1Draw3DCS),   VECTOR_UNIT_1, false); 
 	vu1_lights   = vu_mpg_load_buffer(embed_vu_code_ptr(VU1Draw3DLCS),  embed_vu_code_size(VU1Draw3DLCS),  VECTOR_UNIT_1, false);
@@ -66,6 +65,10 @@ void render_init() {
 	vu1_specular_skinned = vu_mpg_load_buffer(embed_vu_code_ptr(VU1Draw3DLCSS_Skin), embed_vu_code_size(VU1Draw3DLCSS_Skin), VECTOR_UNIT_1, false);
 
 	vu1_lights_reflection = vu_mpg_load_buffer(embed_vu_code_ptr(VU1Draw3DLCS_Ref), embed_vu_code_size(VU1Draw3DLCS_Ref), VECTOR_UNIT_1, false);
+}
+
+void render_begin() {
+	vu1_set_double_buffer_settings(270, 339); // Skinned layout
 
 	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 17);
 

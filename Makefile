@@ -76,7 +76,8 @@ VU1_MPGS = draw_3D_colors.o \
            draw_3D_colors_skin.o \
            draw_3D_lights_skin.o \
            draw_3D_spec_skin.o \
-           draw_3D_lights_ref.o 
+           draw_3D_lights_ref.o \
+           draw_2D_tile_list.o
 
 # VU0_MPGS = matrix_multiply.o
 
@@ -124,9 +125,9 @@ ifeq ($(GRAPHICS),1)
   EE_LIBS += -L$(PS2DEV)/gsKit/lib/ -ljpeg -lfreetype -ldmakit -lpng
   EE_INCS += -I$(PS2DEV)/gsKit/include -I$(PS2SDK)/ports/include/freetype2
   EE_CFLAGS += -DATHENA_GRAPHICS
-  APP_CORE += graphics.o image_font.o owl_draw.o image_loaders.o mesh_loaders.o atlas.o fntsys.o render.o camera.o skin_math.o calc_3d.o fast_obj/fast_obj.o
+  APP_CORE += tile_render.o graphics.o image_font.o owl_draw.o image_loaders.o mesh_loaders.o atlas.o fntsys.o render.o camera.o skin_math.o calc_3d.o fast_obj/fast_obj.o
 
-  ATHENA_MODULES += ath_color.o ath_font.o ath_render.o ath_anim_3d.o ath_lights.o ath_3dcamera.o ath_screen.o ath_image.o ath_imagelist.o ath_shape.o ath_shadows.o
+  ATHENA_MODULES += ath_color.o ath_font.o ath_render.o ath_anim_3d.o ath_lights.o ath_3dcamera.o ath_screen.o ath_image.o ath_imagelist.o ath_shape.o ath_shadows.o ath_sprite.o
   APP_CORE += shadows.o
   EE_OBJS += $(VU1_MPGS) $(VU0_MPGS)
 endif
@@ -223,7 +224,7 @@ all: $(DIR_GUARD) $(EXT_LIBS) $(EE_OBJS)
 	
 	ps2-packer $(EE_BIN) $(EE_BIN_PKD) > /dev/null
 
- # vu1_mpgs: src/vu1/draw_3D_colors.vsm src/vu1/draw_3D_lights.vsm src/vu1/draw_3D_spec.vsm src/vu1/draw_3D_colors_skin.vsm src/vu1/draw_3D_lights_skin.vsm src/vu1/draw_3D_spec_skin.vsm src/vu1/draw_3D_lights_ref.vsm 
+ # vu1_mpgs: src/vu1/draw_2D_tile_list.vsm src/vu1/draw_3D_colors.vsm src/vu1/draw_3D_lights.vsm src/vu1/draw_3D_spec.vsm src/vu1/draw_3D_colors_skin.vsm src/vu1/draw_3D_lights_skin.vsm src/vu1/draw_3D_spec_skin.vsm src/vu1/draw_3D_lights_ref.vsm 
  # vu0_mpgs: src/vu0/matrix_multiply.vsm
 
 debug: $(DIR_GUARD) $(EXT_LIBS) $(EE_OBJS) 
