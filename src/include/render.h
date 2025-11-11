@@ -253,6 +253,8 @@ void LookAtCameraMatrix(MATRIX m, VECTOR position, VECTOR target, VECTOR up);
 
 void render_init();
 
+void render_begin();
+
 void render_set_view(float fov, float near, float far, float width, float height);
 
 VECTOR *getCameraPosition();

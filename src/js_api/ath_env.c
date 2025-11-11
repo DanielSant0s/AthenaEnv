@@ -181,6 +181,9 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"globalThis.Camera = Camera;\n"
 				"globalThis.Shadows = Shadows;\n"
 
+				"import TileMap from 'TileMap';\n"
+				"globalThis.TileMap = TileMap;\n"
+
 				#endif
 
 				#ifdef ATHENA_ODE
@@ -272,6 +275,7 @@ static JSContext *JS_NewCustomContext(JSRuntime *rt)
 	athena_vector4_init(ctx);
 	athena_matrix_init(ctx);
 
+
 	#ifdef ATHENA_AUDIO
 	athena_sound_init(ctx);
 	#endif
@@ -288,6 +292,7 @@ static JSContext *JS_NewCustomContext(JSRuntime *rt)
 	athena_3dcamera_init(ctx);
 	athena_anim_3d_init(ctx);
 	athena_shadows_init(ctx);
+	athena_tilemap_init(ctx);
 	
 	#endif
 
