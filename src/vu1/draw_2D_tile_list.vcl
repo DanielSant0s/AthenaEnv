@@ -38,10 +38,10 @@ INBUF_OFFSET       .assign 1
 SIZEOF_INBUF       .assign 4
 
 RGBA .assign 0
-POS  .assign 1
-UV1  .assign 2
-SIZE .assign 3
-UV2  .assign 4
+POS  .assign 2
+UV1  .assign 1
+SIZE .assign 4
+UV2  .assign 3
 
 POS_SIZE_OFFSET .assign 0
 UVS_OFFSET      .assign 1
@@ -99,13 +99,10 @@ init:
         lq inColor,    COLOR_OFFSET(iBase)    
         lq zindex,     ZINDEX_OFFSET(iBase)
 
-        sub outUV2, vf00, vf00
+        ftoi4       inUVs, inUVs
+
         mr32 inUV2, inUVs ; yzwx
         mr32 inUV2, inUV2 ; zwxy
-        add.xy outUV2, outUV2, inUV2
-
-        sub outUV1, vf00, vf00
-        add.xy outUV1, outUV1, inUVs
 
         sub inPos, vf00, vf00
         add.xy inPos, inPosSize, finalOffset
@@ -123,11 +120,14 @@ init:
         maxx.xy      midSize, midSize,  vf00             
         minix.xy     midSize, midSize, maxvec           
 
+        ftoi4       inPos, inPos
+        ftoi4       midSize, midSize
+
         sq inColor,      RGBA(destAddress)      
-        sq inPos,       POS(destAddress)  
-        sq outUV1,       UV1(destAddress)  
-        sq midSize,      SIZE(destAddress)     
-        sq outUV2,       UV2(destAddress)     
+        sq inUVs,       UV1(destAddress)   
+        sq inPos,        POS(destAddress)   
+        sq inUV2,       UV2(destAddress)     
+        sq midSize,      SIZE(destAddress)   
 
         iaddiu          iBase,        iBase,          4   
         iaddiu          destAddress,  destAddress,    5

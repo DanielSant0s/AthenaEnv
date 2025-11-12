@@ -318,4 +318,6 @@ void create_transform_matrix(MATRIX result, const VECTOR position,
 void decompose_transform_matrix(const MATRIX matrix, VECTOR position, 
                               VECTOR rotation, VECTOR scale);
 
+void append_texture_tags(owl_packet* packet, GSSURFACE *texture, int texture_id, eColorFunctions func);
+
 #endif
