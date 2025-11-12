@@ -33,7 +33,7 @@ const spriteList = new TileMap(spriteListData);
 
 const tex = spriteList.textures[0];
 
-Screen.setParam(Screen.DEPTH_TEST_ENABLE, false);
+Screen.setParam(Screen.DEPTH_TEST_ENABLE, true);
 
 TileMap.init();
 
