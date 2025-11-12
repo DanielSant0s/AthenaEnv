@@ -70,6 +70,8 @@ void tile_render_render(athena_tilemap_data *tilemap, float x, float y, float zi
     int batch_size = BATCH_SIZE_2D;
     int mpg_addr = vu_mpg_preload(vu1_tile_list, true);
 
+    uint64_t old_alpha = get_screen_param(ALPHA_BLEND_EQUATION);
+
     owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 3);
 
     owl_add_unpack_data_cnt(packet, 0, 2, 0);
@@ -81,6 +83,8 @@ void tile_render_render(athena_tilemap_data *tilemap, float x, float y, float zi
 	GSSURFACE* tex = NULL;
 	int texture_id;
 	for(int i = 0; i < tilemap->material_count; i++) {
+        set_screen_param(ALPHA_BLEND_EQUATION, tilemap->materials[i].blend_mode);
+
 		bool texture_mapping = (tilemap->materials[i].texture_index != -1);
 
 		if (texture_mapping) {
@@ -160,5 +164,7 @@ void tile_render_render(athena_tilemap_data *tilemap, float x, float y, float zi
 	owl_query_packet(CHANNEL_VIF1, 1);
 
 	owl_add_cnt_tag(packet, 0, owl_vif_code_double(VIF_CODE(0, 0, VIF_FLUSH, 0), VIF_CODE(0, 0, VIF_FLUSH, 0)));
+
+    set_screen_param(ALPHA_BLEND_EQUATION, old_alpha);
 
 }

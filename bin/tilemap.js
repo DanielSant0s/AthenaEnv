@@ -26,7 +26,7 @@ const spriteListVerts = [
 const spriteListData = {
     sprites: spriteListVerts,
     textures: ["simple_atlas.png"],
-    materials: [{texture_index: 0, blend_mode: Screen.BLEND_DEFAULT, end_offset:spriteListVerts.length-1}]
+    materials: [{texture_index: 0, blend_mode: Screen.alphaEquation(Screen.ZERO_RGB, Screen.SRC_RGB, Screen.SRC_ALPHA, Screen.DST_RGB, 0), end_offset:spriteListVerts.length-1}]
 };
 
 const spriteList = new TileMap(spriteListData);
