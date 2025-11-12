@@ -124,7 +124,10 @@ static JSValue athena_tilemap_ctor(JSContext *ctx, JSValueConst new_target, int 
         JS_ToFloat32(ctx, &tilemap->m.sprites[i].u2, JS_GetPropertyStr(ctx, sprite, "u2"));
         JS_ToFloat32(ctx, &tilemap->m.sprites[i].v2, JS_GetPropertyStr(ctx, sprite, "v2"));
 
-        JS_ToUint32(ctx, &tilemap->m.sprites[i].color, JS_GetPropertyStr(ctx, sprite, "color"));
+        JS_ToUint32(ctx, &tilemap->m.sprites[i].r, JS_GetPropertyStr(ctx, sprite, "r"));
+        JS_ToUint32(ctx, &tilemap->m.sprites[i].g, JS_GetPropertyStr(ctx, sprite, "g"));
+        JS_ToUint32(ctx, &tilemap->m.sprites[i].b, JS_GetPropertyStr(ctx, sprite, "b"));
+        JS_ToUint32(ctx, &tilemap->m.sprites[i].a, JS_GetPropertyStr(ctx, sprite, "a"));
     }
 
 	JSValue materials_array = JS_GetPropertyStr(ctx, tilemap_data, "materials");
@@ -243,7 +246,10 @@ static JSValue js_tilemap_set(JSContext *ctx, JSValueConst this_val, JSValue val
                     JS_ToFloat32(ctx, &tilemap->m.sprites[i].u2, JS_GetPropertyStr(ctx, sprite, "u2"));
                     JS_ToFloat32(ctx, &tilemap->m.sprites[i].v2, JS_GetPropertyStr(ctx, sprite, "v2"));
                 
-                    JS_ToUint32(ctx, &tilemap->m.sprites[i].color, JS_GetPropertyStr(ctx, sprite, "color"));
+                    JS_ToUint32(ctx, &tilemap->m.sprites[i].r, JS_GetPropertyStr(ctx, sprite, "r"));
+                    JS_ToUint32(ctx, &tilemap->m.sprites[i].r, JS_GetPropertyStr(ctx, sprite, "g"));
+                    JS_ToUint32(ctx, &tilemap->m.sprites[i].r, JS_GetPropertyStr(ctx, sprite, "b"));
+                    JS_ToUint32(ctx, &tilemap->m.sprites[i].r, JS_GetPropertyStr(ctx, sprite, "a"));
                 }
             }
             break;
@@ -365,10 +371,12 @@ static const JSCFunctionListEntry js_tilemap_proto_funcs[] = {
 };
 
 static JSValue athena_set_camera(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
-	int src_x, src_y;
+	float src_x, src_y;
 
-	JS_ToInt32(ctx, &src_x, argv[0]);
-	JS_ToInt32(ctx, &src_y, argv[1]);
+	JS_ToFloat32(ctx, &src_x, argv[0]);
+	JS_ToFloat32(ctx, &src_y, argv[1]);
+
+    tile_render_set_camera(src_x, src_y);
 
 	return JS_UNDEFINED;
 }

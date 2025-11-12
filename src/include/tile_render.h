@@ -11,8 +11,6 @@
 typedef struct {
 	float x;
 	float y;
-	float zindex;
-
 	float w;
 	float h;
 
@@ -21,7 +19,15 @@ typedef struct {
 	float u2;
 	float v2;
 
-	uint32_t color;
+	uint32_t r;
+	uint32_t g;
+	uint32_t b;
+	uint32_t a;
+
+	uint32_t pad0;
+	uint32_t pad1;
+	float zindex;
+	uint32_t pad2;
 } athena_sprite_data;
 
 typedef struct {
@@ -46,5 +52,7 @@ typedef struct {
 void tile_render_init();
 void tile_render_begin();
 void tile_render_render(athena_tilemap_data *tilemap, float x, float y, float zindex);
+
+void tile_render_set_camera(float x, float y);
 
 #endif

@@ -344,7 +344,7 @@ void update_object_space(athena_object_data *obj) {
 		obj->update_collision(obj);
 }
 
-void bake_giftags(owl_packet *packet, athena_render_data *data, bool texture_mapping, int mat_id) {
+static void bake_giftags(owl_packet *packet, athena_render_data *data, bool texture_mapping, int mat_id) {
 	prim_reg_t prim_data = {
 		.PRIM = GS_PRIM_PRIM_TRIFAN,
 		.IIP = data->attributes.shade_model,
