@@ -131,6 +131,17 @@ static JSValue athena_setvmode(JSContext *ctx, JSValue this_val, int argc, JSVal
 	return JS_UNDEFINED;
 }
 
+static JSValue athena_alpha_equation(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	int a, b, c, d, fix;
+	JS_ToInt32(ctx, &a,   argv[0]);
+	JS_ToInt32(ctx, &b,   argv[1]);
+	JS_ToInt32(ctx, &c,   argv[2]);
+	JS_ToInt32(ctx, &d,   argv[3]);
+	JS_ToInt32(ctx, &fix, argv[4]);
+
+	return JS_NewInt64(ctx, ALPHA_EQUATION(a, b, c, d, fix));
+}
+
 static JSValue athena_set_param(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	int param;
 	uint64_t value;
@@ -357,6 +368,8 @@ static const JSCFunctionListEntry module_funcs[] = {
 
 	JS_CFUNC_DEF("getParam", 1, athena_get_param),
 	JS_CFUNC_DEF("setParam", 2, athena_set_param),
+
+	JS_CFUNC_DEF("alphaEquation", 1, athena_alpha_equation),
 
 	JS_PROP_INT32_DEF("ALPHA_TEST_ENABLE", ALPHA_TEST_ENABLE, JS_PROP_CONFIGURABLE),
 	JS_PROP_INT32_DEF("ALPHA_TEST_METHOD", ALPHA_TEST_METHOD, JS_PROP_CONFIGURABLE),
