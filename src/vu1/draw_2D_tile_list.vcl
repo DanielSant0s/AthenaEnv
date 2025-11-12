@@ -106,7 +106,6 @@ init:
 
         sub inPos, vf00, vf00
         add.xy inPos, inPosSize, finalOffset
-        add.z  inPos, inPos, zindex
 
         maxx.xyzw      inPos, inPos,    vf00             
         minix.xyzw     inPos, inPos, maxvec  
@@ -121,7 +120,9 @@ init:
         minix.xy     midSize, midSize, maxvec           
 
         ftoi4       inPos, inPos
+        add.z  inPos, inPos, zindex
         ftoi4       midSize, midSize
+        add.z  midSize, midSize, zindex
 
         sq inColor,      RGBA(destAddress)      
         sq inUVs,       UV1(destAddress)   

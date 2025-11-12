@@ -27,22 +27,24 @@ init:
          NOP                                                        isw.x         VI05,0(VI02)                        
          addi.x        VF02,VF00,I                                  iaddiu        VI04,VI04,0                         
 vertexLoop:
-; _LNOPT_w=[ vuta1 ] 18 [37 17] 38   [vertexLoop]
+; _LNOPT_w=[ normal2 ] 20 [41 17] 41   [vertexLoop]
          NOP                                                        lq            VF03,0(VI01)                        
-         sub.zw        VF04,VF00,VF00                               lq.z          VF01,3(VI01)                        
-         add.xy        VF04,VF03,VF01                               lq            VF05,1(VI01)                               ;	STALL_LATENCY ?2
-         add.z         VF04,VF04,VF01                               lq            VF06,2(VI01)                        
-         ftoi4         VF05,VF05                                    iaddiu        VI03,VI03,0x00000005                       ;	STALL_LATENCY ?2
-         maxx          VF04,VF04,VF00x                              sq            VF06,-5(VI03)                       
-         NOP                                                        mr32          VF06,VF05                                  ;	STALL_LATENCY ?2
-         minix         VF04,VF04,VF02x                              mr32.yz       VF03,VF03                           
-         NOP                                                        sq            VF05,-4(VI03)                       
+         sub.zw        VF05,VF00,VF00                               lq            VF04,1(VI01)                        
+         add.xy        VF05,VF03,VF01                               lq            VF06,2(VI01)                               ;	STALL_LATENCY ?2
+         ftoi4         VF04,VF04                                    mr32.yz       VF03,VF03                           
+         maxx          VF06,VF05,VF00x                              sq            VF06,0(VI03)                               ;	STALL_LATENCY ?2
+         NOP                                                        mr32          VF05,VF04                           
+         minix         VF04,VF06,VF02x                              sq            VF04,1(VI03)                               ;	STALL_LATENCY ?2
+         NOP                                                        mr32          VF06,VF05                           
          max           VF03,VF04,VF04                               mr32.xy       VF05,VF03                                  ;	STALL_LATENCY ?2
-         add.xy        VF03,VF05,VF03                               mr32          VF06,VF06                                  ;	STALL_LATENCY ?3
-         maxx.xy       VF03,VF03,VF00x                              sq            VF06,-2(VI03)                              ;	STALL_LATENCY ?3
+         NOP                                                        sq            VF06,3(VI03)                        
+         add.xy        VF03,VF05,VF03                               iaddiu        VI03,VI03,0x00000005                       ;	STALL_LATENCY ?2
+         maxx.xy       VF03,VF03,VF00x                              NOP                                                      ;	STALL_LATENCY ?3
          minix.xy      VF03,VF03,VF02x                              NOP                                                      ;	STALL_LATENCY ?3
-         ftoi4         VF04,VF04                                    iaddiu        VI01,VI01,0x00000004                
-         ftoi4         VF03,VF03                                    isubiu        VI04,VI04,1                                ;	STALL_LATENCY ?2
+         ftoi4         VF04,VF04                                    lq.z          VF01,3(VI01)                        
+         ftoi4         VF03,VF03                                    NOP                                                      ;	STALL_LATENCY ?2
+         add.z         VF04,VF04,VF01                               iaddiu        VI01,VI01,0x00000004                
+         add.z         VF03,VF03,VF01                               isubiu        VI04,VI04,1                                ;	STALL_LATENCY ?2
          NOP                                                        sq            VF04,-3(VI03)                       
          NOP                                                        ibne          VI04,VI00,vertexLoop                
          NOP                                                        sq            VF03,-1(VI03)                              ;	STALL_LATENCY ?1
@@ -56,7 +58,7 @@ vertexLoop:
          NOP                                                        NOP                                               
 		.align 4
 VU1Draw2D_TileList_CodeEnd:
-;	iCount=40
+;	iCount=42
 ; register stats:
 ;   6 VU User integer
 ;   7 VU User floating point
