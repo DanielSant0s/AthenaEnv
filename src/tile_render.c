@@ -5,6 +5,7 @@
 #include <math.h>
 #include <fcntl.h>
 #include <matrix.h>
+#include <stddef.h>
 #include <dbgprintf.h>
 
 #include <owl_packet.h>
@@ -66,7 +67,36 @@ static void bake_giftags(owl_packet *packet, bool texture_mapping, int mat_id) {
 	owl_add_ulong(packet, (((u64)GS_RGBAQ) << 0 | ((u64)GS_UV) << 4 | ((u64)GS_XYZ2) << 8 | ((u64)GS_UV) << 12 | ((u64)GS_XYZ2) << 16));
 }
 
-void tile_render_render(athena_tilemap_data *tilemap, float x, float y, float zindex) {
+static const athena_tilemap_layout k_tile_layout = {
+	.stride = sizeof(athena_sprite_data),
+	.offset_x = offsetof(athena_sprite_data, x),
+	.offset_y = offsetof(athena_sprite_data, y),
+	.offset_w = offsetof(athena_sprite_data, w),
+	.offset_h = offsetof(athena_sprite_data, h),
+	.offset_u1 = offsetof(athena_sprite_data, u1),
+	.offset_v1 = offsetof(athena_sprite_data, v1),
+	.offset_u2 = offsetof(athena_sprite_data, u2),
+	.offset_v2 = offsetof(athena_sprite_data, v2),
+	.offset_r = offsetof(athena_sprite_data, r),
+	.offset_g = offsetof(athena_sprite_data, g),
+	.offset_b = offsetof(athena_sprite_data, b),
+	.offset_a = offsetof(athena_sprite_data, a),
+	.offset_zindex = offsetof(athena_sprite_data, zindex)
+};
+
+const athena_tilemap_layout *tile_render_layout() {
+	return &k_tile_layout;
+}
+
+void tile_render_render(
+	athena_tilemap_descriptor *descriptor,
+	athena_sprite_data *sprites,
+	float x,
+	float y,
+	float zindex) {
+    if (!descriptor || !sprites || descriptor->material_count == 0)
+        return;
+
     int batch_size = BATCH_SIZE_2D;
     int mpg_addr = vu_mpg_preload(vu1_tile_list, true);
 
@@ -81,15 +111,21 @@ void tile_render_render(athena_tilemap_data *tilemap, float x, float y, float zi
 
 	int last_index = -1;
 	GSSURFACE* tex = NULL;
-	int texture_id;
-	for(int i = 0; i < tilemap->material_count; i++) {
-        set_screen_param(ALPHA_BLEND_EQUATION, tilemap->materials[i].blend_mode);
+	int texture_id = -1;
+	for(int i = 0; i < descriptor->material_count; i++) {
+		athena_sprite_material *material = &descriptor->materials[i];
+		set_screen_param(ALPHA_BLEND_EQUATION, material->blend_mode);
 
-		bool texture_mapping = (tilemap->materials[i].texture_index != -1);
+		bool texture_mapping = (material->texture_index != -1);
 
 		if (texture_mapping) {
-			GSSURFACE *cur_tex = NULL;
-			cur_tex = tilemap->textures[tilemap->materials[i].texture_index];
+			if (!descriptor->textures || material->texture_index >= descriptor->texture_count) {
+				texture_mapping = false;
+			}
+		}
+
+		if (texture_mapping) {
+			GSSURFACE *cur_tex = descriptor->textures[material->texture_index];
 
 			if (cur_tex != tex) {
 				texture_id = texture_manager_bind(gsGlobal, cur_tex, true);
@@ -97,9 +133,9 @@ void tile_render_render(athena_tilemap_data *tilemap, float x, float y, float zi
 			}
 		}
 
-        athena_sprite_data *sprites = &tilemap->sprites[last_index+1];
+		athena_sprite_data *sprite_batch = &sprites[last_index+1];
 
-		int idxs_to_draw = (tilemap->materials[i].end-last_index);
+		int idxs_to_draw = (material->end - last_index);
 		int idxs_drawn = 0;
 
 		while (idxs_to_draw > 0) {
@@ -117,7 +153,7 @@ void tile_render_render(athena_tilemap_data *tilemap, float x, float y, float zi
   
 			bake_giftags(packet, texture_mapping, i);
 
-			owl_add_unpack_data_ref(packet, 1, &sprites[idxs_drawn], count*4, 1);
+			owl_add_unpack_data_ref(packet, 1, &sprite_batch[idxs_drawn], count*4, 1);
 
 			owl_add_cnt_tag(packet, texture_mapping? 5 : 1, owl_vif_code_double(VIF_CODE(0, 0, VIF_NOP, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
 
@@ -158,7 +194,7 @@ void tile_render_render(athena_tilemap_data *tilemap, float x, float y, float zi
 			idxs_drawn += count;
 		}
 
-		last_index = tilemap->materials[i].end;
+		last_index = material->end;
 	}
 
 	owl_query_packet(CHANNEL_VIF1, 1);

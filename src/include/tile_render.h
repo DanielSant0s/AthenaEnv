@@ -32,27 +32,46 @@ typedef struct {
 
 typedef struct {
 	int texture_index;
-
 	uint64_t blend_mode;
-
 	uint32_t end;
 } athena_sprite_material;
 
 typedef struct {
+	uint32_t stride;
+	uint32_t offset_x;
+	uint32_t offset_y;
+	uint32_t offset_w;
+	uint32_t offset_h;
+	uint32_t offset_u1;
+	uint32_t offset_v1;
+	uint32_t offset_u2;
+	uint32_t offset_v2;
+	uint32_t offset_r;
+	uint32_t offset_g;
+	uint32_t offset_b;
+	uint32_t offset_a;
+	uint32_t offset_zindex;
+} athena_tilemap_layout;
+
+typedef struct {
 	GSSURFACE **textures;
 	uint32_t texture_count;
-
-	athena_sprite_data *sprites;
-	uint32_t sprite_count;
-
 	athena_sprite_material *materials;
 	uint32_t material_count;
-} athena_tilemap_data;
+} athena_tilemap_descriptor;
 
 void tile_render_init();
 void tile_render_begin();
-void tile_render_render(athena_tilemap_data *tilemap, float x, float y, float zindex);
-
 void tile_render_set_camera(float x, float y);
+
+void tile_render_render(
+	athena_tilemap_descriptor *descriptor,
+	athena_sprite_data *sprites,
+	float x,
+	float y,
+	float zindex
+);
+
+const athena_tilemap_layout *tile_render_layout();
 
 #endif

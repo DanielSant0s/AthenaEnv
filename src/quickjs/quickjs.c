@@ -53934,10 +53934,10 @@ static JSValue js_dataview_setValue(JSContext *ctx,
             return JS_EXCEPTION;
         if (class_id == JS_CLASS_FLOAT32_ARRAY) {
             union {
-                double f;
+                float f;
                 uint32_t i;
             } u;
-            u.f = d;
+            u.f = (float)d;
             v = u.i;
         } else {
             JSFloat64Union u;
