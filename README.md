@@ -99,6 +99,12 @@ AthenaEnv is a complete JavaScript Runtime Environment for the PlayStation 2. It
   • Screenspace control  
   • Video modes  
 
+* TileMap: High-throughput 2D tilemap renderer built on QuickJS + VU1.  
+  • Descriptor/instance model for reusing textures/materials  
+  • Sprite buffers exposed as `ArrayBuffer` (mutate via DataView/TypedArray)  
+  • Material-aware batching and automatic texture uploads  
+  • See `docs/TILEMAP.md` + "Functions, classes and consts" for API/usage  
+
 * Font: Text rendering.  
   • MMI accelerated  
   • Render-time resizer  
@@ -146,7 +152,6 @@ AthenaEnv is a complete JavaScript Runtime Environment for the PlayStation 2. It
 
 * Keyboard: Basic USB keyboard support.
 * Mouse: Basic USB mouse support.
-
 New types are always being added and this list can grow a lot over time, so stay tuned.
 
 ### Built With
@@ -505,47 +510,44 @@ async_list.process();
 * Draw.triangle(x, y, x2, y2, x3, y3, color, *color2*, *color3*) - Draws a triangle on the specified points positions and colors on the screen.
 * Draw.quad(x, y, x2, y2, x3, y3, x4, y4 color, *color2*, *color3*, *color4*) - Draws a quad on the specified points positions and colors on the screen.
 
+### TileMap module
+The TileMap module exposes the descriptor/buffer-based API described in [docs/TILEMAP.md](docs/TILEMAP.md). It is split into a namespace with constructors and helpers:
+
+**Available exports:**
+
+* `TileMap.Descriptor(config)` – Create an immutable descriptor (textures array or `Image` objects, plus `materials` list with `texture_index`, `blend_mode`, `end_offset`).
+* `TileMap.Instance({ descriptor, spriteBuffer })` – Bind a sprite buffer (`ArrayBuffer`) to a descriptor. Methods:
+  • `render(x, y[, zindex])` – Draw at the specified offset.  
+  • `replaceSpriteBuffer(buffer)` – Swap the current buffer pointer.  
+  • `getSpriteBuffer()` – Returns the attached `ArrayBuffer` for direct mutation.  
+  • `updateSprites(dstOffset, srcBuffer[, spriteCount])` – Copy a range of sprites from another buffer.
+* `TileMap.SpriteBuffer.create(count)` – Allocate a zeroed buffer sized for `count` sprites.
+* `TileMap.SpriteBuffer.fromObjects(array)` – Convert an array of JS objects (`x`, `y`, `w`, `h`, `u1`, `v1`, …) into a packed buffer.
+* `TileMap.layout` – `{ stride, offsets }` helper for DataView/TypedArray math (fields: `x`, `y`, `w`, `h`, `u1`, `v1`, `u2`, `v2`, `r`, `g`, `b`, `a`, `zindex`).
+* `TileMap.init()` / `TileMap.begin()` / `TileMap.setCamera(x, y)` – Low-level hooks to initialize the renderer, start a frame, and move the shared camera offset.
+
 ### Render module
 
-• Remember to enable zbuffering on screen mode, put the line of code below  
-• Default NTSC mode(3D enabled): 
+Always configure the screen z-buffer before rendering 3D:
 ```js
 const canvas = Screen.getMode();
 canvas.zbuffering = true;
-canvas.psmz = Z16S;
-
+canvas.psmz = Screen.Z16S;
 Screen.setMode(canvas);
 ```
 
-* Render.init() - Initializes rendering routines.
-* Render.setView(*fov*, *near_clip*, *far_clip*) - Set render default view matrix. FOV, NearClip and FarClip aren't mandatory.  
-  • fov - Field of view, default: 60  
-  • near_clip - Near clip, default: 0.1  
-  • far_clip - Far clip, default: 2000.0  
-* Render.materialColor(red, green, blue, *alpha*) - alpha isn't mandatory.
-* Render.materialIndex(index, end)
-* Render.material(ambient, diffuse, specular, emission, transmittance, shininess, refraction, transmission_filter, disolve, texture_id, bump_texture_id, ref_texture_id) - Returns a material object.  
-  • ambient - Render.materialColor  
-  • diffuse - Render.materialColor  
-  • specular - Render.materialColor  
-  • emission - Render.materialColor  
-  • transmittance - Render.materialColor  
-  • shininess - Float32  
-  • refraction - Float32  
-  • transmission_filter - Render.materialColor  
-  • disolve - Float32  
-  • texture_id - Texture index, -1 for an untextured mesh.  
-  • bump_texture_id - Bump map texture index, -1 for disable.  
-  • ref_texture_id - Reflection/Env map texture index, -1 for disable.  
-  
-* Render.vertexList(positions, normals, texcoords, colors, materials, material_indices) - Returns an object used to build a RenderData. P.S.: All vertex arrays are Vector4 (x, y, z, w for i+0, i+1, i+2, i+3, in steps of 4).  
-  • positions - Float32Array that stores all vertex positions (x, y, z, w/adc).  
-  • normals - Float32Array that stores all vertex normals (n1, n2, n3, w/adc).  
-  • texcoords - Float32Array that stores all vertex texture coordinates (s, t, q, w/adc).  
-  • colors - Float32Array that stores all vertex colors (r, g, b, a).  
-  • materials - A Render.material array.  
-  • material_indices - A Render.materialIndex array.  
-  
+* `Render.init()` – Initializes internal renderer state (GS/VU microprograms, materials cache). Call once during boot.
+* `Render.begin()` – Starts a render pass and resets batched state. Call once per frame before issuing draw calls.
+* `Render.setView(fov = 60, nearClip = 1.0, farClip = 2000.0, width = 0.0, height = 0.0)` – Configures the default projection matrix. Width/height override the auto-derived aspect ratio when non-zero.
+* `Render.materialColor(r, g, b, alpha = 1.0)` – Convenience helper that returns a `{r,g,b,a}` color object for materials.
+* `Render.material(ambient, diffuse, specular, emission, transmittance, shininess, refraction, transmission_filter, dissolve, texture_id, bump_texture_id, ref_texture_id, decal_texture_id)` – Builds a material descriptor used by RenderData/RenderObject. Texture ids accept `-1` to disable a layer.
+* `Render.materialIndex(index, end)` – Tags the vertex/material arrays so the renderer knows which faces should use each material slice.
+* `Render.vertexList(positions, normals, texcoords, colors, materials, material_indices)` – Creates the structure expected by `new RenderData(...)`. Each typed array must use 4-component packing (xyzw, n1n2n3w, stqw, rgba).
+
+Constants:
+* `Render.PL_NO_LIGHTS`, `Render.PL_DEFAULT`, `Render.PL_SPECULAR` – Select the shading pipeline for RenderData.
+* `Render.CULL_FACE_NONE`, `Render.CULL_FACE_BACK`, `Render.CULL_FACE_FRONT` – Face-culling modes consumed by RenderData/RenderObject.
+
 ### RenderData module
 
 **Construction:**
@@ -664,41 +666,26 @@ You have 4 lights to use in 3D scenes, use set to configure them.
   • Avaliable light attributes: Lights.DIRECTION, Lights.AMBIENT, Lights.DIFFUSE    
   
 ### Screen module
-* Screen.display(func) - Makes the specified function behave like a main loop, when you don't need to clear or flip the screen because it's done automatically.  
-* Screen.clearColor(*color*) - Sets a constant clear color for Screen.display function.
-* Screen.clear(*color*) - Clears screen with the specified color. If you don't specify any argument, it will use black as default.  
-* Screen.flip() - Run the render queue and jump to the next frame, i.e.: Updates your screen.  
-* let vram_stat = Screen.getMemoryStats(*stat_id*) - Returns VRAM memory stats in bytes. Avaliable stats below:  
-  • Screen.VRAM_SIZE - Total VRAM size.  
-  • Screen.VRAM_USED_TOTAL - Total used VRAM memory. (This stats is returned by default if getMemoryStats is called without args)  
-  • Screen.VRAM_USED_STATIC - Static used VRAM memory. Normally used by screen buffers (draw, display, depth) and off-screen rendering buffers.  
-  • Screen.VRAM_USED_DYNAMIC - Dynamic used VRAM memory. Normally used by image textures.  
-* Screen.setVSync(bool) - Toggles VSync, which makes the framerate stable in 15, 30, 60(depending on the mode) on screen.  
-* Screen.setFrameCounter(bool) - Toggles frame counting and FPS collecting.  
-* Screen.waitVblankStart() - Waits for a vertical sync.  
-* let fps = Screen.getFPS(frame_interval) - Get Frames per second measure within the specified frame_interval in msec. Dependant on Screen.setFrameCounter(true) to work.
-* const canvas = Screen.getMode() - Get actual video mode parameters. Returns an object.  
-  • canvas.mode - Available modes: Screen.NTSC, Screen.DTV_480p, Screen.PAL, Screen.DTV_576p, Screen.DTV_720p, Screen.DTV_1080i.  
-  • canvas.width - Screen width. Default: 640.  
-  • canvas.height - Screen height. Default: 448 on NTSC consoles, 512 on PAL consoles.  
-  • canvas.psm - Color mode. Available colormodes: Screen.CT16, Screen.CT16S, Screen.CT24, Screen.CT32.  
-  • canvas.interlace - Available interlaces: Screen.INTERLACED, Screen.PROGRESSIVE.  
-  • canvas.field - Available fields: Screen.FIELD, Screen.FRAME.  
-  • canvas.double_buffering - Enable or disable double buffering(bool).  
-  • canvas.zbuffering - Enable or disable Z buffering (3D buffering)(bool).  
-  • canvas.psmz - ZBuffering color mode. Available zbuffer colormodes: Screen.Z16, Screen.Z16S, Screen.Z24, Screen.Z32.  
-* Screen.setMode(canvas) - Set the current video mode, get an video mode object as an argument.  
-* Screen.initBuffers() - Init rendering buffers routine, it MUST be called before using offscreen rendering and screenspace related functionality.
-* Screen.resetBuffers() - Resets screen buffers to their original contexts.
-* const buffer = Screen.getBuffer(buffer_id) - Get buffer data as an Image.
-* Screen.setBuffer(buffer_id, new_buffer) - Set the screen buffer as new_buffer (must be an Image object with .renderable = true and cache locked), buffer IDs below:
-  • Screen.DRAW_BUFFER  
-  • Screen.DISPLAY_BUFFER  
-  • Screen.DEPTH_BUFFER  
-* let value = Screen.getParam(param) - Get screen/rendering parameters
-* Screen.setParam(param, value) - Set screen/rendering parameters  
-* let current_ctx = Screen.switchContext() - Athena has two drawing contexts, one tipically for screen drawing and other for off-screen drawing mostly, this function switches between them so you can give a draw buffer, alpha and test attributes for your second context without the need for calling setBuffer everytime you need off-screen drawing.
-  
+* `Screen.display(loopFn)` – Runs `loopFn` every frame with automatic clear/flip (ideal for quick demos).
+* `Screen.clearColor(color)` – Persists a clear color used by `Screen.display` and as the default for `Screen.clear()` with no args.
+* `Screen.clear(color = Color.new(0,0,0,0))` – Clears the current draw buffer.
+* `Screen.flip()` – Submits all queued draw packets and swaps the display buffers.
+* `Screen.getMemoryStats(statId = Screen.VRAM_USED_TOTAL)` – Returns VRAM usage in bytes. Other counters: `VRAM_SIZE`, `VRAM_USED_STATIC`, `VRAM_USED_DYNAMIC`.
+* `Screen.setVSync(enabled)` – Enables/disables VSync (locks FPS to the mode’s refresh rate).
+* `Screen.setFrameCounter(enabled)` – Enables internal FPS counter required by `Screen.getFPS()`.
+* `Screen.waitVblankStart()` – Blocks until the next vertical blank.
+* `Screen.getFPS(frameIntervalMs = 1000)` – Returns the measured FPS over the given window (requires frame counter enabled).
+* `Screen.getMode()` – Returns the active video mode object: `{ mode, width, height, psm, interlace, field, double_buffering, zbuffering, psmz, pass_count }`.
+* `Screen.setMode(canvas)` – Applies a video mode previously fetched/edited via `Screen.getMode()`.
+* `Screen.initBuffers()` – Allocates internal draw/display/depth buffers (required for off-screen rendering APIs).
+* `Screen.resetBuffers()` – Restores the buffers created by `initBuffers()`.
+* `Screen.getBuffer(bufferId)` – Returns the GS surface bound to `DRAW_BUFFER`, `DISPLAY_BUFFER`, or `DEPTH_BUFFER`.
+* `Screen.setBuffer(bufferId, image[, mask = 0])` – Replaces a buffer with a renderable `Image`. Call `Screen.initBuffers()` before using this function.
+* `Screen.switchContext()` – Toggles between the two GS drawing contexts and returns the active context id.
+* `Screen.flush()` – Forces pending GIF packets to be flushed immediately.
+* `Screen.getParam(param)` / `Screen.setParam(param, value)` – Low-level access to GS render state (alpha/depth/scissor/etc.). Pass either raw integers or helper objects (see below).
+* `Screen.alphaEquation(a, b, c, d, fix)` – Utility that packs the GS alpha-blend formula into a 64-bit value suitable for `Screen.setParam(Screen.ALPHA_BLEND_EQUATION, ...)`.
+
 **Parameters below:**  
   
 * Screen.ALPHA_BLEND_EQUATION - Set alpha blending mode based on a fixed coefficient equation.  
@@ -1508,8 +1495,3 @@ Here are some direct and indirect thanks to the people who made the project viab
 * guiprav - for 3dcb-duktape, which was the inspiration for bringing Enceladus and JavaScript together
 * HowlingWolf&Chelsea - Tests, tips and many other things
 * Whole PS2DEV team
-
-
-
-
-

@@ -1,53 +1,97 @@
-
 const pad = Pads.get();
 
-const spriteListVerts = [
-    {x: 0,   y: 0, zindex: 1, u1: 0, v1: 0, w: 64, h: 64, u2: 64, v2: 64, r: 128, g:128, b:128, a:128},
-    {x: 64,  y: 0, zindex: 1, u1: 0, v1: 0, w: 64, h: 64, u2: 64, v2: 64, r: 128, g:128, b:128, a:128},
-    {x: 128, y: 0, zindex: 1, u1: 0, v1: 0, w: 64, h: 64, u2: 64, v2: 64, r: 128, g:128, b:128, a:128},
-    {x: 192, y: 0, zindex: 1, u1: 0, v1: 0, w: 64, h: 64, u2: 64, v2: 64, r: 128, g:128, b:128, a:128},
+const tilesX = 6;
+const tilesY = 4;
+const tileSize = 48;
+const texture = "simple_atlas.png";
 
-    {x: 0,   y: 64, zindex: 1, u1: 64, v1: 0, w: 64, h: 64, u2: 128, v2: 64, r: 128, g:128, b:128, a:128},
-    {x: 64,  y: 64, zindex: 1, u1: 64, v1: 0, w: 64, h: 64, u2: 128, v2: 64, r: 128, g:128, b:128, a:128},
-    {x: 128, y: 64, zindex: 1, u1: 64, v1: 0, w: 64, h: 64, u2: 128, v2: 64, r: 128, g:128, b:128, a:128},
-    {x: 192, y: 64, zindex: 1, u1: 64, v1: 0, w: 64, h: 64, u2: 128, v2: 64, r: 128, g:128, b:128, a:128},
+const spriteDefs = [];
+for (let y = 0; y < tilesY; y++) {
+    for (let x = 0; x < tilesX; x++) {
+        const atlasX = (x % 2) * 64;
+        const atlasY = (y % 2) * 64;
+        spriteDefs.push({
+            x: x * tileSize,
+            y: y * tileSize,
+            w: tileSize,
+            h: tileSize,
+            zindex: 1,
+            u1: atlasX,
+            v1: atlasY,
+            u2: atlasX + 64,
+            v2: atlasY + 64,
+            r: 180,
+            g: 180,
+            b: 180,
+            a: 200,
+        });
+    }
+}
 
-    {x: 0,   y: 128, zindex: 1, u1: 0, v1: 64, w: 64, h: 64, u2: 64, v2: 128, r: 128, g:128, b:128, a:128},
-    {x: 64,  y: 128, zindex: 1, u1: 0, v1: 64, w: 64, h: 64, u2: 64, v2: 128, r: 128, g:128, b:128, a:128},
-    {x: 128, y: 128, zindex: 1, u1: 0, v1: 64, w: 64, h: 64, u2: 64, v2: 128, r: 128, g:128, b:128, a:128},
-    {x: 192, y: 128, zindex: 1, u1: 0, v1: 64, w: 64, h: 64, u2: 64, v2: 128, r: 128, g:128, b:128, a:128},
+const descriptor = new TileMap.Descriptor({
+    textures: [texture],
+    materials: [{
+        texture_index: 0,
+        blend_mode: Screen.alphaEquation(Screen.ZERO_RGB, Screen.SRC_RGB, Screen.SRC_ALPHA, Screen.DST_RGB, 0),
+        end_offset: spriteDefs.length - 1,
+    }],
+});
 
-    {x: 0,   y: 192, zindex: 1, u1: 64, v1: 64, w: 64, h: 64, u2: 128, v2: 128, r: 128, g:128, b:128, a:128},
-    {x: 64,  y: 192, zindex: 1, u1: 64, v1: 64, w: 64, h: 64, u2: 128, v2: 128, r: 128, g:128, b:128, a:128},
-    {x: 128, y: 192, zindex: 1, u1: 64, v1: 64, w: 64, h: 64, u2: 128, v2: 128, r: 128, g:128, b:128, a:128},
-    {x: 192, y: 192, zindex: 1, u1: 64, v1: 64, w: 64, h: 64, u2: 128, v2: 128, r: 128, g:128, b:128, a:128},
-];
+const spriteBuffer = TileMap.SpriteBuffer.fromObjects(spriteDefs);
+const tileMap = new TileMap.Instance({ descriptor, spriteBuffer });
 
-const spriteListData = {
-    sprites: spriteListVerts,
-    textures: ["simple_atlas.png"],
-    materials: [{texture_index: 0, blend_mode: Screen.alphaEquation(Screen.ZERO_RGB, Screen.SRC_RGB, Screen.SRC_ALPHA, Screen.DST_RGB, 0), end_offset:spriteListVerts.length-1}]
-};
+const layout = TileMap.layout;
+const stride = layout.stride;
+const offsets = layout.offsets;
+const spriteView = new DataView(tileMap.getSpriteBuffer());
 
-const spriteList = new TileMap(spriteListData);
+const basePositions = spriteDefs.map(({ x, y }) => ({ x, y }));
 
-const tex = spriteList.textures[0];
+function setFloat(idx, offset, value) {
+    spriteView.setFloat32(idx * stride + offset, value, true);
+}
+
+function setUint(idx, offset, value) {
+    spriteView.setUint32(idx * stride + offset, value >>> 0, true);
+}
+
+function updateBuffer(time) {
+    for (let i = 0; i < basePositions.length; i++) {
+        const base = basePositions[i];
+        const row = Math.floor(i / tilesX);
+        const col = i % tilesX;
+        const wave = Math.sin(time + col * 0.5) * 6;
+        const lift = Math.cos(time * 0.8 + row * 0.6) * 4;
+        setFloat(i, offsets.x, base.x + wave);
+        setFloat(i, offsets.y, base.y + lift);
+
+        const pulse = Math.sin(time + i * 0.15) * 0.5 + 0.5;
+        const hue = 120 + Math.floor(pulse * 100);
+        setUint(i, offsets.r, hue);
+        setUint(i, offsets.g, 200 - hue / 2);
+        setUint(i, offsets.b, 220);
+    }
+}
+
+let time = 0;
 
 Screen.setParam(Screen.DEPTH_TEST_ENABLE, true);
-
 TileMap.init();
 
-while(true) {
-    Screen.clear(Color.new(255, 255, 255));
+while (true) {
+    Screen.clear(Color.new(200, 200, 200));
     pad.update();
 
     TileMap.begin();
 
-    if(pad.justPressed(Pads.TRIANGLE)) {
+    if (pad.justPressed(Pads.TRIANGLE)) {
         std.reload("main.js");
     }
 
-    spriteList.render(50, 50);
+    time += 0.05;
+    updateBuffer(time);
+
+    tileMap.render(80, 60);
 
     Screen.flip();
 }
