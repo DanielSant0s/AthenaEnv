@@ -156,6 +156,9 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"import * as Render from 'Render';\n"
 				"import * as RenderData from 'RenderData';\n"
 				"import * as RenderObject from 'RenderObject';\n"
+				"import * as RenderBatch from 'RenderBatch';\n"
+				"import * as RenderSceneNode from 'RenderSceneNode';\n"
+				"import * as RenderAsyncLoader from 'RenderAsyncLoader';\n"
 				"import * as AnimCollection from 'AnimCollection';\n"
 				"import * as Lights from 'Lights';\n"
 				"import * as Camera from 'Camera';\n"
@@ -173,6 +176,9 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"globalThis.Render = Render;\n"
 				"globalThis.RenderData = RenderData.RenderData;\n"
 				"globalThis.RenderObject = RenderObject.RenderObject;\n"
+				"globalThis.Batch = RenderBatch.Batch;\n"
+				"globalThis.SceneNode = RenderSceneNode.SceneNode;\n"
+				"globalThis.AsyncLoader = RenderAsyncLoader.AsyncLoader;\n"
 
 				"globalThis.AnimCollection = AnimCollection.AnimCollection;\n"
 

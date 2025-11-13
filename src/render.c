@@ -4,6 +4,7 @@
 #include <malloc.h>
 #include <math.h>
 #include <fcntl.h>
+#include <string.h>
 #include <matrix.h>
 #include <render.h>
 #include <dbgprintf.h>
@@ -50,6 +51,20 @@ static int active_pnt_lights = 0;
 static int active_dir_lights = 0;
 
 static LightData dir_lights = { };
+static render_stats_t g_render_stats = { 0 };
+
+static inline uint32_t render_calc_triangles(const athena_render_data *data) {
+	if (!data)
+		return 0;
+
+	if (data->tristrip) {
+		if (data->index_count < 2)
+			return 0;
+		return data->index_count - 2;
+	}
+
+	return data->index_count / 3;
+}
 
 void render_init() {
 	initCamera(&world_screen, &world_view, &view_screen);
@@ -69,6 +84,8 @@ void render_init() {
 
 void render_begin() {
 	vu1_set_double_buffer_settings(270, 339); // Skinned layout
+
+	render_reset_stats();
 
 	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 17);
 
@@ -156,6 +173,14 @@ void SetLightAttribute(int id, float x, float y, float z, int attr) {
 	}
 }
 
+const render_stats_t *render_get_stats(void) {
+	return &g_render_stats;
+}
+
+void render_reset_stats(void) {
+	memset(&g_render_stats, 0, sizeof(g_render_stats));
+}
+
 
 VECTOR zero_bump_offset = { 0.0f, 0.0f, 0.0f, 0.0f };
 
@@ -173,6 +198,11 @@ void (*render_funcs[])(athena_object_data *obj, int pass_state) = {
 void render_object(athena_object_data *obj) {
 	if (obj->update_physics)
 		obj->update_physics(obj);
+
+	if (obj && obj->data) {
+		g_render_stats.draw_calls++;
+		g_render_stats.triangles += render_calc_triangles(obj->data);
+	}
 
 	uint64_t old_alpha = get_screen_param(ALPHA_BLEND_EQUATION);
 	uint64_t old_colclamp = get_screen_param(COLOR_CLAMP_MODE);

@@ -320,4 +320,12 @@ void decompose_transform_matrix(const MATRIX matrix, VECTOR position,
 
 void append_texture_tags(owl_packet* packet, GSSURFACE *texture, int texture_id, eColorFunctions func);
 
+typedef struct {
+	uint32_t draw_calls;
+	uint32_t triangles;
+} render_stats_t;
+
+const render_stats_t *render_get_stats(void);
+void render_reset_stats(void);
+
 #endif

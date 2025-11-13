@@ -3,16 +3,188 @@
 #include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <math.h>
+#include <stdbool.h>
 
 #include <render.h>
+#include <render_batch.h>
+#include <render_scene.h>
+#include <render_async_loader.h>
+#include <stdio.h>
 #include <ath_env.h>
+#include <kernel.h>
 
 static JSClassID js_render_data_class_id;
+static JSClassID js_render_batch_class_id;
+static JSClassID js_scene_node_class_id;
+static JSClassID js_render_async_loader_class_id;
+/* Removed unused ctor caches; classes are exported via their modules in ath_env */
+static JSValue g_scene_node_ctor = JS_UNDEFINED;
+static JSValue g_async_loader_ctor = JS_UNDEFINED;
 
 typedef struct {
 	athena_render_data m;
 	JSValue *textures;
+	JSValue vertex_buffers[4];
+	bool owns_vertices[4];
 } JSRenderData;
+
+typedef struct {
+    athena_batch *batch;
+    JSValue *refs; // keep JS RenderObject alive
+    uint32_t ref_count;
+    uint32_t ref_capacity;
+} JSRenderBatch;
+
+typedef struct {
+    JSValue *items;
+    uint32_t count;
+    uint32_t capacity;
+} JSValueList;
+
+typedef struct {
+    athena_scene_node *node;
+    JSValueList attachments; // JS refs
+    JSValueList children;    // JS refs
+    JSValue parent;
+    JSContext *ctx;
+} JSSceneNode;
+
+typedef struct {
+    athena_async_loader *native;              // cooperative single-thread
+    uint32_t jobs_per_step;
+} JSRenderAsyncLoader;
+
+typedef struct LoaderThunk {
+    JSContext *ctx;
+    JSValue cb;
+    char *path_c; // C string copy of path to avoid JS refcounting across threads/queues
+} LoaderThunk;
+
+static JSValue js_wrap_render_data(JSContext *ctx, athena_render_data *m);
+
+// Single-threaded bridge: builds JS objects and frees the thunk here.
+static void loader_bridge_cb(athena_render_data *data, void *user) {
+    LoaderThunk *t = (LoaderThunk *)user;
+    if (!t) return;
+    JSRuntime *rt = JS_GetRuntime(t->ctx);
+    JS_UpdateStackTop(rt);
+
+    JSValue rd = js_wrap_render_data(t->ctx, data);
+    if (!JS_IsException(rd)) {
+        // Build a fresh JS string from C path to avoid refcount issues
+        JSValue path_arg = JS_NewString(t->ctx, t->path_c ? t->path_c : "");
+        JSValue args[2] = { path_arg, rd };
+        JSValue ret = JS_Call(t->ctx, t->cb, JS_UNDEFINED, 2, args);
+        JS_FreeValue(t->ctx, ret);
+        JS_FreeValue(t->ctx, rd);
+        JS_FreeValue(t->ctx, path_arg);
+    }
+
+    JS_FreeValue(t->ctx, t->cb);
+    if (t->path_c) free(t->path_c);
+    js_free(t->ctx, t);
+}
+
+// Worker-thread bridge: creates JS objects and calls callback; thunk is freed
+// by process_wk via cleanup after callback completes (do not free here).
+/* worker variant removed */
+
+// Multithreaded bridge: must not free the thunk here; process_mt() will do it
+// on the main thread after callback returns to avoid races with clear/destroy.
+// MT variant removed; we only use the cooperative single-thread bridge above.
+
+// user cleanup for pending jobs (clear/destroy)
+// Cleanup when running on the JS thread (have a valid JSContext)
+static void loader_thunk_cleanup_js(void *user) {
+    if (!user) return;
+    LoaderThunk *t = (LoaderThunk *)user;
+    if (t->ctx) {
+        JS_FreeValue(t->ctx, t->cb);
+        if (t->path_c) free(t->path_c);
+        js_free(t->ctx, t);
+    } else {
+        free(t);
+    }
+}
+
+// Cleanup when only a JSRuntime is safe to use (e.g., GC finalizer)
+static void loader_thunk_cleanup_rt(void *user) {
+    if (!user) return;
+    LoaderThunk *t = (LoaderThunk *)user;
+    if (t->ctx) {
+        JSRuntime *rt = JS_GetRuntime(t->ctx);
+        JS_FreeValueRT(rt, t->cb);
+        if (t->path_c) free(t->path_c);
+        js_free_rt(rt, t);
+    } else {
+        free(t);
+    }
+}
+
+static inline float clampf(float value, float min, float max) {
+	if (value < min) return min;
+	if (value > max) return max;
+	return value;
+}
+
+static inline bool js_value_is_same_object(JSValueConst a, JSValueConst b) {
+	if (JS_VALUE_GET_TAG(a) != JS_TAG_OBJECT || JS_VALUE_GET_TAG(b) != JS_TAG_OBJECT)
+		return false;
+	return JS_VALUE_GET_OBJ(a) == JS_VALUE_GET_OBJ(b);
+}
+
+static void js_value_list_init(JSValueList *list) {
+	list->items = NULL;
+	list->count = 0;
+	list->capacity = 0;
+}
+
+static void js_value_list_free(JSContext *ctx, JSValueList *list) {
+	for (uint32_t i = 0; i < list->count; i++)
+		JS_FreeValue(ctx, list->items[i]);
+	free(list->items);
+	list->items = NULL;
+	list->count = 0;
+	list->capacity = 0;
+}
+
+static int js_value_list_reserve(JSContext *ctx, JSValueList *list, uint32_t extra) {
+	uint32_t needed = list->count + extra;
+	if (needed <= list->capacity)
+		return 0;
+	uint32_t new_cap = list->capacity? list->capacity * 2 : 4;
+	while (new_cap < needed)
+		new_cap *= 2;
+	JSValue *items = realloc(list->items, sizeof(JSValue) * new_cap);
+	if (!items)
+		return -1;
+	list->items = items;
+	list->capacity = new_cap;
+	return 0;
+}
+
+static int js_value_list_push(JSContext *ctx, JSValueList *list, JSValue value) {
+	if (js_value_list_reserve(ctx, list, 1) != 0)
+		return -1;
+	list->items[list->count++] = JS_DupValue(ctx, value);
+	return 0;
+}
+
+static void js_value_list_remove(JSContext *ctx, JSValueList *list, JSValue value) {
+	int32_t idx = -1;
+	for (uint32_t i = 0; i < list->count; i++) {
+		if (js_value_is_same_object(list->items[i], value)) {
+			idx = (int32_t)i;
+			break;
+		}
+	}
+	if (idx < 0)
+		return;
+	JS_FreeValue(ctx, list->items[idx]);
+	memmove(&list->items[idx], &list->items[idx+1], (list->count-idx-1)*sizeof(JSValue));
+	list->count--;
+}
 
 static void athena_render_data_dtor(JSRuntime *rt, JSValue val){
 	JSRenderData* ro = JS_GetOpaque(val, js_render_data_class_id);
@@ -23,17 +195,22 @@ static void athena_render_data_dtor(JSRuntime *rt, JSValue val){
 	if (ro->m.indices)
 		free(ro->m.indices); 
 
-	if (ro->m.positions)
-		free(ro->m.positions); 
-	
-	if (ro->m.colours)
-		free(ro->m.colours);
+	VECTOR **attribute_ptrs[] = {
+		&ro->m.positions,
+		&ro->m.normals,
+		&ro->m.texcoords,
+		&ro->m.colours
+	};
 
-	if (ro->m.normals)	
-    	free(ro->m.normals);
+	for (int i = 0; i < 4; i++) {
+		if (*attribute_ptrs[i] && ro->owns_vertices[i]) {
+			free(*attribute_ptrs[i]);
+		}
 
-	if (ro->m.texcoords)
-    	free(ro->m.texcoords);
+		if (!JS_IsUndefined(ro->vertex_buffers[i])) {
+			JS_FreeValueRT(rt, ro->vertex_buffers[i]);
+		}
+	}
 	
 	if (ro->m.materials)
 		free(ro->m.materials);
@@ -44,11 +221,12 @@ static void athena_render_data_dtor(JSRuntime *rt, JSValue val){
 	if (ro->m.skin_data)
 		free(ro->m.skin_data);
 
-	if (ro->m.skeleton)
-		free(ro->m.skeleton);
+	if (ro->m.skeleton) {
+		if (ro->m.skeleton->bones)
+			free(ro->m.skeleton->bones);
 
-	if (ro->m.skeleton->bones)
-		free(ro->m.skeleton->bones);
+		free(ro->m.skeleton);
+	}
 
 	//printf("%d textures\n", ro->m.texture_count);
 
@@ -87,12 +265,16 @@ static JSValue athena_render_data_ctor(JSContext *ctx, JSValueConst new_target, 
     if (!ro)
         return JS_EXCEPTION;
 
+	for (int i = 0; i < 4; i++) {
+		ro->vertex_buffers[i] = JS_UNDEFINED;
+		ro->owns_vertices[i] = true;
+	}
+
 	if (JS_IsObject(argv[0])) {
 		memset(ro, 0, sizeof(JSRenderData));
 
-		uint32_t size = 0;
 		JSValue vert_arr, ta_buf;
-		void *tmp_vert_ptr = NULL;
+		bool share_buffers = false;
 		
 		VECTOR** attributes_ptr[] = {
 			&ro->m.positions,
@@ -101,22 +283,58 @@ static JSValue athena_render_data_ctor(JSContext *ctx, JSValueConst new_target, 
 			&ro->m.colours
 		};
 
+		JSValue share_prop = JS_GetPropertyStr(ctx, argv[0], "shareBuffers");
+		if (!JS_IsUndefined(share_prop))
+			share_buffers = JS_ToBool(ctx, share_prop);
+		JS_FreeValue(ctx, share_prop);
+
 		for (int i = 0; i < 4; i++) {
 			vert_arr = JS_GetPropertyStr(ctx, argv[0], vert_attributes[i]);
+			if (JS_IsUndefined(vert_arr))
+				continue;
 
-			ta_buf = JS_GetTypedArrayBuffer(ctx, vert_arr, NULL, NULL, NULL);
+			size_t byte_offset = 0;
+			size_t byte_length = 0;
+			size_t bytes_per_element = 0;
 
-			tmp_vert_ptr = JS_GetArrayBuffer(ctx, &size, ((ta_buf != JS_EXCEPTION)? ta_buf : vert_arr));
+			ta_buf = JS_GetTypedArrayBuffer(ctx, vert_arr, &byte_offset, &byte_length, &bytes_per_element);
 
-			if (!i)
-				ro->m.index_count = size/sizeof(VECTOR);
+			uint8_t *buffer_ptr = NULL;
+			size_t data_size = 0;
+			JSValue data_ref = JS_UNDEFINED;
 
-			if (tmp_vert_ptr) {
-				*attributes_ptr[i] = malloc(size);
-				memcpy(*attributes_ptr[i], tmp_vert_ptr, size);
-			}			
+			if (!JS_IsException(ta_buf)) {
+				size_t backing_size = 0;
+				uint8_t *backing = JS_GetArrayBuffer(ctx, &backing_size, ta_buf);
+				if (backing && byte_offset + byte_length <= backing_size) {
+					buffer_ptr = backing + byte_offset;
+					data_size = byte_length;
+					data_ref = ta_buf;
+				}
+			} else {
+				buffer_ptr = JS_GetArrayBuffer(ctx, &data_size, vert_arr);
+				data_ref = vert_arr;
+			}
 
-			JS_FreeValue(ctx, ((ta_buf != JS_EXCEPTION)? ta_buf : vert_arr));
+			if (buffer_ptr && data_size) {
+				if (!i)
+					ro->m.index_count = data_size/sizeof(VECTOR);
+
+				if (share_buffers && !JS_IsUndefined(data_ref)) {
+					*attributes_ptr[i] = (VECTOR*)buffer_ptr;
+					ro->owns_vertices[i] = false;
+					ro->vertex_buffers[i] = JS_DupValue(ctx, data_ref);
+				} else {
+					*attributes_ptr[i] = malloc(data_size);
+					memcpy(*attributes_ptr[i], buffer_ptr, data_size);
+					ro->owns_vertices[i] = true;
+				}
+			}
+
+			if (!JS_IsException(ta_buf))
+				JS_FreeValue(ctx, ta_buf);
+
+			JS_FreeValue(ctx, vert_arr);
 		}
 		
 		ro->m.materials = (ath_mat *)malloc(sizeof(ath_mat));
@@ -406,6 +624,79 @@ inline JSValue JS_NewVector(JSContext *ctx, VECTOR v) {
 	return vec;
 }
 
+// Create a JS RenderData wrapping an existing athena_render_data*. Ownership of
+// the struct is transferred to the JS object (internal pointers freed by dtor).
+static JSValue js_wrap_render_data(JSContext *ctx, athena_render_data *m) {
+    JSRenderData* ro = js_mallocz(ctx, sizeof(JSRenderData));
+    if (!ro) {
+        free(m);
+        return JS_EXCEPTION;
+    }
+
+    // move the struct into JS wrapper (shallow move)
+    memcpy(&ro->m, m, sizeof(athena_render_data));
+    free(m);
+
+    JSValue obj = JS_NewObjectClass(ctx, js_render_data_class_id);
+    if (JS_IsException(obj)) {
+        // manual cleanup mirroring destructor
+        if (ro->m.indices) free(ro->m.indices);
+        if (ro->m.positions) free(ro->m.positions);
+        if (ro->m.colours) free(ro->m.colours);
+        if (ro->m.normals) free(ro->m.normals);
+        if (ro->m.texcoords) free(ro->m.texcoords);
+        if (ro->m.materials) free(ro->m.materials);
+        if (ro->m.material_indices) free(ro->m.material_indices);
+        if (ro->m.skin_data) free(ro->m.skin_data);
+        if (ro->m.skeleton) {
+            if (ro->m.skeleton->bones) free(ro->m.skeleton->bones);
+            free(ro->m.skeleton);
+        }
+        if (ro->m.textures) free(ro->m.textures);
+        js_free(ctx, ro);
+        return JS_EXCEPTION;
+    }
+
+    // Ensure sane defaults like the RenderData constructor
+    ro->m.pipeline = PL_DEFAULT;
+    ro->m.attributes.accurate_clipping = 1;
+    ro->m.attributes.face_culling = CULL_FACE_BACK;
+    ro->m.attributes.texture_mapping = 1;
+    ro->m.attributes.shade_model = 1; // gouraud
+
+    // Wrap native textures into JS Image objects for 'textures' array
+    if (ro->m.texture_count > 0 && ro->m.textures) {
+        ro->textures = malloc(sizeof(JSValue)*ro->m.texture_count);
+        JSValue tex_arr = JS_NewArray(ctx);
+        for (int i = 0; i < ro->m.texture_count; i++) {
+            JSImageData* image = js_mallocz(ctx, sizeof(*image));
+            JSValue img_obj = JS_NewObjectClass(ctx, get_img_class_id());
+            image->delayed = true;
+            image->tex = ro->m.textures[i];
+            image->loaded = true;
+            image->width = image->tex->Width;
+            image->height = image->tex->Height;
+            image->endx = image->tex->Width;
+            image->endy = image->tex->Height;
+            image->startx = 0.0f;
+            image->starty = 0.0f;
+            image->angle = 0.0f;
+            image->color = 0x80808080;
+            JS_SetOpaque(img_obj, image);
+            ro->textures[i] = img_obj;
+            JS_DefinePropertyValueUint32(ctx, tex_arr, i, img_obj, JS_PROP_C_W_E);
+        }
+        JS_DefinePropertyValueStr(ctx, obj, "textures", tex_arr, JS_PROP_C_W_E);
+    }
+
+    ro->m.tristrip = ro->m.tristrip;
+    JS_SetOpaque(obj, ro);
+
+    // Flush dcache so VIF/DMAC see coherent vertex/material data
+    FlushCache(WRITEBACK_DCACHE);
+    return obj;
+}
+
 inline void JS_ToVector(JSContext *ctx, VECTOR v, JSValue vec) {
 	JS_ToFloat32(ctx, &v[0], JS_GetPropertyStr(ctx, vec, "x"));
 	JS_ToFloat32(ctx, &v[1], JS_GetPropertyStr(ctx, vec, "y"));
@@ -685,6 +976,93 @@ static JSValue js_render_data_set(JSContext *ctx, JSValueConst this_val, JSValue
     return JS_UNDEFINED;
 }
 
+static void js_apply_color_prop(JSContext *ctx, JSValue obj, const char *name, VECTOR color) {
+	JSValue prop = JS_GetPropertyStr(ctx, obj, name);
+	if (!JS_IsObject(prop)) {
+		JS_FreeValue(ctx, prop);
+		return;
+	}
+
+	float r = 0, g = 0, b = 0;
+	JSValue cr = JS_GetPropertyStr(ctx, prop, "r");
+	JSValue cg = JS_GetPropertyStr(ctx, prop, "g");
+	JSValue cb = JS_GetPropertyStr(ctx, prop, "b");
+
+	if (!JS_IsUndefined(cr)) JS_ToFloat32(ctx, &r, cr);
+	if (!JS_IsUndefined(cg)) JS_ToFloat32(ctx, &g, cg);
+	if (!JS_IsUndefined(cb)) JS_ToFloat32(ctx, &b, cb);
+
+	color[0] = clampf(r, 0.0f, 1.0f);
+	color[1] = clampf(g, 0.0f, 1.0f);
+	color[2] = clampf(b, 0.0f, 1.0f);
+	color[3] = 1.0f;
+
+	JS_FreeValue(ctx, cr);
+	JS_FreeValue(ctx, cg);
+	JS_FreeValue(ctx, cb);
+	JS_FreeValue(ctx, prop);
+}
+
+static JSValue athena_renderdata_update_material(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+	JSRenderData* ro = JS_GetOpaque2(ctx, this_val, js_render_data_class_id);
+	if (!ro)
+		return JS_EXCEPTION;
+
+	if (argc < 2 || !JS_IsNumber(argv[0]) || !JS_IsObject(argv[1]))
+		return JS_ThrowTypeError(ctx, "expected (index, object)");
+
+	uint32_t index = 0;
+	JS_ToUint32(ctx, &index, argv[0]);
+	if (index >= ro->m.material_count)
+		return JS_ThrowRangeError(ctx, "material index out of range");
+
+	JSValue props = argv[1];
+	ath_mat *mat = &ro->m.materials[index];
+
+	js_apply_color_prop(ctx, props, "ambient", mat->ambient);
+	js_apply_color_prop(ctx, props, "diffuse", mat->diffuse);
+	js_apply_color_prop(ctx, props, "specular", mat->specular);
+	js_apply_color_prop(ctx, props, "emission", mat->emission);
+	js_apply_color_prop(ctx, props, "transmittance", mat->transmittance);
+	js_apply_color_prop(ctx, props, "transmission_filter", mat->transmission_filter);
+
+	JSValue shininess = JS_GetPropertyStr(ctx, props, "shininess");
+	if (!JS_IsUndefined(shininess)) {
+		float value = mat->shininess;
+		JS_ToFloat32(ctx, &value, shininess);
+		mat->shininess = clampf(value, 0.0f, 255.0f);
+	}
+	JS_FreeValue(ctx, shininess);
+
+	JSValue refraction = JS_GetPropertyStr(ctx, props, "refraction");
+	if (!JS_IsUndefined(refraction)) {
+		float value = mat->refraction;
+		JS_ToFloat32(ctx, &value, refraction);
+		mat->refraction = clampf(value, 0.1f, 4.0f);
+	}
+	JS_FreeValue(ctx, refraction);
+
+	JSValue dissolve = JS_GetPropertyStr(ctx, props, "disolve");
+	if (!JS_IsUndefined(dissolve)) {
+		float value = mat->disolve;
+		JS_ToFloat32(ctx, &value, dissolve);
+		mat->disolve = clampf(value, 0.0f, 1.0f);
+	}
+	JS_FreeValue(ctx, dissolve);
+
+	JSValue bump_scale = JS_GetPropertyStr(ctx, props, "bump_scale");
+	if (!JS_IsUndefined(bump_scale)) {
+		float value = mat->bump_scale;
+		JS_ToFloat32(ctx, &value, bump_scale);
+		mat->bump_scale = clampf(value, -10.0f, 10.0f);
+	}
+	JS_FreeValue(ctx, bump_scale);
+
+	FlushCache(WRITEBACK_DCACHE);
+
+	return JS_NewUint32(ctx, index);
+}
+
 static const JSCFunctionListEntry js_render_data_proto_funcs[] = {
 	JS_CFUNC_DEF("setTexture",  3,  athena_settexture),
 	JS_CFUNC_DEF("getTexture",  1,  athena_gettexture),
@@ -692,6 +1070,9 @@ static const JSCFunctionListEntry js_render_data_proto_funcs[] = {
 	JS_CFUNC_DEF("pushTexture",  1,  athena_pushtexture),
 
 	JS_CFUNC_DEF("free",  0,  athena_rdfree),
+	JS_CFUNC_DEF("dispose",  0,  athena_rdfree),
+
+	JS_CFUNC_DEF("updateMaterial",  2,  athena_renderdata_update_material),
 
 	JS_CGETSET_MAGIC_DEF("vertices",          js_render_data_get, js_render_data_set, 0),
 	JS_CGETSET_MAGIC_DEF("materials",         js_render_data_get, js_render_data_set, 1),
@@ -759,8 +1140,10 @@ static JSValue athena_render_object_ctor(JSContext *ctx, JSValueConst new_target
         return JS_EXCEPTION;
 
     JSRenderData* rd = JS_GetOpaque2(ctx, argv[0], js_render_data_class_id);
-    if (!rd)
+    if (!rd) {
+        js_free(ctx, ro);
         return JS_EXCEPTION;
+    }
 
 	new_render_object(&ro->obj, &rd->m);
 
@@ -770,7 +1153,6 @@ static JSValue athena_render_object_ctor(JSContext *ctx, JSValueConst new_target
 
     JS_SetOpaque(transform_matrix, &ro->obj.transform);
 
-register_3d_object_data:
     proto = JS_GetPropertyStr(ctx, new_target, "prototype");
     obj = JS_NewObjectProtoClass(ctx, proto, js_render_object_class_id);
 
@@ -823,6 +1205,9 @@ register_3d_object_data:
 		JS_DefinePropertyValueStr(ctx, obj, "playAnim", JS_NewCFunction2(ctx, athena_play_anim, "playAnim", 2, JS_CFUNC_generic, 0), JS_PROP_C_W_E);
 		JS_DefinePropertyValueStr(ctx, obj, "isPlayingAnim", JS_NewCFunction2(ctx, athena_is_playing, "isPlayingAnim", 1, JS_CFUNC_generic, 0), JS_PROP_C_W_E);
 	}
+
+    // Keep a strong reference to the source RenderData to prevent premature GC
+    JS_DefinePropertyValueStr(ctx, obj, "__render_data", JS_DupValue(ctx, argv[0]), JS_PROP_C_W_E);
 
     JS_FreeValue(ctx, proto);
     JS_SetOpaque(obj, ro);
@@ -887,11 +1272,15 @@ static JSValue athena_ro_physics(JSContext *ctx, JSValue this_val, int argc, JSV
 #endif
 
 static JSValue athena_drawbbox(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-	Color color;
+    Color color;
 
-	JSRenderObject* ro = JS_GetOpaque2(ctx, this_val, js_render_object_class_id);
+    JSRenderObject* ro = JS_GetOpaque2(ctx, this_val, js_render_object_class_id);
 
-	JS_ToUint32(ctx, &color,  argv[0]);
+	{
+		uint32_t c32 = 0;
+		JS_ToUint32(ctx, &c32, argv[0]);
+		color = (Color)c32;
+	}
 	
 	draw_bbox(&ro->obj, color);
 
@@ -902,8 +1291,9 @@ static JSValue athena_drawbbox(JSContext *ctx, JSValue this_val, int argc, JSVal
 static JSValue js_render_object_get(JSContext *ctx, JSValueConst this_val, int magic)
 {
     JSRenderObject* ro = JS_GetOpaque2(ctx, this_val, js_render_object_class_id);
-    if (!ro)
+    if (!ro) {
         return JS_EXCEPTION;
+    }
 
 	switch (magic) {
 		case 0:
@@ -944,8 +1334,9 @@ static JSValue js_render_object_get(JSContext *ctx, JSValueConst this_val, int m
 static JSValue js_render_object_set(JSContext *ctx, JSValueConst this_val, JSValue val, int magic)
 {
     JSRenderObject* ro = JS_GetOpaque2(ctx, this_val, js_render_object_class_id);
-    if (!ro)
+    if (!ro) {
         return JS_EXCEPTION;
+    }
 
 	switch (magic) {
 		case 0:
@@ -974,6 +1365,7 @@ static const JSCFunctionListEntry js_render_object_proto_funcs[] = {
     JS_CFUNC_DEF("render",        0,  athena_drawobject),
 	JS_CFUNC_DEF("renderBounds",  0,    athena_drawbbox),
 	JS_CFUNC_DEF("free",  0,    athena_drawfree),
+	JS_CFUNC_DEF("dispose",  0,    athena_drawfree),
 
 	#ifdef ATHENA_ODE
 	JS_CFUNC_DEF("setCollision",        1,  athena_ro_collision),
@@ -984,6 +1376,588 @@ static const JSCFunctionListEntry js_render_object_proto_funcs[] = {
 	JS_CGETSET_MAGIC_DEF("rotation",          js_render_object_get, js_render_object_set, 1),
 	JS_CGETSET_MAGIC_DEF("scale",             js_render_object_get, js_render_object_set, 2)
 };
+
+typedef struct {
+	JSRenderObject *ro;
+} RenderBatchEntry;
+
+static void render_batch_free(JSRuntime *rt, JSValue val) {
+    JSRenderBatch *jb = JS_GetOpaque(val, js_render_batch_class_id);
+    if (!jb)
+        return;
+
+    for (uint32_t i = 0; i < jb->ref_count; i++) {
+        JS_FreeValueRT(rt, jb->refs[i]);
+    }
+    free(jb->refs);
+    if (jb->batch)
+        athena_batch_destroy(jb->batch);
+    js_free_rt(rt, jb);
+    JS_SetOpaque(val, NULL);
+}
+
+static int render_batch_ensure(JSContext *ctx, JSRenderBatch *batch, uint32_t extra) {
+    uint32_t needed = batch->ref_count + extra;
+    if (needed <= batch->ref_capacity)
+        return 0;
+    uint32_t new_cap = batch->ref_capacity? batch->ref_capacity * 2 : 8;
+    while (new_cap < needed)
+        new_cap *= 2;
+
+    JSValue *new_items = realloc(batch->refs, sizeof(JSValue) * new_cap);
+    if (!new_items)
+        return -1;
+    batch->refs = new_items;
+    batch->ref_capacity = new_cap;
+    return 0;
+}
+
+static JSValue athena_render_batch_ctor(JSContext *ctx, JSValueConst new_target, int argc, JSValueConst *argv) {
+    JSRenderBatch *jb = js_mallocz(ctx, sizeof(JSRenderBatch));
+    if (!jb)
+        return JS_EXCEPTION;
+
+    jb->batch = athena_batch_create();
+    if (!jb->batch) {
+        js_free(ctx, jb);
+        return JS_EXCEPTION;
+    }
+
+    int auto_sort = 1;
+    if (argc > 0 && JS_IsObject(argv[0])) {
+        JSValue auto_sort_val = JS_GetPropertyStr(ctx, argv[0], "autoSort");
+        if (!JS_IsUndefined(auto_sort_val))
+            auto_sort = JS_ToBool(ctx, auto_sort_val);
+        JS_FreeValue(ctx, auto_sort_val);
+    }
+    athena_batch_set_sort(jb->batch, NULL, auto_sort);
+
+    JSValue proto = JS_GetPropertyStr(ctx, new_target, "prototype");
+    JSValue obj = JS_NewObjectProtoClass(ctx, proto, js_render_batch_class_id);
+    JS_FreeValue(ctx, proto);
+    if (JS_IsException(obj)) {
+        athena_batch_destroy(jb->batch);
+        js_free(ctx, jb);
+        return obj;
+    }
+
+    JS_SetOpaque(obj, jb);
+    return obj;
+}
+
+static JSValue athena_render_batch_add(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSRenderBatch *jb = JS_GetOpaque2(ctx, this_val, js_render_batch_class_id);
+    if (!jb)
+        return JS_EXCEPTION;
+    if (argc < 1)
+        return JS_ThrowTypeError(ctx, "expected RenderObject");
+
+    JSRenderObject* ro = JS_GetOpaque2(ctx, argv[0], js_render_object_class_id);
+    if (!ro)
+        return JS_EXCEPTION;
+
+    if (athena_batch_add(jb->batch, &ro->obj) < 0)
+        return JS_ThrowInternalError(ctx, "batch add failed");
+
+    if (render_batch_ensure(ctx, jb, 1) != 0)
+        return JS_ThrowInternalError(ctx, "out of memory");
+    jb->refs[jb->ref_count++] = JS_DupValue(ctx, argv[0]);
+    return JS_NewUint32(ctx, jb->batch->count);
+}
+
+static JSValue athena_render_batch_clear(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSRenderBatch *jb = JS_GetOpaque2(ctx, this_val, js_render_batch_class_id);
+    if (!jb)
+        return JS_EXCEPTION;
+
+    for (uint32_t i = 0; i < jb->ref_count; i++) {
+        JS_FreeValue(ctx, jb->refs[i]);
+    }
+    jb->ref_count = 0;
+    athena_batch_clear(jb->batch);
+    return JS_UNDEFINED;
+}
+
+/* render_batch_compare no longer used (sorting handled in C core) */
+
+static JSValue athena_render_batch_render(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSRenderBatch *jb = JS_GetOpaque2(ctx, this_val, js_render_batch_class_id);
+    if (!jb)
+        return JS_EXCEPTION;
+    unsigned int n = athena_batch_render(jb->batch);
+    return JS_NewUint32(ctx, n);
+}
+
+static JSValue athena_render_batch_size(JSContext *ctx, JSValueConst this_val, int magic) {
+    JSRenderBatch *jb = JS_GetOpaque2(ctx, this_val, js_render_batch_class_id);
+    if (!jb)
+        return JS_EXCEPTION;
+    return JS_NewUint32(ctx, jb->batch->count);
+}
+
+static const JSCFunctionListEntry js_render_batch_proto_funcs[] = {
+	JS_CFUNC_DEF("add", 1, athena_render_batch_add),
+	JS_CFUNC_DEF("clear", 0, athena_render_batch_clear),
+	JS_CFUNC_DEF("render", 0, athena_render_batch_render),
+	JS_CGETSET_MAGIC_DEF("size", athena_render_batch_size, NULL, 0),
+};
+
+static JSClassDef js_render_batch_class = {
+	"RenderBatch",
+	.finalizer = render_batch_free,
+};
+
+static void scene_node_free(JSRuntime *rt, JSValue val) {
+	JSSceneNode *node = JS_GetOpaque(val, js_scene_node_class_id);
+	if (!node)
+		return;
+
+	JSContext *ctx = node->ctx;
+	if (ctx) {
+		js_value_list_free(ctx, &node->attachments);
+		js_value_list_free(ctx, &node->children);
+		JS_FreeValue(ctx, node->parent);
+	} else {
+		for (uint32_t i = 0; i < node->attachments.count; i++)
+			JS_FreeValueRT(rt, node->attachments.items[i]);
+		free(node->attachments.items);
+		for (uint32_t i = 0; i < node->children.count; i++)
+			JS_FreeValueRT(rt, node->children.items[i]);
+		free(node->children.items);
+		JS_FreeValueRT(rt, node->parent);
+	}
+
+	if (node->node)
+		athena_scene_node_destroy(node->node);
+	js_free_rt(rt, node);
+	JS_SetOpaque(val, NULL);
+}
+
+static void scene_node_init_transform(JSSceneNode *node) {
+	node->node->position[0] = 0.0f;
+	node->node->position[1] = 0.0f;
+	node->node->position[2] = 0.0f;
+	node->node->position[3] = 1.0f;
+	node->node->rotation[0] = 0.0f;
+	node->node->rotation[1] = 0.0f;
+	node->node->rotation[2] = 0.0f;
+	node->node->rotation[3] = 1.0f;
+	node->node->scale[0] = 1.0f;
+	node->node->scale[1] = 1.0f;
+	node->node->scale[2] = 1.0f;
+	node->node->scale[3] = 1.0f;
+}
+
+static JSValue athena_scene_node_ctor(JSContext *ctx, JSValueConst new_target, int argc, JSValueConst *argv) {
+	JSSceneNode *node = js_mallocz(ctx, sizeof(JSSceneNode));
+	if (!node)
+		return JS_EXCEPTION;
+
+    node->ctx = ctx;
+    node->node = athena_scene_node_create();
+    if (!node->node) {
+        js_free(ctx, node);
+        return JS_EXCEPTION;
+    }
+    js_value_list_init(&node->attachments);
+	js_value_list_init(&node->children);
+	node->parent = JS_UNDEFINED;
+	scene_node_init_transform(node);
+
+	JSValue proto = JS_GetPropertyStr(ctx, new_target, "prototype");
+	JSValue obj = JS_NewObjectProtoClass(ctx, proto, js_scene_node_class_id);
+	JS_FreeValue(ctx, proto);
+	if (JS_IsException(obj)) {
+		js_free(ctx, node);
+		return obj;
+	}
+
+	JS_SetOpaque(obj, node);
+	return obj;
+}
+
+static void scene_node_detach_parent(JSContext *ctx, JSSceneNode *node, JSValue node_val) {
+	if (JS_IsUndefined(node->parent))
+		return;
+    JSSceneNode *parent = JS_GetOpaque(node->parent, js_scene_node_class_id);
+    if (parent) {
+        js_value_list_remove(ctx, &parent->children, node_val);
+        if (parent->node)
+            athena_scene_node_remove_child(parent->node, node->node);
+    }
+	JS_FreeValue(ctx, node->parent);
+	node->parent = JS_UNDEFINED;
+}
+
+static JSValue js_scene_node_add_child(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+	JSSceneNode *node = JS_GetOpaque2(ctx, this_val, js_scene_node_class_id);
+	if (!node)
+		return JS_EXCEPTION;
+	if (argc < 1)
+		return JS_ThrowTypeError(ctx, "expected SceneNode");
+
+	JSSceneNode *child = JS_GetOpaque2(ctx, argv[0], js_scene_node_class_id);
+	if (!child)
+		return JS_EXCEPTION;
+	if (node == child)
+		return JS_ThrowRangeError(ctx, "cannot parent node to itself");
+
+	scene_node_detach_parent(ctx, child, argv[0]);
+
+    if (js_value_list_push(ctx, &node->children, argv[0]) != 0)
+        return JS_ThrowInternalError(ctx, "out of memory");
+
+    athena_scene_node_add_child(node->node, child->node);
+    child->parent = JS_DupValue(ctx, this_val);
+	return JS_NewUint32(ctx, node->children.count);
+}
+
+static JSValue js_scene_node_remove_child(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+	JSSceneNode *node = JS_GetOpaque2(ctx, this_val, js_scene_node_class_id);
+	if (!node)
+		return JS_EXCEPTION;
+	if (argc < 1)
+		return JS_ThrowTypeError(ctx, "expected SceneNode");
+
+	JSSceneNode *child = JS_GetOpaque2(ctx, argv[0], js_scene_node_class_id);
+	if (!child)
+		return JS_EXCEPTION;
+
+	js_value_list_remove(ctx, &node->children, argv[0]);
+    if (js_value_is_same_object(child->parent, this_val)) {
+        JS_FreeValue(ctx, child->parent);
+        child->parent = JS_UNDEFINED;
+    }
+    athena_scene_node_remove_child(node->node, child->node);
+    return JS_NewUint32(ctx, node->children.count);
+}
+
+static JSValue js_scene_node_attach(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+	JSSceneNode *node = JS_GetOpaque2(ctx, this_val, js_scene_node_class_id);
+	if (!node)
+		return JS_EXCEPTION;
+	if (argc < 1)
+		return JS_ThrowTypeError(ctx, "expected RenderObject");
+
+	JSRenderObject *ro = JS_GetOpaque2(ctx, argv[0], js_render_object_class_id);
+	if (!ro)
+		return JS_EXCEPTION;
+
+	js_value_list_remove(ctx, &node->attachments, argv[0]);
+	if (js_value_list_push(ctx, &node->attachments, argv[0]) != 0)
+		return JS_ThrowInternalError(ctx, "out of memory");
+	athena_scene_node_attach(node->node, &ro->obj);
+	return JS_NewUint32(ctx, node->attachments.count);
+}
+
+static JSValue js_scene_node_detach(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+	JSSceneNode *node = JS_GetOpaque2(ctx, this_val, js_scene_node_class_id);
+	if (!node)
+		return JS_EXCEPTION;
+
+	if (argc == 0) {
+		js_value_list_free(ctx, &node->attachments);
+		js_value_list_init(&node->attachments);
+		athena_scene_node_detach(node->node, NULL);
+		return JS_NewUint32(ctx, 0);
+	}
+
+	JSRenderObject *ro = JS_GetOpaque2(ctx, argv[0], js_render_object_class_id);
+	js_value_list_remove(ctx, &node->attachments, argv[0]);
+	if (ro)
+		athena_scene_node_detach(node->node, &ro->obj);
+	return JS_NewUint32(ctx, node->attachments.count);
+}
+
+static JSValue scene_node_prop_get(JSContext *ctx, JSValueConst this_val, int magic) {
+	JSSceneNode *node = JS_GetOpaque2(ctx, this_val, js_scene_node_class_id);
+	if (!node)
+		return JS_EXCEPTION;
+
+    JSValue obj = JS_NewObject(ctx);
+    switch (magic) {
+        case 0:
+            JS_DefinePropertyValueStr(ctx, obj, "x", JS_NewFloat32(ctx, node->node->position[0]), JS_PROP_C_W_E);
+            JS_DefinePropertyValueStr(ctx, obj, "y", JS_NewFloat32(ctx, node->node->position[1]), JS_PROP_C_W_E);
+            JS_DefinePropertyValueStr(ctx, obj, "z", JS_NewFloat32(ctx, node->node->position[2]), JS_PROP_C_W_E);
+            break;
+        case 1:
+            JS_DefinePropertyValueStr(ctx, obj, "x", JS_NewFloat32(ctx, node->node->rotation[0]), JS_PROP_C_W_E);
+            JS_DefinePropertyValueStr(ctx, obj, "y", JS_NewFloat32(ctx, node->node->rotation[1]), JS_PROP_C_W_E);
+            JS_DefinePropertyValueStr(ctx, obj, "z", JS_NewFloat32(ctx, node->node->rotation[2]), JS_PROP_C_W_E);
+            break;
+        case 2:
+            JS_DefinePropertyValueStr(ctx, obj, "x", JS_NewFloat32(ctx, node->node->scale[0]), JS_PROP_C_W_E);
+            JS_DefinePropertyValueStr(ctx, obj, "y", JS_NewFloat32(ctx, node->node->scale[1]), JS_PROP_C_W_E);
+            JS_DefinePropertyValueStr(ctx, obj, "z", JS_NewFloat32(ctx, node->node->scale[2]), JS_PROP_C_W_E);
+            break;
+    }
+    return obj;
+}
+
+static JSValue scene_node_prop_set(JSContext *ctx, JSValueConst this_val, JSValue val, int magic) {
+	JSSceneNode *node = JS_GetOpaque2(ctx, this_val, js_scene_node_class_id);
+	if (!node)
+		return JS_EXCEPTION;
+
+	float x = 0, y = 0, z = 0;
+	JSValue vx = JS_GetPropertyStr(ctx, val, "x");
+	JSValue vy = JS_GetPropertyStr(ctx, val, "y");
+	JSValue vz = JS_GetPropertyStr(ctx, val, "z");
+	if (!JS_IsUndefined(vx)) JS_ToFloat32(ctx, &x, vx);
+	if (!JS_IsUndefined(vy)) JS_ToFloat32(ctx, &y, vy);
+	if (!JS_IsUndefined(vz)) JS_ToFloat32(ctx, &z, vz);
+	JS_FreeValue(ctx, vx);
+	JS_FreeValue(ctx, vy);
+	JS_FreeValue(ctx, vz);
+
+    switch (magic) {
+        case 0:
+            node->node->position[0] = x;
+            node->node->position[1] = y;
+            node->node->position[2] = z;
+            break;
+        case 1:
+            node->node->rotation[0] = x;
+            node->node->rotation[1] = y;
+            node->node->rotation[2] = z;
+            break;
+        case 2:
+            node->node->scale[0] = x;
+            node->node->scale[1] = y;
+            node->node->scale[2] = z;
+            break;
+    }
+
+	return JS_UNDEFINED;
+}
+
+static JSValue athena_scene_node_update(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSSceneNode *node = JS_GetOpaque2(ctx, this_val, js_scene_node_class_id);
+    if (!node)
+        return JS_EXCEPTION;
+
+    athena_scene_update(node->node);
+    return JS_UNDEFINED;
+}
+
+static const JSCFunctionListEntry js_scene_node_proto_funcs[] = {
+	JS_CFUNC_DEF("addChild", 1, js_scene_node_add_child),
+	JS_CFUNC_DEF("removeChild", 1, js_scene_node_remove_child),
+	JS_CFUNC_DEF("attach", 1, js_scene_node_attach),
+	JS_CFUNC_DEF("detach", 1, js_scene_node_detach),
+	JS_CFUNC_DEF("update", 0, athena_scene_node_update),
+	JS_CGETSET_MAGIC_DEF("position", scene_node_prop_get, scene_node_prop_set, 0),
+	JS_CGETSET_MAGIC_DEF("rotation", scene_node_prop_get, scene_node_prop_set, 1),
+	JS_CGETSET_MAGIC_DEF("scale", scene_node_prop_get, scene_node_prop_set, 2),
+};
+
+static JSClassDef js_scene_node_class = {
+	"SceneNode",
+	.finalizer = scene_node_free,
+};
+
+static void render_async_loader_free(JSRuntime *rt, JSValue val) {
+    JSRenderAsyncLoader *loader = JS_GetOpaque(val, js_render_async_loader_class_id);
+    if (!loader)
+        return;
+    if (loader->native) {
+        // Cleanup any pending thunks before destroying the native loader
+        athena_async_clear_with(loader->native, loader_thunk_cleanup_rt);
+        athena_async_loader_destroy(loader->native);
+    }
+    js_free_rt(rt, loader);
+    JS_SetOpaque(val, NULL);
+}
+
+static JSValue athena_render_async_loader_ctor(JSContext *ctx, JSValueConst new_target, int argc, JSValueConst *argv) {
+    JSRenderAsyncLoader *loader = js_mallocz(ctx, sizeof(JSRenderAsyncLoader));
+    if (!loader)
+        return JS_EXCEPTION;
+
+    uint32_t jobs_per_step = 1;
+    if (argc > 0 && JS_IsObject(argv[0])) {
+        JSValue v = JS_GetPropertyStr(ctx, argv[0], "jobsPerStep");
+        if (!JS_IsUndefined(v))
+            JS_ToUint32(ctx, &jobs_per_step, v);
+        JS_FreeValue(ctx, v);
+        if (jobs_per_step == 0) jobs_per_step = 1;
+    }
+
+    JSValue proto = JS_GetPropertyStr(ctx, new_target, "prototype");
+    JSValue obj = JS_NewObjectProtoClass(ctx, proto, js_render_async_loader_class_id);
+    JS_FreeValue(ctx, proto);
+    if (JS_IsException(obj)) {
+        js_free(ctx, loader);
+        return obj;
+    }
+
+    loader->jobs_per_step = jobs_per_step;
+    loader->native = athena_async_loader_create(jobs_per_step);
+    if (!loader->native) { js_free(ctx, loader); return JS_EXCEPTION; }
+    JS_SetOpaque(obj, loader);
+    return obj;
+}
+
+/* legacy no-op removed */
+
+static JSValue athena_render_async_loader_enqueue(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSRenderAsyncLoader *loader = JS_GetOpaque2(ctx, this_val, js_render_async_loader_class_id);
+    if (!loader)
+        return JS_EXCEPTION;
+    if (argc < 2)
+        return JS_ThrowTypeError(ctx, "expected (path, callback[, texture])");
+
+    JSValue path = argv[0];
+    JSValue callback = argv[1];
+    JSValue texture = argc > 2? argv[2] : JS_UNDEFINED;
+
+    if (!JS_IsString(path))
+        return JS_ThrowTypeError(ctx, "path must be string");
+    if (!JS_IsFunction(ctx, callback))
+        return JS_ThrowTypeError(ctx, "callback must be function");
+
+    const char *cpath = JS_ToCString(ctx, path);
+    if (!cpath)
+        return JS_EXCEPTION;
+
+    GSSURFACE *tex_ptr = NULL;
+    if (!JS_IsUndefined(texture) && !JS_IsNull(texture)) {
+        JSImageData* image = JS_GetOpaque2(ctx, texture, get_img_class_id());
+        if (image)
+            tex_ptr = image->tex;
+    }
+
+    LoaderThunk *thunk = js_mallocz(ctx, sizeof(LoaderThunk));
+    if (!thunk) {
+        JS_FreeCString(ctx, cpath);
+        return JS_EXCEPTION;
+    }
+    thunk->ctx = ctx;
+    thunk->cb = JS_DupValue(ctx, callback);
+    thunk->path_c = strdup(cpath);
+
+    int qsz = athena_async_enqueue(loader->native, cpath, tex_ptr, loader_bridge_cb, thunk);
+    JS_FreeCString(ctx, cpath);
+    if (qsz < 0) {
+        JS_FreeValue(ctx, thunk->cb);
+        if (thunk->path_c) free(thunk->path_c);
+        js_free(ctx, thunk);
+        return JS_ThrowInternalError(ctx, "enqueue failed");
+    }
+    return JS_NewUint32(ctx, (uint32_t)qsz);
+}
+
+static JSValue athena_render_async_loader_clear(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSRenderAsyncLoader *loader = JS_GetOpaque2(ctx, this_val, js_render_async_loader_class_id);
+    if (!loader)
+        return JS_EXCEPTION;
+    athena_async_clear_with(loader->native, loader_thunk_cleanup_js);
+    return JS_UNDEFINED;
+}
+
+static JSValue athena_render_async_loader_process(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSRenderAsyncLoader *loader = JS_GetOpaque2(ctx, this_val, js_render_async_loader_class_id);
+    if (!loader)
+        return JS_EXCEPTION;
+
+    // Process completed jobs; after delivering, kick the worker to leave wait state
+
+    uint32_t budget = loader->jobs_per_step;
+    if (argc > 0) {
+        JS_ToUint32(ctx, &budget, argv[0]);
+        if (budget == 0) budget = loader->jobs_per_step;
+    }
+    unsigned int qsz_before = athena_async_queue_size(loader->native);
+    unsigned int processed = athena_async_process(loader->native, budget);
+    unsigned int qsz_after = athena_async_queue_size(loader->native);
+    return JS_NewUint32(ctx, processed);
+}
+
+static JSValue athena_render_async_loader_size(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSRenderAsyncLoader *loader = JS_GetOpaque2(ctx, this_val, js_render_async_loader_class_id);
+    if (!loader) return JS_EXCEPTION;
+    return JS_NewUint32(ctx, athena_async_queue_size(loader->native));
+}
+
+static JSValue athena_render_async_loader_get_jps(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSRenderAsyncLoader *loader = JS_GetOpaque2(ctx, this_val, js_render_async_loader_class_id);
+    if (!loader) return JS_EXCEPTION;
+    return JS_NewUint32(ctx, athena_async_jobs_per_step(loader->native));
+}
+
+static JSValue athena_render_async_loader_set_jps(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSRenderAsyncLoader *loader = JS_GetOpaque2(ctx, this_val, js_render_async_loader_class_id);
+    if (!loader) return JS_EXCEPTION;
+    uint32_t v = loader->jobs_per_step;
+    if (argc > 0) JS_ToUint32(ctx, &v, argv[0]);
+    athena_async_set_jobs_per_step(loader->native, v);
+    loader->jobs_per_step = v ? v : 1;
+    return JS_NewUint32(ctx, loader->jobs_per_step);
+}
+
+static JSValue athena_render_async_loader_destroy(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSRenderAsyncLoader *loader = JS_GetOpaque2(ctx, this_val, js_render_async_loader_class_id);
+    if (!loader) return JS_EXCEPTION;
+    if (loader->native) {
+        athena_async_clear_with(loader->native, loader_thunk_cleanup_js);
+        athena_async_loader_destroy(loader->native);
+        loader->native = NULL;
+    }
+    return JS_UNDEFINED;
+}
+
+static const JSCFunctionListEntry js_render_async_loader_proto_funcs[] = {
+	JS_CFUNC_DEF("enqueue", 3, athena_render_async_loader_enqueue),
+	JS_CFUNC_DEF("clear", 0, athena_render_async_loader_clear),
+	JS_CFUNC_DEF("process", 1, athena_render_async_loader_process),
+	JS_CFUNC_DEF("destroy", 0, athena_render_async_loader_destroy),
+	JS_CFUNC_DEF("size", 0, athena_render_async_loader_size),
+	JS_CFUNC_DEF("getJobsPerStep", 0, athena_render_async_loader_get_jps),
+	JS_CFUNC_DEF("setJobsPerStep", 1, athena_render_async_loader_set_jps),
+};
+
+static JSClassDef js_render_async_loader_class = {
+	"RenderAsyncLoader",
+	.finalizer = render_async_loader_free,
+};
+
+static int js_scene_node_init(JSContext *ctx, JSModuleDef *m)
+{
+    JSValue node_proto, node_class;
+
+    JS_NewClassID(&js_scene_node_class_id);
+    JS_NewClass(JS_GetRuntime(ctx), js_scene_node_class_id, &js_scene_node_class);
+
+    node_proto = JS_NewObject(ctx);
+    JS_SetPropertyFunctionList(ctx, node_proto, js_scene_node_proto_funcs, countof(js_scene_node_proto_funcs));
+
+    node_class = JS_NewCFunction2(ctx, athena_scene_node_ctor, "SceneNode", 0, JS_CFUNC_constructor, 0);
+    JS_SetConstructor(ctx, node_class, node_proto);
+    JS_SetClassProto(ctx, js_scene_node_class_id, node_proto);
+
+    JS_SetModuleExport(ctx, m, "SceneNode", node_class);
+    return 0;
+}
+
+static int js_render_async_loader_init(JSContext *ctx, JSModuleDef *m)
+{
+    JSValue proto, cls;
+
+    JS_NewClassID(&js_render_async_loader_class_id);
+    JS_NewClass(JS_GetRuntime(ctx), js_render_async_loader_class_id, &js_render_async_loader_class);
+
+    proto = JS_NewObject(ctx);
+    JS_SetPropertyFunctionList(ctx, proto, js_render_async_loader_proto_funcs, countof(js_render_async_loader_proto_funcs));
+
+    cls = JS_NewCFunction2(ctx, athena_render_async_loader_ctor, "AsyncLoader", 1, JS_CFUNC_constructor, 0);
+    JS_SetConstructor(ctx, cls, proto);
+    JS_SetClassProto(ctx, js_render_async_loader_class_id, proto);
+
+    JS_SetModuleExport(ctx, m, "AsyncLoader", cls);
+    return 0;
+}
+
 
 static JSValue athena_r_init(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
   	render_init();
@@ -1064,13 +2038,46 @@ static JSValue athena_newvertex(JSContext *ctx, JSValue this_val, int argc, JSVa
 	JS_DefinePropertyValueStr(ctx, obj, "materials",        argv[4], JS_PROP_C_W_E);
 	JS_DefinePropertyValueStr(ctx, obj, "material_indices", argv[5], JS_PROP_C_W_E);
 
+	bool share_buffers = false;
+	if (argc > 6) {
+		if (JS_IsObject(argv[6])) {
+			JSValue share_prop = JS_GetPropertyStr(ctx, argv[6], "shareBuffers");
+			if (!JS_IsUndefined(share_prop))
+				share_buffers = JS_ToBool(ctx, share_prop);
+			JS_FreeValue(ctx, share_prop);
+		} else {
+			share_buffers = JS_ToBool(ctx, argv[6]);
+		}
+	}
+
+	if (share_buffers) {
+		JS_DefinePropertyValueStr(ctx, obj, "shareBuffers", JS_NewBool(ctx, share_buffers), JS_PROP_C_W_E);
+	}
+
 	return obj;
+}
+
+static JSValue athena_render_stats(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
+	const render_stats_t *stats = render_get_stats();
+	JSValue obj = JS_NewObject(ctx);
+
+	JS_DefinePropertyValueStr(ctx, obj, "drawCalls", JS_NewUint32(ctx, stats->draw_calls), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "triangles", JS_NewUint32(ctx, stats->triangles), JS_PROP_C_W_E);
+
+	return obj;
+}
+
+static JSValue athena_render_reset_stats(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
+	render_reset_stats();
+	return JS_UNDEFINED;
 }
 
 static const JSCFunctionListEntry render_funcs[] = {
 	JS_CFUNC_DEF( "init",            0,                athena_r_init),
 	JS_CFUNC_DEF( "begin",            0,               athena_r_begin),
     JS_CFUNC_DEF( "setView",         6,                athena_set_view),
+	JS_CFUNC_DEF( "stats",           0,                athena_render_stats),
+	JS_CFUNC_DEF( "resetStats",      0,                athena_render_reset_stats),
 	JS_CFUNC_DEF( "vertexList",      6,                 athena_newvertex),
 	JS_CFUNC_DEF( "materialColor",   3,             athena_materialcolor),
 	JS_CFUNC_DEF( "material",        0,               athena_newmaterial),
@@ -1129,6 +2136,24 @@ static int js_render_object_init(JSContext *ctx, JSModuleDef *m)
     return 0;
 }
 
+static int js_render_batch_init(JSContext *ctx, JSModuleDef *m)
+{
+    JSValue batch_proto, batch_class;
+
+    JS_NewClassID(&js_render_batch_class_id);
+    JS_NewClass(JS_GetRuntime(ctx), js_render_batch_class_id, &js_render_batch_class);
+
+    batch_proto = JS_NewObject(ctx);
+    JS_SetPropertyFunctionList(ctx, batch_proto, js_render_batch_proto_funcs, countof(js_render_batch_proto_funcs));
+
+    batch_class = JS_NewCFunction2(ctx, athena_render_batch_ctor, "Batch", 1, JS_CFUNC_constructor, 0);
+    JS_SetConstructor(ctx, batch_class, batch_proto);
+    JS_SetClassProto(ctx, js_render_batch_class_id, batch_proto);
+
+    JS_SetModuleExport(ctx, m, "Batch", batch_class);
+    return 0;
+}
+
 
 JSModuleDef *athena_render_init(JSContext* ctx){
     JSModuleDef *m;
@@ -1141,6 +2166,21 @@ JSModuleDef *athena_render_init(JSContext* ctx){
     if (!m)
         return NULL;
     JS_AddModuleExport(ctx, m, "RenderObject");
+
+    m = JS_NewCModule(ctx, "RenderBatch", js_render_batch_init);
+    if (!m)
+        return NULL;
+    JS_AddModuleExport(ctx, m, "Batch");
+
+    m = JS_NewCModule(ctx, "RenderSceneNode", js_scene_node_init);
+    if (!m)
+        return NULL;
+    JS_AddModuleExport(ctx, m, "SceneNode");
+
+    m = JS_NewCModule(ctx, "RenderAsyncLoader", js_render_async_loader_init);
+    if (!m)
+        return NULL;
+    JS_AddModuleExport(ctx, m, "AsyncLoader");
 
 	return athena_push_module(ctx, render_module_init, render_funcs, countof(render_funcs), "Render");
 }

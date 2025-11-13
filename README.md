@@ -89,6 +89,16 @@ AthenaEnv is a complete JavaScript Runtime Environment for the PlayStation 2. It
   • Skinning & node transforming  
   • Environment/Reflection maps  
   • Multiple material processing  
+  • Frame stats API (draw calls/triangles) for live tuning  
+  • Optional zero-copy vertex buffers via `Render.vertexList(..., { shareBuffers: true })`  
+  • High-level helpers: batching (`Batch`), scene graph (`SceneNode`) and cooperative streaming (`AsyncLoader`).  
+
+  Export model: AthenaEnv exports constructors on globalThis via ath_env (no imports from C modules):
+  ```js
+  const batch = new Batch({ autoSort: true });
+  const root = new SceneNode();
+  const loader = new AsyncLoader({ jobsPerStep: 2 });
+  ```
 
 * Screen: Rendering and video control.  
   • Screen control params (vsync, FPS)  
@@ -525,6 +535,95 @@ The TileMap module exposes the descriptor/buffer-based API described in [docs/TI
 * `TileMap.SpriteBuffer.fromObjects(array)` – Convert an array of JS objects (`x`, `y`, `w`, `h`, `u1`, `v1`, …) into a packed buffer.
 * `TileMap.layout` – `{ stride, offsets }` helper for DataView/TypedArray math (fields: `x`, `y`, `w`, `h`, `u1`, `v1`, `u2`, `v2`, `r`, `g`, `b`, `a`, `zindex`).
 * `TileMap.init()` / `TileMap.begin()` / `TileMap.setCamera(x, y)` – Low-level hooks to initialize the renderer, start a frame, and move the shared camera offset.
+
+### RenderBatch (RenderBatch Module)
+
+Construction:
+
+* let batch = new Batch(options);  
+  options.autoSort - Boolean (default: true). Enables internal state-aware sort.
+
+Methods:
+
+* add(renderObject) - Adds a RenderObject to the batch. Returns current count.
+* clear() - Removes all objects from the batch.
+* render() - Renders all objects in the batch using optimal state transitions. Returns number of draws.
+
+Properties:
+
+* size (read-only) - Number of objects currently in the batch.
+
+Example:
+```js
+const batch = new Batch({ autoSort: true });
+batch.add(new RenderObject(new RenderData("dragon.obj")));
+batch.render();
+```
+
+### SceneNode (RenderSceneNode Module)
+
+Construction:
+
+* let node = new SceneNode();
+
+Methods:
+
+* addChild(node) - Parents a child SceneNode.
+* removeChild(node) - Unparents a specific child.
+* attach(renderObject) - Attaches a RenderObject to this node.
+* detach([renderObject]) - Detaches the specific object or all when omitted.
+* update() - Recomputes world transforms (rotate → scale → translate) for this subtree.
+
+Properties:
+
+* position { x, y, z }
+* rotation { x, y, z }
+* scale { x, y, z }
+
+Example:
+```js
+const root = new SceneNode();
+const child = new SceneNode();
+const obj = new RenderObject(new RenderData("monkey.obj"));
+child.position = { x: 0, y: 2, z: 0 };
+child.attach(obj);
+root.addChild(child);
+root.update();
+```
+
+### AsyncLoader (RenderAsyncLoader Module)
+
+Cooperative streaming helper executed on the main thread in small steps.
+
+Construction:
+
+* let loader = new AsyncLoader({ jobsPerStep });  
+  jobsPerStep - Number (default: 1). How many items to process per process() call when budget is omitted.
+
+Methods:
+
+* enqueue(path, callback[, texture]) - Queues a model load.  
+  - path: String (e.g., "BoxTextured.gltf").  
+  - callback: Function (path, renderData) invoked when the item is ready.  
+  - texture: optional Image to bind during load (may be null/omitted).
+* process([budget]) - Processes up to budget items from the queue (or jobsPerStep if omitted). Returns number processed.
+* clear() - Clears pending items and releases their callbacks.
+* destroy() - Clears and destroys the loader.
+* size() - Returns number of items still pending.
+* getJobsPerStep() - Returns current jobs-per-step.
+* setJobsPerStep(n) - Sets jobs-per-step, clamped to at least 1. Returns the applied value.
+
+Example:
+```js
+const loader = new AsyncLoader({ jobsPerStep: 2 });
+loader.enqueue("BoxTextured.gltf", (path, data) => {
+  const obj = new RenderObject(data);
+  sceneBatch.add(obj);
+});
+
+// In your frame loop
+loader.process();
+```
 
 ### Render module
 

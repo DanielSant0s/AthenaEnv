@@ -1,4 +1,7 @@
 // {"name": "Render demo", "author": "Daniel Santos", "version": "04072023", "icon": "render_icon.png", "file": "render.js"}
+import { Batch } from 'RenderBatch';
+import { SceneNode } from 'RenderSceneNode';
+import { AsyncLoader } from 'RenderAsyncLoader';
 
 const pipelines = [
     "NO_LIGHTS",
@@ -91,10 +94,15 @@ const triColors = new Float32Array([
     0.0f, 0.0f, 1.0f, 1.0f, 
 ]);
 
-const vertList = Render.vertexList(triPositions, 
-                                   triNormals, 
-                                   triTexCoords, 
-                                   triColors);
+const vertList = Render.vertexList(
+    triPositions,
+    triNormals,
+    triTexCoords,
+    triColors,
+    undefined,
+    undefined,
+    { shareBuffers: true }
+);
 
 const listtest = new RenderData(vertList);
 listtest.face_culling = Render.CULL_FACE_NONE;
@@ -110,6 +118,7 @@ trilist_materials[0].diffuse.b = 0.0;
 //trilist_materials[0].diffuse.a = 0.0;
 
 listtest.materials = trilist_materials;
+listtest.updateMaterial(0, { shininess: 64.0f, diffuse: { r: 0.7f, g: 0.2f, b: 0.2f } });
 
 const gltf_box = new RenderData("box_bump.gltf");
 //gltf_box.texture_mapping = false;
@@ -182,6 +191,33 @@ const render_object = [ new RenderObject(dragonmesh),
                         new RenderObject(mill)
                     ];
 
+const sceneRoot = new SceneNode();
+const objectNodes = render_object.map(obj => {
+    const node = new SceneNode();
+    node.attach(obj);
+    sceneRoot.addChild(node);
+    return node;
+});
+
+const sceneBatch = new Batch({ autoSort: true });
+render_object.forEach(obj => sceneBatch.add(obj));
+
+const asyncLoader = new AsyncLoader({ jobsPerStep: 2 });
+const streamedObjects = [];
+
+console.log("[Render] enqueue BoxTextured.gltf");
+asyncLoader.enqueue("BoxTextured.gltf", (path, renderData) => {
+    console.log("[Render] loaded:", path, "size:", renderData.size);
+    const obj = new RenderObject(renderData);
+    streamedObjects.push(obj);
+
+    const node = new SceneNode();
+    node.position = { x: 0.0f, y: 6.0f + streamedObjects.length * 2.5f, z: 0.0f };
+    node.attach(obj);
+    sceneRoot.addChild(node);
+    sceneBatch.add(obj);
+});
+
 Camera.position(0.0f, 0.0f, 35.0f);
 
 const light = Lights.new();
@@ -224,8 +260,11 @@ let decal_y = 0;
 
 while(true) {
     Screen.clear(gray);
+    Render.begin();
     Camera.update();
     pad.update();
+    const processed = asyncLoader.process(2);
+    if (processed) console.log("[Render] processed", processed, "queue:", asyncLoader.size());
 
     lx = ((pad.lx > 25 || pad.lx < -25)? pad.lx : 0) / 4096.0f;
     ly = ((pad.ly > 25 || pad.ly < -25)? pad.ly : 0) / 4096.0f;
@@ -271,6 +310,8 @@ while(true) {
     }
     
     if(pad.justPressed(Pads.TRIANGLE)) {
+        asyncLoader.clear();
+        asyncLoader.destroy();
         os.chdir("..");
         std.reload("main.js");
     }
@@ -295,7 +336,7 @@ while(true) {
     //monkey_object.render();
 
     if (lx || ly) {
-        render_object[modeltodisplay].rotation = {x:savedly, y:savedlx, z:0.0f};
+        objectNodes[modeltodisplay].rotation = {x:savedly, y:savedlx, z:0.0f};
     }
 
     Screen.switchContext();
@@ -311,7 +352,8 @@ while(true) {
     Screen.setParam(Screen.DEPTH_TEST_ENABLE, true);
     Screen.setParam(Screen.DEPTH_TEST_METHOD, Screen.DEPTH_GEQUAL);
 
-    render_object[modeltodisplay].render();
+    sceneRoot.update();
+    sceneBatch.render();
 
     Screen.setParam(Screen.DEPTH_TEST_ENABLE, false);
 //
@@ -336,8 +378,10 @@ while(true) {
     //temp_buffer.draw(0, 0);
 //
 
+    const renderStats = Render.stats();
     font.print(10, 10, Screen.getFPS(360) + " FPS | " + free_mem + " | Static VRAM: " + Screen.getMemoryStats(Screen.VRAM_USED_STATIC)/1024 + "KB" + " | Dynamic VRAM: " + Screen.getMemoryStats(Screen.VRAM_USED_DYNAMIC)/1024 + "KB");
-    font.print(10, 25, render_data[modeltodisplay].size + " Vertices | " + "Pipeline: " + pipelines[render_data[modeltodisplay].pipeline]);
+    font.print(10, 25, render_data[modeltodisplay].size + " Vertices | " + "Pipeline: " + pipelines[render_data[modeltodisplay].pipeline] + " | Draws: " + renderStats.drawCalls + " | Tris: " + renderStats.triangles);
+    font.print(10, 40, `Batch: ${sceneBatch.size} objects | Loader queue: ${asyncLoader.size()} | Streamed: ${streamedObjects.length}`);
 
     Screen.flip();
 }

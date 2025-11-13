@@ -128,7 +128,7 @@ ifeq ($(GRAPHICS),1)
   APP_CORE += tile_render.o graphics.o image_font.o owl_draw.o image_loaders.o mesh_loaders.o atlas.o fntsys.o render.o camera.o skin_math.o calc_3d.o fast_obj/fast_obj.o
 
   ATHENA_MODULES += ath_color.o ath_font.o ath_render.o ath_anim_3d.o ath_lights.o ath_3dcamera.o ath_screen.o ath_image.o ath_imagelist.o ath_shape.o ath_shadows.o ath_sprite.o
-  APP_CORE += shadows.o
+  APP_CORE += shadows.o render_batch.o render_scene.o render_async_loader.o
   EE_OBJS += $(VU1_MPGS) $(VU0_MPGS)
 endif
 

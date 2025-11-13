@@ -673,6 +673,7 @@ void setVSync(bool vsync_flag){
 	switchFlipScreenFunction();
 }
 
+
 void toggleFrameCounter(bool enable){ 
 	perf = enable;
 	switchFlipScreenFunction();
