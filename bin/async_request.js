@@ -6,10 +6,11 @@ IOP.loadModule("SMAP");
 
 Network.init();
 
-Screen.log(JSON.stringify(Network.getConfig()));
+console.log(JSON.stringify(Network.getConfig()));
 
 let req = new Request();
-req.followlocation = true;
+
+req.verifyTLS = true;
 req.headers = ["upgrade-insecure-requests: 1",
                "sec-fetch-dest: document",
                "sec-fetch-mode: navigate"];
@@ -28,5 +29,7 @@ console.log(result);
 Network.deinit();
 
 System.sleep(300);
+
+console.log("loading main.js");
 
 std.reload("main.js");

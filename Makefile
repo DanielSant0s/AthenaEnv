@@ -162,7 +162,19 @@ ifeq ($(STATIC_NETWORK),1)
   APP_CORE += network.o request.o
   ATHENA_MODULES += ath_network.o ath_socket.o ath_request.o ath_websocket.o
   IOP_MODULES += NETMAN.o SMAP.o ps2ips.o
-  EE_LIBS += -lnetman -lps2ip -lcurl -lwolfssl
+  # Native networking backend (lwIP + BearSSL)
+  EE_LIBS += -lnetman -lps2ip
+  APP_CORE += net/ath_http.o net/ath_tls.o net/ath_ws.o
+  # Optional TLS (BearSSL)
+  EE_CFLAGS += -DATHENA_HAS_BEARSSL=1
+  # Prefer vendored BearSSL sources if present; else link against libbearssl
+  ifneq (,$(wildcard $(EE_SRC_DIR)BearSSL/inc/bearssl.h))
+    EE_INCS += -I$(EE_SRC_DIR)BearSSL/inc
+    EE_LIBS += -Lee_modules/bearssl/lib -lbearssl
+    EXT_LIBS += ee_modules/bearssl/lib/libbearssl.a
+  else
+    EE_LIBS += -lbearssl
+  endif
 
   DYNAMIC_NETWORK = 0
 endif
@@ -247,6 +259,7 @@ clean:
 	$(MAKE) -C iop_modules/ds34bt clean
 	$(MAKE) -C ee_modules/loader clean
 	$(MAKE) -C ee_modules/ode clean
+	$(MAKE) -C ee_modules/bearssl clean
 
 	$(MAKE) -f Makefile.dl KEYBOARD=$(DYNAMIC_KEYBOARD) clean
 	$(MAKE) -f Makefile.dl MOUSE=$(DYNAMIC_MOUSE) clean
@@ -256,6 +269,10 @@ rebuild: clean all
 include $(PS2SDK)/samples/Makefile.pref
 include $(PS2SDK)/samples/Makefile.eeglobal
 include Makefile.embed
+
+# Build vendored BearSSL static library when present and TLS enabled
+ee_modules/bearssl/lib/libbearssl.a:
+	$(MAKE) -C ee_modules/bearssl
 
 $(EE_EMBED_DIR):
 	@mkdir -p $@

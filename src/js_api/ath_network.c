@@ -41,11 +41,6 @@ static JSValue athena_nw_init(JSContext *ctx, JSValue this_val, int argc, JSValu
 
     dbgprintf("DHCP Connected.\n");
 
-    curl_global_init(CURL_GLOBAL_ALL);
-    curl = curl_easy_init();
-
-    dbgprintf("cURL Started.\n");
-
 	return JS_UNDEFINED;
 }
 
@@ -70,8 +65,6 @@ static JSValue athena_nw_get_config(JSContext *ctx, JSValue this_val, int argc, 
 
 static JSValue athena_nw_deinit(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
 {
-    curl_easy_cleanup(curl);
-    curl_global_cleanup();
 	ps2ipDeinit();
 
     return JS_UNDEFINED;

@@ -1,60 +1,78 @@
 #include <network.h>
+#include <ath_net.h>
 #include <taskman.h>
 #include <time.h>
 
 static JSClassID js_ws_class_id;
 
-static JSValue athena_ws_ctor(JSContext *ctx, JSValueConst new_target, int argc, JSValueConst *argv){
+static JSValue athena_ws_get(JSContext *ctx, JSValueConst this_val, int magic)
+{
+    switch (magic) {
+    case 0: { // verifyTLS
+        JSValue v = JS_GetPropertyStr(ctx, this_val, "_verifyTLS");
+        if (JS_IsUndefined(v)) {
+            v = JS_NewBool(ctx, 1);
+        }
+        return v;
+    }
+    default:
+        break;
+    }
+    return JS_UNDEFINED;
+}
 
-    CURL* ws;
-    CURLcode result;
+static JSValue athena_ws_set(JSContext *ctx, JSValueConst this_val, JSValue val, int magic)
+{
+    (void)this_val; (void)val;
+    switch (magic) {
+    case 0: // verifyTLS
+        return JS_ThrowTypeError(ctx, "verifyTLS is read-only for WebSocket instances");
+    default:
+        break;
+    }
+    return JS_UNDEFINED;
+}
+
+static JSValue athena_ws_ctor(JSContext *ctx, JSValueConst new_target, int argc, JSValueConst *argv){
     JSValue obj = JS_UNDEFINED;
     JSValue proto;
 
-    ws = curl_easy_init();
-    if (!ws)
-        return JS_EXCEPTION;
-
+    // Native backend: create object with opaque WS context
     proto = JS_GetPropertyStr(ctx, new_target, "prototype");
     if (JS_IsException(proto))
-        goto ws_fail;
+        return JS_EXCEPTION;
     obj = JS_NewObjectProtoClass(ctx, proto, js_ws_class_id);
     JS_FreeValue(ctx, proto);
     if (JS_IsException(obj))
-        goto ws_fail;
-    JS_SetOpaque(obj, ws);
+        return JS_EXCEPTION;
 
     const char* url = JS_ToCString(ctx, argv[0]);
-    curl_easy_setopt(ws, CURLOPT_URL, url);
 
-    curl_easy_setopt(ws, CURLOPT_CONNECT_ONLY, 2L);
-
-    /* only do the initial bootstrap */
-    //curl_easy_setopt(ws, CURLOPT_WS_OPTIONS, CURLWS_ALONE);
-
-    curl_easy_setopt(ws, CURLOPT_SSL_VERIFYPEER, 0L);
-    curl_easy_setopt(ws, CURLOPT_SSL_VERIFYHOST, 0L);
-
-    result = curl_easy_perform(ws);
-
-    if(CURLE_OK != result) {
-        curl_easy_cleanup(ws);
-        JS_FreeValue(ctx, obj);
-        return JS_ThrowInternalError(ctx, "Error %d while connecting to WebSocket", result);
+    bool verify_tls = true;
+    if (argc > 1 && JS_IsObject(argv[1])) {
+        JSValue v = JS_GetPropertyStr(ctx, argv[1], "verifyTLS");
+        if (!JS_IsUndefined(v)) {
+            int b = JS_ToBool(ctx, v);
+            if (b >= 0) verify_tls = b != 0;
+        }
+        JS_FreeValue(ctx, v);
     }
 
+    ath_ws_ctx_t *ws = ath_ws_connect(url, verify_tls);
+    if (!ws) {
+        JS_FreeValue(ctx, obj);
+        return JS_ThrowInternalError(ctx, "WebSocket native connect failed");
+    }
+    JS_SetOpaque(obj, ws);
+    JS_DefinePropertyValueStr(ctx, obj, "_verifyTLS", JS_NewBool(ctx, verify_tls), JS_PROP_C_W_E);
     return obj;
-
- ws_fail:
-    curl_easy_cleanup(ws);
-    JS_FreeValue(ctx, obj);
-    return JS_EXCEPTION;
 }
 
 static void athena_ws_dtor(JSRuntime *rt, JSValue val)
 {
-    CURL *ws = JS_GetOpaque(val, js_ws_class_id);
-    curl_easy_cleanup(ws);
+    void *opaque = JS_GetOpaque(val, js_ws_class_id);
+    ath_ws_ctx_t *ws = (ath_ws_ctx_t*)opaque;
+    if (ws) ath_ws_close(ws);
     printf("Freeing WebSocket\n");
 }
 
@@ -62,13 +80,12 @@ static uint8_t ws_buf[16000];
 
 static JSValue athena_ws_recv(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
 {
-    CURL *ws = JS_GetOpaque2(ctx, this_val, js_ws_class_id);
+    void *opaque = JS_GetOpaque2(ctx, this_val, js_ws_class_id);
     JSValue ret = JS_UNDEFINED;
 
     size_t rlen = 0;
-    struct curl_ws_frame *meta;
 
-    if(curl_ws_recv(ws, ws_buf, sizeof(ws_buf), &rlen, &meta) == CURLE_OK) {
+    if (ath_ws_recv((ath_ws_ctx_t*)opaque, ws_buf, sizeof(ws_buf), &rlen) == 0) {
         ret = JS_NewArrayBufferCopy(ctx, ws_buf, rlen);
     }
 
@@ -77,17 +94,17 @@ static JSValue athena_ws_recv(JSContext *ctx, JSValue this_val, int argc, JSValu
 
 static JSValue athena_ws_send(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
 {
-    CURL *ws = JS_GetOpaque2(ctx, this_val, js_ws_class_id);
+    void *opaque = JS_GetOpaque2(ctx, this_val, js_ws_class_id);
     uint8_t *buf;
     size_t size;
     size_t sent = 0;
-    struct curl_ws_frame *meta;
 
     buf = JS_GetArrayBuffer(ctx, &size, argv[0]);
 
-    if(curl_ws_send(ws, buf, size, &sent, 0, CURLWS_BINARY) != CURLE_OK) {
-        return JS_ThrowInternalError(ctx, "Error on WebSocket send");
+    if (ath_ws_send((ath_ws_ctx_t*)opaque, buf, size, 1) != 0) {
+        return JS_ThrowInternalError(ctx, "WebSocket native send not implemented");
     }
+    sent = size;
 
     return JS_NewUint32(ctx, sent);
 	
@@ -99,6 +116,7 @@ static JSClassDef js_ws_class = {
 }; 
 
 static const JSCFunctionListEntry athena_ws_funcs[] = {
+    JS_CGETSET_MAGIC_DEF("verifyTLS", athena_ws_get, athena_ws_set, 0),
     JS_CFUNC_DEF("send", 1, athena_ws_send),
     JS_CFUNC_DEF("recv", 0, athena_ws_recv),
 };

@@ -1,7 +1,6 @@
 
 #include <network.h>
-
-CURL* curl = NULL;
+#include <ath_net.h>
 
 size_t AsyncWriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp)
 {
@@ -38,77 +37,51 @@ size_t AsyncWriteFileCallback(void *contents, size_t size, size_t nmemb, void *u
   return written;
 }
 
+// Adapters from native backend on_data to existing callbacks
+static int AthenaOnDataMem(const uint8_t *data, size_t len, void *user) {
+  struct MemoryStruct *ms = (struct MemoryStruct*)user;
+  size_t r = AsyncWriteMemoryCallback((void*)data, 1, len, ms);
+  return (r == len) ? 0 : -1;
+}
+
+static int AthenaOnDataFile(const uint8_t *data, size_t len, void *user) {
+  struct MemoryStruct *ms = (struct MemoryStruct*)user;
+  size_t r = AsyncWriteFileCallback((void*)data, 1, len, ms);
+  return (r == len) ? 0 : -1;
+}
+
 void requestThread(void* data) {
-    CURLcode res;
-
     JSRequestData *s = data;
-
-    curl_easy_reset(curl);
-
-    struct curl_slist *header_chunk = NULL;
-
-    curl_easy_setopt(curl, CURLOPT_URL, s->url);
-
-    for(int i = 0; i < s->headers_len; i++) {
-        header_chunk = curl_slist_append(header_chunk, s->headers[i]);
-    }
-
-	header_chunk = curl_slist_append(header_chunk, "Content-Type: application/json");
-
-    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, header_chunk);
-
-	switch (s->method){
-	case ATHENA_GET:
-		curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);
-		break;
-	case ATHENA_POST:
-		curl_easy_setopt(curl, CURLOPT_POST, 1L);
-		break;
-	case ATHENA_HEAD:
-		curl_easy_setopt(curl, CURLOPT_NOBODY, 1L);
-		curl_easy_setopt(curl, CURLOPT_HEADER, 1L); 
-		break;
-	default:
-		break;
-	}
-
-	if (s->postdata){
-		curl_easy_setopt(curl, CURLOPT_POSTFIELDS, s->postdata);
-	}
-
-    if(s->save) {
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, AsyncWriteFileCallback);
-    } else {
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, AsyncWriteMemoryCallback);
-    }
-
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&(s->chunk));
-
-    curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1L);
-
-    curl_easy_setopt(curl, CURLOPT_SSLVERSION, CURL_SSLVERSION_TLSv1_2);
-
-    curl_easy_setopt(curl, CURLOPT_USERPWD, s->userpwd);
-    curl_easy_setopt(curl, CURLOPT_USERAGENT, s->useragent);
-
-    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-    curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, s->keepalive);
-
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
-
-	curl_easy_setopt(curl, CURLOPT_USE_SSL, CURLUSESSL_TRY);
-
     s->chunk.timer = clock();
-    res = curl_easy_perform(curl);
 
-    if (res != CURLE_OK) {
-        s->error = "Error while downloading file\n"; //, curl_easy_strerror(res));
+    ath_http_request_t req = {0};
+    ath_http_response_t resp = {0};
+
+    req.url = s->url;
+    req.method = (s->method == ATHENA_GET) ? ATH_HTTP_GET :
+                 (s->method == ATHENA_POST) ? ATH_HTTP_POST : ATH_HTTP_HEAD;
+    req.useragent = s->useragent;
+    req.userpwd = s->userpwd;
+    req.postdata = s->postdata;
+    for (int i = 0; i < s->headers_len && i < 16; ++i) req.headers[i] = s->headers[i];
+    req.headers_len = s->headers_len;
+    req.follow_redirects = s->follow_redirects;
+    req.keepalive = s->keepalive;
+    req.verify_tls = s->verify_tls;
+    req.timeout_ms = s->timeout_ms;
+    if (s->save) req.on_data = AthenaOnDataFile; else req.on_data = AthenaOnDataMem;
+    req.on_data_user = &(s->chunk);
+
+    if (ath_http_perform(&req, &resp) != 0) {
+        s->error = resp.error ? resp.error : "Network error";
+        printf("%s\n", s->error);
     }
-
-    if(s->save) fclose(s->chunk.fp);
-
+    s->response_code = resp.status_code;
+    if (s->tid == -1) {
+        s->response_headers = resp.headers;
+    } else {
+        if (resp.headers) free(resp.headers);
+    }
+    if (s->save && s->chunk.fp) fclose(s->chunk.fp);
     s->ready = true;
-
-    //exitkill_task();
 }
