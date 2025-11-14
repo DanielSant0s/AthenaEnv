@@ -8,11 +8,8 @@
 #include <arpa/inet.h> /* struct sockaddr_in, struct sockaddr */
 #include <netdb.h> /* struct hostent, gethostbyname */
 #include <loadfile.h>
-#include <curl/curl.h>
 #include <loadfile.h>
 #include <pthread.h>
-
-extern CURL* curl; // REWORK IT LATER, ADD GET AND SET FUNCTIONS
 
 struct MemoryStruct {
     union {
@@ -39,11 +36,15 @@ typedef struct
     const char* url;
     const char* error;
     long keepalive;
+    int timeout_ms;
+    int verify_tls;
+    int follow_redirects;
     const char* userpwd;
     const char* useragent;
     const char* postdata;
     struct MemoryStruct chunk;
     long response_code;
+    char* response_headers;
     char* headers[16];
     int headers_len;
 } JSRequestData;

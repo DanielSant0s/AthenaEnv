@@ -25,7 +25,7 @@ console.log(JSON.stringify(Network.getConfig()));
 
 let req = new Request();
 
-let ws = new WebSocket("wss://gateway.discord.gg/?v=10&encoding=json");
+let ws = new WebSocket("wss://echo.websocket.org");
 
 console.log(ab2str(ws.recv()));
 

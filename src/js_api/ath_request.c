@@ -21,9 +21,13 @@ static JSValue athena_nw_ctor(JSContext *ctx, JSValueConst new_target, int argc,
         return JS_EXCEPTION;
 
     req->keepalive = 0L;
+    req->timeout_ms = 5000;
+    req->verify_tls = 1;
+    req->follow_redirects = 1;
     req->userpwd = NULL;
     req->useragent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36";
     req->headers_len = 0;
+    req->response_headers = NULL;
     req->postdata = NULL;
 
     proto = JS_GetPropertyStr(ctx, new_target, "prototype");
@@ -63,6 +67,18 @@ static JSValue athena_nw_get(JSContext *ctx, JSValueConst this_val, int magic)
         return JS_NewString(ctx, s->userpwd);
         break;
 
+    case 3:
+        return JS_NewInt32(ctx, s->timeout_ms);
+        break;
+
+    case 4:
+        return JS_NewBool(ctx, s->verify_tls);
+        break;
+
+    case 5:
+        return JS_NewBool(ctx, s->follow_redirects);
+        break;
+
     default:
         break;
     }
@@ -81,7 +97,7 @@ static JSValue athena_nw_set(JSContext *ctx, JSValueConst this_val, JSValue val,
     if (!s)
         return JS_EXCEPTION;
 
-    if (magic < 1) {
+    if (magic == 0 || magic == 3 || magic == 4 || magic == 5) {
         JS_ToInt32(ctx, &v, val);
     } else {
         str = JS_ToCString(ctx, val);
@@ -99,6 +115,18 @@ static JSValue athena_nw_set(JSContext *ctx, JSValueConst this_val, JSValue val,
     
     case 2:
         s->userpwd = str;
+        break;
+
+    case 3:
+        s->timeout_ms = (int)v;
+        break;
+
+    case 4:
+        s->verify_tls = (int)v;
+        break;
+
+    case 5:
+        s->follow_redirects = (int)v;
         break;
 
     default:
@@ -198,6 +226,11 @@ static JSValue athena_nw_requests_async_dl(JSContext *ctx, JSValue this_val, int
     }
 
     s->tid = create_task("Requests: Download", requestThread, 4096*10, 16);
+    if (s->tid < 0) {
+        fclose(s->chunk.fp);
+        s->chunk.fp = NULL;
+        return JS_ThrowInternalError(ctx, "asyncDownload: unable to create task\n");
+    }
     init_task(s->tid, (void*)s);
 
     return JS_UNDEFINED;
@@ -231,6 +264,11 @@ static JSValue athena_nw_requests_get(JSContext *ctx, JSValue this_val, int argc
     JSValue obj = JS_NewObject(ctx);
     JS_DefinePropertyValueStr(ctx, obj, "text", JS_NewStringLen(ctx, s->chunk.memory, s->chunk.size), JS_PROP_C_W_E);
 	JS_DefinePropertyValueStr(ctx, obj, "status_code", JS_NewInt32(ctx, s->response_code), JS_PROP_C_W_E);
+    if (s->response_headers) {
+        JS_DefinePropertyValueStr(ctx, obj, "headers", JS_NewString(ctx, s->response_headers), JS_PROP_C_W_E);
+        free(s->response_headers);
+        s->response_headers = NULL;
+    }
 	return obj;
 }
 
@@ -253,7 +291,12 @@ static JSValue athena_nw_requests_async_get(JSContext *ctx, JSValue this_val, in
     s->chunk.size = 0;    /* no data at this point */
     s->chunk.transferring = false;
 
-    s->tid = create_task("Requests: Get", requestThread, 1638400, 16);
+    s->tid = create_task("Requests: Get", requestThread, 4096*10, 16);
+    if (s->tid < 0) {
+        free(s->chunk.memory);
+        s->chunk.memory = NULL;
+        return JS_ThrowInternalError(ctx, "asyncGet: unable to create task\n");
+    }
     init_task(s->tid, (void*)s);
 
     return JS_UNDEFINED;
@@ -358,7 +401,11 @@ static JSValue athena_nw_requests_post(JSContext *ctx, JSValue this_val, int arg
     JSValue obj = JS_NewObject(ctx);
     JS_DefinePropertyValueStr(ctx, obj, "text", JS_NewStringLen(ctx, s->chunk.memory, s->chunk.size), JS_PROP_C_W_E);
 	JS_DefinePropertyValueStr(ctx, obj, "status_code", JS_NewInt32(ctx, s->response_code), JS_PROP_C_W_E);
-
+    if (s->response_headers) {
+        JS_DefinePropertyValueStr(ctx, obj, "headers", JS_NewString(ctx, s->response_headers), JS_PROP_C_W_E);
+        free(s->response_headers);
+        s->response_headers = NULL;
+    }
 	return obj;
 }
 
@@ -382,6 +429,11 @@ static JSValue athena_nw_requests_async_post(JSContext *ctx, JSValue this_val, i
     s->chunk.transferring = false;
 
     s->tid = create_task("Requests: Post", requestThread, 4096*10, 16);
+    if (s->tid < 0) {
+        free(s->chunk.memory);
+        s->chunk.memory = NULL;
+        return JS_ThrowInternalError(ctx, "asyncPost: unable to create task\n");
+    }
     init_task(s->tid, (void*)s);
 
     return JS_UNDEFINED;
@@ -415,6 +467,11 @@ static JSValue athena_nw_requests_head(JSContext *ctx, JSValue this_val, int arg
     JSValue obj = JS_NewObject(ctx);
     JS_DefinePropertyValueStr(ctx, obj, "text", JS_NewStringLen(ctx, s->chunk.memory, s->chunk.size), JS_PROP_C_W_E);
 	JS_DefinePropertyValueStr(ctx, obj, "status_code", JS_NewInt32(ctx, s->response_code), JS_PROP_C_W_E);
+    if (s->response_headers) {
+        JS_DefinePropertyValueStr(ctx, obj, "headers", JS_NewString(ctx, s->response_headers), JS_PROP_C_W_E);
+        free(s->response_headers);
+        s->response_headers = NULL;
+    }
 	return obj;
 }
 
@@ -427,6 +484,9 @@ static const JSCFunctionListEntry athena_request_funcs[] = {
     JS_CGETSET_MAGIC_DEF("keepalive",      athena_nw_get, athena_nw_set, 0),
     JS_CGETSET_MAGIC_DEF("useragent",      athena_nw_get, athena_nw_set, 1),
     JS_CGETSET_MAGIC_DEF("userpwd",        athena_nw_get, athena_nw_set, 2),
+    JS_CGETSET_MAGIC_DEF("timeout",        athena_nw_get, athena_nw_set, 3),
+    JS_CGETSET_MAGIC_DEF("verifyTLS",      athena_nw_get, athena_nw_set, 4),
+    JS_CGETSET_MAGIC_DEF("followRedirects",athena_nw_get, athena_nw_set, 5),
     JS_CGETSET_DEF("headers", athena_nw_get_headers, athena_nw_set_headers),
 
     JS_CFUNC_DEF("get", 1, athena_nw_requests_get),
