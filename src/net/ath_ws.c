@@ -151,7 +151,7 @@ ath_ws_ctx_t *ath_ws_connect(const char *url, bool verify_tls) {
     ctx->verify_tls = verify_tls ? 1 : 0;
 
     if (is_secure) {
-        ctx->tls = ath_tls_connect(host, (uint16_t)port, ctx->verify_tls != 0);
+        ctx->tls = ath_tls_connect(host, (uint16_t)port, ctx->verify_tls != 0, 1);
         if (!ctx->tls) { free(ctx); return NULL; }
     } else {
         ctx->sock = tcp_connect_ws(host, port, ctx->timeout_ms);
