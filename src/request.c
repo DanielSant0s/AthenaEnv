@@ -2,52 +2,36 @@
 #include <network.h>
 #include <ath_net.h>
 
-size_t AsyncWriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp)
-{
-  size_t realsize = size * nmemb;
-  struct MemoryStruct *mem = (struct MemoryStruct *)userp;
+static int AthenaOnDataMem(const uint8_t *data, size_t len, void *user) {
+  struct MemoryStruct *ms = (struct MemoryStruct*)user;
 
-  mem->memory = realloc(mem->memory, mem->size + realsize + 1);
-  if(mem->memory == NULL) {
+  ms->memory = realloc(ms->memory, ms->size + len + 1);
+  if(ms->memory == NULL) {
     /* out of memory */
     dbgprintf("not enough memory (realloc returned NULL)\n");
     return 0;
   }
 
-  memcpy(&(mem->memory[mem->size]), contents, realsize);
-  mem->size += realsize;
-  mem->memory[mem->size] = 0;
+  memcpy(&(ms->memory[ms->size]), data, len);
+  ms->size += len;
+  ms->memory[ms->size] = 0;
 
-  mem->timer = clock();
-  mem->transferring = true;
-
-  return realsize;
-}
-
-size_t AsyncWriteFileCallback(void *contents, size_t size, size_t nmemb, void *userp)
-{
-  struct MemoryStruct *mem = (struct MemoryStruct *)userp;
-
-  size_t written = fwrite(contents, size, nmemb, mem->fp);
-
-  mem->size += written;
-  mem->timer = clock();
-  mem->transferring = true;
-
-  return written;
-}
-
-// Adapters from native backend on_data to existing callbacks
-static int AthenaOnDataMem(const uint8_t *data, size_t len, void *user) {
-  struct MemoryStruct *ms = (struct MemoryStruct*)user;
-  size_t r = AsyncWriteMemoryCallback((void*)data, 1, len, ms);
-  return (r == len) ? 0 : -1;
+  ms->timer = clock();
+  ms->transferring = true;
+  
+  return 0;
 }
 
 static int AthenaOnDataFile(const uint8_t *data, size_t len, void *user) {
   struct MemoryStruct *ms = (struct MemoryStruct*)user;
-  size_t r = AsyncWriteFileCallback((void*)data, 1, len, ms);
-  return (r == len) ? 0 : -1;
+
+  size_t written = fwrite(data, 1, len, ms->fp);
+
+  ms->size += written;
+  ms->timer = clock();
+  ms->transferring = true;
+
+  return 0;
 }
 
 void requestThread(void* data) {
@@ -58,8 +42,7 @@ void requestThread(void* data) {
     ath_http_response_t resp = {0};
 
     req.url = s->url;
-    req.method = (s->method == ATHENA_GET) ? ATH_HTTP_GET :
-                 (s->method == ATHENA_POST) ? ATH_HTTP_POST : ATH_HTTP_HEAD;
+    req.method = s->method;
     req.useragent = s->useragent;
     req.userpwd = s->userpwd;
     req.postdata = s->postdata;
