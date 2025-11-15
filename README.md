@@ -39,7 +39,7 @@
 
 ## About AthenaEnv
 
-AthenaEnv is a complete JavaScript Runtime Environment for the PlayStation 2. It has dozens of built-in exclusive libraries made for the project, such as a MMI instruction accelerated 2D renderer, asynchronous texture manager system and a advanced 3D renderer powered by VU1 and VU0. It let's you to almost instantly write modern code on PS2 powered by performant libraries and a fine-tuned interpreter for it.
+AthenaEnv is a complete JavaScript Runtime Environment for the PlayStation 2. It has dozens of built-in exclusive libraries made for the project, such as a MMI instruction accelerated 2D renderer, asynchronous texture manager system, an advanced 3D renderer powered by VU1 and VU0 and even a custom build HTTP/S client. It let's you to almost instantly write modern code on PS2 powered by performant libraries and a fine-tuned interpreter for it.
 
 ### Modules:
 * System: Files, folders and system stuff.  
@@ -147,7 +147,7 @@ AthenaEnv is a complete JavaScript Runtime Environment for the PlayStation 2. It
 
 * Network: Net basics and web requests.  
   • HTTP/HTTPS support  
-  • TLS 1.3 support  
+  • TLS 1.2 support  
   • A/Sync requests (GET, POST, HEAD)  
   • Download functions  
   • Static/DHCP  
