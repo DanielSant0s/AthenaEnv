@@ -1,6 +1,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 #include <malloc.h>
 #include <math.h>
@@ -12,6 +13,8 @@
 #include <athena_math.h>
 #include <dbgprintf.h>
 #include <fntsys.h>
+#include <texture_manager.h>
+#include <render.h>
 
 #include <owl_packet.h>
 
@@ -21,21 +24,18 @@ int athena_font_upload(GSCONTEXT *gsGlobal, GSFONT *gsFont)
 
 	if( gsFont->Type == FONT_TYPE_FNT )
 	{
-		//if( gsKit_texture_fnt(gsGlobal, gsFont) == -1 )
-		//{
-			printf("Error uploading font!\n");
-			return -1;
-		//}
-
+		// FNT format support (basic implementation)
 		for (i=0; i<256; i++) {
             gsFont->Additional[i] = gsFont->CharWidth;
         }
-
 		return 0;
 	}
-	else if( (gsFont->Type == FONT_TYPE_PNG_DAT) || (gsFont->Type == FONT_TYPE_BMP_DAT)) {
+	else if( (gsFont->Type == FONT_TYPE_PNG_DAT) || 
+	         (gsFont->Type == FONT_TYPE_BMP_DAT) || 
+	         (gsFont->Type == FONT_TYPE_JPEG_DAT)) 
+	{
 		if( load_image(gsFont->Texture, gsFont->Path, true) == -1) {
-			dbgprintf("Error uploading font!\n");
+			dbgprintf("Error uploading font texture: %s\n", gsFont->Path);
 			return -1;
 		}
 
@@ -44,227 +44,395 @@ int athena_font_upload(GSCONTEXT *gsGlobal, GSFONT *gsFont)
 		gsFont->CharWidth = gsFont->Texture->Width / 16;
 		gsFont->CharHeight = gsFont->Texture->Height / 16;
 
-        if(gsFont->Path_DAT) {
-            FILE* File = fopen(gsFont->Path_DAT, "rb");
-            if (File)
-            {
-                fseek(File, 0, SEEK_SET);
-                for(i=0; i<256; i++) {
-                    if(fread(&gsFont->Additional[i], 1, 2, File) != 2)
-                    {
-                        printf("Problem reading font sizes %s\n", gsFont->Path_DAT);
-                        fclose(File);
-                        return -1;
-                    }
-                }
-                fclose(File);
-                return 0;
-            }
-            else
-            {
-                for (i=0; i<256; i++) {
-                    gsFont->Additional[i] = (short)gsFont->CharWidth;
-                    return 0;
-                }
-            }
-        }
+		// Try to load .dat file with character widths
+		if(gsFont->Path_DAT) {
+			FILE* File = fopen(gsFont->Path_DAT, "rb");
+			if (File)
+			{
+				fseek(File, 0, SEEK_SET);
+				for(i=0; i<256; i++) {
+					if(fread(&gsFont->Additional[i], 1, 2, File) != 2)
+					{
+						dbgprintf("Problem reading font sizes from %s\n", gsFont->Path_DAT);
+						fclose(File);
+						// Fallback to default width
+						for (i=0; i<256; i++) {
+							gsFont->Additional[i] = (short)gsFont->CharWidth;
+						}
+						return 0;
+					}
+				}
+				fclose(File);
+				return 0;
+			}
+		}
+
+		for (i=0; i<256; i++) {
+			gsFont->Additional[i] = (short)gsFont->CharWidth;
+		}
+		return 0;
 	}
 
-	// if it reaches here, something's wrong
-	printf("Error uploading font!\n");
-
+	dbgprintf("Error uploading font: Unknown type %d\n", gsFont->Type);
 	return -1;
 }
 
 GSFONT *athena_init_font(u8 type, char *path)
 {
-    char *tmp = NULL;
+	char *tmp = NULL;
+	size_t path_len = strlen(path) + 1;
 
-	GSFONT *gsFont = calloc(1,sizeof(GSFONT));
-	gsFont->Texture = calloc(1,sizeof(GSSURFACE));
-	gsFont->Path = calloc(1,strlen(path));
-	gsFont->Additional=calloc(1,sizeof(short)*256);
+	GSFONT *gsFont = calloc(1, sizeof(GSFONT));
+	if (!gsFont) return NULL;
+	
+	gsFont->Texture = calloc(1, sizeof(GSSURFACE));
+	gsFont->Path = calloc(1, path_len);
+	gsFont->Additional = calloc(1, sizeof(short)*256);
 
-    gsFont->Type = type;
-    strcpy(gsFont->Path, path);
+	if (!gsFont->Texture || !gsFont->Path || !gsFont->Additional) {
+		if (gsFont->Texture) free(gsFont->Texture);
+		if (gsFont->Path) free(gsFont->Path);
+		if (gsFont->Additional) free(gsFont->Additional);
+		free(gsFont);
+		return NULL;
+	}
 
-    if(gsFont->Type == FONT_TYPE_BMP_DAT || gsFont->Type == FONT_TYPE_PNG_DAT)
+	gsFont->Type = type;
+	strcpy(gsFont->Path, path);
+
+	if(gsFont->Type == FONT_TYPE_BMP_DAT || 
+	   gsFont->Type == FONT_TYPE_PNG_DAT || 
+	   gsFont->Type == FONT_TYPE_JPEG_DAT)
 	{
-        gsFont->Path_DAT = calloc(1,strlen(path));
-        strcpy(gsFont->Path_DAT, path);
+		gsFont->Path_DAT = calloc(1, path_len);
+		if (!gsFont->Path_DAT) {
+			free(gsFont->Additional);
+			free(gsFont->Path);
+			free(gsFont->Texture);
+			free(gsFont);
+			return NULL;
+		}
+		strcpy(gsFont->Path_DAT, path);
 
-        if(gsFont->Type == FONT_TYPE_BMP_DAT) tmp = strstr(gsFont->Path_DAT, ".bmp");
-        if(gsFont->Type == FONT_TYPE_PNG_DAT) tmp = strstr(gsFont->Path_DAT, ".png");
+		if(gsFont->Type == FONT_TYPE_BMP_DAT) {
+			tmp = strstr(gsFont->Path_DAT, ".bmp");
+		} else if(gsFont->Type == FONT_TYPE_PNG_DAT) {
+			tmp = strstr(gsFont->Path_DAT, ".png");
+		} else if(gsFont->Type == FONT_TYPE_JPEG_DAT) {
+			tmp = strstr(gsFont->Path_DAT, ".jpg");
+			if (!tmp) tmp = strstr(gsFont->Path_DAT, ".jpeg");
+		}
 
-        if (tmp == NULL)
-        {
-            free(gsFont->Additional);
-            free(gsFont->Path);
-            free(gsFont->Path_DAT);
-            free(gsFont->Texture);
-            free(gsFont);
+		if (tmp == NULL)
+		{
+			free(gsFont->Additional);
+			free(gsFont->Path);
+			free(gsFont->Path_DAT);
+			free(gsFont->Texture);
+			free(gsFont);
+			dbgprintf("Error initializing .dat path for font\n");
+			return NULL;
+		}
+		else
+		{
+			strcpy(tmp, ".dat");
+		}
+	}
+	else
+	{
+		gsFont->Path_DAT = NULL;
+	}
 
-            printf("Error initializing .dat\n");
+	return gsFont;
+}
 
-            return NULL;
-        }
-        else
-        {
-            strcpy(tmp, ".dat");
-        }
-    }
-    else
-    {
-        gsFont->Path_DAT = NULL;
-    }
+static float XYUV_MAX_FLOAT[4] qw_aligned = { 4095.75f, 4095.75f, 1024.0f, 1024.0f };
 
-    return gsFont;
+static void render_font_char_glyph(GSFONT *gsFont, unsigned char c, owl_packet *packet, int pen_x, int pen_y, float scale)
+{
+	int px, py, charsiz;
+	float x1, y1, x2, y2;
+	float u1, v1, u2, v2;
 
+	px = c % 16;
+	py = (c - px) / 16;
+
+	charsiz = gsFont->Additional[(u8)c];
+
+	x1 = (float)pen_x - 0.5f;
+	
+	if (GetInterlacedFrameMode()) {
+		y1 = ((float)pen_y / 2.0f) - 0.5f;
+		y2 = (y1 + ((float)gsFont->CharHeight / 2.0f) * scale) - 0.5f;
+	} else {
+		y1 = (float)pen_y - 0.5f;
+		y2 = y1 + ((float)gsFont->CharHeight * scale) - 0.5f;
+	}
+	
+	x2 = x1 + ((float)charsiz * scale) - 0.5f;
+
+	u1 = (float)(px * gsFont->CharWidth) + (0.5f * scale);
+	v1 = (float)(py * gsFont->CharHeight) + (0.5f * scale);
+	u2 = u1 + (float)charsiz;
+	v2 = v1 + (float)gsFont->CharHeight;
+
+	float float_pos[8] = { x1, y1, u1, v1, x2, y2, u2, v2 };
+	int fixed_pos[8];
+	vu0_ftoi4_clamp_8x(float_pos, fixed_pos, XYUV_MAX_FLOAT);
+
+	owl_add_xy_uv_2x_font(packet, fixed_pos[0], fixed_pos[1], fixed_pos[2], fixed_pos[3], 
+	                      fixed_pos[4], fixed_pos[5], fixed_pos[6], fixed_pos[7]);
 }
 
 void athena_font_print_scaled(GSCONTEXT *gsGlobal, GSFONT *gsFont, float X, float Y, int Z,
                       float scale, unsigned long color, const char *String)
 {
-	if( gsFont->Type == FONT_TYPE_PNG_DAT)
+
+	if(gsFont->Type == FONT_TYPE_PNG_DAT || 
+	   gsFont->Type == FONT_TYPE_BMP_DAT || 
+	   gsFont->Type == FONT_TYPE_JPEG_DAT ||
+	   gsFont->Type == FONT_TYPE_FNT)
 	{
-		//u64 oldalpha = gsGlobal->PrimAlpha;
-		//u8 oldpabe = gsGlobal->PABE;
-		//u8 fixate = 0;
-		//if(gsGlobal->Test->ATE)
-		//{
-		//	gsKit_set_test(gsGlobal, GS_ATEST_OFF);
-		//	fixate = 1;
-		//}
-		//gsKit_set_primalpha(gsGlobal, GS_SETREG_ALPHA(0,1,0,1,0), 1);
+		int pen_x = (int)X;
+		int pen_y = (int)Y;
+		const char *text_to_render = String;
+		
+		owl_packet *packet = NULL;
+		owl_qword *last_cnt, *last_direct, *last_prim, *before_first_draw, *after_draw;
+		int texture_id = -1;
+		bool started_rendering = false;
 
-
-		int cx,cy,i,l;
-		u8 c;
-		cx=X;
-		cy=Y;
-
-		l=strlen( String );
-		for( i=0;i<l;i++ )
-		{
-			c=String[i];
-			if( c=='\n' )
-			{
-				cx=X;
-				cy+=(gsFont->CharHeight*scale)+1;
-			}
-			else
-			{
-				int px,py,charsiz;
-
-				px=c%16;
-				py=(c-px)/16;
-				charsiz=gsFont->Additional[(u8)c];
-
-				//gsKit_prim_sprite_texture(gsGlobal, gsFont->Texture, cx, cy,
-				//	(px*gsFont->CharWidth), (py*gsFont->CharHeight+1),
-				//	cx+(charsiz*scale), cy+(gsFont->CharHeight*scale),
-				//	(px*gsFont->CharWidth)+charsiz, (py*gsFont->CharHeight)+16+1,
-				//	Z, color);
-				cx+=(charsiz*scale)+1;
-			}
-		}
-		//gsGlobal->PABE = oldpabe;
-		//gsGlobal->PrimAlpha=oldalpha;
-		//gsKit_set_primalpha(gsGlobal, gsGlobal->PrimAlpha, gsGlobal->PABE);
-		//gsKit_set_clamp(gsGlobal, GS_CMODE_RESET); -- not athena comment
-
-		//if(fixate)
-		//	gsKit_set_test(gsGlobal, GS_ATEST_ON);
-
-	}
-
-	if( gsFont->Type == FONT_TYPE_BMP_DAT ||
-		gsFont->Type == FONT_TYPE_FNT)
-	{
-		u64 oldalpha;
-		u8 oldpabe;
-		int cx,cy,i,l;
-
-		//oldpabe = gsGlobal->PABE;
-		//oldalpha = gsGlobal->PrimAlpha;
-
-		//gsKit_set_primalpha(gsGlobal, ALPHA_BLEND_ADD, 1);
-
-		cx=X;
-		cy=Y;
-
-		l=strlen( String );
-		for( i=0;i<l;i++ )
-		{
-			unsigned char c=String[i];
-			if( c=='\n' )
-			{
-				cx=X;
-				cy+=(gsFont->CharHeight*scale)+1;
-			}
-			else
-			{
-				int px,py,charsiz;
-
-				px=c%16;
-				py=(c-px)/16;
-				charsiz=gsFont->Additional[(u8)c];
-
-				//gsKit_prim_sprite_texture(gsGlobal, gsFont->Texture, cx, cy,
-				//	(px*gsFont->CharWidth), (py*gsFont->CharHeight+1),
-				//	cx+(charsiz*scale), cy+(gsFont->CharHeight*scale),
-				//	(px*gsFont->CharWidth)+charsiz, (py*gsFont->CharHeight)+16+1,
-				//	Z, color);
-				cx+=(charsiz*scale)+1;
-			}
+		int printable_chars = 0;
+		for (const char *p = String; *p; p++) {
+			if (*p != '\n') printable_chars++;
 		}
 
-		//gsKit_set_primalpha(gsGlobal, oldalpha, oldpabe);
+		texture_id = texture_manager_bind(gsGlobal, gsFont->Texture, true);
+		
+		int text_vert_size = printable_chars * 2;
+		packet = owl_query_packet(CHANNEL_VIF1, (texture_id != -1 ? 12 : 8) + text_vert_size);
+
+		last_cnt = packet->ptr;
+		owl_add_cnt_tag(packet, (texture_id != -1 ? 11 : 7) + text_vert_size, 0);
+
+		if (texture_id != -1) {
+			owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+			owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+			owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSH, 0));
+			owl_add_uint(packet, VIF_CODE(2, 0, VIF_DIRECT, 0));
+
+			owl_add_tag(packet, GIF_AD, GIFTAG(1, 1, 0, 0, 0, 1));
+			owl_add_tag(packet, GIF_NOP, 0);
+
+			owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));
+			owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+			owl_add_uint(packet, VIF_CODE(texture_id, 0, VIF_MARK, 0));
+			owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 1));
+		}
+
+		last_direct = packet->ptr;
+		owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+		owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+		owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));
+		owl_add_uint(packet, VIF_CODE(6 + text_vert_size, 0, VIF_DIRECT, 0));
+
+		owl_add_tag(packet, GIF_AD, GIFTAG(4, 1, 0, 0, 0, 1));
+
+		int tw, th;
+		athena_set_tw_th(gsFont->Texture, &tw, &th);
+
+		owl_add_tag(packet,
+			GS_TEX0_1 + gsGlobal->PrimContext,
+			GS_SETREG_TEX0((gsFont->Texture->Vram & ~TRANSFER_REQUEST_MASK) / 256,
+				gsFont->Texture->TBW,
+				gsFont->Texture->PSM,
+				tw, th,
+				gsGlobal->PrimAlphaEnable,
+				COLOR_MODULATE,
+				(gsFont->Texture->VramClut & ~TRANSFER_REQUEST_MASK) / 256,
+				gsFont->Texture->ClutPSM,
+				0, 0,
+				gsFont->Texture->VramClut ? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD)
+		);
+
+		owl_add_tag(packet, GS_TEX1_1 + gsGlobal->PrimContext, 
+			GS_SETREG_TEX1(1, 0, gsFont->Texture->Filter, gsFont->Texture->Filter, 0, 0, 0));
+
+		owl_add_tag(packet, GS_PRIM,
+			VU_GS_PRIM(GS_PRIM_PRIM_SPRITE,
+				0,
+				1,
+				gsGlobal->PrimFogEnable,
+				gsGlobal->PrimAlphaEnable,
+				gsGlobal->PrimAAEnable,
+				1,
+				gsGlobal->PrimContext,
+				0)
+		);
+
+		owl_add_tag(packet, GS_RGBAQ, color);
+
+		last_prim = packet->ptr;
+		owl_add_tag(packet,
+			((uint64_t)(GS_UV) << 0 | (uint64_t)(GS_XYZ2) << 4),
+			VU_GS_GIFTAG(text_vert_size,
+				1, NO_CUSTOM_DATA, 0,
+				0,
+				1, 2)
+		);
+
+		before_first_draw = packet->ptr;
+
+		for (; *text_to_render; ++text_to_render) {
+			unsigned char c = (unsigned char)*text_to_render;
+			
+			if (c == '\n') {
+				pen_x = (int)X;
+				pen_y += (int)((gsFont->CharHeight * scale) + 1);
+				continue;
+			}
+
+			render_font_char_glyph(gsFont, c, packet, pen_x, pen_y, scale);
+
+			pen_x += (int)((gsFont->Additional[(u8)c] * scale) + 1);
+		}
 	}
 }
 
-
-
-GSFONT* loadFont(const char* path){
+GSFONT* loadFont(const char* path)
+{
 	int file = open(path, O_RDONLY, 0777);
+	if (file < 0) {
+		dbgprintf("Cannot open font file: %s\n", path);
+		return NULL;
+	}
+
 	uint16_t magic;
-	read(file, &magic, 2);
+	if (read(file, &magic, 2) != 2) {
+		close(file);
+		dbgprintf("Cannot read font file header: %s\n", path);
+		return NULL;
+	}
 	close(file);
+
 	GSFONT* font = NULL;
+
 	if (magic == 0x4D42) {
 		font = athena_init_font(FONT_TYPE_BMP_DAT, (char*)path);
-		athena_font_upload(gsGlobal, font);
-	} else if (magic == 0x4246) {
+		if (font && athena_font_upload(gsGlobal, font) != 0) {
+			unloadFont(font);
+			font = NULL;
+		}
+	}
+
+	else if (magic == 0x4246) {
 		font = athena_init_font(FONT_TYPE_FNT, (char*)path);
-		athena_font_upload(gsGlobal, font);
-	} else if (magic == 0x5089) { 
+		if (font && athena_font_upload(gsGlobal, font) != 0) {
+			unloadFont(font);
+			font = NULL;
+		}
+	}
+
+	else if (magic == 0x5089) {
 		font = athena_init_font(FONT_TYPE_PNG_DAT, (char*)path);
-		athena_font_upload(gsGlobal, font);
+		if (font && athena_font_upload(gsGlobal, font) != 0) {
+			unloadFont(font);
+			font = NULL;
+		}
+	}
+
+	else if (magic == 0xFFD8) {
+		font = athena_init_font(FONT_TYPE_JPEG_DAT, (char*)path);
+		if (font && athena_font_upload(gsGlobal, font) != 0) {
+			unloadFont(font);
+			font = NULL;
+		}
+	}
+	else {
+		const char *ext = strrchr(path, '.');
+		if (ext) {
+			if (strcasecmp(ext, ".bmp") == 0) {
+				font = athena_init_font(FONT_TYPE_BMP_DAT, (char*)path);
+				if (font && athena_font_upload(gsGlobal, font) != 0) {
+					unloadFont(font);
+					font = NULL;
+				}
+			}
+			else if (strcasecmp(ext, ".png") == 0) {
+				font = athena_init_font(FONT_TYPE_PNG_DAT, (char*)path);
+				if (font && athena_font_upload(gsGlobal, font) != 0) {
+					unloadFont(font);
+					font = NULL;
+				}
+			}
+			else if (strcasecmp(ext, ".jpg") == 0 || strcasecmp(ext, ".jpeg") == 0) {
+				font = athena_init_font(FONT_TYPE_JPEG_DAT, (char*)path);
+				if (font && athena_font_upload(gsGlobal, font) != 0) {
+					unloadFont(font);
+					font = NULL;
+				}
+			}
+		}
+		
+		if (!font) {
+			dbgprintf("Unknown font format: %s (magic: 0x%04X)\n", path, magic);
+		}
 	}
 
 	return font;
 }
 
 void printFontText(GSFONT* font, const char* text, float x, float y, float scale, Color color)
-{ 
-	//gsKit_set_test(gsGlobal, GS_ATEST_ON);
-	athena_font_print_scaled(gsGlobal, font, x-0.5f, y-0.5f, 1, scale, color, text);
+{
+	if (!font || !text) {
+		return;
+	}
+	
+	athena_font_print_scaled(gsGlobal, font, x - 0.5f, y - 0.5f, 1, scale, color, text);
 }
 
 void unloadFont(GSFONT* font)
 {
-	texture_manager_free(font->Texture);
-	// clut was pointing to static memory, so do not free
-	font->Texture->Clut = NULL;
-	// mem was pointing to 'TexBase', so do not free
-	font->Texture->Mem = NULL;
-	// free texture
-	free(font->Texture);
-	font->Texture = NULL;
+	if (!font) {
+		return;
+	}
 
-	if (font->RawData)
+	if (font->Texture) {
+		texture_manager_free(font->Texture);
+
+		if (font->Texture->Mem) {
+			free(font->Texture->Mem);
+			font->Texture->Mem = NULL;
+		}
+
+		if (font->Texture->Clut) {
+			free(font->Texture->Clut);
+			font->Texture->Clut = NULL;
+		}
+		
+		free(font->Texture);
+		font->Texture = NULL;
+	}
+
+	if (font->RawData) {
 		free(font->RawData);
+		font->RawData = NULL;
+	}
+
+	if (font->Path) {
+		free(font->Path);
+		font->Path = NULL;
+	}
+
+	if (font->Path_DAT) {
+		free(font->Path_DAT);
+		font->Path_DAT = NULL;
+	}
+
+	if (font->Additional) {
+		free(font->Additional);
+		font->Additional = NULL;
+	}
 
 	free(font);
-	font = NULL;
 }

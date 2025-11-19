@@ -284,7 +284,8 @@ extern GSSURFACE *main_screen_buffer[3];
 typedef enum {
     FONT_TYPE_FNT,
     FONT_TYPE_BMP_DAT,
-    FONT_TYPE_PNG_DAT
+    FONT_TYPE_PNG_DAT,
+    FONT_TYPE_JPEG_DAT
 } eTextureFontTypes;
 
 /// gsKit Font Structure
