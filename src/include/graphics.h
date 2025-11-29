@@ -514,6 +514,10 @@ void draw_quad_gouraud(float x, float y, float x2, float y2, float x3, float y3,
 
 GSFONT* loadFont(const char* path);
 void printFontText(GSFONT* font, const char* text, float x, float y, float scale, Color color);
+void printFontTextPlus(GSFONT* font, const char* text, float x, float y, float scale, Color color,
+                       short aligned, size_t width, size_t height,
+                       float outline, Color outline_color,
+                       float dropshadow, Color dropshadow_color);
 void unloadFont(GSFONT* font);
 
 void athena_error_screen(const char* errMsg, bool dark_mode);

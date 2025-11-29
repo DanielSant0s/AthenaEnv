@@ -24,7 +24,6 @@ int athena_font_upload(GSCONTEXT *gsGlobal, GSFONT *gsFont)
 
 	if( gsFont->Type == FONT_TYPE_FNT )
 	{
-		// FNT format support (basic implementation)
 		for (i=0; i<256; i++) {
             gsFont->Additional[i] = gsFont->CharWidth;
         }
@@ -382,6 +381,43 @@ GSFONT* loadFont(const char* path)
 	return font;
 }
 
+Coords athena_font_calc_dimensions(GSFONT *gsFont, float scale, const char *str)
+{
+	Coords size = {0, 0};
+	
+	if (!gsFont || !str) {
+		return size;
+	}
+
+	int width = 0;
+	int max_width = 0;
+	int lines = 1;
+
+	for (const char *p = str; *p; ++p) {
+		unsigned char c = (unsigned char)*p;
+		
+		if (c == '\n') {
+			if (width > max_width) {
+				max_width = width;
+			}
+			width = 0;
+			lines++;
+			continue;
+		}
+
+		width += (int)((gsFont->Additional[(u8)c] * scale) + 1);
+	}
+
+	if (width > max_width) {
+		max_width = width;
+	}
+
+	size.width = max_width;
+	size.height = (int)(gsFont->CharHeight * scale * lines);
+
+	return size;
+}
+
 void printFontText(GSFONT* font, const char* text, float x, float y, float scale, Color color)
 {
 	if (!font || !text) {
@@ -389,6 +425,52 @@ void printFontText(GSFONT* font, const char* text, float x, float y, float scale
 	}
 	
 	athena_font_print_scaled(gsGlobal, font, x - 0.5f, y - 0.5f, 1, scale, color, text);
+}
+
+void printFontTextPlus(GSFONT* font, const char* text, float x, float y, float scale, Color color,
+                       short aligned, size_t width, size_t height,
+                       float outline, Color outline_color,
+                       float dropshadow, Color dropshadow_color)
+{
+	if (!font || !text) {
+		return;
+	}
+
+	float draw_x = x;
+	float draw_y = y;
+
+	Coords text_size = athena_font_calc_dimensions(font, scale, text);
+
+	if (aligned & ALIGN_HCENTER) {
+		draw_x -= text_size.width >> 1;
+	} else if (aligned & ALIGN_RIGHT) {
+		draw_x -= text_size.width;
+	}
+
+	if (aligned & ALIGN_VCENTER) {
+		draw_y += (height - text_size.height) >> 1;
+	} else if (aligned & ALIGN_BOTTOM) {
+		draw_y += height - text_size.height;
+	}
+
+	if (outline > 0.0f) {
+		float offsets[][2] = { {outline, outline}, {outline, -outline}, {-outline, outline}, {-outline, -outline} };
+		for (int i = 0; i < 4; i++) {
+			athena_font_print_scaled(gsGlobal, font, 
+				draw_x + offsets[i][0] - 0.5f, 
+				draw_y + offsets[i][1] - 0.5f, 
+				1, scale, outline_color, text);
+		}
+	} 
+
+	else if (dropshadow > 0.0f) {
+		athena_font_print_scaled(gsGlobal, font, 
+			draw_x + dropshadow - 0.5f, 
+			draw_y + dropshadow - 0.5f, 
+			1, scale, dropshadow_color, text);
+	}
+
+	athena_font_print_scaled(gsGlobal, font, draw_x - 0.5f, draw_y - 0.5f, 1, scale, color, text);
 }
 
 void unloadFont(GSFONT* font)
