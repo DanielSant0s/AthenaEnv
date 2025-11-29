@@ -2989,8 +2989,9 @@ static JSValue JS_NewSymbolFromAtom(JSContext *ctx, JSAtom descr,
     JSRuntime *rt = ctx->rt;
     JSString *p;
 
-    assert(!__JS_AtomIsTaggedInt(descr));
-    assert(descr < rt->atom_size);
+    /* Safety check: return exception for invalid atoms */
+    if (__JS_AtomIsTaggedInt(descr) || descr >= rt->atom_size)
+        return JS_ThrowInternalError(ctx, "invalid atom");
     p = rt->atom_array[descr];
     JS_DupValue(ctx, JS_MKPTR(JS_TAG_STRING, p));
     return JS_NewSymbol(ctx, p, atom_type);
@@ -3006,7 +3007,11 @@ static const char *JS_AtomGetStrRT(JSRuntime *rt, char *buf, int buf_size,
         snprintf(buf, buf_size, "%u", __JS_AtomToUInt32(atom));
     } else {
         JSAtomStruct *p;
-        assert(atom < rt->atom_size);
+        /* Safety check: return error string for invalid atoms */
+        if (atom >= rt->atom_size) {
+            snprintf(buf, buf_size, "<invalid>");
+            return buf;
+        }
         if (atom == JS_ATOM_NULL) {
             snprintf(buf, buf_size, "<null>");
         } else {
@@ -3063,7 +3068,9 @@ static JSValue __JS_AtomToValue(JSContext *ctx, JSAtom atom, BOOL force_string)
     } else {
         JSRuntime *rt = ctx->rt;
         JSAtomStruct *p;
-        assert(atom < rt->atom_size);
+        /* Safety check: return exception for invalid atoms */
+        if (atom >= rt->atom_size)
+            return JS_ThrowInternalError(ctx, "invalid atom");
         p = rt->atom_array[atom];
         if (p->atom_type == JS_ATOM_TYPE_STRING) {
             goto ret_string;
@@ -3102,7 +3109,11 @@ static BOOL JS_AtomIsArrayIndex(JSContext *ctx, uint32_t *pval, JSAtom atom)
         JSAtomStruct *p;
         uint32_t val;
 
-        assert(atom < rt->atom_size);
+        /* Safety check: return FALSE for invalid atoms instead of crashing */
+        if (atom >= rt->atom_size) {
+            *pval = 0;
+            return FALSE;
+        }
         p = rt->atom_array[atom];
         if (p->atom_type == JS_ATOM_TYPE_STRING &&
             is_num_string(&val, p) && val != -1) {
@@ -3128,7 +3139,9 @@ static JSValue JS_AtomIsNumericIndex1(JSContext *ctx, JSAtom atom)
 
     if (__JS_AtomIsTaggedInt(atom))
         return JS_NewInt32(ctx, __JS_AtomToUInt32(atom));
-    assert(atom < rt->atom_size);
+    /* Safety check: return UNDEFINED for invalid atoms instead of crashing */
+    if (atom >= rt->atom_size)
+        return JS_UNDEFINED;
     p1 = rt->atom_array[atom];
     if (p1->atom_type != JS_ATOM_TYPE_STRING)
         return JS_UNDEFINED;
