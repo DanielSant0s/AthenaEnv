@@ -45,7 +45,71 @@ static JSValue athena_getstate(JSContext *ctx, JSValue this_val, int argc, JSVal
 	return JS_NewInt32(ctx, mode);
 }
 
-static bool pad1_initialized = false;
+//check if pad is active
+static JSValue athena_isactive(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	if (argc != 1) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
+	int port;
+	JS_ToInt32(ctx, &port, argv[0]);
+	if (port > 1) return JS_ThrowSyntaxError(ctx, "wrong port number.");
+	
+	int state = padGetState(port, 0);
+	bool isActive = (state == PAD_STATE_STABLE) || (state == PAD_STATE_FINDCTP1);
+	
+	#ifdef ATHENA_PADEMU
+	if (!isActive) {
+		if (ds34bt_get_status(port) & DS34BT_STATE_RUNNING) isActive = true;
+		if (ds34usb_get_status(port) & DS34USB_STATE_RUNNING) isActive = true;
+	}
+	#endif
+	
+	return JS_NewBool(ctx, isActive);
+}
+
+// get array of connected ports
+static JSValue athena_getConnected(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	JSValue arr = JS_NewArray(ctx);
+	int count = 0;
+	
+	for (int port = 0; port < 2; port++) {
+		int state = padGetState(port, 0);
+		bool isConnected = (state == PAD_STATE_STABLE) || (state == PAD_STATE_FINDCTP1);
+		
+		#ifdef ATHENA_PADEMU
+		if (!isConnected) {
+			if (ds34bt_get_status(port) & DS34BT_STATE_RUNNING) isConnected = true;
+			if (ds34usb_get_status(port) & DS34USB_STATE_RUNNING) isConnected = true;
+		}
+		#endif
+		
+		if (isConnected) {
+			JS_SetPropertyUint32(ctx, arr, count, JS_NewInt32(ctx, port));
+			count++;
+		}
+	}
+	
+	return arr;
+}
+
+// get number of connected pads
+static JSValue athena_getconnectedcount(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	int count = 0;
+	
+	for (int port = 0; port < 2; port++) {
+		int state = padGetState(port, 0);
+		bool isConnected = (state == PAD_STATE_STABLE) || (state == PAD_STATE_FINDCTP1);
+		
+		#ifdef ATHENA_PADEMU
+		if (!isConnected) {
+			if (ds34bt_get_status(port) & DS34BT_STATE_RUNNING) isConnected = true;
+			if (ds34usb_get_status(port) & DS34USB_STATE_RUNNING) isConnected = true;
+		}
+		#endif
+		
+		if (isConnected) count++;
+	}
+	
+	return JS_NewInt32(ctx, count);
+}
 
 static JSValue athena_getpad(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv){
 	int port = 0;
@@ -62,24 +126,28 @@ static JSValue athena_getpad(JSContext *ctx, JSValueConst this_val, int argc, JS
         return JS_EXCEPTION;
 	if (argc == 1){
 		JS_ToInt32(ctx, &port, argv[0]);
-		if (port == 1 && !pad1_initialized) {
-			initializePad(1, 0);
-			pad1_initialized = true;
-		}
 		if (port > 1) return JS_ThrowSyntaxError(ctx, "wrong port number.");
 	}
 
 	struct padButtonStatus buttons;
+	memset(&buttons, 0, sizeof(buttons));
+	buttons.ljoy_h = 127;
+	buttons.ljoy_v = 127;
+	buttons.rjoy_h = 127;
+	buttons.rjoy_v = 127;
+	
 	u32 paddata = 0;
 	int ret;
 
 	int state = padGetState(port, 0);
+	bool validRead = false;
 
 	if ((state == PAD_STATE_STABLE) || (state == PAD_STATE_FINDCTP1)) {
         // pad is connected. Read pad button information.
         ret = padRead(port, 0, &buttons); // port, slot, buttons
         if (ret != 0) {
             paddata = 0xffff ^ buttons.btns;
+            validRead = true;
         }
     }
 	#ifdef ATHENA_PADEMU
@@ -87,6 +155,7 @@ static JSValue athena_getpad(JSContext *ctx, JSValueConst this_val, int argc, JS
         ret = ds34bt_get_data(port, (u8 *)&buttons.btns);
         if (ret != 0) {
             paddata |= 0xffff ^ buttons.btns;
+            validRead = true;
         }
     }
 
@@ -94,14 +163,23 @@ static JSValue athena_getpad(JSContext *ctx, JSValueConst this_val, int argc, JS
         ret = ds34usb_get_data(port, (u8 *)&buttons.btns);
         if (ret != 0) {
             paddata |= 0xffff ^ buttons.btns;
+            validRead = true;
         }
     }
 	#endif
+	
+	if (!validRead) {
+		buttons.ljoy_h = 127;
+		buttons.ljoy_v = 127;
+		buttons.rjoy_h = 127;
+		buttons.rjoy_v = 127;
+	}
+	
 	pad->btns = paddata;
-	pad->lx = buttons.ljoy_h-127;
-	pad->ly = buttons.ljoy_v-127;
-	pad->rx = buttons.rjoy_h-127;
-	pad->ry = buttons.rjoy_v-127;
+	pad->lx = buttons.ljoy_h - 127;
+	pad->ly = buttons.ljoy_v - 127;
+	pad->rx = buttons.rjoy_h - 127;
+	pad->ry = buttons.rjoy_v - 127;
 	pad->port = port;
 
     JS_SetOpaque(obj, pad);
@@ -114,16 +192,31 @@ static JSValue athena_getpad(JSContext *ctx, JSValueConst this_val, int argc, JS
 
 void js_pads_update(JSPads *pad) {
 	struct padButtonStatus buttons;
+	memset(&buttons, 0, sizeof(buttons));
+	buttons.ljoy_h = 127;
+	buttons.ljoy_v = 127;
+	buttons.rjoy_h = 127;
+	buttons.rjoy_v = 127;
+	
 	u32 paddata = 0;
 	int ret;
 
 	int state = padGetState(pad->port, 0);
+
+	pad->old_btns = pad->btns;
+	pad->old_lx = pad->lx;
+	pad->old_ly = pad->ly;
+	pad->old_rx = pad->rx;
+	pad->old_ry = pad->ry;
+
+	bool validRead = false;
 
 	if ((state == PAD_STATE_STABLE) || (state == PAD_STATE_FINDCTP1)) {
         // pad is connected. Read pad button information.
         ret = padRead(pad->port, 0, &buttons); // port, slot, buttons
         if (ret != 0) {
             paddata = 0xffff ^ buttons.btns;
+            validRead = true;
         }
     }
 	#ifdef ATHENA_PADEMU
@@ -131,6 +224,7 @@ void js_pads_update(JSPads *pad) {
         ret = ds34bt_get_data(pad->port, (u8 *)&buttons.btns);
         if (ret != 0) {
             paddata |= 0xffff ^ buttons.btns;
+            validRead = true;
         }
     }
 
@@ -138,36 +232,54 @@ void js_pads_update(JSPads *pad) {
         ret = ds34usb_get_data(pad->port, (u8 *)&buttons.btns);
         if (ret != 0) {
             paddata |= 0xffff ^ buttons.btns;
+            validRead = true;
         }
     }
 	#endif
-	pad->old_btns = pad->btns;
-	pad->old_lx = pad->lx;
-	pad->old_ly = pad->ly;
-	pad->old_rx = pad->rx;
-	pad->old_ry = pad->ry;
+
+	if (!validRead) {
+		buttons.ljoy_h = 127;
+		buttons.ljoy_v = 127;
+		buttons.rjoy_h = 127;
+		buttons.rjoy_v = 127;
+	}
 
 	pad->btns = paddata;
-	pad->lx = buttons.ljoy_h-127;
-	pad->ly = buttons.ljoy_v-127;
-	pad->rx = buttons.rjoy_h-127;
-	pad->ry = buttons.rjoy_v-127;
+	pad->lx = buttons.ljoy_h - 127;
+	pad->ly = buttons.ljoy_v - 127;
+	pad->rx = buttons.rjoy_h - 127;
+	pad->ry = buttons.rjoy_v - 127;
 }
 
 static JSValue athena_update(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
     JSPads *pad = JS_GetOpaque2(ctx, this_val, js_pads_class_id);
 
 	struct padButtonStatus buttons;
+	memset(&buttons, 0, sizeof(buttons));
+	buttons.ljoy_h = 127;
+	buttons.ljoy_v = 127;
+	buttons.rjoy_h = 127;
+	buttons.rjoy_v = 127;
+	
 	u32 paddata = 0;
 	int ret;
 
 	int state = padGetState(pad->port, 0);
+
+	pad->old_btns = pad->btns;
+	pad->old_lx = pad->lx;
+	pad->old_ly = pad->ly;
+	pad->old_rx = pad->rx;
+	pad->old_ry = pad->ry;
+
+	bool validRead = false;
 
 	if ((state == PAD_STATE_STABLE) || (state == PAD_STATE_FINDCTP1)) {
         // pad is connected. Read pad button information.
         ret = padRead(pad->port, 0, &buttons); // port, slot, buttons
         if (ret != 0) {
             paddata = 0xffff ^ buttons.btns;
+            validRead = true;
         }
     }
 	#ifdef ATHENA_PADEMU
@@ -175,6 +287,7 @@ static JSValue athena_update(JSContext *ctx, JSValue this_val, int argc, JSValue
         ret = ds34bt_get_data(pad->port, (u8 *)&buttons.btns);
         if (ret != 0) {
             paddata |= 0xffff ^ buttons.btns;
+            validRead = true;
         }
     }
 
@@ -182,20 +295,23 @@ static JSValue athena_update(JSContext *ctx, JSValue this_val, int argc, JSValue
         ret = ds34usb_get_data(pad->port, (u8 *)&buttons.btns);
         if (ret != 0) {
             paddata |= 0xffff ^ buttons.btns;
+            validRead = true;
         }
     }
 	#endif
-	pad->old_btns = pad->btns;
-	pad->old_lx = pad->lx;
-	pad->old_ly = pad->ly;
-	pad->old_rx = pad->rx;
-	pad->old_ry = pad->ry;
+
+	if (!validRead) {
+		buttons.ljoy_h = 127;
+		buttons.ljoy_v = 127;
+		buttons.rjoy_h = 127;
+		buttons.rjoy_v = 127;
+	}
 
 	pad->btns = paddata;
-	pad->lx = buttons.ljoy_h-127;
-	pad->ly = buttons.ljoy_v-127;
-	pad->rx = buttons.rjoy_h-127;
-	pad->ry = buttons.rjoy_v-127;
+	pad->lx = buttons.ljoy_h - 127;
+	pad->ly = buttons.ljoy_v - 127;
+	pad->rx = buttons.rjoy_h - 127;
+	pad->ry = buttons.rjoy_v - 127;
 
     return JS_UNDEFINED;
 }
@@ -212,8 +328,9 @@ static JSValue athena_getpressure(JSContext *ctx, JSValue this_val, int argc, JS
 	}
 
 	struct padButtonStatus pad;
+	memset(&pad, 0, sizeof(pad));
 
-	unsigned char pressure = 255;
+	unsigned char pressure = 0;
 
 	int state = padGetState(port, 0);
 
@@ -438,6 +555,10 @@ static const JSCFunctionListEntry module_funcs[] = {
     JS_CFUNC_DEF("rumble", 3, athena_rumble),
     JS_CFUNC_DEF("setLED", 4, athena_set_led),
 
+	JS_CFUNC_DEF("isActive", 1, athena_isactive),
+	JS_CFUNC_DEF("getConnected", 0, athena_getConnected),
+	JS_CFUNC_DEF("getConnectedCount", 0, athena_getconnectedcount),
+
 	JS_CFUNC_DEF("newEvent", 3, athena_new_pad_event),
 	JS_CFUNC_DEF("deleteEvent", 1, athena_delete_pad_event),
 
@@ -499,7 +620,6 @@ static const JSCFunctionListEntry js_pad_proto_funcs[] = {
 
 static JSClassDef js_pads_class = {
     "Pad",
-    //.finalizer = js_std_file_finalizer,
 };
 
 static int js_pads_init(JSContext *ctx, JSModuleDef *m)

@@ -932,6 +932,9 @@ P.S.: outline and drop shadow do not coexist, so one of them must be 0.0f.
 
 * let press = Pads.getPressure(*port*, button) - Get button pressure level.
 * Pads.rumble(port, big, small) - Rumble your gamepad.
+* let count = Pads.getConnectedCount() – Returns the number of gamepads currently connected.
+* let ports = Pads.getConnected() – Returns an array containing the ports of all connected gamepads. Example: [0], [1], or [0, 1].
+* let active = Pads.isActive(port) – Checks whether the specified port is active and ready to receive input.
   
 ### Keyboard module
 * Keyboard.init() - Initialize keyboard routines.
