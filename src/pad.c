@@ -14,6 +14,9 @@ static int actuators;
 
 int port, slot;
 
+static int pad_initialized[2] = {0, 0};
+static int last_pad_state[2] = {PAD_STATE_DISCONN, PAD_STATE_DISCONN};
+
 int waitPadReady(int port, int slot)
 {
     int state;
@@ -135,10 +138,29 @@ int initializePad(int port, int slot)
     return 1;
 }
 
+void checkPadReconnection(int port, int slot)
+{
+    int current_state = padGetState(port, slot);
+    
+    if (current_state == PAD_STATE_DISCONN) {
+        pad_initialized[port] = 0;
+    }
+    
+    if ((current_state == PAD_STATE_STABLE || current_state == PAD_STATE_FINDCTP1) && 
+        !pad_initialized[port]) {
+        initializePad(port, slot);
+        pad_initialized[port] = 1;
+    }
+    
+    last_pad_state[port] = current_state;
+}
+
 struct padButtonStatus readPad(int port, int slot)
 {
     struct padButtonStatus buttons;
-    int ret;    
+    int ret;
+    
+    checkPadReconnection(port, slot);
 
     do {
     	ret = padGetState(port, slot);
@@ -156,6 +178,8 @@ int isButtonPressed(u32 button)
    u32 paddata;
    
    struct padButtonStatus padbuttons;
+   
+   checkPadReconnection(0, 0);
    
    while (((ret=padGetState(0, 0)) != PAD_STATE_STABLE)&&(ret!=PAD_STATE_FINDCTP1)&&(ret != PAD_STATE_DISCONN)); // more error check ?
    if (padRead(0, 0, &padbuttons) != 0)
@@ -185,7 +209,9 @@ void pad_init()
         SleepThread();
     }
 
-    if(!initializePad(port, slot)) {
+    if(initializePad(port, slot)) {
+        pad_initialized[0] = 1;
+    } else {
         dbgprintf("pad initalization failed!\n");
         SleepThread();
     }
@@ -194,5 +220,8 @@ void pad_init()
         dbgprintf("padOpenPort failed: %d\n", ret);
         SleepThread();
     }
+    
+    if(initializePad(1, 0)) {
+        pad_initialized[1] = 1;
+    }
 }
-

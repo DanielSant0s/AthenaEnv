@@ -8,6 +8,28 @@
 
 static JSClassID js_pads_class_id;
 
+static int js_pad_initialized[2] = {0, 0};
+static int js_last_pad_state[2] = {PAD_STATE_DISCONN, PAD_STATE_DISCONN};
+
+extern int initializePad(int port, int slot);
+
+void checkPadReconnectionJS(int port)
+{
+    int current_state = padGetState(port, 0);
+    
+    if (current_state == PAD_STATE_DISCONN) {
+        js_pad_initialized[port] = 0;
+    }
+    
+    if ((current_state == PAD_STATE_STABLE || current_state == PAD_STATE_FINDCTP1) && 
+        !js_pad_initialized[port]) {
+        initializePad(port, 0);
+        js_pad_initialized[port] = 1;
+    }
+    
+    js_last_pad_state[port] = current_state;
+}
+
 static JSValue athena_gettype(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	if (argc != 0 && argc != 1) return JS_ThrowSyntaxError(ctx, "wrong number of arguments");
 	int port = 0;
@@ -15,6 +37,7 @@ static JSValue athena_gettype(JSContext *ctx, JSValue this_val, int argc, JSValu
 		JS_ToInt32(ctx, &port, argv[0]);
 		if (port > 1) return JS_ThrowSyntaxError(ctx, "wrong port number.");
 	}
+	checkPadReconnectionJS(port);
 	int mode = padInfoMode(port, 0, PAD_MODETABLE, 0);
 	return JS_NewInt32(ctx, mode);
 }
@@ -129,6 +152,8 @@ static JSValue athena_getpad(JSContext *ctx, JSValueConst this_val, int argc, JS
 		if (port > 1) return JS_ThrowSyntaxError(ctx, "wrong port number.");
 	}
 
+	checkPadReconnectionJS(port);
+
 	struct padButtonStatus buttons;
 	memset(&buttons, 0, sizeof(buttons));
 	buttons.ljoy_h = 127;
@@ -191,6 +216,8 @@ static JSValue athena_getpad(JSContext *ctx, JSValueConst this_val, int argc, JS
 }
 
 void js_pads_update(JSPads *pad) {
+	checkPadReconnectionJS(pad->port);
+	
 	struct padButtonStatus buttons;
 	memset(&buttons, 0, sizeof(buttons));
 	buttons.ljoy_h = 127;
@@ -253,6 +280,8 @@ void js_pads_update(JSPads *pad) {
 
 static JSValue athena_update(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
     JSPads *pad = JS_GetOpaque2(ctx, this_val, js_pads_class_id);
+
+	checkPadReconnectionJS(pad->port);
 
 	struct padButtonStatus buttons;
 	memset(&buttons, 0, sizeof(buttons));
@@ -327,6 +356,8 @@ static JSValue athena_getpressure(JSContext *ctx, JSValue this_val, int argc, JS
 		JS_ToUint32(ctx, &button, argv[0]);
 	}
 
+	checkPadReconnectionJS(port);
+
 	struct padButtonStatus pad;
 	memset(&pad, 0, sizeof(pad));
 
@@ -397,6 +428,8 @@ static JSValue athena_rumble(JSContext *ctx, JSValue this_val, int argc, JSValue
 		JS_ToInt32(ctx, &actAlign[0], argv[0]);
 		JS_ToInt32(ctx, &actAlign[1], argv[1]);
 	}
+
+	checkPadReconnectionJS(port);
 
 	int state = padGetState(port, 0);
 	if ((state == PAD_STATE_STABLE) || (state == PAD_STATE_FINDCTP1)) padSetActDirect(port, 0, actAlign);
@@ -620,6 +653,7 @@ static const JSCFunctionListEntry js_pad_proto_funcs[] = {
 
 static JSClassDef js_pads_class = {
     "Pad",
+    //.finalizer = js_std_file_finalizer,
 };
 
 static int js_pads_init(JSContext *ctx, JSModuleDef *m)
