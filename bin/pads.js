@@ -1,10 +1,10 @@
-// {"name": "Gamepad tester", "author": "Daniel Santos", "version": "04072023", "icon": "pads_icon.png", "file": "pads.js"}
+// {"name": "Gamepad tester", "author": "Daniel Santos", "version": "08122024", "icon": "pads_icon.png", "file": "pads.js"}
 
 const canvas = Screen.getMode();
 
 canvas.psm = Screen.CT24;
-canvas.zbuffering = false;
-canvas.double_buffering = false;
+canvas.zbuffering = true;
+canvas.double_buffering = true;
 
 Screen.setMode(canvas);
 
@@ -40,9 +40,21 @@ var rumble = false;
 var pad = Pads.get(0);
 
 Screen.display(() => {
+
+    const connectedCount = Pads.getConnectedCount();
+    const connectedPorts = Pads.getConnected();
+    const isActivePort0 = Pads.isActive(0);
+    const isActivePort1 = Pads.isActive(1);
+
     pad.update();
 
     font.print(220, 25, "\nAthena project: Controls demo\n");
+    
+    font.print(10, 40, "Connected pads: " + connectedCount);
+    font.print(10, 55, "Active ports: [" + connectedPorts.join(', ') + "]");
+    font.print(10, 70, "Port 0 status: " + (isActivePort0 ? "ACTIVE" : "INACTIVE"));
+    font.print(10, 85, "Port 1 status: " + (isActivePort1 ? "ACTIVE" : "INACTIVE"));
+    
     font.print(100, 370, "\nTips:\n");
     font.print(100, 390, "\nPress R2+L2 to start rumble and press again to stop it.\n");
     font.print(100, 405, "\nButtons transparency varies with the pressure applied to them.\n");
