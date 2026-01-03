@@ -169,6 +169,10 @@ JSModuleDef *athena_sound_init(JSContext* ctx);
 JSModuleDef *athena_camera_init(JSContext* ctx);
 #endif
 
-
+/* Native compiler module */
+#ifdef ATHENA_NATIVE_COMPILER
+JSModuleDef *athena_native_init(JSContext* ctx);
+void athena_native_cleanup(void);
+#endif
 
 #endif

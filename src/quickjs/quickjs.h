@@ -1137,6 +1137,19 @@ int JS_SetModuleExport(JSContext *ctx, JSModuleDef *m, const char *export_name,
 int JS_SetModuleExportList(JSContext *ctx, JSModuleDef *m,
                            const JSCFunctionListEntry *tab, int len);
 
+/* Native compiler support - get bytecode info from a JS function */
+typedef struct {
+    const uint8_t *bytecode;
+    int bytecode_len;
+    int arg_count;
+    int var_count;
+    int stack_size;
+} JSFunctionBytecodeInfo;
+
+/* Returns 0 on success, -1 if not a bytecode function, -2 on other errors */
+int JS_GetFunctionBytecodeInfo(JSContext *ctx, JSValueConst func_val, 
+                               JSFunctionBytecodeInfo *info);
+
 #undef js_unlikely
 #undef js_force_inline
 

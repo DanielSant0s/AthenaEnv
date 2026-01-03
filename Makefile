@@ -208,11 +208,21 @@ ifeq ($(STATIC_CAMERA),1)
   DYNAMIC_CAMERA = 0
 endif
 
+# Native compiler (AOT JS to MIPS R5900)
+NATIVE_COMPILER ?= 1
+
+ifeq ($(NATIVE_COMPILER),1)
+  EE_CFLAGS += -DATHENA_NATIVE_COMPILER
+  EE_INCS += -Isrc/native_compiler
+  ATHENA_MODULES += ath_native.o
+  NATIVE_COMPILER_OBJS = native_compiler/native_compiler.o native_compiler/mips_emitter.o native_compiler/type_inference.o native_compiler/native_struct.o native_compiler/int64_runtime.o native_compiler/native_string.o native_compiler/native_array.o
+endif
+
 ATHENA_MODULES := $(ATHENA_MODULES:%=$(JS_API_DIR)%) #prepend the modules folder
 VU1_MPGS := $(VU1_MPGS:%=$(VU1_MPGS_DIR)%) #prepend the microprograms folder
 VU0_MPGS := $(VU0_MPGS:%=$(VU0_MPGS_DIR)%) #prepend the microprograms folder
 
-EE_OBJS = $(APP_CORE) $(INI_READER) $(JS_CORE) $(ATHENA_MODULES) $(VU1_MPGS) $(VU0_MPGS) $(IOP_MODULES) $(EMBEDDED_ELFS) $(EMBEDDED_ASSETS) # group them all
+EE_OBJS = $(APP_CORE) $(INI_READER) $(JS_CORE) $(ATHENA_MODULES) $(NATIVE_COMPILER_OBJS) $(VU1_MPGS) $(VU0_MPGS) $(IOP_MODULES) $(EMBEDDED_ELFS) $(EMBEDDED_ASSETS) # group them all
 EE_OBJS := $(EE_OBJS:%=$(EE_OBJ_DIR)%) #prepend the object folder
 
 EE_BIN := $(EE_BIN_DIR)$(EE_BIN_PREF)$(EE_EXT)

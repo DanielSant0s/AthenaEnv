@@ -54614,3 +54614,49 @@ void JS_AddIntrinsicTypedArrays(JSContext *ctx)
     JS_AddIntrinsicAtomics(ctx);
 #endif
 }
+
+/*
+ * Native compiler support - get bytecode info from a JS function
+ * Returns 0 on success, -1 if not a bytecode function, -2 on other errors
+ */
+int JS_GetFunctionBytecodeInfo(JSContext *ctx, JSValueConst func_val, 
+                               JSFunctionBytecodeInfo *info)
+{
+    JSObject *p;
+    JSFunctionBytecode *b;
+    
+    if (!info)
+        return -2;
+    
+    /* Initialize output */
+    memset(info, 0, sizeof(*info));
+    
+    /* Check if it's an object */
+    if (JS_VALUE_GET_TAG(func_val) != JS_TAG_OBJECT)
+        return -2;
+    
+    p = JS_VALUE_GET_OBJ(func_val);
+    if (!p)
+        return -2;
+    
+    /* Check if it's a bytecode function */
+    if (p->class_id != JS_CLASS_BYTECODE_FUNCTION &&
+        p->class_id != JS_CLASS_GENERATOR_FUNCTION &&
+        p->class_id != JS_CLASS_ASYNC_FUNCTION &&
+        p->class_id != JS_CLASS_ASYNC_GENERATOR_FUNCTION)
+        return -1;
+    
+    /* Get the function bytecode */
+    b = p->u.func.function_bytecode;
+    if (!b)
+        return -2;
+    
+    /* Fill in the info */
+    info->bytecode = b->byte_code_buf;
+    info->bytecode_len = b->byte_code_len;
+    info->arg_count = b->arg_count;
+    info->var_count = b->var_count;
+    info->stack_size = b->stack_size;
+    
+    return 0;
+}

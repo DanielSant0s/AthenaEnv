@@ -225,7 +225,13 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"globalThis.Thread = Thread;\n"
 
 				"import Mutex from 'Mutex';\n"
-				"globalThis.Mutex = Mutex;\n";
+				"globalThis.Mutex = Mutex;\n"
+
+				#ifdef ATHENA_NATIVE_COMPILER
+				"import * as Native from 'Native';\n"
+				"globalThis.Native = Native;\n"
+				#endif
+				;
 
 				
             rc = qjs_eval_buf(ctx, str, strlen(str), "<input>", JS_EVAL_TYPE_MODULE);
@@ -325,6 +331,10 @@ static JSContext *JS_NewCustomContext(JSRuntime *rt)
 	athena_ws_init(ctx); 
 	#endif
 
+	#ifdef ATHENA_NATIVE_COMPILER
+	athena_native_init(ctx);
+	#endif
+
     return ctx;
 }
 
@@ -334,6 +344,10 @@ void destroy_vm(JSContext* ctx) {
 	JSRuntime* rt = JS_GetRuntime(ctx);
 
 	athena_task_free(ctx);
+
+	#ifdef ATHENA_NATIVE_COMPILER
+	athena_native_cleanup();
+	#endif
 
 	js_std_free_handlers(rt);
 	JS_FreeContext(ctx);
