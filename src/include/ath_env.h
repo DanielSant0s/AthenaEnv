@@ -175,4 +175,9 @@ JSModuleDef *athena_native_init(JSContext* ctx);
 void athena_native_cleanup(void);
 #endif
 
+/* MPEG video module */
+#ifdef ATHENA_MPEG_VIDEO
+JSModuleDef *athena_mpeg_init(JSContext* ctx);
+#endif
+
 #endif

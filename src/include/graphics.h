@@ -87,6 +87,7 @@ struct gsSurface
 	uint8_t ClutStorageMode;	///< CLUT Storage Mode
 	uint8_t	Delayed;	///< Delay Texture Upload To VRAM
 	uint8_t PageAligned;
+	uint8_t Macroblock;	///< Data is in 16x16 macroblock format (for MPEG)
 	uint32_t Mask;      ///< Framebuffer Mask
 };
 typedef struct gsSurface GSSURFACE;

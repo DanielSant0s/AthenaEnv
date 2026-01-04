@@ -149,6 +149,16 @@ ifeq ($(AUDIO),1)
   EE_LIBS += -laudsrv -lvorbisfile -lvorbis -logg
 endif
 
+# MPEG Video support (requires PS2SDK libmpeg)
+MPEG_VIDEO ?= 1
+
+ifeq ($(MPEG_VIDEO),1)
+  EE_CFLAGS += -DATHENA_MPEG_VIDEO
+  APP_CORE += mpeg_player.o
+  ATHENA_MODULES += ath_mpeg.o
+  EE_LIBS += -lmpeg
+endif
+
 ifneq ($(EE_SIO), 0)
   EE_BIN_PREF := $(EE_BIN_PREF)_eesio
   EE_BIN_PKD := $(EE_BIN_PKD)_eesio

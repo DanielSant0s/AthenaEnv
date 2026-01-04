@@ -192,6 +192,11 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 
 				#endif
 
+				#ifdef ATHENA_MPEG_VIDEO
+				"import * as Video from 'Video';\n"
+				"globalThis.Video = Video.Video;\n"
+				#endif
+
 				#ifdef ATHENA_ODE
 				"import * as ODE from 'ODE';\n"
 				"globalThis.ODE = ODE;\n"
@@ -333,6 +338,10 @@ static JSContext *JS_NewCustomContext(JSRuntime *rt)
 
 	#ifdef ATHENA_NATIVE_COMPILER
 	athena_native_init(ctx);
+	#endif
+
+	#ifdef ATHENA_MPEG_VIDEO
+	athena_mpeg_init(ctx);
 	#endif
 
     return ctx;

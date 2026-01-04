@@ -1225,15 +1225,8 @@ MIPS_CFLAGS += -march=r5900 -mabi=eabi
 - Array operations
 - Type conversions
 
-**Run tests:**
-```bash
-cd bin
-./AthenaEnv native_test.js
-```
-
 ### D. References
 
-- [MIPS R5900 Core Architecture Manual](https://www.google.com/search?q=MIPS+R5900+manual)
 - ps2tek: PS2 technical documentation
 - [QuickJS Documentation](https://bellard.org/quickjs/)
 - MIPS n32 ABI Specification
@@ -1244,16 +1237,6 @@ cd bin
 
 Copyright (c) 2025 AthenaEnv Project  
 Licensed under MIT License
-
----
-
-## Contributors
-
-- **Native Compiler**: Core team
-- **Documentation**: Technical writing team
-- **Testing**: QA team
-
-For questions or contributions, please visit the project repository.
 
 ---
 
