@@ -1063,6 +1063,88 @@ static JSValue athena_renderdata_update_material(JSContext *ctx, JSValueConst th
 	return JS_NewUint32(ctx, index);
 }
 
+// Clone RenderData: shares geometry buffers but creates independent materials
+static JSValue athena_renderdata_clone(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
+	JSRenderData* src = JS_GetOpaque2(ctx, this_val, js_render_data_class_id);
+	if (!src)
+		return JS_EXCEPTION;
+
+	JSRenderData* ro = js_mallocz(ctx, sizeof(JSRenderData));
+	if (!ro)
+		return JS_EXCEPTION;
+
+	// Share geometry buffers (reference same memory)
+	ro->m.index_count = src->m.index_count;
+	ro->m.indices = src->m.indices; // shared
+	ro->m.positions = src->m.positions; // shared
+	ro->m.normals = src->m.normals; // shared
+	ro->m.texcoords = src->m.texcoords; // shared
+	ro->m.colours = src->m.colours; // shared
+	ro->m.skin_data = src->m.skin_data; // shared
+	ro->m.skeleton = src->m.skeleton; // shared
+	ro->m.tristrip = src->m.tristrip;
+
+	// Mark as not owning vertices (prevent double-free)
+	for (int i = 0; i < 4; i++) {
+		ro->owns_vertices[i] = false;
+		ro->vertex_buffers[i] = JS_UNDEFINED;
+	}
+
+	// Clone materials (independent copy)
+	if (src->m.material_count > 0) {
+		ro->m.material_count = src->m.material_count;
+		ro->m.materials = malloc(sizeof(ath_mat) * ro->m.material_count);
+		memcpy(ro->m.materials, src->m.materials, sizeof(ath_mat) * ro->m.material_count);
+	}
+
+	// Clone material indices (independent copy)
+	if (src->m.material_index_count > 0) {
+		ro->m.material_index_count = src->m.material_index_count;
+		ro->m.material_indices = malloc(sizeof(material_index) * ro->m.material_index_count);
+		memcpy(ro->m.material_indices, src->m.material_indices, sizeof(material_index) * ro->m.material_index_count);
+	}
+
+	// Share textures (reference same pointers)
+	ro->m.texture_count = src->m.texture_count;
+	if (src->m.texture_count > 0) {
+		ro->m.textures = malloc(sizeof(GSSURFACE*) * ro->m.texture_count);
+		memcpy(ro->m.textures, src->m.textures, sizeof(GSSURFACE*) * ro->m.texture_count);
+
+		ro->textures = malloc(sizeof(JSValue) * ro->m.texture_count);
+		for (int i = 0; i < ro->m.texture_count; i++) {
+			ro->textures[i] = JS_DupValue(ctx, src->textures[i]);
+		}
+	}
+
+	// Copy bounding box
+	memcpy(ro->m.bounding_box, src->m.bounding_box, sizeof(ro->m.bounding_box));
+
+	// Copy attributes and pipeline
+	ro->m.pipeline = src->m.pipeline;
+	ro->m.attributes = src->m.attributes;
+
+	// Create JS object
+	JSValue obj = JS_NewObjectClass(ctx, js_render_data_class_id);
+	if (JS_IsException(obj)) {
+		if (ro->m.materials) free(ro->m.materials);
+		if (ro->m.material_indices) free(ro->m.material_indices);
+		if (ro->m.textures) free(ro->m.textures);
+		if (ro->textures) {
+			for (int i = 0; i < ro->m.texture_count; i++)
+				JS_FreeValue(ctx, ro->textures[i]);
+			free(ro->textures);
+		}
+		js_free(ctx, ro);
+		return JS_EXCEPTION;
+	}
+
+	// Keep reference to source to prevent geometry from being freed
+	JS_DefinePropertyValueStr(ctx, obj, "__source", JS_DupValue(ctx, this_val), 0);
+
+	JS_SetOpaque(obj, ro);
+	return obj;
+}
+
 static const JSCFunctionListEntry js_render_data_proto_funcs[] = {
 	JS_CFUNC_DEF("setTexture",  3,  athena_settexture),
 	JS_CFUNC_DEF("getTexture",  1,  athena_gettexture),
@@ -1071,6 +1153,8 @@ static const JSCFunctionListEntry js_render_data_proto_funcs[] = {
 
 	JS_CFUNC_DEF("free",  0,  athena_rdfree),
 	JS_CFUNC_DEF("dispose",  0,  athena_rdfree),
+
+	JS_CFUNC_DEF("clone",  0,  athena_renderdata_clone),
 
 	JS_CFUNC_DEF("updateMaterial",  2,  athena_renderdata_update_material),
 
@@ -1361,11 +1445,70 @@ static JSValue js_render_object_set(JSContext *ctx, JSValueConst this_val, JSVal
     return JS_UNDEFINED;
 }
 
+// Get bone transform by name
+static JSValue athena_ro_get_bone_transform(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
+	JSRenderObject* ro = JS_GetOpaque2(ctx, this_val, js_render_object_class_id);
+	if (!ro)
+		return JS_EXCEPTION;
+
+	if (!ro->obj.data || !ro->obj.data->skeleton || !ro->obj.bones)
+		return JS_UNDEFINED;
+
+	const char *name = JS_ToCString(ctx, argv[0]);
+	if (!name)
+		return JS_EXCEPTION;
+
+	athena_skeleton *skeleton = ro->obj.data->skeleton;
+	int bone_id = -1;
+
+	for (int i = 0; i < skeleton->bone_count; i++) {
+		if (strcmp(skeleton->bones[i].name, name) == 0) {
+			bone_id = i;
+			break;
+		}
+	}
+
+	JS_FreeCString(ctx, name);
+
+	if (bone_id < 0)
+		return JS_UNDEFINED;
+
+	// Return bone transform info
+	JSValue result = JS_NewObject(ctx);
+
+	// World-space transform matrix
+	JSValue bone_matrix = JS_NewObjectClass(ctx, get_matrix4_class_id());
+	JS_SetOpaque(bone_matrix, &ro->obj.bone_matrices[bone_id]);
+	JS_DefinePropertyValueStr(ctx, result, "matrix", bone_matrix, JS_PROP_C_W_E);
+
+	// Local-space position
+	JSValue pos = JS_NewObject(ctx);
+	JS_DefinePropertyValueStr(ctx, pos, "x", JS_NewFloat32(ctx, ro->obj.bones[bone_id].position[0]), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, pos, "y", JS_NewFloat32(ctx, ro->obj.bones[bone_id].position[1]), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, pos, "z", JS_NewFloat32(ctx, ro->obj.bones[bone_id].position[2]), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, result, "position", pos, JS_PROP_C_W_E);
+
+	// Local-space rotation (quaternion)
+	JSValue rot = JS_NewObject(ctx);
+	JS_DefinePropertyValueStr(ctx, rot, "x", JS_NewFloat32(ctx, ro->obj.bones[bone_id].rotation[0]), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, rot, "y", JS_NewFloat32(ctx, ro->obj.bones[bone_id].rotation[1]), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, rot, "z", JS_NewFloat32(ctx, ro->obj.bones[bone_id].rotation[2]), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, rot, "w", JS_NewFloat32(ctx, ro->obj.bones[bone_id].rotation[3]), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, result, "rotation", rot, JS_PROP_C_W_E);
+
+	// Bone index
+	JS_DefinePropertyValueStr(ctx, result, "index", JS_NewInt32(ctx, bone_id), JS_PROP_C_W_E);
+
+	return result;
+}
+
 static const JSCFunctionListEntry js_render_object_proto_funcs[] = {
     JS_CFUNC_DEF("render",        0,  athena_drawobject),
 	JS_CFUNC_DEF("renderBounds",  0,    athena_drawbbox),
 	JS_CFUNC_DEF("free",  0,    athena_drawfree),
 	JS_CFUNC_DEF("dispose",  0,    athena_drawfree),
+
+	JS_CFUNC_DEF("getBoneTransform",  1,  athena_ro_get_bone_transform),
 
 	#ifdef ATHENA_ODE
 	JS_CFUNC_DEF("setCollision",        1,  athena_ro_collision),

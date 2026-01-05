@@ -259,6 +259,8 @@ extern const uint16_t OWL_XYMAX[8] qw_aligned;
 extern const int16_t OWL_XYOFFSET_FIXED[8] qw_aligned;
 extern const uint16_t OWL_XYMAX_FIXED[8] qw_aligned;
 
+extern const float XYUV_MAX_FLOAT[4] qw_aligned;
+
 inline void owl_add_uv(owl_packet *packet, int u, int v) { // each call increases 8 bytes in pointer
 	asm volatile ( 	
         "psllh $7, %[uv], 4      \n"

@@ -362,6 +362,8 @@ void draw_image_list(GSSURFACE* source, float x, float y, prim_tex_sprite *list,
 	}
 }
 
+const float XYUV_MAX_FLOAT[4] qw_aligned = { 4095.75f, 4095.75f, 1024.0f, 1024.0f };
+
 void draw_image(GSSURFACE* source, float x, float y, float width, float height, float startx, float starty, float endx, float endy, Color color)
 {
 	if (source == cur_screen_buffer[0] || source == cur_screen_buffer[1] || source == cur_screen_buffer[2]) {
@@ -425,14 +427,13 @@ void draw_image(GSSURFACE* source, float x, float y, float width, float height, 
 
 	owl_add_tag(packet, color, VU_GS_PRIM(GS_PRIM_PRIM_SPRITE, 0, 1, gsGlobal->PrimFogEnable, gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 1, gsGlobal->PrimContext, 0));
 
-    owl_add_xy_uv_2x(packet, x, 
-                             y, 
-                             startx, 
-                             starty, 
-                             width+x, 
-                             height+y,
-                             endx, 
-                             endy);
+    float float_pos[8] = { x, y, startx, starty, width+x, height+y, endx, endy };
+    int fixed_pos[8];
+    vu0_ftoi4_clamp_8x(float_pos, fixed_pos, XYUV_MAX_FLOAT);
+
+    owl_add_xy_uv_2x_font(packet, fixed_pos[0], fixed_pos[1], fixed_pos[2], fixed_pos[3], fixed_pos[4], fixed_pos[5], fixed_pos[6], fixed_pos[7]);
+
+	
 }
 
 void draw_image_rotate(GSSURFACE* source, float x, float y, float width, float height, float startx, float starty, float endx, float endy, float angle, Color color){

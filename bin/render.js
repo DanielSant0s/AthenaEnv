@@ -68,30 +68,30 @@ os.chdir("render");
 
 // x, y, z, adc=1.0f
 const triPositions = new Float32Array([
-    0.5f, 0.5f, 0.5f, 1.0f, 
-    0.5f, 0.8f, 0.5f, 1.0f, 
-    0.8f, 0.8f, 0.5f, 1.0f, 
+    0.5f, 0.5f, 0.5f, 1.0f,
+    0.5f, 0.8f, 0.5f, 1.0f,
+    0.8f, 0.8f, 0.5f, 1.0f,
 ]);
 
 // n1, n2, n3, adc=1.0f
 const triNormals = new Float32Array([
-    1.0f, 1.0f, 1.0f, 1.0f, 
-    1.0f, 1.0f, 1.0f, 1.0f, 
-    1.0f, 1.0f, 1.0f, 1.0f, 
+    1.0f, 1.0f, 1.0f, 1.0f,
+    1.0f, 1.0f, 1.0f, 1.0f,
+    1.0f, 1.0f, 1.0f, 1.0f,
 ]);
 
 // s, t, q, adc=1.0f
 const triTexCoords = new Float32Array([
-    0.0f, 0.0f, 1.0f, 1.0f, 
-    1.0f, 0.0f, 1.0f, 1.0f, 
-    1.0f, 1.0f, 1.0f, 1.0f, 
+    0.0f, 0.0f, 1.0f, 1.0f,
+    1.0f, 0.0f, 1.0f, 1.0f,
+    1.0f, 1.0f, 1.0f, 1.0f,
 ]);
 
 // r, g, b, a
 const triColors = new Float32Array([
-    1.0f, 0.0f, 0.0f, 1.0f, 
-    0.0f, 1.0f, 0.0f, 1.0f, 
-    0.0f, 0.0f, 1.0f, 1.0f, 
+    1.0f, 0.0f, 0.0f, 1.0f,
+    0.0f, 1.0f, 0.0f, 1.0f,
+    0.0f, 0.0f, 1.0f, 1.0f,
 ]);
 
 const vertList = Render.vertexList(
@@ -177,19 +177,19 @@ boombox.getTexture(0).filter = LINEAR;
 const render_data = [dragonmesh, gltf_box, monkeymesh, car, listtest, boombox, mill];
 
 const dragon_object = new RenderObject(dragonmesh);
-dragon_object.position = {x:0.0f, y:4.0f, z:0.0f};
+dragon_object.position = { x: 0.0f, y: 4.0f, z: 0.0f };
 
 const monkey_object = new RenderObject(dragonmesh);
-monkey_object.position = {x:4.0f, y:4.0f, z:0.0f};
+monkey_object.position = { x: 4.0f, y: 4.0f, z: 0.0f };
 
-const render_object = [ new RenderObject(dragonmesh), 
-                        new RenderObject(gltf_box),
-                        new RenderObject(monkeymesh), 
-                        new RenderObject(car), 
-                        new RenderObject(listtest), 
-                        new RenderObject(boombox), 
-                        new RenderObject(mill)
-                    ];
+const render_object = [new RenderObject(dragonmesh),
+new RenderObject(gltf_box),
+new RenderObject(monkeymesh),
+new RenderObject(car),
+new RenderObject(listtest),
+new RenderObject(boombox),
+new RenderObject(mill)
+];
 
 const sceneRoot = new SceneNode();
 const objectNodes = render_object.map(obj => {
@@ -212,19 +212,20 @@ asyncLoader.enqueue("BoxTextured.gltf", (path, renderData) => {
     streamedObjects.push(obj);
 
     const node = new SceneNode();
-    node.position = { x: 0.0f, y: 6.0f + streamedObjects.length * 2.5f, z: 0.0f };
-    node.attach(obj);
-    sceneRoot.addChild(node);
-    sceneBatch.add(obj);
+    node.position = { x: 0.0f, y: 6.0f + streamedObjects.length * 2.5f, z: 0.0f
+};
+node.attach(obj);
+sceneRoot.addChild(node);
+sceneBatch.add(obj);
 });
 
 Camera.position(0.0f, 0.0f, 35.0f);
 
 const light = Lights.new();
-Lights.set(light, Lights.DIRECTION, 0.0,  0.5, 1.0);
-Lights.set(light, Lights.AMBIENT,   0.12, 0.15, 0.2);
-Lights.set(light, Lights.DIFFUSE,   0.5, 0.5, 0.5);
-Lights.set(light, Lights.SPECULAR,  1.0, 1.0, 1.0);
+Lights.set(light, Lights.DIRECTION, 0.0, 0.5, 1.0);
+Lights.set(light, Lights.AMBIENT, 0.12, 0.15, 0.2);
+Lights.set(light, Lights.DIFFUSE, 0.5, 0.5, 0.5);
+Lights.set(light, Lights.SPECULAR, 1.0, 1.0, 1.0);
 
 //const light1 = Lights.new();
 //Lights.set(light1, Lights.DIRECTION, 0.0,  1.0, 1.0);
@@ -258,7 +259,7 @@ let spec = false;
 let decal_x = 32;
 let decal_y = 0;
 
-while(true) {
+while (true) {
     Screen.clear(gray);
     Render.begin();
     Camera.update();
@@ -266,69 +267,69 @@ while(true) {
     const processed = asyncLoader.process(2);
     if (processed) console.log("[Render] processed", processed, "queue:", asyncLoader.size());
 
-    lx = ((pad.lx > 25 || pad.lx < -25)? pad.lx : 0) / 4096.0f;
-    ly = ((pad.ly > 25 || pad.ly < -25)? pad.ly : 0) / 4096.0f;
+    lx = ((pad.lx > 25 || pad.lx < -25) ? pad.lx : 0) / 4096.0f;
+    ly = ((pad.ly > 25 || pad.ly < -25) ? pad.ly : 0) / 4096.0f;
     savedlx = savedlx - lx;
     savedly = savedly - ly;
 
-    rx = ((pad.rx > 25 || pad.rx < -25)? pad.rx : 0) / 2048.0f;
-    ry = ((pad.ry > 25 || pad.ry < -25)? pad.ry : 0) / 2048.0f;
+    rx = ((pad.rx > 25 || pad.rx < -25) ? pad.rx : 0) / 2048.0f;
+    ry = ((pad.ry > 25 || pad.ry < -25) ? pad.ry : 0) / 2048.0f;
     savedrx = savedrx - rx;
     savedry = savedry + ry;
 
-    if(pad.pressed(Pads.R2)){
+    if (pad.pressed(Pads.R2)) {
         savedrz -= 0.05f;
-    } else if(pad.pressed(Pads.L2)){
+    } else if (pad.pressed(Pads.L2)) {
         savedrz += 0.05f;
     }
 
     if (rx || ry) {
-        decal_x += (rx*32.0f);
-        decal_y += (ry*32.0f);
+        decal_x += (rx * 32.0f);
+        decal_y += (ry * 32.0f);
     }
 
-    Camera.target(0,  0, savedrz);
+    Camera.target(0, 0, savedrz);
 
     //if (rx || ry) {
     //    Lights.set(light, Lights.DIRECTION, savedrx,  savedry, 1.0);
     //}
 
-    if(pad.justPressed(Pads.LEFT) && modeltodisplay > 0){
+    if (pad.justPressed(Pads.LEFT) && modeltodisplay > 0) {
         modeltodisplay -= 1;
     }
 
-    if(pad.justPressed(Pads.RIGHT) && modeltodisplay < render_data.length-1){
+    if (pad.justPressed(Pads.RIGHT) && modeltodisplay < render_data.length - 1) {
         modeltodisplay += 1;
     }
 
-    if(pad.justPressed(Pads.UP) && render_data[modeltodisplay].pipeline > 0){
-        render_data[modeltodisplay].pipeline = render_data[modeltodisplay].pipeline-1;
+    if (pad.justPressed(Pads.UP) && render_data[modeltodisplay].pipeline > 0) {
+        render_data[modeltodisplay].pipeline = render_data[modeltodisplay].pipeline - 1;
     }
 
-    if(pad.justPressed(Pads.DOWN) && render_data[modeltodisplay].pipeline < pipelines.length-1){
-        render_data[modeltodisplay].pipeline = render_data[modeltodisplay].pipeline+1;
+    if (pad.justPressed(Pads.DOWN) && render_data[modeltodisplay].pipeline < pipelines.length - 1) {
+        render_data[modeltodisplay].pipeline = render_data[modeltodisplay].pipeline + 1;
     }
-    
-    if(pad.justPressed(Pads.TRIANGLE)) {
+
+    if (pad.justPressed(Pads.TRIANGLE)) {
         asyncLoader.clear();
         asyncLoader.destroy();
         os.chdir("..");
         std.reload("main.js");
     }
 
-    if(pad.justPressed(Pads.R1)) {
+    if (pad.justPressed(Pads.R1)) {
         bbox ^= 1;
     }
 
-    if(pad.justPressed(Pads.SQUARE)) {
+    if (pad.justPressed(Pads.SQUARE)) {
         render_data[modeltodisplay].shade_model ^= 1;
     }
 
-    if(pad.justPressed(Pads.CIRCLE)) {
+    if (pad.justPressed(Pads.CIRCLE)) {
         render_data[modeltodisplay].texture_mapping ^= 1;
     }
 
-    if(pad.justPressed(Pads.CROSS)) {
+    if (pad.justPressed(Pads.CROSS)) {
         render_data[modeltodisplay].accurate_clipping ^= 1;
     }
 
@@ -336,7 +337,7 @@ while(true) {
     //monkey_object.render();
 
     if (lx || ly) {
-        objectNodes[modeltodisplay].rotation = {x:savedly, y:savedlx, z:0.0f};
+        objectNodes[modeltodisplay].rotation = { x: savedly, y: savedlx, z: 0.0f };
     }
 
     Screen.switchContext();
@@ -356,30 +357,30 @@ while(true) {
     sceneBatch.render();
 
     Screen.setParam(Screen.DEPTH_TEST_ENABLE, false);
-//
+    //
     //Image.copyVRAMBlock(draw_buffer, 0, 0, depth_buffer, 0, 0);
-//
+    //
     //Screen.setParam(Screen.ALPHA_BLEND_EQUATION, additive_alpha);
 
     //depth_buffer.color = Color.new(128, 100, 100, 32);
     //depth_buffer.draw(2, 2);
-//
+    //
     //depth_buffer.color = Color.new(100, 100, 128, 32);
     //depth_buffer.draw(-2, 2);
-//
+    //
     //depth_buffer.color = Color.new(100, 128, 100, 32);
     //depth_buffer.draw(2, -2);
 
     //Screen.setParam(Screen.ALPHA_BLEND_EQUATION, default_alpha);
-//
+    //
     //Image.copyVRAMBlock(draw_buffer, 150, 150, temp_buffer, 0, 0);
-//
+    //
     //temp_buffer.color = Color.new(128, 0, 0);
     //temp_buffer.draw(0, 0);
-//
+    //
 
     const renderStats = Render.stats();
-    font.print(10, 10, Screen.getFPS(360) + " FPS | " + free_mem + " | Static VRAM: " + Screen.getMemoryStats(Screen.VRAM_USED_STATIC)/1024 + "KB" + " | Dynamic VRAM: " + Screen.getMemoryStats(Screen.VRAM_USED_DYNAMIC)/1024 + "KB");
+    font.print(10, 10, Screen.getFPS(360) + " FPS | " + free_mem + " | Static VRAM: " + Screen.getMemoryStats(Screen.VRAM_USED_STATIC) / 1024 + "KB" + " | Dynamic VRAM: " + Screen.getMemoryStats(Screen.VRAM_USED_DYNAMIC) / 1024 + "KB");
     font.print(10, 25, render_data[modeltodisplay].size + " Vertices | " + "Pipeline: " + pipelines[render_data[modeltodisplay].pipeline] + " | Draws: " + renderStats.drawCalls + " | Tris: " + renderStats.triangles);
     font.print(10, 40, `Batch: ${sceneBatch.size} objects | Loader queue: ${asyncLoader.size()} | Streamed: ${streamedObjects.length}`);
 

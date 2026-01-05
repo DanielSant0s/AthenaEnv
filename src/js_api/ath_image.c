@@ -75,6 +75,7 @@ static JSValue athena_image_ctor(JSContext *ctx, JSValueConst new_target, int ar
 	image->tex->Height = 0;
 	image->tex->Delayed = true;
 	image->tex->PageAligned = false;
+	image->tex->Macroblock = false;
 	image->tex->Mem = NULL;
 	image->tex->Clut = NULL;
 	image->tex->Vram = 0;

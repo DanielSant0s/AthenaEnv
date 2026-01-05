@@ -91,6 +91,7 @@ atlas_t *atlasNew(size_t width, size_t height, u8 psm)
     atlas->surface.Height = height;
 
     atlas->surface.Delayed = true;
+    atlas->surface.Macroblock = false;
 
     atlas->surface.Filter = GS_FILTER_LINEAR;
 

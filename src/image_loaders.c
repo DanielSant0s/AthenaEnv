@@ -690,6 +690,7 @@ int athena_load_jpeg(GSSURFACE* tex, FILE* fp, bool scale_down, bool delayed)
 int load_image(GSSURFACE* image, const char* path, bool delayed) {
 	image->Delayed = true;
 	image->PageAligned = false;
+	image->Macroblock = false;
 
 	FILE* file = fopen(path, "rb");
 	uint16_t magic;
