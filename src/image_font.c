@@ -145,8 +145,6 @@ GSFONT *athena_init_font(u8 type, char *path)
 	return gsFont;
 }
 
-static float XYUV_MAX_FLOAT[4] qw_aligned = { 4095.75f, 4095.75f, 1024.0f, 1024.0f };
-
 static void render_font_char_glyph(GSFONT *gsFont, unsigned char c, owl_packet *packet, int pen_x, int pen_y, float scale)
 {
 	int px, py, charsiz;
