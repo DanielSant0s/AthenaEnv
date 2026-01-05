@@ -1,7 +1,8 @@
 #include <time.h>
-#include "include/graphics.h"
-#include "include/taskman.h"
-#include "ath_env.h"
+
+#include <graphics.h>
+#include <taskman.h>
+#include <ath_env.h>
 
 extern unsigned char owl_indices[];
 extern unsigned int size_owl_indices;
@@ -23,10 +24,9 @@ bool bootlogo_finished() {
 }
 
 void bootlogoThread(void* data) {
-    GSGLOBAL* gsGlobal = getGSGLOBAL();
     clock_t start_time = 0;
     uint8_t logo_alpha = 0;
-    GSTEXTURE bootlogo = { };
+    GSSURFACE bootlogo = { };
 
    	bootlogo.Width = 128;
 	bootlogo.Height = 86;
@@ -44,7 +44,7 @@ void bootlogoThread(void* data) {
 
     bootlogo.Delayed = true;
 
-    gsKit_setup_tbw(&bootlogo);
+    athena_calculate_tbw(&bootlogo);
 
     while (boot_state != BOOT_FINISH) {
         clearScreen(GS_SETREG_RGBAQ(0x00, 0x00, 0x00, 0x80, 0x00));
@@ -77,7 +77,7 @@ void bootlogoThread(void* data) {
 
         }
 
-        drawImage(&bootlogo, 
+        draw_image(&bootlogo, 
                   (gsGlobal->Width/2)-(bootlogo.Width/2), 
                   (gsGlobal->Height/2)-(bootlogo.Height/2), 
                   bootlogo.Width, 
@@ -91,9 +91,9 @@ void bootlogoThread(void* data) {
         flipScreen();
     }
 
-    gsKit_TexManager_free(gsGlobal, &bootlogo);
+    texture_manager_free(&bootlogo);
 
-    exitkill_task();
+    exit_kill_task();
 }
 
 void init_bootlogo() {

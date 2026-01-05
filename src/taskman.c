@@ -5,12 +5,14 @@
 #include <unistd.h>
 #include <string.h>
 #include <stdbool.h>
-#include "ath_env.h"
-#include "include/taskman.h"
-#include "include/memory.h"
-#include "include/ee_tools.h"
-#include "include/dbgprintf.h"
-#include "include/strUtils.h"
+
+#include <ath_env.h>
+
+#include <taskman.h>
+#include <memory.h>
+#include <ee_tools.h>
+#include <dbgprintf.h>
+#include <strUtils.h>
 
 extern void *_gp;
 
@@ -51,7 +53,7 @@ s32 AthenaCreateThread(ee_thread_t *thread) {
     return CreateThread(thread);
 }
 
-void del_task(int id){
+void free_task(int id){
     for(int i = 0; i < MAX_THREADS; i++){
         if (tasks[i].id == id){
             tasks[i].id = -1;
@@ -60,11 +62,13 @@ void del_task(int id){
             tasks[i].title = NULL;
             free(tasks[i].stack);
             tasks[i].stack = NULL;
+
+            tasks_size--;
+
+            DeleteThread(id);
             break;
         }
     }
-
-    tasks_size--;
 }
 
 
@@ -139,15 +143,31 @@ void init_task(int id, void* args){
     StartThread(id, args);
 }
 
-void kill_task(int id){
+void kill_task(int id) {
     TerminateThread(id);
-    DeleteThread(id);
-    del_task(id);
 }
 
-void exitkill_task(){
-    del_task(GetThreadId());
-    ExitDeleteThread();
+void exit_task(){
+    ExitThread();
+}
+
+// for internal use
+void exit_kill_task() {
+    for(int i = 0; i < MAX_THREADS; i++){
+        if (tasks[i].id == GetThreadId()) {
+            tasks[i].id = -1;
+            tasks[i].stack_size = 0;
+            tasks[i].status = -1;
+            tasks[i].title = NULL;
+            free(tasks[i].stack);
+            tasks[i].stack = NULL;
+
+            tasks_size--;
+
+            ExitDeleteThread();
+            break;
+        }
+    }
 }
 
 Task* get_tasks() {

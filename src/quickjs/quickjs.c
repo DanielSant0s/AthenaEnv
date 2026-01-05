@@ -1785,6 +1785,8 @@ static const JSMallocFunctions def_malloc_funcs = {
     NULL,
 #elif defined(__linux__)
     (size_t (*)(const void *))malloc_usable_size,
+#elif defined(PS2)
+    NULL,
 #else
     /* change this to `NULL,` if compilation fails */
     NULL,
@@ -2987,8 +2989,9 @@ static JSValue JS_NewSymbolFromAtom(JSContext *ctx, JSAtom descr,
     JSRuntime *rt = ctx->rt;
     JSString *p;
 
-    assert(!__JS_AtomIsTaggedInt(descr));
-    assert(descr < rt->atom_size);
+    /* Safety check: return exception for invalid atoms */
+    if (__JS_AtomIsTaggedInt(descr) || descr >= rt->atom_size)
+        return JS_ThrowInternalError(ctx, "invalid atom");
     p = rt->atom_array[descr];
     JS_DupValue(ctx, JS_MKPTR(JS_TAG_STRING, p));
     return JS_NewSymbol(ctx, p, atom_type);
@@ -3004,7 +3007,11 @@ static const char *JS_AtomGetStrRT(JSRuntime *rt, char *buf, int buf_size,
         snprintf(buf, buf_size, "%u", __JS_AtomToUInt32(atom));
     } else {
         JSAtomStruct *p;
-        assert(atom < rt->atom_size);
+        /* Safety check: return error string for invalid atoms */
+        if (atom >= rt->atom_size) {
+            snprintf(buf, buf_size, "<invalid>");
+            return buf;
+        }
         if (atom == JS_ATOM_NULL) {
             snprintf(buf, buf_size, "<null>");
         } else {
@@ -3061,7 +3068,9 @@ static JSValue __JS_AtomToValue(JSContext *ctx, JSAtom atom, BOOL force_string)
     } else {
         JSRuntime *rt = ctx->rt;
         JSAtomStruct *p;
-        assert(atom < rt->atom_size);
+        /* Safety check: return exception for invalid atoms */
+        if (atom >= rt->atom_size)
+            return JS_ThrowInternalError(ctx, "invalid atom");
         p = rt->atom_array[atom];
         if (p->atom_type == JS_ATOM_TYPE_STRING) {
             goto ret_string;
@@ -3100,7 +3109,11 @@ static BOOL JS_AtomIsArrayIndex(JSContext *ctx, uint32_t *pval, JSAtom atom)
         JSAtomStruct *p;
         uint32_t val;
 
-        assert(atom < rt->atom_size);
+        /* Safety check: return FALSE for invalid atoms instead of crashing */
+        if (atom >= rt->atom_size) {
+            *pval = 0;
+            return FALSE;
+        }
         p = rt->atom_array[atom];
         if (p->atom_type == JS_ATOM_TYPE_STRING &&
             is_num_string(&val, p) && val != -1) {
@@ -3126,7 +3139,9 @@ static JSValue JS_AtomIsNumericIndex1(JSContext *ctx, JSAtom atom)
 
     if (__JS_AtomIsTaggedInt(atom))
         return JS_NewInt32(ctx, __JS_AtomToUInt32(atom));
-    assert(atom < rt->atom_size);
+    /* Safety check: return UNDEFINED for invalid atoms instead of crashing */
+    if (atom >= rt->atom_size)
+        return JS_UNDEFINED;
     p1 = rt->atom_array[atom];
     if (p1->atom_type != JS_ATOM_TYPE_STRING)
         return JS_UNDEFINED;
@@ -7149,7 +7164,7 @@ JSValue JS_GetPropertyInternal(JSContext *ctx, JSValueConst obj,
                         obj1 = JS_DupValue(ctx, JS_MKPTR(JS_TAG_OBJECT, p));
                         retval = em->get_property(ctx, obj1, prop, this_obj);
                         JS_FreeValue(ctx, obj1);
-                        return retval;
+                        if (retval != JS_UNDEFINED) return retval;
                     }
                     if (em->get_own_property) {
                         JSPropertyDescriptor desc;
@@ -8300,7 +8315,7 @@ static int JS_SetPropertyGeneric(JSContext *ctx,
                                        val, this_obj, flags);
                 JS_FreeValue(ctx, obj1);
                 JS_FreeValue(ctx, val);
-                return ret;
+                if (ret != 2) return ret;
             }
         }
 
@@ -10279,7 +10294,11 @@ static JSValue js_atof(JSContext *ctx, const char *str, const char **pp,
 
 #ifdef CONFIG_BIGNUM
     if (flags & ATOD_ACCEPT_SUFFIX) {
-        if (*p == 'n') {
+        if (*p == 'f') {
+            p++;
+            val = JS_NewFloat32(ctx, atof(buf));
+            goto done;
+        } else if (*p == 'n') {
             p++;
             atod_type = ATOD_TYPE_BIG_INT;
         } else if (*p == 'l') {
@@ -11006,6 +11025,7 @@ static int JS_ToInt32Free(JSContext *ctx, int32_t *pres, JSValue val)
             }
 
         }
+        break;
 #ifdef CONFIG_BIGNUM
     case JS_TAG_BIG_FLOAT:
         {
@@ -12193,6 +12213,13 @@ static bf_t *JS_ToBigFloat(JSContext *ctx, bf_t *buf, JSValueConst val)
         r = buf;
         bf_init(ctx->bf_ctx, r);
         if (bf_set_float64(r, JS_VALUE_GET_FLOAT64(val))) {
+            goto fail;
+        }
+        break;
+    case JS_CUSTOM_TAG_FLOAT32:
+        r = buf;
+        bf_init(ctx->bf_ctx, r);
+        if (bf_set_float64(r, (double)JS_VALUE_GET_FLOAT32(val))) {
         fail:
             bf_delete(r);
             return NULL;
@@ -12295,6 +12322,17 @@ static bf_t *JS_ToBigIntFree(JSContext *ctx, bf_t *buf, JSValue val)
         r = buf;
         bf_init(ctx->bf_ctx, r);
         bf_set_si(r, JS_VALUE_GET_INT(val));
+        break;
+    case JS_CUSTOM_TAG_FLOAT32:
+        {
+            float f = JS_VALUE_GET_FLOAT32(val);
+            if (!is_math_mode(ctx))
+                goto fail;
+            r = buf;
+            bf_init(ctx->bf_ctx, r);
+            f = truncf(f);
+            bf_set_float64(r, (double)f);
+        }
         break;
     case JS_TAG_FLOAT64:
         {
@@ -12978,6 +13016,28 @@ static no_inline __exception int js_unary_arith_slow(JSContext *ctx,
     uint32_t tag;
 
     op1 = sp[-1];
+
+    if (JS_TAG_IS_FLOAT32(JS_VALUE_GET_NORM_TAG(op1))) {
+        float f = JS_VALUE_GET_FLOAT32(op1);
+        switch(op) {
+        case OP_inc:
+            f+=1.0f;
+            break;
+        case OP_dec:
+            f-=1.0f;
+            break;
+        case OP_plus:
+            break;
+        case OP_neg:
+            f = -f;
+            break;
+        default:
+            abort();
+        }
+        sp[-1] = JS_NewFloat32(ctx, f);
+        return 0;
+    }
+
     /* fast path for float64 */
     if (JS_TAG_IS_FLOAT64(JS_VALUE_GET_TAG(op1)))
         goto handle_float64;
@@ -13429,6 +13489,7 @@ static no_inline __exception int js_binary_arith_slow(JSContext *ctx, JSValue *s
     uint32_t tag1, tag2;
     int ret;
     double d1, d2;
+    float f1, f2;
 
     op1 = sp[-2];
     op2 = sp[-1];
@@ -13471,6 +13532,35 @@ static no_inline __exception int js_binary_arith_slow(JSContext *ctx, JSValue *s
     }
     tag1 = JS_VALUE_GET_NORM_TAG(op1);
     tag2 = JS_VALUE_GET_NORM_TAG(op2);
+
+    if (JS_TAG_IS_FLOAT32(tag1) || JS_TAG_IS_FLOAT32(tag2)){
+        float fres;
+        JS_ToFloat32Free(ctx, &f1, op1);
+        JS_ToFloat32Free(ctx, &f2, op2);
+
+        switch(op) {
+        case OP_sub:
+            fres = f1 - f2;
+            break;
+        case OP_mul:
+            fres = f1 * f2;
+            break;
+        case OP_div:
+            fres = f1 / f2;
+            break;
+        case OP_mod:
+            fres = fmodf(f1, f2);
+            break;
+        case OP_pow:
+            fres = powf(f1, f2);
+            break;
+        default:
+            abort();
+        }
+        sp[-2] = JS_NewFloat32(ctx, fres);
+        return 0;
+    }
+
 
     if (tag1 == JS_TAG_INT && tag2 == JS_TAG_INT) {
         int32_t v1, v2;
@@ -13598,6 +13688,21 @@ static no_inline __exception int js_add_slow(JSContext *ctx, JSValue *sp)
     tag1 = JS_VALUE_GET_NORM_TAG(op1);
     tag2 = JS_VALUE_GET_NORM_TAG(op2);
     /* fast path for float64 */
+
+    if ((tag1 == JS_TAG_INT || JS_TAG_IS_FLOAT32(tag1) || JS_TAG_IS_FLOAT64(tag1)) &&
+        (tag2 == JS_TAG_INT || JS_TAG_IS_FLOAT32(tag2) || JS_TAG_IS_FLOAT64(tag2))) {
+        float f1, f2;
+        if (JS_ToFloat32Free(ctx, &f1, op1)) {
+            JS_FreeValue(ctx, op2);
+            goto exception;
+        }
+        if (JS_ToFloat32Free(ctx, &f2, op2))
+            goto exception;
+        sp[-2] = JS_NewFloat32(ctx, f1 + f2);
+        return 0;
+
+    }
+
     if (tag1 == JS_TAG_FLOAT64 && tag2 == JS_TAG_FLOAT64) {
         double d1, d2;
         d1 = JS_VALUE_GET_FLOAT64(op1);
@@ -13955,6 +14060,36 @@ static no_inline int js_relational_slow(JSContext *ctx, JSValue *sp,
                (tag2 <= JS_TAG_NULL || tag2 == JS_TAG_FLOAT64)) {
         /* fast path for float64/int */
         goto float64_compare;
+    } else if ((tag1 <= JS_TAG_NULL || tag1 == JS_CUSTOM_TAG_FLOAT32) &&
+               (tag2 <= JS_TAG_NULL || tag2 == JS_CUSTOM_TAG_FLOAT32)) {
+        float f1, f2;
+        if (tag1 == JS_CUSTOM_TAG_FLOAT32) {
+            f1 = JS_VALUE_GET_FLOAT32(op1);
+        } else {
+            f1 = JS_VALUE_GET_INT(op1);
+        }
+        if (tag2 == JS_CUSTOM_TAG_FLOAT32) {
+            f2 = JS_VALUE_GET_FLOAT32(op2);
+        } else {
+            f2 = JS_VALUE_GET_INT(op2);
+        }
+        switch(op) {
+            case OP_lt:
+                res = (f1 < f2); /* if NaN return false */
+                break;
+            case OP_lte:
+                res = (f1 <= f2); /* if NaN return false */
+                break;
+            case OP_gt:
+                res = (f1 > f2); /* if NaN return false */
+                break;
+            default:
+            case OP_gte:
+                res = (f1 >= f2); /* if NaN return false */
+                break;
+        }
+
+        goto done;
     } else {
         if (((tag1 == JS_TAG_BIG_INT && tag2 == JS_TAG_STRING) ||
              (tag2 == JS_TAG_BIG_INT && tag1 == JS_TAG_STRING)) &&
@@ -14066,17 +14201,25 @@ static no_inline __exception int js_eq_slow(JSContext *ctx, JSValue *sp,
         if (tag1 == JS_TAG_INT && tag2 == JS_TAG_INT) {
             res = JS_VALUE_GET_INT(op1) == JS_VALUE_GET_INT(op2);
         } else if ((tag1 == JS_TAG_FLOAT64 &&
-                    (tag2 == JS_TAG_INT || tag2 == JS_TAG_FLOAT64)) ||
+                    (tag2 == JS_TAG_INT || tag2 == JS_TAG_FLOAT64 || tag2 == JS_CUSTOM_TAG_FLOAT32)) ||
                    (tag2 == JS_TAG_FLOAT64 &&
-                    (tag1 == JS_TAG_INT || tag1 == JS_TAG_FLOAT64))) {
+                    (tag1 == JS_TAG_INT || tag1 == JS_TAG_FLOAT64 || tag1 == JS_CUSTOM_TAG_FLOAT32)) ||
+                   (tag1 == JS_CUSTOM_TAG_FLOAT32 &&
+                    (tag2 == JS_TAG_INT || tag2 == JS_TAG_FLOAT64 || tag2 == JS_CUSTOM_TAG_FLOAT32)) ||
+                   (tag2 == JS_CUSTOM_TAG_FLOAT32 &&
+                    (tag1 == JS_TAG_INT || tag1 == JS_TAG_FLOAT64 || tag1 == JS_CUSTOM_TAG_FLOAT32))) {
             double d1, d2;
             if (tag1 == JS_TAG_FLOAT64) {
                 d1 = JS_VALUE_GET_FLOAT64(op1);
+            } else if (tag1 == JS_CUSTOM_TAG_FLOAT32) {
+                d1 = JS_VALUE_GET_FLOAT32(op1);
             } else {
                 d1 = JS_VALUE_GET_INT(op1);
             }
             if (tag2 == JS_TAG_FLOAT64) {
                 d2 = JS_VALUE_GET_FLOAT64(op2);
+            } else if (tag2 == JS_CUSTOM_TAG_FLOAT32) {
+                d2 = JS_VALUE_GET_FLOAT32(op2);
             } else {
                 d2 = JS_VALUE_GET_INT(op2);
             }
@@ -16402,6 +16545,32 @@ static JSValue js_call_c_function(JSContext *ctx, JSValueConst func_obj,
                 break;
             }
             ret_val = JS_NewFloat32(ctx, func.f_d(d1));
+        }
+        break;
+        case JS_CFUNC_i_i:
+        {
+            int i;
+
+            if (unlikely(JS_ToInt32(ctx, &i, arg_buf[0]))) {
+                ret_val = JS_EXCEPTION;
+                break;
+            }
+            ret_val = JS_NewInt32(ctx, func.i_i(i));
+        }
+        break;
+    case JS_CFUNC_i_i_i:
+        {
+            int i, j;
+
+            if (unlikely(JS_ToInt32(ctx, &i, arg_buf[0]))) {
+                ret_val = JS_EXCEPTION;
+                break;
+            }
+            if (unlikely(JS_ToInt32(ctx, &j, arg_buf[1]))) {
+                ret_val = JS_EXCEPTION;
+                break;
+            }
+            ret_val = JS_NewInt32(ctx, func.i_i_i(i, j));
         }
         break;
     case JS_CFUNC_iterator_next:
@@ -36390,6 +36559,9 @@ static int JS_InstantiateFunctionListItem(JSContext *ctx, JSValueConst obj,
     case JS_DEF_PROP_INT64:
         val = JS_NewInt64(ctx, e->u.i64);
         break;
+    case JS_DEF_PROP_FLOAT:
+        val = custom_JS_NewFloat32(ctx, e->u.f32);
+        break;
     case JS_DEF_PROP_DOUBLE:
         val = __JS_NewFloat64(ctx, e->u.f64);
         break;
@@ -36453,6 +36625,9 @@ int JS_SetModuleExportList(JSContext *ctx, JSModuleDef *m,
             break;
         case JS_DEF_PROP_INT64:
             val = JS_NewInt64(ctx, e->u.i64);
+            break;
+        case JS_DEF_PROP_FLOAT:
+            val = custom_JS_NewFloat32(ctx, e->u.f32);
             break;
         case JS_DEF_PROP_DOUBLE:
             val = __JS_NewFloat64(ctx, e->u.f64);
@@ -53772,10 +53947,10 @@ static JSValue js_dataview_setValue(JSContext *ctx,
             return JS_EXCEPTION;
         if (class_id == JS_CLASS_FLOAT32_ARRAY) {
             union {
-                double f;
+                float f;
                 uint32_t i;
             } u;
-            u.f = d;
+            u.f = (float)d;
             v = u.i;
         } else {
             JSFloat64Union u;
@@ -54438,4 +54613,50 @@ void JS_AddIntrinsicTypedArrays(JSContext *ctx)
 #ifdef CONFIG_ATOMICS
     JS_AddIntrinsicAtomics(ctx);
 #endif
+}
+
+/*
+ * Native compiler support - get bytecode info from a JS function
+ * Returns 0 on success, -1 if not a bytecode function, -2 on other errors
+ */
+int JS_GetFunctionBytecodeInfo(JSContext *ctx, JSValueConst func_val, 
+                               JSFunctionBytecodeInfo *info)
+{
+    JSObject *p;
+    JSFunctionBytecode *b;
+    
+    if (!info)
+        return -2;
+    
+    /* Initialize output */
+    memset(info, 0, sizeof(*info));
+    
+    /* Check if it's an object */
+    if (JS_VALUE_GET_TAG(func_val) != JS_TAG_OBJECT)
+        return -2;
+    
+    p = JS_VALUE_GET_OBJ(func_val);
+    if (!p)
+        return -2;
+    
+    /* Check if it's a bytecode function */
+    if (p->class_id != JS_CLASS_BYTECODE_FUNCTION &&
+        p->class_id != JS_CLASS_GENERATOR_FUNCTION &&
+        p->class_id != JS_CLASS_ASYNC_FUNCTION &&
+        p->class_id != JS_CLASS_ASYNC_GENERATOR_FUNCTION)
+        return -1;
+    
+    /* Get the function bytecode */
+    b = p->u.func.function_bytecode;
+    if (!b)
+        return -2;
+    
+    /* Fill in the info */
+    info->bytecode = b->byte_code_buf;
+    info->bytecode_len = b->byte_code_len;
+    info->arg_count = b->arg_count;
+    info->var_count = b->var_count;
+    info->stack_size = b->stack_size;
+    
+    return 0;
 }

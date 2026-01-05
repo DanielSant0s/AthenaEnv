@@ -9,7 +9,7 @@ Screen.setVSync(false);
 const canvas = Screen.getMode();
 
 canvas.zbuffering = true;
-canvas.psmz = Z16S;
+canvas.psmz = Screen.Z16S;
 
 Screen.setMode(canvas);
 
@@ -19,10 +19,10 @@ Render.setView(70.0);
 os.chdir("render");
 
 let dragontex = new Image("dragon.png");
-let dragonmesh = new RenderObject("dragon.obj", dragontex);
+let dragonmesh = new RenderData("dragon.obj", dragontex);
 let dragonbounds = Physics.createBox(4, 4, 4);
 
-let car = new RenderObject("Car.obj");
+let car = new RenderData("Car.obj");
 let carbounds = Physics.createBox(2, 2, 2);
 
 Camera.position(0.0f, 0.0f, 40.0f);

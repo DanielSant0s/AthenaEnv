@@ -1,0 +1,104 @@
+#!/usr/bin/perl
+#
+#########################################################################
+#                                                                       #
+# Open Dynamics Engine, Copyright (C) 2001,2002 Russell L. Smith.       #
+# All rights reserved.  Email: russ@q12.org   Web: www.q12.org          #
+#                                                                       #
+# This library is free software; you can redistribute it and/or         #
+# modify it under the terms of EITHER:                                  #
+#   (1) The GNU Lesser General Public License as published by the Free  #
+#       Software Foundation; either version 2.1 of the License, or (at  #
+#       your option) any later version. The text of the GNU Lesser      #
+#       General Public License is included with this library in the     #
+#       file LICENSE.TXT.                                               #
+#   (2) The BSD-style license that is included with this library in     #
+#       the file LICENSE-BSD.TXT.                                       #
+#                                                                       #
+# This library is distributed in the hope that it will be useful,       #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of        #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the files    #
+# LICENSE.TXT and LICENSE-BSD.TXT for more details.                     #
+#                                                                       #
+#########################################################################
+
+# extract the public functions from ode.doc and build a DLL exports list.
+
+@funcs = ();
+
+
+sub exportFunc
+{
+  push (@funcs,$_[0]);
+}
+
+
+sub exportFuncList
+{
+  my $f = $_[0];
+  $f =~ s/([A-Za-z0-9_]+)\s*\(/&exportFunc($1)/ge;
+}
+
+
+# read the documentation
+open (FILE,"ode.doc");
+$a = join('',<FILE>);
+close (FILE);
+
+# strip whitespace out of $a
+$a =~ s/\s+/ /g;
+
+# extract all function definitions
+$a =~ s/\@funcdef{([^}]*)}/&exportFuncList($1)/ge;
+
+# add in some functions and symbols that are not currently shown in
+# the documentation
+
+push (@funcs,"dSetZero");
+push (@funcs,"dBoxBox");
+
+push (@funcs,"dMultiply0");
+push (@funcs,"dMultiply1");
+push (@funcs,"dMultiply2");
+push (@funcs,"dNormalize3");
+push (@funcs,"dNormalize4");
+push (@funcs,"dPlaneSpace");
+
+push (@funcs,"dRandInt");
+push (@funcs,"dRandReal");
+push (@funcs,"dRandSetSeed");
+push (@funcs,"dMakeRandomMatrix");
+push (@funcs,"dMakeRandomVector");
+push (@funcs,"dMaxDifference");
+push (@funcs,"dClearUpperTriangle");
+
+push (@funcs,"dError");
+push (@funcs,"dDebug");
+push (@funcs,"dMessage");
+push (@funcs,"dSetMessageHandler");
+push (@funcs,"dSetErrorHandler");
+push (@funcs,"dSetDebugHandler");
+
+push (@funcs,"dFactorCholesky");
+push (@funcs,"dFactorLDLT");
+push (@funcs,"dGeomRayGetClosestHit");
+push (@funcs,"dGeomRaySetClosestHit");
+push (@funcs,"dGeomTriMeshDataBuildDouble");
+push (@funcs,"dGeomTriMeshDataBuildSingle");
+push (@funcs,"dInvertPDMatrix");
+push (@funcs,"dIsPositiveDefinite");
+push (@funcs,"dLDLTAddTL");
+push (@funcs,"dLDLTRemove");
+push (@funcs,"dRemoveRowCol");
+push (@funcs,"dRandGetSeed");
+push (@funcs,"dRFromZAxis");
+push (@funcs,"dSolveCholesky");
+push (@funcs,"dSolveLDLT");
+push (@funcs,"dSpaceClean");
+
+# sort the functions and generate the exports file
+print "LIBRARY ODE\n";
+print "EXPORTS\n";
+foreach $f (sort @funcs) {
+	print "$f\n";
+}

@@ -14,5 +14,7 @@ bin/brew_data.json
 !.github
 !.gitignore
 !.gitattributes
-!modules/mmceman/mmceman.irx
+!iop_modules/mmceman/mmceman.irx
 
+src/exports.c
+*.erl

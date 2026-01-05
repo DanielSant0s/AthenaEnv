@@ -4,14 +4,16 @@
 
 IOP.reset();
 
-//IOP.loadDefaultModule(IOP.pads);
-IOP.loadDefaultModule(IOP.network);
+//IOP.loadModule("padman");
+IOP.loadModule("SMAP");
 
 Network.init();
 
-//Screen.log(JSON.stringvify(Network.getConfig()));
+console.log(JSON.stringify(Network.getConfig()));
 
 let req = new Request();
+
+req.verifyTLS = true;
 req.followlocation = true;
 req.headers = ["upgrade-insecure-requests: 1",
                "sec-fetch-dest: document",

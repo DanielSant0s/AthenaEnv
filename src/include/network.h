@@ -1,14 +1,15 @@
-#include "../ath_env.h"
+#ifndef ATHENA_NETWORK_H
+#define ATHENA_NETWORK_H
+
+#include <ath_env.h>
+
 #include <netman.h>
 #include <sys/socket.h> /* socket, connect */
 #include <arpa/inet.h> /* struct sockaddr_in, struct sockaddr */
 #include <netdb.h> /* struct hostent, gethostbyname */
 #include <loadfile.h>
-#include <curl/curl.h>
 #include <loadfile.h>
 #include <pthread.h>
-
-extern CURL* curl; // REWORK IT LATER, ADD GET AND SET FUNCTIONS
 
 struct MemoryStruct {
     union {
@@ -35,11 +36,15 @@ typedef struct
     const char* url;
     const char* error;
     long keepalive;
+    int timeout_ms;
+    int verify_tls;
+    int follow_redirects;
     const char* userpwd;
     const char* useragent;
     const char* postdata;
     struct MemoryStruct chunk;
     long response_code;
+    char* response_headers;
     char* headers[16];
     int headers_len;
 } JSRequestData;
@@ -50,3 +55,6 @@ int ethApplyNetIFConfig(int mode);
 int ethWaitValidNetIFLinkState(void);
 int ethWaitValidDHCPState(void);
 int ethApplyIPConfig(int use_dhcp, const struct ip4_addr *ip, const struct ip4_addr *netmask, const struct ip4_addr *gateway, const struct ip4_addr *dns);
+
+
+#endif

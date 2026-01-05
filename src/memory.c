@@ -3,8 +3,8 @@
 #include <kernel.h>
 #include <malloc.h>
 #include <stdbool.h>
-#include "include/memory.h"
-#include "include/ee_tools.h"
+#include <memory.h>
+#include <ee_tools.h>
 
 typedef struct {
 	size_t binary_size;

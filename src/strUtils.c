@@ -1,5 +1,6 @@
 
-#include "include/strUtils.h"
+#include <strUtils.h>
+
 #include <stdio.h>
 #include <string.h>
 #include <malloc.h>
@@ -18,11 +19,11 @@ char* s_sprintf(const char* format, ...)
     va_list args;
     va_start(args, format);
 
-    // Determine o tamanho necessário da string
+    // Determine o tamanho necessï¿½rio da string
     int size = vsnprintf(NULL, 0, format, args);
     va_end(args);
 
-    // Aloque memória para a string
+    // Aloque memï¿½ria para a string
     char* str = (char*)malloc(size + 1);
     if (!str) {
         return NULL;
@@ -128,3 +129,36 @@ quit:
         free(duplicate);
     return 0;
 }
+
+int count_nonascii(const char *str) {
+    int count = 0;
+
+    while (*str) {
+        if ((*str & ~0x7f)) {
+            count++;
+        }
+        str++;
+    }
+
+    return count/2;
+}
+
+int count_spaces(const char *str, const char *chars) {
+    int count = 0;
+
+    while (*chars) {
+        char *tmp_str = str;
+
+        while (*tmp_str) {
+            if (*tmp_str == *chars) {
+                count++;
+            }
+            tmp_str++;
+        }
+
+        chars++;
+    }
+
+    return count;
+}
+

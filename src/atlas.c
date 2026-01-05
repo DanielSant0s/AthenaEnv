@@ -6,8 +6,8 @@
 
 #include <stdio.h>
 #include <malloc.h>
-#include "include/atlas.h"
-#include "include/graphics.h"
+#include <atlas.h>
+#include <graphics.h>
 
 static inline struct atlas_allocation_t *allocNew(int x, int y, size_t width, size_t height)
 {
@@ -90,9 +90,12 @@ atlas_t *atlasNew(size_t width, size_t height, u8 psm)
     atlas->surface.Width = width;
     atlas->surface.Height = height;
 
-    atlas->surface.Filter = GS_FILTER_NEAREST;
+    atlas->surface.Delayed = true;
+    atlas->surface.Macroblock = false;
 
-    size_t txtsize = gsKit_texture_size(width, height, psm);
+    atlas->surface.Filter = GS_FILTER_LINEAR;
+
+    size_t txtsize = athena_vram_surface_size(width, height, psm);
     atlas->surface.PSM = psm;
     atlas->surface.Mem = (u32 *)memalign(128, txtsize);
     atlas->surface.Vram = 0;
@@ -118,7 +121,7 @@ void atlasFree(atlas_t *atlas)
     allocFree(atlas->allocation);
     atlas->allocation = NULL;
 
-    UnloadTexture(&atlas->surface);
+    texture_manager_free(&atlas->surface);
     free(atlas->surface.Mem);
     atlas->surface.Mem = NULL;
 
@@ -179,7 +182,7 @@ struct atlas_allocation_t *atlasPlace(atlas_t *atlas, size_t width, size_t heigh
 
     atlasCopyData(atlas, al, width, height, surface);
 
-    InvalidateTexture(&atlas->surface);
+    texture_manager_invalidate(&atlas->surface);
 
     return al;
 }

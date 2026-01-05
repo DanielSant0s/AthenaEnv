@@ -9,18 +9,23 @@
 #include <math.h>
 #include <unistd.h>
 #include <sys/fcntl.h>
-#include "include/fntsys.h"
-#include "include/utf8.h"
-#include "include/atlas.h"
-#include "include/graphics.h"
-#include "include/dbgprintf.h"
+#include <fntsys.h>
+#include <utf8.h>
+#include <atlas.h>
+#include <graphics.h>
+#include <owl_packet.h>
+#include <dbgprintf.h>
 
 #include <sys/types.h>
 #include <ft2build.h>
 
+#include <strUtils.h>
+
+#include <macros.h>
+
 #include FT_FREETYPE_H
 
-extern void *quicksand_regular;
+extern unsigned char quicksand_regular[] __attribute__((aligned(16)));
 extern int size_quicksand_regular;
 
 // freetype vars
@@ -82,7 +87,6 @@ typedef struct
 /// Array of font definitions
 static font_t fonts[FNT_MAX_COUNT];
 
-static rm_quad_t quad;
 static uint32_t codepoint, state;
 static fnt_glyph_cache_entry_t *glyph;
 static FT_Bool use_kerning;
@@ -93,27 +97,7 @@ static FT_Vector delta;
 
 #define GLYPH_PAGE_OK(font, page) ((pageid <= font->cacheMaxPageID) && (font->glyphCache[page]))
 
-#define ALIGN_TOP     (0 << 0)
-#define ALIGN_BOTTOM  (1 << 0)
-#define ALIGN_VCENTER (2 << 0)
-#define ALIGN_LEFT    (0 << 2)
-#define ALIGN_RIGHT   (1 << 2)
-#define ALIGN_HCENTER (2 << 2)
-#define ALIGN_NONE    (ALIGN_TOP | ALIGN_LEFT)
-#define ALIGN_CENTER  (ALIGN_VCENTER | ALIGN_HCENTER)
-
-
-// a simple maximum of two
-int max(int a, int b)
-{
-    return a > b ? a : b;
-}
-
-// a simple minimum of two
-int min(int a, int b)
-{
-    return a < b ? a : b;
-}
+static fnt_glyph_cache_entry_t *fntCacheGlyph(font_t *font, uint32_t gid);
 
 void *readFile(const char* path, int align, int *size)
 {
@@ -181,6 +165,11 @@ static void fntCacheFlush(font_t *font)
     for (aid = 0; aid < ATLAS_MAX; ++aid) {
         atlasFree(font->atlases[aid]);
         font->atlases[aid] = NULL;
+    }
+
+    for (char c = 32; c <= 126; ++c) {
+        utf8Decode(&state, &codepoint, c);
+        fntCacheGlyph(font, codepoint); // Preload all visible glyphs
     }
 }
 
@@ -292,7 +281,7 @@ static int fntLoadSlot(font_t *font, const char* path)
         }
         font->dataPtr = buffer;
     } else {
-        buffer = &quicksand_regular;
+        buffer = quicksand_regular;
         bufferSize = size_quicksand_regular;
     }
 
@@ -331,8 +320,6 @@ void fntInit()
     for (; i < FNT_MAX_COUNT; ++i)
         fntInitSlot(&fonts[i]);
 
-    //fntLoadDefault(NULL);
-
     fntUpdateAspectRatio();
 }
 
@@ -350,28 +337,6 @@ int fntLoadFile(const char* path)
     }
 
     return FNT_ERROR;
-}
-
-int fntLoadDefault(const char* path)
-{
-    font_t newFont, oldFont;
-
-    if (fntLoadSlot(&newFont, path) != FNT_ERROR) {
-        // copy over the new font definition
-        // we have to lock this phase, as the old font may still be used
-        // Note: No check for concurrency is done here, which is kinda funky!
-        WaitSema(gFontSemaId);
-        memcpy(&oldFont, &fonts[FNT_DEFAULT], sizeof(font_t));
-        memcpy(&fonts[FNT_DEFAULT], &newFont, sizeof(font_t));
-        SignalSema(gFontSemaId);
-
-        // delete the old font
-        fntDeleteSlot(&oldFont);
-
-        return 0;
-    }
-
-    return -1;
 }
 
 void fntEnd()
@@ -525,69 +490,60 @@ void fntSetCharSize(int fontid, int width, int height)
     FT_Set_Char_Size(fonts[fontid].face, width, height, fDPI, fDPI);
 }
 
-static void fntRenderGlyph(fnt_glyph_cache_entry_t *glyph, int pen_x, int pen_y)
+void fntRenderGlyph(fnt_glyph_cache_entry_t *glyph, owl_packet *packet, int pen_x, int pen_y, float scale)
 {
-    // only if glyph has atlas placement
-    if (glyph->allocation) {
-        /* TODO: Ineffective on many parts:
-         * 1. Usage of floats for UV - fixed point should suffice (and is used internally by GS for UV)
-         *
-         * 2. GS_SETREG_TEX0 for every quad - why? gsKit should only set texture if demanded
-         *    We should prepare a special fnt render method that would step over most of the
-         *    performance problems under - beginning with rmSetupQuad and continuing into gsKit
-         *    - this method would handle the preparation of the quads and GS upload itself,
-         *    without the use of prim_quad_texture and rmSetupQuad...
-         */
-        quad.ul.x = pen_x + glyph->ox;
-        if (GetInterlacedFrameMode() == 0)
-            quad.ul.y = pen_y + glyph->oy;
-        else
-            quad.ul.y = (float)pen_y + ((float)glyph->oy / 2.0f);
-        quad.ul.u = glyph->allocation->x;
-        quad.ul.v = glyph->allocation->y;
+    float x1, y1, x2, y2;
+    float u1, v1, u2, v2;
 
-        quad.br.x = quad.ul.x + glyph->width;
-        if (GetInterlacedFrameMode() == 0)
-            quad.br.y = quad.ul.y + glyph->height;
-        else
-            quad.br.y = quad.ul.y + ((float)glyph->height / 2.0f);
-        quad.br.u = quad.ul.u + glyph->width;
-        quad.br.v = quad.ul.v + glyph->height;
-
-        quad.txt = &glyph->atlas->surface;
-
-        fntDrawQuad(&quad);
-
+    x1 = (float)pen_x + ((float)glyph->ox * scale)-0.5f;
+    
+    if (GetInterlacedFrameMode()) {
+        y1 = ((float)pen_y + ((float)glyph->oy / 2.0f) * scale)-0.5f;
+        y2 = (y1 + ((float)glyph->height / 2.0f) * scale)-0.5f;
+    } else {
+        y1 = (float)pen_y + ((float)glyph->oy * scale)-0.5f;
+        y2 = y1 + ((float)glyph->height * scale)-0.5f;
     }
+    
+    x2 = x1 + ((float)glyph->width * scale)-0.5f;
+
+    u1 = glyph->allocation->x; 
+    v1 = glyph->allocation->y;
+    u2 = glyph->allocation->x + glyph->width + 0.5f;
+    v2 = glyph->allocation->y + glyph->height + 0.5f;
+
+    float float_pos[8] = { x1, y1, u1, v1, x2, y2, u2, v2 };
+    int fixed_pos[8];
+    vu0_ftoi4_clamp_8x(float_pos, fixed_pos, XYUV_MAX_FLOAT);
+
+    owl_add_xy_uv_2x_font(packet, fixed_pos[0], fixed_pos[1], fixed_pos[2], fixed_pos[3], fixed_pos[4], fixed_pos[5], fixed_pos[6], fixed_pos[7]);
 }
 
-
-#ifndef __RTL
-int fntRenderString(int id, int x, int y, short aligned, size_t width, size_t height, const char *string, u64 colour)
+#ifndef __RTL  
+int fntRenderString(int id, int x, int y, short aligned, size_t width, size_t height, const char *string, float scale, u64 colour)
 {
     // wait for font lock to unlock
     WaitSema(gFontSemaId);
     font_t *font = &fonts[id];
     SignalSema(gFontSemaId);
 
-    if (aligned & ALIGN_HCENTER) {
-        if (width) {
-            x -= min(fntCalcDimensions(id, string), width) >> 1;
-        } else {
-            x -= fntCalcDimensions(id, string) >> 1;
-        }
-    }
+    int text_width = fntCalcDimensions(id, scale, string);
+    int text_height = FNTSYS_CHAR_SIZE*scale; 
 
-    if (aligned & ALIGN_VCENTER) {
-        y += (FNTSYS_CHAR_SIZE - 4) >> 1;
-    } else {
-        y += (FNTSYS_CHAR_SIZE - 2);
-    }
+    if (aligned & ALIGN_HCENTER)
+        x -= text_width >> 1;
+    else if (aligned & ALIGN_RIGHT)
+        x -= text_width;
 
-    quad.color = colour;
+    if (aligned & ALIGN_VCENTER)
+        y += (height - text_height) >> 1;
+    else if (aligned & ALIGN_BOTTOM)
+        y += height - text_height;
+    else
+        y += (text_height - 2);
 
     int pen_x = x;
-    int xmax = x + width;
+    int xmax = x + width; 
     int ymax = y + height;
 
     use_kerning = FT_HAS_KERNING(font->face);
@@ -602,9 +558,25 @@ int fntRenderString(int id, int x, int y, short aligned, size_t width, size_t he
     // because that'll make the code run only once per N frames, not every frame
 
     // cache glyphs and render as we go
-    for (; *string; ++string) {
-        if (utf8Decode(&state, &codepoint, *string)) // accumulate the codepoint value
+
+    owl_packet *packet = NULL;
+
+    GSSURFACE *tex = NULL;
+
+    const char *text_to_render = string;
+
+    owl_qword *last_cnt, *last_direct, *last_prim, *before_first_draw, *after_draw;
+
+    int text_size = 0, texture_id, last_texture_id;
+
+    char *chars_to_count = width? " \n" : " ";
+
+    bool started_rendering = false;
+
+    for (; *text_to_render; ++text_to_render) {
+        if (utf8Decode(&state, &codepoint, *text_to_render)) // accumulate the codepoint value 
             continue;
+            
 
         glyph = fntCacheGlyph(font, codepoint);
         if (!glyph)
@@ -615,7 +587,7 @@ int fntRenderString(int id, int x, int y, short aligned, size_t width, size_t he
             glyph_index = FT_Get_Char_Index(font->face, codepoint);
             if (glyph_index) {
                 FT_Get_Kerning(font->face, previous, glyph_index, FT_KERNING_DEFAULT, &delta);
-                pen_x += delta.x >> 6;
+                pen_x += ((int)(delta.x*scale) >> 6);
             }
             previous = glyph_index;
         }
@@ -623,49 +595,181 @@ int fntRenderString(int id, int x, int y, short aligned, size_t width, size_t he
         if (width) {
             if (codepoint == '\n') {
                 pen_x = x;
-                y +=19; // hmax is too tight and unordered, generally
+                y += 19; // hmax is too tight and unordered, generally
                 continue;
             }
 
-            if (y > ymax) // stepped over the max
-                break;
+            //if (y > ymax) // stepped over the max
+            //    break;
 
             if (pen_x + glyph->width > xmax) {
-                pen_x = xmax + 1; // to be sure no other cahr will be written (even not a smaller one just following)
-                continue;
+                //pen_x = xmax + 1; // to be sure no other cahr will be written (even not a smaller one just following)
+                pen_x = x;
+                y += 19; // hmax is too tight and unordered, generally
+                //continue;
             }
         }
 
-        fntRenderGlyph(glyph, pen_x, y);
-        pen_x += glyph->shx >> 6;
+        if (glyph->allocation) {
+            if (tex != &glyph->atlas->surface || !glyph->atlas->surface.Vram) {
+                tex = &glyph->atlas->surface;
+                
+                if (started_rendering) {
+                    int last_size = (((uint32_t)after_draw)-((uint32_t)before_first_draw))/16;
+
+                    last_cnt->dword[0] = DMA_TAG((texture_id != -1? 11 : 7)+last_size, 0, DMA_CNT, 0, 0, 0);
+            
+                    last_direct->sword[3] = VIF_CODE(6+last_size, 0, VIF_DIRECT, 0);
+
+                    last_prim->dword[0] = VU_GS_GIFTAG(last_size/2, 
+				                            			1, NO_CUSTOM_DATA, 1, 
+				                            			VU_GS_PRIM(GS_PRIM_PRIM_SPRITE, 
+				                            					   0, 1, 
+				                            					   gsGlobal->PrimFogEnable, 
+				                            					   gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 1, gsGlobal->PrimContext, 0),
+    			                            			1, 4);
+
+                } 
+
+                text_size = strlen(text_to_render)-count_spaces(text_to_render, chars_to_count)-count_nonascii(text_to_render);
+                int text_vert_size = (text_size*2);
+
+                texture_id = texture_manager_bind(gsGlobal, tex, true);
+
+	            packet = owl_query_packet(CHANNEL_VIF1, (texture_id != -1? 12 : 8)+text_vert_size);
+
+                last_cnt = packet->ptr;
+	            owl_add_cnt_tag(packet, (texture_id != -1? 11 : 7)+text_vert_size, 0); // 4 quadwords for vif
+
+	            if (texture_id != -1) {
+	            	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0)); 
+	            	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0)); 
+	            	owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSH, 0));
+	            	owl_add_uint(packet, VIF_CODE(2, 0, VIF_DIRECT, 0));
+
+	            	owl_add_tag(packet, GIF_AD, GIFTAG(1, 1, 0, 0, 0, 1));
+	            	owl_add_tag(packet, GIF_NOP, 0);
+
+	            	owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));
+	            	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0)); 
+	            	owl_add_uint(packet, VIF_CODE(texture_id, 0, VIF_MARK, 0));
+	            	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 1));
+	            }
+
+                last_direct = packet->ptr;
+	            owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+	            owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+	            owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));
+	            owl_add_uint(packet, VIF_CODE(6+(text_size*2), 0, VIF_DIRECT, 0)); // 3 giftags
+
+	            owl_add_tag(packet, GIF_AD, GIFTAG(4, 1, 0, 0, 0, 1));
+
+	            int tw, th;
+	            athena_set_tw_th(tex, &tw, &th);
+
+	            owl_add_tag(packet, 
+	            	GS_TEX0_1, 
+	            	GS_SETREG_TEX0((tex->Vram & ~TRANSFER_REQUEST_MASK)/256, 
+	            				  tex->TBW, 
+	            				  tex->PSM,
+	            				  tw, th, 
+	            				  gsGlobal->PrimAlphaEnable, 
+	            				  COLOR_MODULATE,
+	            				  (tex->VramClut & ~TRANSFER_REQUEST_MASK)/256, 
+	            				  tex->ClutPSM, 
+	            				  0, 0, 
+	            				  tex->VramClut? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD)
+	            );
+
+	            owl_add_tag(packet, GS_TEX1_1, GS_SETREG_TEX1(1, 0, tex->Filter, tex->Filter, 0, 0, 0));
+
+                owl_add_tag(packet, GS_PRIM, 
+                    VU_GS_PRIM(
+                        GS_PRIM_PRIM_SPRITE, 
+                        0, 
+                        1, 
+                        gsGlobal->PrimFogEnable, 
+                        gsGlobal->PrimAlphaEnable, 
+                        gsGlobal->PrimAAEnable, 
+                        1, 
+                        gsGlobal->PrimContext, 
+                        0
+                    )
+                );
+
+                owl_add_tag(packet, GS_RGBAQ, colour);
+
+                last_prim = packet->ptr; 
+	            owl_add_tag(packet, 
+					   ((uint64_t)(GS_UV) << 0 | (uint64_t)(GS_XYZ2) << 4), 
+					   	VU_GS_GIFTAG(text_vert_size, 
+							1, NO_CUSTOM_DATA, 0, 
+							0,
+    						1, 2)
+						);
+
+                before_first_draw = packet->ptr;
+            }                 
+
+            fntRenderGlyph(glyph, packet, pen_x, y, scale);
+            
+            after_draw = packet->ptr;
+
+            started_rendering = true;
+        }
+
+        pen_x += ((int)(glyph->shx*scale) >> 6);
     }
 
     return pen_x;
 }
+ 
 
-Coords fntGetTextSize(int id, const char* text) {
+int fntRenderStringPlus(int id, int x, int y, short aligned, size_t width, size_t height, const char *string, float scale, u64 colour, float outline, u64 outline_colour, float dropshadow, u64 dropshadow_colour) {
+    if (outline > 0.0f) {
+        float offsets[][2] = { {outline, outline}, {outline, -outline}, {-outline, outline}, {-outline, -outline} };
+
+	    for(int i = 0; i < 4; i++){
+            fntRenderString(id, x+offsets[i][0], y+offsets[i][1], aligned, width, height, string, scale, outline_colour);
+	    }
+    } else if (dropshadow > 0.0f) {
+        fntRenderString(id, x+dropshadow, y+dropshadow, aligned, width, height, string, scale, dropshadow_colour);
+    }
+
+    fntRenderString(id, x, y, aligned, width, height, string, scale, colour);
+}
+
+Coords fntGetTextSize(int id, const char* text, float scale) {
     WaitSema(gFontSemaId);
     font_t *font = &fonts[id];
     SignalSema(gFontSemaId);
 
-	int num_chars = strlen(text);
-	FT_GlyphSlot slot = font->face->glyph;
     int width = 0;
-    int height = num_chars > 0? FNTSYS_CHAR_SIZE : 0;
-    int maxHeight = 0;
-	for (int n = 0; n < num_chars; n++) {
-		FT_UInt glyph_index = FT_Get_Char_Index(font->face, text[n]);
-		int error = FT_Load_Glyph(font->face, glyph_index, FT_LOAD_DEFAULT );
-		if (error) continue;
-		error = FT_Render_Glyph(font->face->glyph, ft_render_mode_normal );
-		if (error) continue;
-		if (slot->bitmap.rows > maxHeight) maxHeight = slot->bitmap.rows;
-		width += slot->advance.x >> 6;
-	}
+
+    for (; *text; ++text) {
+        if (utf8Decode(&state, &codepoint, *text)) // accumulate the codepoint value
+            continue;
+
+        fnt_glyph_cache_entry_t *glyph = fntCacheGlyph(font, codepoint);
+        if (!glyph)
+            continue;
+
+        // kerning
+        if (use_kerning && previous) {
+            glyph_index = FT_Get_Char_Index(font->face, codepoint);
+            if (glyph_index) {
+                FT_Get_Kerning(font->face, previous, glyph_index, FT_KERNING_DEFAULT, &delta);
+                width += (int)(delta.x*scale) >> 6;
+            }
+            previous = glyph_index;
+        }
+
+        width += ((int)(glyph->shx*scale) >> 6); 
+    }
 
     Coords size;
     size.width = width;
-    size.height = FNTSYS_CHAR_SIZE;
+    size.height = FNTSYS_CHAR_SIZE*scale;
 	
 	return size;
 }
@@ -817,6 +921,7 @@ int fntRenderString(int id, int x, int y, short aligned, size_t width, size_t he
 }
 #endif
 
+#if 0
 void fntFitString(int id, char *string, size_t width)
 {
     size_t cw = 0;
@@ -872,8 +977,9 @@ void fntFitString(int id, char *string, size_t width)
         str = ++sp;
     }
 }
+#endif
 
-int fntCalcDimensions(int id, const char *str)
+int fntCalcDimensions(int id, float scale, const char *str)
 {
     int w = 0;
 
@@ -903,12 +1009,12 @@ int fntCalcDimensions(int id, const char *str)
             glyph_index = FT_Get_Char_Index(font->face, codepoint);
             if (glyph_index) {
                 FT_Get_Kerning(font->face, previous, glyph_index, FT_KERNING_DEFAULT, &delta);
-                w += delta.x >> 6;
+                w += (int)(delta.x*scale) >> 6;
             }
             previous = glyph_index;
         }
 
-        w += glyph->shx >> 6;
+        w += (int)(glyph->shx*scale) >> 6;
     }
 
     return w;

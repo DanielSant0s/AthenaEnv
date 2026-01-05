@@ -1,0 +1,69 @@
+include Makefile.const
+
+EE_EXT = .erl
+
+EE_CFLAGS += -Wno-sign-compare -fno-strict-aliasing -fno-exceptions -fpermissive 
+EE_INCS += -I$(PS2SDK)/ports/include -I$(PS2SDK)/ports/include/zlib -I$(ATHENAENV_SRC)/include -I$(ATHENAENV_SRC)/quickjs
+
+PS2SDK_IOP_MODULES_DIR = $(PS2SDK)/iop/irx/
+PS2SDK_EE_MODULES_DIR = $(PS2SDK)/ee/lib/
+
+IOP_MODULES_DIR = $(EE_BIN_DIR)iop/
+EE_MODULES_DIR = $(EE_BIN_DIR)
+
+ifeq ($(KEYBOARD),1)
+  EE_CFLAGS += -DDYNAMIC_ATHENA_KEYBOARD
+	EE_TARGET_ERL = $(EE_BIN_DIR)athena_keyboard.erl
+  EE_OBJS = $(JS_API_DIR)ath_keyboard.o
+  IOP_MODULES = ps2kbd.irx
+	EE_MODULES = libkbd.erl
+endif
+
+ifeq ($(MOUSE),1)
+  EE_CFLAGS += -DDYNAMIC_ATHENA_MOUSE
+	EE_TARGET_ERL = $(EE_BIN_DIR)athena_mouse.erl
+  EE_OBJS = $(JS_API_DIR)ath_mouse.o
+  IOP_MODULES = ps2mouse.irx
+	EE_MODULES = libmouse.erl
+endif
+
+EE_OBJS := $(EE_OBJS:%=$(EE_OBJ_DIR)%) #prepend the object folder
+
+EE_MODULES := $(EE_MODULES:%=$(EE_MODULES_DIR)%)
+IOP_MODULES := $(IOP_MODULES:%=$(IOP_MODULES_DIR)%)
+
+all: $(EE_OBJS) $(EE_TARGET_ERL) $(EE_MODULES_DIR) $(EE_MODULES) $(IOP_MODULES_DIR) $(IOP_MODULES)
+
+clean:
+	rm -rf $(IOP_MODULES_DIR)
+	rm -f $(EE_TARGET_ERL) $(EE_OBJS) $(EE_MODULES)
+
+$(EE_OBJ_DIR):
+	@mkdir -p $@
+	
+$(EE_MODULES_DIR):
+	@mkdir -p $@
+
+$(IOP_MODULES_DIR):
+	@mkdir -p $@
+
+$(IOP_MODULES_DIR)%.irx: $(PS2SDK_IOP_MODULES_DIR)%.irx
+	@echo COPY IOP MODULE - $<
+	cp $< $@
+
+$(EE_MODULES_DIR)%.erl: $(PS2SDK_EE_MODULES_DIR)%.erl
+	@echo COPY EE MODULE - $<
+	cp $< $@
+
+$(EE_BIN_DIR)%.erl:
+	@echo CC - $@
+	$(EE_CC) -nostartfiles -nostdlib $(EE_OPTFLAGS) -o $@ $(EE_OBJS) $(EE_LDFLAGS) $(EXTRA_LDFLAGS) -Wl,-r -Wl,-d
+	$(EE_STRIP) --strip-unneeded -R .mdebug.eabi64 -R .reginfo -R .comment $@
+
+$(EE_OBJ_DIR)%.o: $(EE_SRC_DIR)%.c | $(EE_OBJ_DIR)
+	@echo CC - $<
+	$(DIR_GUARD)
+	$(EE_CC) $(EE_CFLAGS) $(EE_INCS) -c $< -o $@ -Wl,-r -Wl,-d
+
+include $(PS2SDK)/samples/Makefile.pref
+include $(PS2SDK)/samples/Makefile.eeglobal

@@ -1,21 +1,47 @@
 // {"name": "Playground", "author": "Daniel Santos", "version": "06022024", "file": "playground.js"}
 
-let v1 = Vector2.new(15.0f, 15.0f);
-let v2 = Vector2.new(30.0f, 30.0f);
+let v3 = new Vector3(15.0f, 15.0f, 15.0f);
+let v4 = new Vector3(30.0f, 30.0f, 30.0f);
 
-let v3 = Vector3.new(15.0f, 15.0f, 15.0f);
-let v4 = Vector3.new(30.0f, 30.0f, 30.0f);
-
-console.log(`Vector3 ${Vector3.add(v3, v4).toString()}`);
+console.log(`Vector3 ${v3 + v4}`);
 console.log(`Vector3 dist ${v3.dist(v4)}`);
 
-Screen.log(`Vectors distance is ${v1.dist(v2)}`);
-Screen.log(`Vectors add is ${Vector2.add(v1, v2).toString()}`);
-Screen.log(`Vectors sub is ${Vector2.sub(v1, v2).toString()}`);
-Screen.log(`Vectors mul is ${Vector2.mul(v1, v2).toString()}`);
-Screen.log(`Vectors div is ${Vector2.div(v1, v2).toString()}`);
+let v1 = new Vector2(15.0f, 15.0f);
+let v2 = new Vector2(30.0f, 30.0f);
+
+console.log(`Vectors distance is ${v1.dist(v2)}`);
+console.log(`Vectors add is ${v1 + v2}`);
+console.log(`Vectors sub is ${v1 - v2}`);
+console.log(`Vectors mul is ${v1 * v2}`);
+console.log(`Vectors div is ${v1 / v2}`);
+
+const test_matrix = new Matrix4();
+console.log(`Matrix4 ${test_matrix}`);
+for (let i = 0; i < test_matrix.length; i++) {
+    console.log(`m[${i}] = ${test_matrix[i]}`);
+}
 
 let pad = Pads.get();
+
+const m1 = new Matrix4();
+
+if (m1 == test_matrix) {
+    console.log("Matrix equal check for equal matrix values");
+}
+
+for (let i = 0; i < test_matrix.length; i++) {
+    test_matrix[i] = Math.randomf(0.0f, 1.0f);
+}
+console.log(`Matrix4 ${test_matrix}`);
+
+if (m1 != test_matrix) {
+    console.log("Matrix equal check for different matrix values");
+}
+
+const OsdConfigParam = new ArrayBuffer(4);
+System.nativeCall(System.findRelocObject("GetOsdConfigParam"), [{type: System.JS_BUFFER, value: OsdConfigParam}]);
+
+console.log((new Uint32Array(OsdConfigParam))[0].toString());
 
 pad.setEventHandler();
 

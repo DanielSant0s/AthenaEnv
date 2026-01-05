@@ -19,15 +19,13 @@ sound_table.forEach(name => {
     sounds.push({name:sound_name, file:name, size:segoe_ui.getTextSize(sound_name)});
 });
 
-let cur_sound = 0;
+let track = Sound.Stream("sounds/" + sounds[0].file);
 
-let track = Sound.load("sounds/" + sounds[0].file);
+let duration = track.length;
 
-let duration = Sound.getDuration(track);
+let position = track.position;
 
-let position = Sound.getPosition(track);
-
-Sound.play(track);
+track.play();
 
 let repeat = false;
 
@@ -50,13 +48,11 @@ icons.back.color = purple;
 icons.back.width /= 3;
 icons.back.height /= 3;
 
-let playing = true;
-
 let cur_duration = 0.0f;
 
 let text_size = null;
 
-console.log(JSON.stringify(Tasks.get()));
+console.log(JSON.stringify(Threads.get()));
 
 function msToSecondMin(ms) {
     let minutes = Math.floor(ms / 60000)
@@ -78,52 +74,50 @@ while(true){
     pad.update();
 
     if(pad.justPressed(Pads.START)) {
-        if(Sound.isPlaying()) {
-            Sound.pause(track);
-            playing = false;
+        if(track.playing()) {
+            track.pause();
         } else {
-            Sound.resume(track);
-            playing = true;
+            track.play();
         }
     }
 
     if(pad.justPressed(Pads.L1)) {
         cur_duration = 0;
-        Sound.pause(track);
+        track.pause();
         sounds.unshift(sounds.pop());
-        let new_track = Sound.load("sounds/" + sounds[0].file);
-        duration = Sound.getDuration(new_track);
-        Sound.play(new_track);
+        let new_track = Sound.Stream("sounds/" + sounds[0].file);
+        duration = new_track.length;
+        new_track.play();
         let old_track = track;
         track = new_track;
-        Sound.free(old_track);
+        old_track.free();
     }
 
     if(pad.justPressed(Pads.R1)) {
         cur_duration = 0;
-        Sound.pause(track);
+        track.pause();
         sounds.push(sounds.shift());
-        let new_track = Sound.load("sounds/" + sounds[0].file);
-        duration = Sound.getDuration(new_track);
-        Sound.play(new_track);
+        let new_track = Sound.Stream("sounds/" + sounds[0].file);
+        duration = new_track.length;
+        new_track.play();
         let old_track = track;
         track = new_track;
-        Sound.free(old_track);
+        old_track.free();
     }
 
-    position = Sound.getPosition(track);
+    position = track.position;
 
-    if(pad.justPressed(Pads.RIGHT) && Sound.isPlaying()) {
-        Sound.setPosition(track, Sound.getPosition(track) + 5000);
-    } else if(pad.justPressed(Pads.LEFT) && Sound.isPlaying()) {
-        Sound.setPosition(track, Sound.getPosition(track) - 5000);
+    if(pad.justPressed(Pads.RIGHT) && track.playing()) {
+        track.position = track.position + 5000;
+    } else if(pad.justPressed(Pads.LEFT) && track.playing()) {
+        track.position = track.position - 5000;
     }
 
     if(pad.justPressed(Pads.TRIANGLE)) {
-        Sound.restart(track);
+        track.rewind();
     }
     
-    if(Sound.isPlaying()) {
+    if(track.playing()) {
         icons.pause.draw(320 - icons.play.width/2, 224 - icons.play.height/2 + 100);
     } else {
         icons.play.draw(320 - icons.play.width/2, 224 - icons.play.height/2 + 100);
@@ -133,7 +127,7 @@ while(true){
     
     segoe_ui.print(320 - sounds[0].size.width/2, 180 - sounds[0].size.height/2, sounds[0].name);
 
-    segoe_ui.print(260, 220, msToSecondMin(Sound.getPosition(track)) + "/" + msToSecondMin(duration));
+    segoe_ui.print(260, 220, msToSecondMin(track.position) + "/" + msToSecondMin(duration));
 
     Draw.rect(120, 260, 400, 8, purple);
     Draw.rect(120, 260, 400 * cur_duration, 8, Color.new(127, 0, 255));

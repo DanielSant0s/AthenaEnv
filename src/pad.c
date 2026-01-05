@@ -2,8 +2,9 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
-#include "include/pad.h"
-#include "include/dbgprintf.h"
+
+#include <pad.h>
+#include <dbgprintf.h>
 
 static char pad0Buf[256] __attribute__((aligned(64)));
 static char pad1Buf[256] __attribute__((aligned(64)));
@@ -13,15 +14,19 @@ static int actuators;
 
 int port, slot;
 
+static int pad_initialized[2] = {0, 0};
+static int last_pad_state[2] = {PAD_STATE_DISCONN, PAD_STATE_DISCONN};
+
 int waitPadReady(int port, int slot)
 {
     int state;
     int lastState;
     char stateString[16];
+    int timeout = 0;
 
     state = padGetState(port, slot);
     lastState = -1;
-    while((state != PAD_STATE_STABLE) && (state != PAD_STATE_FINDCTP1)) {
+    while((state != PAD_STATE_STABLE) && (state != PAD_STATE_FINDCTP1) && (state != PAD_STATE_DISCONN)) {
         if (state != lastState) {
             padStateInt2String(state, stateString);
             dbgprintf("Please wait, pad(%d,%d) is in state %s\n",
@@ -29,6 +34,11 @@ int waitPadReady(int port, int slot)
         }
         lastState = state;
         state=padGetState(port, slot);
+        timeout++;
+        if(timeout > 1000) {
+            dbgprintf("Pad timeout, continuing anyway\n");
+            return -1;
+        }
     }
     // Were the pad ever 'out of sync'?
     if (lastState != -1) {
@@ -49,7 +59,10 @@ int initializePad(int port, int slot)
     int i;
     int status;
 
-    waitPadReady(port, slot);
+    if(waitPadReady(port, slot) != 0) {
+        dbgprintf("Pad not ready, skipping initialization\n");
+        return 0;
+    }
 
     // How many different modes can this device operate in?
     // i.e. get # entrys in the modetable
@@ -134,10 +147,29 @@ int initializePad(int port, int slot)
     return 1;
 }
 
+void checkPadReconnection(int port, int slot)
+{
+    int current_state = padGetState(port, slot);
+    
+    if (current_state == PAD_STATE_DISCONN) {
+        pad_initialized[port] = 0;
+    }
+    
+    if ((current_state == PAD_STATE_STABLE || current_state == PAD_STATE_FINDCTP1) && 
+        !pad_initialized[port]) {
+        initializePad(port, slot);
+        pad_initialized[port] = 1;
+    }
+    
+    last_pad_state[port] = current_state;
+}
+
 struct padButtonStatus readPad(int port, int slot)
 {
     struct padButtonStatus buttons;
-    int ret;    
+    int ret;
+    
+    checkPadReconnection(port, slot);
 
     do {
     	ret = padGetState(port, slot);
@@ -155,6 +187,8 @@ int isButtonPressed(u32 button)
    u32 paddata;
    
    struct padButtonStatus padbuttons;
+   
+   checkPadReconnection(0, 0);
    
    while (((ret=padGetState(0, 0)) != PAD_STATE_STABLE)&&(ret!=PAD_STATE_FINDCTP1)&&(ret != PAD_STATE_DISCONN)); // more error check ?
    if (padRead(0, 0, &padbuttons) != 0)
@@ -181,17 +215,19 @@ void pad_init()
 
     if((ret = padPortOpen(0, 0, pad0Buf)) == 0) {
         dbgprintf("padOpenPort failed: %d\n", ret);
-        SleepThread();
     }
 
-    if(!initializePad(port, slot)) {
+    if(initializePad(port, slot)) {
+        pad_initialized[0] = 1;
+    } else {
         dbgprintf("pad initalization failed!\n");
-        SleepThread();
     }
 
     if((ret = padPortOpen(1, 0, pad1Buf)) == 0) {
         dbgprintf("padOpenPort failed: %d\n", ret);
-        SleepThread();
+    }
+    
+    if(initializePad(1, 0)) {
+        pad_initialized[1] = 1;
     }
 }
-

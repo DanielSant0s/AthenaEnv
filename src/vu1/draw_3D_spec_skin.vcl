@@ -1,0 +1,427 @@
+; 2024 - Daniel Santos
+; AthenaEnv Renderer
+
+.syntax new
+.name VU1Draw3DLCSS_Skin
+.vu
+.init_vf_all
+.init_vi_all
+
+.include "vu1/include/mem_layout.i"
+.include "vu1/include/athena_consts.i"
+.include "vu1/include/athena_macros.i"
+.include "vu1/include/vcl_sml.i"
+
+.macro SpecularPowerScale 
+    add specAngle, vf00, vf00
+    VectorDotProduct specAngle, normal, halfDir
+    maxx		specAngle, specAngle, vf00			; Clamp to > 0
+    mul  		specAngle, specAngle, specAngle	; Square it
+    mul  		specAngle, specAngle, specAngle	; 4th power
+    mul  		specAngle, specAngle, specAngle	; 8th power
+    mul  		specAngle, specAngle, specAngle	; 16th power
+    ;mul 		specAngle, specAngle, specAngle	; 32nd power
+    ;mul 		specAngle, specAngle, specAngle	; 64nd power
+    mul         specAngle, LightSpecular, specAngle[x]
+    add.xyz         light, light, specAngle 
+.endm
+
+--enter
+--endenter
+    ;//////////// --- Load data 1 --- /////////////
+    ; Updated once per mesh
+    MatrixLoad	ScreenMatrix, SCREEN_MATRIX, vi00 ; load view-projection matrix
+    MatrixLoad	ObjectMatrix, OBJECT_MATRIX, vi00 ; load object matrix
+
+    MatrixMultiply   ObjectToScreen, ObjectMatrix, ScreenMatrix
+
+    lq.w           bfc_multiplier, CLIPFAN_OFFSET(vi00)
+
+    ftoi0.w        bfc_sign_mask, bfc_multiplier
+    mtir           z_sign_mask, bfc_sign_mask[w]
+
+    ibeq           z_sign_mask, vi00, ignore_face_culling 
+
+    iaddiu          z_sign_mask, vi00, 0x20
+ignore_face_culling:
+
+    lq scale, SCREEN_SCALE(vi00)
+
+    AddScreenOffset scale
+
+    move vector, vf00
+    move oldvector, vf00
+    move vertex2, vf00
+    move vertex3, vf00
+
+    ;/////////////////////////////////////////////
+
+	fcset   0x000000	; VCL won't let us use CLIP without first zeroing
+				; the clip flags
+
+    ilw.y       accurateClipping,    CLIPFAN_OFFSET(vi00)
+    ibne vi00,  accurateClipping, scissor_init
+
+cull_init:
+    LoadCullScale clip_scale, 0.5
+
+    ;//////////// --- Load data 1 --- /////////////
+    ; Updated once per mesh
+    ilw.w       dirLightQnt,    NUM_DIR_LIGHTS(vi00)  ; load active directional lights
+    lq.xyz      CamPos,         CAMERA_POSITION(vi00) ; load program params
+    iaddiu      lightDirs,      vi00,    LIGHT_DIRECTION_PTR       
+    iaddiu      lightAmbs,      vi00,    LIGHT_AMBIENT_PTR
+    iaddiu      lightDiffs,     vi00,    LIGHT_DIFFUSE_PTR    
+    iaddiu      lightSpecs,     vi00,    LIGHT_SPECULAR_PTR 
+
+    ;//////////// --- Load data 2 --- /////////////
+    ; Updated dynamically
+
+culled_init:
+    xtop    iBase
+    xitop   vertCount
+
+    lq      primTag,        0(iBase) ; GIF tag - tell GS how many data we will send
+    lq      matDiffuse,     1(iBase) ; RGBA
+                                     ; u32 : R, G, B, A (0-128)
+
+    iaddiu  skinData,        iBase,      0           ; pointer to vertex data
+ 
+    iaddiu    kickAddress,    iBase,  SKINNED_INBUF_SIZE       ; pointer for XGKICK
+    iaddiu    destAddress,    kickAddress,  1       ; helper pointer for data inserting
+    ;////////////////////////////////////////////
+
+    ;/////////// --- Store tags --- /////////////
+    sq primTag,    0(kickAddress) ; prim + tell gs how many data will be
+
+    ; Set the GifTag EOP bit to 1 and NLOOP to the number of vertices
+    iaddiu               Mask, vertCount, 0x7fff
+    iaddiu               Mask, Mask, 0x01
+    isw.x                Mask, 0(kickAddress)
+    ;////////////////////////////////////////////
+
+    ;/////////////// --- Loop --- ///////////////
+    iadd vertexCounter, vi00, vertCount ; loop vertCount times
+    vertexLoop:
+        ;////////// --- Load loop data --- //////////
+        lq inVert,  SKINNED_POSITION_OFFSET(iBase)    
+        lq inNorm,  SKINNED_NORMAL_OFFSET(iBase)    
+        lq inColor, SKINNED_COLOR_OFFSET(iBase)  
+        lq stq,     SKINNED_TEXCOORD_OFFSET(iBase)       
+        ;////////////////////////////////////////////    
+
+        iaddiu  currentWeight, vi00, 4
+
+        lq boneIndices,    SKINNED_SKELETON_OFFSET(skinData) 
+        lq boneWeights,    SKINNED_SKELETON_OFFSET+1(skinData) 
+
+        move final_vertex, vf00
+        move final_normal, vf00
+
+        skinWeightLoop_cull: 
+            mtir           boneIndex, boneIndices[x]
+
+            MatrixLoad	BoneMatrix, BONE_MATRICES, boneIndex
+  
+            MatrixMultiplyVertex ts_vertex, BoneMatrix, inVert
+            MatrixMultiplyVector ts_normal, BoneMatrix, inNorm
+
+            mul ts_vertex, ts_vertex, boneWeights[x]
+            mul ts_normal, ts_normal, boneWeights[x]
+
+            add final_vertex, final_vertex, ts_vertex
+            add final_normal, final_normal, ts_normal
+
+            mr32 boneIndices, boneIndices
+            mr32 boneWeights, boneWeights
+
+            iaddi   currentWeight,  currentWeight,  -1
+            ibgtz    currentWeight,  skinWeightLoop_cull	
+
+        ;////////////// --- Vertex --- //////////////
+        MatrixMultiplyVertex	vertex, ObjectToScreen, final_vertex ; transform each vertex by the matrix
+       
+        mul clip_vertex, vertex, clip_scale
+
+        clipw.xyz	clip_vertex, clip_vertex	
+        fcand		VI01,   0x3FFFF  
+        iaddiu		iADC,   VI01,       0x7FFF 
+        
+        div         q,      vf00[w],    vertex[w]   ; perspective divide (1/vert[w]):
+        mul.xyz     vertex, vertex,     q
+
+        mul.xyz    vertex, vertex,     scale
+        add.xyz    vertex, vertex,     offset
+
+        move vertex2, vertex3       
+        move vertex3, vertex
+
+        move.xyz	oldvector, vector
+
+	    sub.xyz		vector, vertex3, vertex2
+
+        mulw.xyz       vector, vector, bfc_multiplier
+	    opmula.xyz	acc, vector, oldvector
+	    opmsub.xyz	crossproduct, oldvector, vector
+
+	    fmand		z_sign, z_sign_mask
+        iaddiu		z_sign, z_sign, 0xFFE0
+        ior        iADC, iADC, z_sign
+        
+        mfir.w		vertex, iADC
+        ftoi4.xy    vertex, vertex
+        ftoi0.z     vertex, vertex
+        ;////////////////////////////////////////////
+
+
+        ;//////////////// --- ST --- ////////////////
+        mulq modStq, stq, q
+        ;////////////////////////////////////////////
+
+        ;//////////////// - NORMALS - /////////////////
+        MatrixMultiplyVector	normal,    ObjectMatrix, final_normal ; transform each normal by the matrix
+        
+        move light, vf00
+        move intensity, vf00
+
+        iadd  currDirLight, vi00, vi00
+        culled_directionaLightsLoop:
+            lq LightAmbient, LIGHT_AMBIENT_PTR(currDirLight)
+
+            ; Ambient lighting
+            add.xyz light, light, LightAmbient
+
+            lq LightDirection, LIGHT_DIRECTION_PTR(currDirLight)
+            
+            ; Diffuse lighting
+            VectorDotProduct intensity, normal, LightDirection
+
+            maxx.xyzw  intensity, intensity, vf00
+
+            lq LightDiffuse, LIGHT_DIFFUSE_PTR(currDirLight)
+
+            mul diffuse, LightDiffuse, intensity[x]
+            add.xyz light, light, diffuse
+
+            ; Blinn-Phong Lighting Calculation
+            HalfAngle halfDir, LightDirection, CamPos
+
+            lq LightSpecular, LIGHT_SPECULAR_PTR(currDirLight)
+
+            SpecularPowerScale
+
+            iaddiu   currDirLight,  currDirLight,  1; increment the loop counter 
+            ibne    dirLightQnt,  currDirLight,  culled_directionaLightsLoop	; and repeat if needed
+
+        add.xyzw   color, matDiffuse, inColor
+        mul    color, color,      light       ; color = color * light
+
+        VectorNormalizeClamp color, color
+        loi 128.0
+        mul color, color, i                     ; normalize RGBA
+        ColorFPtoGsRGBAQ intColor, color           ; convert to int
+        ;///////////////////////////////////////////
+
+
+        ;//////////// --- Store data --- ////////////
+        sq.xyz modStq,      STQ(destAddress)      
+        sq intColor,    RGBA(destAddress)      ; q is grabbed from stq
+        sq vertex,  XYZ2(destAddress)     
+        ;////////////////////////////////////////////
+
+        iaddiu          iBase,     iBase,     1    
+
+        iaddiu          skinData,     skinData,         2                     
+
+        iaddiu          destAddress,    destAddress,    3
+
+        iaddi   vertexCounter,  vertexCounter,  -1	; decrement the loop counter 
+        ibne    vertexCounter,  vi00,   vertexLoop	; and repeat if needed
+
+    ;//////////////////////////////////////////// 
+
+    xgkick kickAddress ; dispatch to the GS rasterizer.
+
+--barrier
+--cont
+
+    b culled_init
+
+scissor_init:
+
+    iaddiu               StackPtr, vi00, STACK_OFFSET
+
+    .include "vu1/proc/setup_clip_trigger.i"
+
+    ;//////////// --- Load data 2 --- /////////////
+    ; Updated dynamically
+init:
+    xtop    iBase
+    xitop   vertCount
+
+    lq      primTag,        0(iBase) ; GIF tag - tell GS how many data we will send
+    lq      matDiffuse,     1(iBase) ; material diffuse color
+
+    iaddiu  skinData,        iBase,      0           ; pointer to vertex data
+
+    iaddiu     kickAddress,    iBase, SKINNED_INBUF_SIZE
+    ;////////////////////////////////////////////
+
+    ;/////////// --- Store tags --- /////////////
+    sq primTag,    0(kickAddress) ; prim + tell gs how many data will be
+
+    ; Set the GifTag EOP bit to 1 and NLOOP to the number of vertices
+    iaddiu               Mask, vertCount, 0x7fff
+    iaddiu               Mask, Mask, 0x01
+    isw.x                Mask, 0(kickAddress)
+    ;////////////////////////////////////////////
+
+    iaddiu    outputAddress,    kickAddress,  1       ; helper pointer for data inserting
+
+    .include "vu1/proc/setup_clip_flags.i"
+
+    .include "vu1/proc/setup_vertex_queue.i"
+
+    iadd vertexCounter, vi00, vertCount ; loop vertCount times
+
+    loop:
+        ;////////// --- Load loop data --- //////////
+        lq inVert,  SKINNED_POSITION_OFFSET(iBase)    
+        lq inNorm,  SKINNED_NORMAL_OFFSET(iBase)    
+        lq inColor, SKINNED_COLOR_OFFSET(iBase)  
+        lq stq,     SKINNED_TEXCOORD_OFFSET(iBase)       
+        ;////////////////////////////////////////////    
+
+        iaddiu  currentWeight, vi00, 4
+
+        lq boneIndices,    SKINNED_SKELETON_OFFSET(skinData) 
+        lq boneWeights,    SKINNED_SKELETON_OFFSET+1(skinData) 
+
+        move final_vertex, vf00
+        move final_normal, vf00
+
+        skinWeightLoop: 
+            mtir           boneIndex, boneIndices[x]
+
+            MatrixLoad	BoneMatrix, BONE_MATRICES, boneIndex
+  
+            MatrixMultiplyVertex ts_vertex, BoneMatrix, inVert
+            MatrixMultiplyVector ts_normal, BoneMatrix, inNorm
+
+            mul ts_vertex, ts_vertex, boneWeights[x]
+            mul ts_normal, ts_normal, boneWeights[x]
+
+            add final_vertex, final_vertex, ts_vertex
+            add final_normal, final_normal, ts_normal
+
+            mr32 boneIndices, boneIndices
+            mr32 boneWeights, boneWeights
+
+            iaddi   currentWeight,  currentWeight,  -1
+            ibgtz    currentWeight,  skinWeightLoop	
+
+        ;////////////// --- Vertex --- //////////////
+        MatrixMultiplyVertex	vertex, ObjectToScreen, final_vertex ; transform each vertex by the matrix
+        move formVertex, vertex
+         
+        VertexPersCorrST vertex, modStq, vertex, stq
+
+        mul.xyz    vertex, vertex,     scale
+        add.xyz    vertex, vertex,     offset
+
+        move vertex1, vertex2
+        move vertex2, vertex3       
+
+        move vertex3, vertex 
+
+        VertexFpToGsXYZ2  vertex,vertex
+        ;////////////////////////////////////////////
+
+        ;//////////////// - NORMALS - /////////////////
+        MatrixMultiplyVector	normal,    ObjectMatrix, final_normal ; transform each normal by the matrix
+        
+        move light, vf00
+        move intensity, vf00
+
+        iadd  currDirLight, vi00, vi00
+        ilw.w       dirLightQnt,    NUM_DIR_LIGHTS(vi00) ; load active directional lights 
+        directionaLightsLoop:
+            
+            lq.xyz      CamPos,         CAMERA_POSITION(vi00) ; load program params
+            iaddiu      lightDirs,      vi00,    LIGHT_DIRECTION_PTR      
+            iaddiu      lightAmbs,      vi00,    LIGHT_AMBIENT_PTR  
+            iaddiu      lightDiffs,     vi00,    LIGHT_DIFFUSE_PTR     
+            iaddiu      lightSpecs,     vi00,    LIGHT_SPECULAR_PTR  
+
+            iadd  currLightPtr, lightAmbs, currDirLight
+            lq LightAmbient, 0(currLightPtr)
+
+            ; Ambient lighting
+            add.xyz light, light, LightAmbient
+
+            iadd  currLightPtr, lightDirs, currDirLight
+            lq LightDirection, 0(currLightPtr)
+            
+            ; Diffuse lighting
+            VectorDotProduct intensity, normal, LightDirection
+
+            maxx.xyzw  intensity, intensity, vf00
+
+            iadd  currLightPtr, lightDiffs, currDirLight
+            lq LightDiffuse, 0(currLightPtr)
+
+            mul diffuse, LightDiffuse, intensity[x]
+            add.xyz light, light, diffuse
+
+            HalfAngle halfDir, LightDirection, CamPos
+
+            iadd  currLightPtr, lightSpecs, currDirLight
+            lq LightSpecular, 0(currLightPtr)
+
+            SpecularPowerScale
+
+            iaddiu   currDirLight,  currDirLight,  1; increment the loop counter 
+            ibne    dirLightQnt,  currDirLight,  directionaLightsLoop	; and repeat if needed
+
+        add.xyzw   color, matDiffuse, inColor
+        mul    color, color,      light       ; color = color * light
+
+        VectorNormalizeClamp color, color
+        loi 128.0
+        mul color, color, i                        ; normalize RGBA
+        ColorFPtoGsRGBAQ intColor, color           ; convert to int
+        ;///////////////////////////////////////////
+
+ 
+        ;//////////// --- Store data --- ////////////
+        sq.xyz modStq,      STQ(outputAddress)     
+        sq intColor,    RGBA(outputAddress)     ; q is grabbed from stq
+        sq vertex,      XYZ2(outputAddress)   
+        ;////////////////////////////////////////////
+
+        .include "vu1/proc/process_scissor_clip_skin.i"
+
+        iaddiu          iBase,     iBase,     1                         
+
+        iaddiu          skinData,     skinData,     2
+
+        iaddiu          outputAddress,  outputAddress,  3
+
+        iaddi   vertexCounter,  vertexCounter,  -1	; decrement the loop counter 
+        ibne    vertexCounter,  vi00,   loop	; and repeat if needed
+
+    ;//////////////////////////////////////////// 
+
+    xgkick kickAddress ; dispatch to the GS rasterizer.
+
+--barrier
+--cont
+
+    b init
+
+.include "vu1/proc/save_last_loop.i"
+
+.include "vu1/proc/scissor_interpolation.i"
+
+--exit
+--endexit

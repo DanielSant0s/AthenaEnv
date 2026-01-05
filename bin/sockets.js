@@ -1,25 +1,36 @@
 // {"name": "Sockets demo", "author": "Daniel Santos", "version": "04072023","file": "sockets.js"}
 
+IOP.reset();
+
+IOP.loadModule("SMAP");
+
 Network.init();
+
+const font = new Font("default");
+font.scale = 0.7;
 
 var nw_config = Network.getConfig();
 
 var s = new Socket(AF_INET, SOCK_STREAM);
-s.connect("192.168.1.2", 65432);
-var msg = "Hello from the emulated PS2!";
-s.send(msg);
-msg = s.recv(1024);
+
+const host = Network.getHostbyName("www.google.com");
+
+console.log(host);
+
+s.connect(host, 80);
+s.send("GET / HTTP/1.1\r\nHost:www.google.com\r\n\r\n");
+const msg = s.recv(1024);
 console.log(msg);
 s.close();
 
 for(var i = 0; i < 1250; i++){
     Screen.clear();
-    lml_font.print(5, 250, "IP Address: " + nw_config.ip);
-    lml_font.print(5, 265, "Netmask: " + nw_config.netmask);
-    lml_font.print(5, 280, "Gateway: " + nw_config.gateway);
-    lml_font.print(5, 295, "DNS: " + nw_config.dns);
+    font.print(5, 250, "IP Address: " + nw_config.ip);
+    font.print(5, 265, "Netmask: " + nw_config.netmask);
+    font.print(5, 280, "Gateway: " + nw_config.gateway);
+    font.print(5, 295, "DNS: " + nw_config.dns);
 
-    lm_font.print(5, 120, "Message: " + msg);
+    //font.print(5, 120, "Message: " + msg);
 
     Screen.flip();
 }

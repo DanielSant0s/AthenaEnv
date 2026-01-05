@@ -1,15 +1,40 @@
 import { Element, Component, Menu, MenuList, Interface } from 'UI.js'
 
+const canvas = Screen.getMode();
+
+canvas.zbuffering = false;
+canvas.psmz = Screen.Z16S;
+
+System.sleep(1);
+
+for (let i = 0; i < 4; i++) {
+    
+    let bdm_info = System.getBDMInfo(`mass${i}:`);
+    console.log(JSON.stringify(bdm_info));
+    if (bdm_info) {
+        console.log(JSON.stringify(os.readdir(`mass${i}:`)));
+    }
+}
+
+Screen.setMode(canvas);
+
+//Screen.setFrameCounter(true);
+//Screen.setVSync(false);
+
 const unsel_color = Color.new(255, 255, 255, 64);
 const sel_color = Color.new(255, 255, 255);
 
 const font = new Font("fonts/LEMONMILK-Light.otf");
 const font_medium = new Font("fonts/LEMONMILK-Medium.otf");
 const font_bold = new Font("fonts/LEMONMILK-Bold.otf");
+
 font.color = unsel_color;
+
 font_bold.scale = 0.7f
+
 font_medium.scale = 1.0f;
-font.scale = 0.44f;
+
+font.scale = 0.5f;
 
 let exit_to = null;
 
@@ -38,18 +63,19 @@ const stats = new Component([
         (ctx) => { 
             ctx.mem = undefined;
             ctx.ee_info = System.getCPUInfo();
+            ctx.iop_mem = IOP.getMemoryStats();
         }, 
         (ctx) => { 
             ctx.mem = System.getMemoryStats();
             font.color = unsel_color;
-            font.print(15, 420, `Temp: ${System.getTemperature() === undefined? "NaN" : System.getTemperature()} C | RAM Usage: ${Math.floor(ctx.mem.used / 1024)}KB / ${Math.floor(ctx.ee_info.RAMSize / 1024)}KB`);
+            font.print(15, 420, `Temp: ${System.getTemperature() === undefined? "NaN" : System.getTemperature()} C | Core RAM Usage: ${Math.floor(ctx.mem.used / 1024)}KB / ${Math.floor(ctx.ee_info.RAMSize / 1024)}KB | I/O RAM Usage: ${Math.floor(ctx.iop_mem.used / 1024)}KB / ${2048}KB`);
         }, 
         (ctx, pad) => {}
     )
 ]);
 
 const no_icon = new Image("no_icon.png");
-const js_apps = System.listDir().map(file => file.name).filter(str => str.endsWith(".js")).map( app => {
+const js_apps = System.listDir().map(file => file.name).filter(str => (str.toLowerCase().endsWith(".js"))).map( app => {
     const app_fd = std.open(app, "r");
     const metadata_str = app_fd.getline().replace("// ", "");
     app_fd.close();
@@ -60,7 +86,7 @@ const js_apps = System.listDir().map(file => file.name).filter(str => str.endsWi
 
     let metadata = JSON.parse(metadata_str);
 
-    if (std.exists(metadata.icon)) {
+    if (metadata.icon && std.exists(metadata.icon)) {
         metadata.icon = new Image(metadata.icon);
     } else {
         metadata.icon = no_icon;
@@ -77,7 +103,7 @@ const main_menu = new Menu("JS Apps", js_apps,
     
         for(let i = 1; i < (ctx.entries.length < 10? ctx.entries.length : 10); i++) {
             font.color = unsel_color;
-            font.print(210, 125+(23*i), ctx.entries[i].name);
+            font.print(210, 135+(23*i), ctx.entries[i].name);
         }
     }, 
     [(ctx, pad) => {
@@ -154,6 +180,10 @@ const pad = Pads.get();
 pad.setEventHandler();
 
 const dashboard = new Interface(pad, [background, menus, stats]);
+
+Screen.clearColor(Color.new(0, 0, 255, 128));
+
+Screen.setParam(Screen.DEPTH_TEST_ENABLE, false);
 
 Screen.display(() => {
     dashboard.run();

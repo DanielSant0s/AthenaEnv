@@ -14,3 +14,5 @@ typedef struct
 	char name[16];
 	int value;
 } DiscType;
+
+int LoadELFFromFileNoReset(const char *path, int argc, char *argv[]);

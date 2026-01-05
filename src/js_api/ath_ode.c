@@ -1,0 +1,2050 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <math.h>
+#include <ath_env.h>
+#include <ode/ode.h>
+
+#define MAX_CONTACTS 64
+
+JSClassID js_geom_class_id;
+JSClassID js_space_class_id;
+static JSClassID js_world_class_id;
+
+JSClassID js_body_class_id;
+static JSClassID js_joint_class_id;
+static JSClassID js_joint_group_class_id;
+
+static void js_space_finalizer(JSRuntime *rt, JSValue val) {
+    JSSpace *space = JS_GetOpaque(val, js_space_class_id);
+    if (space && space->space) {
+        dSpaceDestroy(space->space);
+        free(space);
+    }
+}
+
+static void js_geom_finalizer(JSRuntime *rt, JSValue val) {
+    JSGeom *geom = JS_GetOpaque(val, js_geom_class_id);
+    if (geom && geom->geom) {
+        dGeomDestroy(geom->geom);
+        free(geom);
+    }
+}
+
+static void js_world_finalizer(JSRuntime *rt, JSValue val) {
+    JSWorld *world = JS_GetOpaque(val, js_world_class_id);
+    if (world && world->world) {
+        dWorldDestroy(world->world);
+        free(world);
+    }
+}
+
+static void js_body_finalizer(JSRuntime *rt, JSValue val) {
+    JSBody *body = JS_GetOpaque(val, js_body_class_id);
+    if (body && body->body) {
+        dBodyDestroy(body->body);
+        free(body);
+    }
+}
+
+static void js_joint_finalizer(JSRuntime *rt, JSValue val) {
+    JSJoint *joint = JS_GetOpaque(val, js_joint_class_id);
+    if (joint && joint->joint) {
+        dJointDestroy(joint->joint);
+        free(joint);
+    }
+}
+
+static void js_joint_group_finalizer(JSRuntime *rt, JSValue val) {
+    JSJointGroup *group = JS_GetOpaque(val, js_joint_group_class_id);
+    if (group && group->group) {
+        dJointGroupDestroy(group->group);
+        free(group);
+    }
+}
+
+static JSClassDef js_space_class = {
+    "ODESpace",
+    .finalizer = js_space_finalizer,
+};
+
+static JSClassDef js_geom_class = {
+    "ODEGeom",
+    .finalizer = js_geom_finalizer,
+};
+
+static JSClassDef js_world_class = {
+    "ODEWorld",
+    .finalizer = js_world_finalizer,
+};
+
+static JSClassDef js_body_class = {
+    "ODEBody",
+    .finalizer = js_body_finalizer,
+};
+
+static JSClassDef js_joint_class = {
+    "ODEJoint",
+    .finalizer = js_joint_finalizer,
+};
+
+static JSClassDef js_joint_group_class = {
+    "ODEJointGroup",
+    .finalizer = js_joint_group_finalizer,
+};
+
+static JSValue js_ode_cleanup(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    dCloseODE();
+    return JS_UNDEFINED;
+}
+
+static JSValue js_world_create(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSWorld *world = malloc(sizeof(JSWorld));
+    if (!world) {
+        return JS_EXCEPTION;
+    }
+    
+    world->world = dWorldCreate();
+    if (!world->world) {
+        free(world);
+        return JS_ThrowInternalError(ctx, "Failed to create ODE world");
+    }
+    
+    JSValue obj = JS_NewObjectClass(ctx, js_world_class_id);
+    if (JS_IsException(obj)) {
+        dWorldDestroy(world->world);
+        free(world);
+        return obj;
+    }
+    
+    JS_SetOpaque(obj, world);
+    return obj;
+}
+
+static JSValue js_world_destroy(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSWorld *world = JS_GetOpaque(this_val, js_world_class_id);
+    
+    if (world->world) {
+        dWorldDestroy(world->world);
+        world->world = NULL;
+    }
+    return JS_UNDEFINED;
+}
+
+static JSValue js_space_create(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSSpace *space = malloc(sizeof(JSSpace));
+    if (!space) {
+        return JS_EXCEPTION;
+    }
+
+    space->parent = NULL;
+
+    if (argc > 0) {
+        JSSpace *space = JS_GetOpaque(argv[0], js_space_class_id);
+        space->parent = space->space;
+    }
+
+    space->space = dHashSpaceCreate(space->parent);
+    if (!space->space) {
+        free(space);
+        return JS_ThrowInternalError(ctx, "Failed to create ODE space");
+    }
+    
+    JSValue obj = JS_NewObjectClass(ctx, js_space_class_id);
+    if (JS_IsException(obj)) {
+        dSpaceDestroy(space->space);
+        free(space);
+        return obj;
+    }
+    
+    JS_SetOpaque(obj, space);
+    return obj;
+}
+
+static JSValue js_space_destroy(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSSpace *space = JS_GetOpaque(this_val, js_space_class_id);
+    
+    if (space->space) {
+        dSpaceDestroy(space->space);
+        space->space = NULL;
+    }
+    return JS_UNDEFINED;
+}
+
+
+// Ray-specific functions - Setters
+static JSValue js_geom_ray_set_length(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSGeom *geom = JS_GetOpaque(this_val, js_geom_class_id);
+    
+    float length;
+    if (JS_ToFloat32(ctx, &length, argv[0])) {
+        return JS_EXCEPTION;
+    }
+    
+    dGeomRaySetLength(geom->geom, length);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_geom_ray_get_length(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSGeom *geom = JS_GetOpaque(this_val, js_geom_class_id);
+    
+    dReal length = dGeomRayGetLength(geom->geom);
+    return JS_NewFloat32(ctx, length);
+}
+
+static JSValue js_geom_ray_set(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSGeom *geom = JS_GetOpaque(this_val, js_geom_class_id);
+    
+    float px, py, pz, dx, dy, dz;
+    if (JS_ToFloat32(ctx, &px, argv[0]) ||
+        JS_ToFloat32(ctx, &py, argv[1]) ||
+        JS_ToFloat32(ctx, &pz, argv[2]) ||
+        JS_ToFloat32(ctx, &dx, argv[3]) ||
+        JS_ToFloat32(ctx, &dy, argv[4]) ||
+        JS_ToFloat32(ctx, &dz, argv[5])) {
+        return JS_EXCEPTION;
+    }
+    
+    dGeomRaySet(geom->geom, px, py, pz, dx, dy, dz);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_geom_ray_get(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSGeom *geom = JS_GetOpaque(this_val, js_geom_class_id);
+    
+    dVector3 start, dir;
+    dGeomRayGet(geom->geom, start, dir);
+    
+    JSValue result = JS_NewObject(ctx);
+    
+    JSValue start_arr = JS_NewArray(ctx);
+    JS_SetPropertyUint32(ctx, start_arr, 0, JS_NewFloat32(ctx, start[0]));
+    JS_SetPropertyUint32(ctx, start_arr, 1, JS_NewFloat32(ctx, start[1]));
+    JS_SetPropertyUint32(ctx, start_arr, 2, JS_NewFloat32(ctx, start[2]));
+    JS_SetPropertyStr(ctx, result, "start", start_arr);
+    
+    JSValue dir_arr = JS_NewArray(ctx);
+    JS_SetPropertyUint32(ctx, dir_arr, 0, JS_NewFloat32(ctx, dir[0]));
+    JS_SetPropertyUint32(ctx, dir_arr, 1, JS_NewFloat32(ctx, dir[1]));
+    JS_SetPropertyUint32(ctx, dir_arr, 2, JS_NewFloat32(ctx, dir[2]));
+    JS_SetPropertyStr(ctx, result, "direction", dir_arr);
+    
+    return result;
+}
+
+static JSValue js_geom_ray_set_params(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSGeom *geom = JS_GetOpaque(this_val, js_geom_class_id);
+    
+    int firstContact, backfaceCull;
+    if (JS_ToInt32(ctx, &firstContact, argv[0]) ||
+        JS_ToInt32(ctx, &backfaceCull, argv[1])) {
+        return JS_EXCEPTION;
+    }
+    
+    dGeomRaySetParams(geom->geom, firstContact, backfaceCull);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_geom_ray_get_params(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSGeom *geom = JS_GetOpaque(this_val, js_geom_class_id);
+    
+    int firstContact, backfaceCull;
+    dGeomRayGetParams(geom->geom, &firstContact, &backfaceCull);
+    
+    JSValue result = JS_NewObject(ctx);
+    JS_SetPropertyStr(ctx, result, "firstContact", JS_NewBool(ctx, firstContact));
+    JS_SetPropertyStr(ctx, result, "backfaceCull", JS_NewBool(ctx, backfaceCull));
+    
+    return result;
+}
+
+static JSValue js_geom_ray_set_closest_hit(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSGeom *geom = JS_GetOpaque(this_val, js_geom_class_id);
+    
+    int closestHit;
+    if (JS_ToInt32(ctx, &closestHit, argv[0])) {
+        return JS_EXCEPTION;
+    }
+    
+    dGeomRaySetClosestHit(geom->geom, closestHit);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_geom_ray_get_closest_hit(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSGeom *geom = JS_GetOpaque(this_val, js_geom_class_id);
+    
+    int closestHit = dGeomRayGetClosestHit(geom->geom);
+    return JS_NewBool(ctx, closestHit);
+}
+
+static JSValue js_geom_create_ray(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSSpace *space = JS_GetOpaque(argv[0], js_space_class_id);
+    
+    float length;
+    if (JS_ToFloat32(ctx, &length, argv[1])) {
+        return JS_EXCEPTION;
+    }
+    
+    JSGeom *geom = malloc(sizeof(JSGeom));
+    if (!geom) {
+        return JS_EXCEPTION;
+    }
+    
+    geom->geom = dCreateRay(space? space->space : NULL, length);
+    geom->parent_space = space? space->space : NULL;
+    
+    if (!geom->geom) {
+        free(geom);
+        return JS_ThrowInternalError(ctx, "Failed to create ray geometry");
+    }
+    
+    JSValue obj = JS_NewObjectClass(ctx, js_geom_class_id);
+    if (JS_IsException(obj)) {
+        dGeomDestroy(geom->geom);
+        free(geom);
+        return obj;
+    }
+    
+    JS_SetOpaque(obj, geom);
+    dGeomSetData(geom->geom, obj);
+
+    // Add ray-specific methods
+    JS_SetPropertyStr(ctx, obj, "raySetLength", JS_NewCFunction(ctx, js_geom_ray_set_length, "raySetLength", 1));
+    JS_SetPropertyStr(ctx, obj, "rayGetLength", JS_NewCFunction(ctx, js_geom_ray_get_length, "rayGetLength", 0));
+    JS_SetPropertyStr(ctx, obj, "raySet", JS_NewCFunction(ctx, js_geom_ray_set, "raySet", 6));
+    JS_SetPropertyStr(ctx, obj, "rayGet", JS_NewCFunction(ctx, js_geom_ray_get, "rayGet", 0));
+    JS_SetPropertyStr(ctx, obj, "raySetParams", JS_NewCFunction(ctx, js_geom_ray_set_params, "raySetParams", 2));
+    JS_SetPropertyStr(ctx, obj, "rayGetParams", JS_NewCFunction(ctx, js_geom_ray_get_params, "rayGetParams", 0));
+    JS_SetPropertyStr(ctx, obj, "raySetClosestHit", JS_NewCFunction(ctx, js_geom_ray_set_closest_hit, "raySetClosestHit", 1));
+    JS_SetPropertyStr(ctx, obj, "rayGetClosestHit", JS_NewCFunction(ctx, js_geom_ray_get_closest_hit, "rayGetClosestHit", 0));
+
+    return obj;
+}
+
+static JSValue js_geom_create_box(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSSpace *space = JS_GetOpaque(argv[0], js_space_class_id);
+    
+    float width, height, depth;
+    if (JS_ToFloat32(ctx, &width, argv[1]) ||
+        JS_ToFloat32(ctx, &height, argv[2]) ||
+        JS_ToFloat32(ctx, &depth, argv[3])) {
+        return JS_EXCEPTION;
+    }
+    
+    JSGeom *geom = malloc(sizeof(JSGeom));
+    if (!geom) {
+        return JS_EXCEPTION;
+    }
+    
+    geom->geom = dCreateBox(space? space->space : NULL, width, height, depth);
+    geom->parent_space = space? space->space : NULL;
+    
+    if (!geom->geom) {
+        free(geom);
+        return JS_ThrowInternalError(ctx, "Failed to create box geometry");
+    }
+    
+    JSValue obj = JS_NewObjectClass(ctx, js_geom_class_id);
+    if (JS_IsException(obj)) {
+        dGeomDestroy(geom->geom);
+        free(geom);
+        return obj;
+    }
+    
+    JS_SetOpaque(obj, geom);
+
+    dGeomSetData(geom->geom, obj);
+
+    return obj;
+}
+
+static JSValue js_geom_create_sphere(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSSpace *space = JS_GetOpaque(argv[0], js_space_class_id);
+    
+    float radius;
+    if (JS_ToFloat32(ctx, &radius, argv[1])) {
+        return JS_EXCEPTION;
+    }
+    
+    JSGeom *geom = malloc(sizeof(JSGeom));
+    if (!geom) {
+        return JS_EXCEPTION;
+    }
+    
+    geom->geom = dCreateSphere(space? space->space : NULL, radius);
+    geom->parent_space = space? space->space : NULL;
+    
+    if (!geom->geom) {
+        free(geom);
+        return JS_ThrowInternalError(ctx, "Failed to create sphere geometry");
+    }
+    
+    JSValue obj = JS_NewObjectClass(ctx, js_geom_class_id);
+    if (JS_IsException(obj)) {
+        dGeomDestroy(geom->geom);
+        free(geom);
+        return obj;
+    }
+    
+    JS_SetOpaque(obj, geom);
+
+    dGeomSetData(geom->geom, obj);
+
+    return obj;
+}
+
+static JSValue js_geom_create_from_render_object(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSSpace *space = JS_GetOpaque(argv[0], js_space_class_id);
+    
+    JSRenderObject *ro = JS_GetOpaque(argv[1], js_render_object_class_id);
+
+    dTriMeshDataID tm_id = dGeomTriMeshDataCreate();
+    
+    dGeomTriMeshDataBuildSingle(tm_id, ro->obj.data->positions, sizeof(VECTOR), ro->obj.data->index_count, ro->obj.data->indices, ro->obj.data->index_count, 3*sizeof(uint32_t));
+
+    JSGeom *geom = malloc(sizeof(JSGeom));
+    if (!geom) {
+        return JS_EXCEPTION;
+    }
+    
+    geom->geom = dCreateTriMesh(space? space->space : NULL, tm_id, NULL, NULL, NULL);
+    dGeomSetData(geom->geom, tm_id); 
+
+    geom->parent_space = space? space->space : NULL;
+    
+    if (!geom->geom) {
+        free(geom);
+        return JS_ThrowInternalError(ctx, "Failed to create trimesh");
+    }
+    
+    JSValue obj = JS_NewObjectClass(ctx, js_geom_class_id);
+    if (JS_IsException(obj)) {
+        dGeomDestroy(geom->geom);
+        free(geom);
+        return obj;
+    }
+    
+    JS_SetOpaque(obj, geom);
+
+    dGeomSetData(geom->geom, obj);
+
+    return obj;
+}
+
+static JSValue js_geom_create_plane(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSSpace *space = JS_GetOpaque(argv[0], js_space_class_id);
+    
+    float a, b, c, d;
+    if (JS_ToFloat32(ctx, &a, argv[1]) ||
+        JS_ToFloat32(ctx, &b, argv[2]) ||
+        JS_ToFloat32(ctx, &c, argv[3]) ||
+        JS_ToFloat32(ctx, &d, argv[4])) {
+        return JS_EXCEPTION;
+    }
+    
+    JSGeom *geom = malloc(sizeof(JSGeom));
+    if (!geom) {
+        return JS_EXCEPTION;
+    }
+    
+    geom->geom = dCreatePlane(space? space->space : NULL, a, b, c, d);
+    geom->parent_space = space? space->space : NULL;
+    
+    if (!geom->geom) {
+        free(geom);
+        return JS_ThrowInternalError(ctx, "Failed to create plane geometry");
+    }
+    
+    JSValue obj = JS_NewObjectClass(ctx, js_geom_class_id);
+    if (JS_IsException(obj)) {
+        dGeomDestroy(geom->geom);
+        free(geom);
+        return obj;
+    }
+    
+    JS_SetOpaque(obj, geom);
+
+    dGeomSetData(geom->geom, obj);
+
+    return obj;
+}
+
+static JSValue js_geom_create_transform(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSSpace *space = JS_GetOpaque(argv[0], js_space_class_id);
+    
+    JSGeom *geom = malloc(sizeof(JSGeom));
+    if (!geom) {
+        return JS_EXCEPTION;
+    }
+
+    JSGeom *target_geom = JS_GetOpaque(argv[1], js_geom_class_id);
+    
+    geom->geom = dCreateGeomTransform(space->space);
+    dGeomTransformSetGeom(geom->geom, target_geom->geom);
+    geom->parent_space = space->space;
+    
+    if (!geom->geom) {
+        free(geom);
+        return JS_ThrowInternalError(ctx, "Failed to create transform geometry");
+    }
+    
+    JSValue obj = JS_NewObjectClass(ctx, js_geom_class_id);
+    if (JS_IsException(obj)) {
+        dGeomDestroy(geom->geom);
+        free(geom);
+        return obj;
+    }
+    
+    JS_SetOpaque(obj, geom);
+
+    dGeomSetData(geom->geom, obj);
+
+    return obj;
+}
+
+static JSValue js_geom_destroy(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSGeom *geom = JS_GetOpaque(this_val, js_geom_class_id);
+    
+    if (geom->geom) {
+        dGeomDestroy(geom->geom);
+        geom->geom = NULL;
+    }
+    return JS_UNDEFINED;
+}
+
+static JSValue js_geom_set_position(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSGeom *geom = JS_GetOpaque(this_val, js_geom_class_id);
+    
+    float x, y, z;
+    if (JS_ToFloat32(ctx, &x, argv[0]) ||
+        JS_ToFloat32(ctx, &y, argv[1]) ||
+        JS_ToFloat32(ctx, &z, argv[2])) {
+        return JS_EXCEPTION;
+    }
+    
+    dGeomSetPosition(geom->geom, x, y, z);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_geom_set_rotation(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSGeom *geom = JS_GetOpaque(this_val, js_geom_class_id);
+
+    if (!JS_IsArray(ctx, argv[0])) {
+        return JS_ThrowTypeError(ctx, "Expected array for rotation matrix");
+    }
+     
+    dMatrix3 R;
+    for (int i = 0; i < 9; i++) {
+        JSValue val = JS_GetPropertyUint32(ctx, argv[0], i);
+        float v;
+        if (JS_ToFloat32(ctx, &v, val)) {
+            JS_FreeValue(ctx, val);
+            return JS_EXCEPTION;
+        }
+        R[i] = v;
+        JS_FreeValue(ctx, val);
+    }
+    
+    dGeomSetRotation(geom->geom, R);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_geom_get_position(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSGeom *geom = JS_GetOpaque(this_val, js_geom_class_id);
+
+    const dReal *pos = dGeomGetPosition(geom->geom);
+    JSValue arr = JS_NewArray(ctx);
+    
+    JS_SetPropertyUint32(ctx, arr, 0, JS_NewFloat32(ctx, pos[0]));
+    JS_SetPropertyUint32(ctx, arr, 1, JS_NewFloat32(ctx, pos[1]));
+    JS_SetPropertyUint32(ctx, arr, 2, JS_NewFloat32(ctx, pos[2]));
+    
+    return arr;
+}
+
+static JSValue js_geom_get_rotation(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSGeom *geom = JS_GetOpaque(this_val, js_geom_class_id);
+    
+    const dReal *rot = dGeomGetRotation(geom->geom);
+    JSValue arr = JS_NewArray(ctx);
+    
+    for (int i = 0; i < 9; i++) {
+        JS_SetPropertyUint32(ctx, arr, i, JS_NewFloat32(ctx, rot[i]));
+    }
+    
+    return arr;
+}
+
+
+typedef struct {
+    JSContext *ctx;
+    JSValue callback;
+    JSValue contacts_array;
+} collision_data;
+
+static void collision_callback(void *data, dGeomID o1, dGeomID o2) {
+    collision_data *cdata = (collision_data*)data;
+    
+    dContact contact[MAX_CONTACTS];
+    int n = dCollide(o1, o2, MAX_CONTACTS, &contact[0].geom, sizeof(dContact));
+    
+    if (n > 0) {
+        for (int i = 0; i < n; i++) {
+            JSValue contact_obj = JS_NewObject(cdata->ctx);
+
+            JSValue pos_arr = JS_NewArray(cdata->ctx);
+            JS_SetPropertyUint32(cdata->ctx, pos_arr, 0, JS_NewFloat32(cdata->ctx, contact[i].geom.pos[0]));
+            JS_SetPropertyUint32(cdata->ctx, pos_arr, 1, JS_NewFloat32(cdata->ctx, contact[i].geom.pos[1]));
+            JS_SetPropertyUint32(cdata->ctx, pos_arr, 2, JS_NewFloat32(cdata->ctx, contact[i].geom.pos[2]));
+            JS_SetPropertyStr(cdata->ctx, contact_obj, "position", pos_arr);
+
+            JSValue normal_arr = JS_NewArray(cdata->ctx);
+            JS_SetPropertyUint32(cdata->ctx, normal_arr, 0, JS_NewFloat32(cdata->ctx, contact[i].geom.normal[0]));
+            JS_SetPropertyUint32(cdata->ctx, normal_arr, 1, JS_NewFloat32(cdata->ctx, contact[i].geom.normal[1]));
+            JS_SetPropertyUint32(cdata->ctx, normal_arr, 2, JS_NewFloat32(cdata->ctx, contact[i].geom.normal[2]));
+            JS_SetPropertyStr(cdata->ctx, contact_obj, "normal", normal_arr);
+
+            JS_SetPropertyStr(cdata->ctx, contact_obj, "depth", JS_NewFloat32(cdata->ctx, contact[i].geom.depth));
+
+            JS_SetPropertyStr(cdata->ctx, contact_obj, "geom1", dGeomGetData(contact[i].geom.g1));
+            JS_SetPropertyStr(cdata->ctx, contact_obj, "geom2", dGeomGetData(contact[i].geom.g2));
+
+            JSValue length_val = JS_GetPropertyStr(cdata->ctx, cdata->contacts_array, "length");
+            uint32_t length;
+            JS_ToUint32(cdata->ctx, &length, length_val);
+            JS_SetPropertyUint32(cdata->ctx, cdata->contacts_array, length, contact_obj);
+            JS_FreeValue(cdata->ctx, length_val);
+
+            if (!JS_IsUndefined(cdata->callback)) {
+                JSValue args[1] = { contact_obj };
+                JS_Call(cdata->ctx, cdata->callback, JS_UNDEFINED, 1, args);
+            }
+        }
+    }
+}
+
+static JSValue js_space_collide(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSSpace *space = JS_GetOpaque(this_val, js_space_class_id);
+    
+    collision_data cdata;
+    cdata.ctx = ctx;
+    cdata.callback = (argc > 0) ? argv[0] : JS_UNDEFINED;
+    cdata.contacts_array = JS_NewArray(ctx);
+    
+    dSpaceCollide(space->space, &cdata, collision_callback);
+    
+    return cdata.contacts_array;
+}
+
+static JSValue js_geom_collide(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSGeom *geom1 = JS_GetOpaque(argv[0], js_geom_class_id);
+    if (!geom1) geom1 = JS_GetOpaque(argv[0], js_space_class_id);
+    JSGeom *geom2 = JS_GetOpaque(argv[1], js_geom_class_id);
+    if (!geom2) geom2 = JS_GetOpaque(argv[1], js_space_class_id);
+    
+    dContact contact[MAX_CONTACTS];
+    int n = dCollide(geom1->geom, geom2->geom, MAX_CONTACTS, &contact[0].geom, sizeof(dContact));
+    
+    JSValue contacts_array = JS_NewArray(ctx);
+    
+    for (int i = 0; i < n; i++) {
+        JSValue contact_obj = JS_NewObject(ctx);
+
+        JSValue pos_arr = JS_NewArray(ctx);
+        JS_SetPropertyUint32(ctx, pos_arr, 0, JS_NewFloat32(ctx, contact[i].geom.pos[0]));
+        JS_SetPropertyUint32(ctx, pos_arr, 1, JS_NewFloat32(ctx, contact[i].geom.pos[1]));
+        JS_SetPropertyUint32(ctx, pos_arr, 2, JS_NewFloat32(ctx, contact[i].geom.pos[2]));
+        JS_SetPropertyStr(ctx, contact_obj, "position", pos_arr);
+
+        JSValue normal_arr = JS_NewArray(ctx);
+        JS_SetPropertyUint32(ctx, normal_arr, 0, JS_NewFloat32(ctx, contact[i].geom.normal[0]));
+        JS_SetPropertyUint32(ctx, normal_arr, 1, JS_NewFloat32(ctx, contact[i].geom.normal[1]));
+        JS_SetPropertyUint32(ctx, normal_arr, 2, JS_NewFloat32(ctx, contact[i].geom.normal[2]));
+        JS_SetPropertyStr(ctx, contact_obj, "normal", normal_arr);
+
+        JS_SetPropertyStr(ctx, contact_obj, "depth", JS_NewFloat32(ctx, contact[i].geom.depth));
+        
+        JS_SetPropertyUint32(ctx, contacts_array, i, contact_obj);
+    }
+    
+    return contacts_array;
+}
+
+static void rot_vector_to_matrix(VECTOR vec, dMatrix3 result) {
+    float angle = sqrtf(vec[0] * vec[0] + vec[1] * vec[1] + vec[2] * vec[2]);
+
+    float nx = vec[0] / angle;
+    float ny = vec[1] / angle;
+    float nz = vec[2] / angle;
+
+    float cos_angle = cosf(angle);
+    float sin_angle = sinf(angle);
+    float one_minus_cos = 1.0f - cos_angle;
+
+    result[0] = cos_angle + nx*nx*one_minus_cos;          
+    result[1] = nx*ny*one_minus_cos - nz*sin_angle;       
+    result[2] = nx*nz*one_minus_cos + ny*sin_angle;       
+    
+    result[4] = ny*nx*one_minus_cos + nz*sin_angle;       
+    result[5] = cos_angle + ny*ny*one_minus_cos;          
+    result[6] = ny*nz*one_minus_cos - nx*sin_angle;       
+    
+    result[8] = nz*nx*one_minus_cos - ny*sin_angle;       
+    result[9] = nz*ny*one_minus_cos + nx*sin_angle;       
+    result[10] = cos_angle + nz*nz*one_minus_cos;         
+}
+
+void updateGeomPosRot(athena_object_data *obj) {
+    dGeomID geom = (dGeomID)obj->collision;
+
+    dGeomSetPosition(geom, obj->position[0], obj->position[1], obj->position[2]);
+
+    dMatrix3 R;
+    rot_vector_to_matrix(obj->rotation, R);
+    
+    dGeomSetRotation(geom, R);
+}
+
+static JSValue js_world_set_gravity(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSWorld *world = JS_GetOpaque(this_val, js_world_class_id);
+    
+    float x, y, z;
+    if (JS_ToFloat32(ctx, &x, argv[0]) ||
+        JS_ToFloat32(ctx, &y, argv[1]) ||
+        JS_ToFloat32(ctx, &z, argv[2])) {
+        return JS_EXCEPTION;
+    }
+    
+    dWorldSetGravity(world->world, x, y, z);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_world_get_gravity(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSWorld *world = JS_GetOpaque(this_val, js_world_class_id);
+    
+    dVector3 gravity;
+    dWorldGetGravity(world->world, gravity);
+    
+    JSValue arr = JS_NewArray(ctx);
+    JS_SetPropertyUint32(ctx, arr, 0, JS_NewFloat32(ctx, gravity[0]));
+    JS_SetPropertyUint32(ctx, arr, 1, JS_NewFloat32(ctx, gravity[1]));
+    JS_SetPropertyUint32(ctx, arr, 2, JS_NewFloat32(ctx, gravity[2]));
+    
+    return arr;
+}
+
+static JSValue js_world_set_cfm(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSWorld *world = JS_GetOpaque(this_val, js_world_class_id);
+    
+    float cfm;
+    if (JS_ToFloat32(ctx, &cfm, argv[0])) {
+        return JS_EXCEPTION;
+    }
+    
+    dWorldSetCFM(world->world, cfm);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_world_set_erp(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSWorld *world = JS_GetOpaque(this_val, js_world_class_id);
+    
+    float erp;
+    if (JS_ToFloat32(ctx, &erp, argv[0])) {
+        return JS_EXCEPTION;
+    }
+    
+    dWorldSetERP(world->world, erp);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_world_step(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSWorld *world = JS_GetOpaque(this_val, js_world_class_id);
+    
+    float step_size;
+    if (JS_ToFloat32(ctx, &step_size, argv[0])) {
+        return JS_EXCEPTION;
+    }
+    
+    dWorldStep(world->world, step_size);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_world_quick_step(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSWorld *world = JS_GetOpaque(this_val, js_world_class_id);
+    
+    float step_size;
+    if (JS_ToFloat32(ctx, &step_size, argv[0])) {
+        return JS_EXCEPTION;
+    }
+    
+    dWorldQuickStep(world->world, step_size);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_world_set_quick_step_iterations(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSWorld *world = JS_GetOpaque(this_val, js_world_class_id);
+    
+    uint32_t iterations;
+    if (JS_ToUint32(ctx, &iterations, argv[0])) {
+        return JS_EXCEPTION;
+    }
+    
+    dWorldSetQuickStepNumIterations(world->world, iterations);
+    return JS_UNDEFINED;
+}
+
+
+typedef struct {
+    dWorldID world;
+    dJointGroupID joint_group;
+
+    JSContext *ctx;
+    JSValue callback;
+    JSValue contacts_array;
+} physics_world_data;
+
+static void contact_callback(void *data, dGeomID o1, dGeomID o2) {
+    physics_world_data *cdata = (physics_world_data*)data;
+    
+    dContact contact[MAX_CONTACTS];
+    int n = dCollide(o1, o2, MAX_CONTACTS, &contact[0].geom, sizeof(dContact));
+    
+    if (n > 0) {
+        dBodyID b1 = dGeomGetBody(o1);
+        dBodyID b2 = dGeomGetBody(o2);
+        
+        if (b1 && b2 && dAreConnectedExcluding(b1, b2, dJointTypeContact)) {
+            return;
+        }
+        
+        for (int i = 0; i < n; i++) {
+            contact[i].surface.mode = dContactBounce | dContactSoftCFM;
+            contact[i].surface.mu = 0.5;
+            contact[i].surface.bounce = 0.1;
+            contact[i].surface.bounce_vel = 0.1;
+            contact[i].surface.soft_cfm = 0.01;
+
+            JSValue contact_obj = JS_NewObject(cdata->ctx);
+
+            JSValue pos_arr = JS_NewArray(cdata->ctx);
+            JS_SetPropertyUint32(cdata->ctx, pos_arr, 0, JS_NewFloat32(cdata->ctx, contact[i].geom.pos[0]));
+            JS_SetPropertyUint32(cdata->ctx, pos_arr, 1, JS_NewFloat32(cdata->ctx, contact[i].geom.pos[1]));
+            JS_SetPropertyUint32(cdata->ctx, pos_arr, 2, JS_NewFloat32(cdata->ctx, contact[i].geom.pos[2]));
+            JS_SetPropertyStr(cdata->ctx, contact_obj, "position", pos_arr);
+
+            JSValue normal_arr = JS_NewArray(cdata->ctx);
+            JS_SetPropertyUint32(cdata->ctx, normal_arr, 0, JS_NewFloat32(cdata->ctx, contact[i].geom.normal[0]));
+            JS_SetPropertyUint32(cdata->ctx, normal_arr, 1, JS_NewFloat32(cdata->ctx, contact[i].geom.normal[1]));
+            JS_SetPropertyUint32(cdata->ctx, normal_arr, 2, JS_NewFloat32(cdata->ctx, contact[i].geom.normal[2]));
+            JS_SetPropertyStr(cdata->ctx, contact_obj, "normal", normal_arr);
+
+            JS_SetPropertyStr(cdata->ctx, contact_obj, "depth", JS_NewFloat32(cdata->ctx, contact[i].geom.depth));
+
+            JS_SetPropertyStr(cdata->ctx, contact_obj, "geom1", dGeomGetData(contact[i].geom.g1));
+            JS_SetPropertyStr(cdata->ctx, contact_obj, "geom2", dGeomGetData(contact[i].geom.g2));
+
+            JSValue length_val = JS_GetPropertyStr(cdata->ctx, cdata->contacts_array, "length");
+            uint32_t length;
+            JS_ToUint32(cdata->ctx, &length, length_val);
+            JS_SetPropertyUint32(cdata->ctx, cdata->contacts_array, length, contact_obj);
+            JS_FreeValue(cdata->ctx, length_val);
+
+            if (!JS_IsUndefined(cdata->callback)) {
+                JSValue args[1] = { contact_obj };
+                JS_Call(cdata->ctx, cdata->callback, JS_UNDEFINED, 1, args);
+            }
+            
+            dJointID c = dJointCreateContact(cdata->world, cdata->joint_group, &contact[i]);
+            dJointAttach(c, b1, b2);
+        }
+    }
+}       
+
+static JSValue js_world_step_with_contacts(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSWorld *world = JS_GetOpaque(this_val, js_world_class_id);
+    JSSpace *space = JS_GetOpaque(argv[0], js_space_class_id);
+    JSJointGroup *contact_group = JS_GetOpaque(argv[1], js_joint_group_class_id);
+    
+    float step_size;
+    if (JS_ToFloat32(ctx, &step_size, argv[2])) {
+        return JS_EXCEPTION;
+    }
+    
+    physics_world_data cdata;
+    cdata.world = world->world;
+    cdata.joint_group = contact_group->group;
+    cdata.contacts_array = JS_NewArray(ctx);
+    cdata.callback = (argc > 0) ? argv[3] : JS_UNDEFINED;
+    cdata.ctx = ctx;
+    
+    dSpaceCollide(space->space, &cdata, contact_callback);
+    dWorldStep(world->world, step_size);
+    dJointGroupEmpty(contact_group->group);
+    
+    return cdata.contacts_array;
+}
+
+static JSValue js_body_create(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSWorld *world = JS_GetOpaque(argv[0], js_world_class_id);
+    
+    JSBody *body = malloc(sizeof(JSBody));
+    if (!body) {
+        return JS_EXCEPTION;
+    }
+    
+    body->body = dBodyCreate(world->world);
+    body->parent_world = world->world;
+    
+    if (!body->body) {
+        free(body);
+        return JS_ThrowInternalError(ctx, "Failed to create ODE body");
+    }
+    
+    JSValue obj = JS_NewObjectClass(ctx, js_body_class_id);
+    if (JS_IsException(obj)) {
+        dBodyDestroy(body->body);
+        free(body);
+        return obj;
+    }
+    
+    JS_SetOpaque(obj, body);
+    return obj;
+}
+
+static JSValue js_body_destroy(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSBody *body = JS_GetOpaque(this_val, js_body_class_id);
+    
+    if (body->body) {
+        dBodyDestroy(body->body);
+        body->body = NULL;
+    }
+    return JS_UNDEFINED;
+}
+
+static JSValue js_body_set_position(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSBody *body = JS_GetOpaque(this_val, js_body_class_id);
+    
+    float x, y, z;
+    if (JS_ToFloat32(ctx, &x, argv[0]) ||
+        JS_ToFloat32(ctx, &y, argv[1]) ||
+        JS_ToFloat32(ctx, &z, argv[2])) {
+        return JS_EXCEPTION;
+    }
+    
+    dBodySetPosition(body->body, x, y, z);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_body_get_position(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSBody *body = JS_GetOpaque(this_val, js_body_class_id);
+    
+    const dReal *pos = dBodyGetPosition(body->body);
+    JSValue arr = JS_NewArray(ctx);
+    
+    JS_SetPropertyUint32(ctx, arr, 0, JS_NewFloat32(ctx, pos[0]));
+    JS_SetPropertyUint32(ctx, arr, 1, JS_NewFloat32(ctx, pos[1]));
+    JS_SetPropertyUint32(ctx, arr, 2, JS_NewFloat32(ctx, pos[2]));
+    
+    return arr;
+}
+
+static JSValue js_body_set_rotation(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSBody *body = JS_GetOpaque(this_val, js_body_class_id);
+    
+    if (!JS_IsArray(ctx, argv[0])) {
+        return JS_ThrowTypeError(ctx, "Expected array for rotation matrix");
+    }
+    
+    dMatrix3 R;
+    for (int i = 0; i < 9; i++) {
+        JSValue val = JS_GetPropertyUint32(ctx, argv[0], i);
+        float v;
+        if (JS_ToFloat32(ctx, &v, val)) {
+            JS_FreeValue(ctx, val);
+            return JS_EXCEPTION;
+        }
+        R[i] = v;
+        JS_FreeValue(ctx, val);
+    }
+    
+    dBodySetRotation(body->body, R);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_body_get_rotation(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSBody *body = JS_GetOpaque(this_val, js_body_class_id);
+    
+    const dReal *rot = dBodyGetRotation(body->body);
+    JSValue arr = JS_NewArray(ctx);
+    
+    for (int i = 0; i < 9; i++) {
+        JS_SetPropertyUint32(ctx, arr, i, JS_NewFloat32(ctx, rot[i]));
+    }
+    
+    return arr;
+}
+
+static JSValue js_body_set_linear_vel(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSBody *body = JS_GetOpaque(this_val, js_body_class_id);
+    
+    float x, y, z;
+    if (JS_ToFloat32(ctx, &x, argv[0]) ||
+        JS_ToFloat32(ctx, &y, argv[1]) ||
+        JS_ToFloat32(ctx, &z, argv[2])) {
+        return JS_EXCEPTION;
+    }
+    
+    dBodySetLinearVel(body->body, x, y, z);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_body_get_linear_vel(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSBody *body = JS_GetOpaque(this_val, js_body_class_id);
+    
+    const dReal *vel = dBodyGetLinearVel(body->body);
+    JSValue arr = JS_NewArray(ctx);
+    
+    JS_SetPropertyUint32(ctx, arr, 0, JS_NewFloat32(ctx, vel[0]));
+    JS_SetPropertyUint32(ctx, arr, 1, JS_NewFloat32(ctx, vel[1]));
+    JS_SetPropertyUint32(ctx, arr, 2, JS_NewFloat32(ctx, vel[2]));
+    
+    return arr;
+}
+
+static JSValue js_body_set_angular_vel(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSBody *body = JS_GetOpaque(this_val, js_body_class_id);
+    
+    float x, y, z;
+    if (JS_ToFloat32(ctx, &x, argv[0]) ||
+        JS_ToFloat32(ctx, &y, argv[1]) ||
+        JS_ToFloat32(ctx, &z, argv[2])) {
+        return JS_EXCEPTION;
+    }
+    
+    dBodySetAngularVel(body->body, x, y, z);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_body_get_angular_vel(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSBody *body = JS_GetOpaque(this_val, js_body_class_id);
+    
+    const dReal *vel = dBodyGetAngularVel(body->body);
+    JSValue arr = JS_NewArray(ctx);
+    
+    JS_SetPropertyUint32(ctx, arr, 0, JS_NewFloat32(ctx, vel[0]));
+    JS_SetPropertyUint32(ctx, arr, 1, JS_NewFloat32(ctx, vel[1]));
+    JS_SetPropertyUint32(ctx, arr, 2, JS_NewFloat32(ctx, vel[2]));
+    
+    return arr;
+}
+
+static JSValue js_body_set_mass(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSBody *body = JS_GetOpaque(this_val, js_body_class_id);
+    
+    float mass;
+    if (JS_ToFloat32(ctx, &mass, argv[0])) {
+        return JS_EXCEPTION;
+    }
+    
+    dMass m;
+    dMassSetSphere(&m, 1.0, 1.0);
+    dMassAdjust(&m, mass);
+    dBodySetMass(body->body, &m);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_body_set_mass_box(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSBody *body = JS_GetOpaque(this_val, js_body_class_id);
+    
+    float mass, lx, ly, lz;
+    if (JS_ToFloat32(ctx, &mass, argv[0]) ||
+        JS_ToFloat32(ctx, &lx, argv[1]) ||
+        JS_ToFloat32(ctx, &ly, argv[2]) ||
+        JS_ToFloat32(ctx, &lz, argv[3])) {
+        return JS_EXCEPTION;
+    }
+    
+    dMass m;
+    dMassSetBox(&m, 1.0, lx, ly, lz);
+    dMassAdjust(&m, mass);
+    dBodySetMass(body->body, &m);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_body_set_mass_sphere(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSBody *body = JS_GetOpaque(this_val, js_body_class_id);
+    
+    float mass, radius;
+    if (JS_ToFloat32(ctx, &mass, argv[0]) ||
+        JS_ToFloat32(ctx, &radius, argv[1])) {
+        return JS_EXCEPTION;
+    }
+    
+    dMass m;
+    dMassSetSphere(&m, 1.0, radius);
+    dMassAdjust(&m, mass);
+    dBodySetMass(body->body, &m);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_body_add_force(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSBody *body = JS_GetOpaque(this_val, js_body_class_id);
+    
+    float fx, fy, fz;
+    if (JS_ToFloat32(ctx, &fx, argv[0]) ||
+        JS_ToFloat32(ctx, &fy, argv[1]) ||
+        JS_ToFloat32(ctx, &fz, argv[2])) {
+        return JS_EXCEPTION;
+    }
+    
+    dBodyAddForce(body->body, fx, fy, fz);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_body_add_torque(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSBody *body = JS_GetOpaque(this_val, js_body_class_id);
+    
+    float fx, fy, fz;
+    if (JS_ToFloat32(ctx, &fx, argv[0]) ||
+        JS_ToFloat32(ctx, &fy, argv[1]) ||
+        JS_ToFloat32(ctx, &fz, argv[2])) {
+        return JS_EXCEPTION;
+    }
+    
+    dBodyAddTorque(body->body, fx, fy, fz);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_body_enable(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSBody *body = JS_GetOpaque(this_val, js_body_class_id);
+    dBodyEnable(body->body);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_body_disable(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSBody *body = JS_GetOpaque(this_val, js_body_class_id);
+    dBodyDisable(body->body);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_body_is_enabled(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSBody *body = JS_GetOpaque(this_val, js_body_class_id);
+    return JS_NewBool(ctx, dBodyIsEnabled(body->body));
+}
+
+static JSValue js_geom_set_body(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSGeom *geom = JS_GetOpaque(this_val, js_geom_class_id);
+    JSBody *body = JS_GetOpaque(argv[0], js_body_class_id);
+    
+    dGeomSetBody(geom->geom, body->body);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_geom_get_body(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSGeom *geom = JS_GetOpaque(this_val, js_geom_class_id);
+    
+    dBodyID body_id = dGeomGetBody(geom->geom);
+    if (!body_id) {
+        return JS_NULL;
+    }
+    
+    JSBody *body = malloc(sizeof(JSBody));
+    if (!body) {
+        return JS_EXCEPTION;
+    }
+    
+    body->body = body_id;
+    body->parent_world = NULL;
+    
+    JSValue obj = JS_NewObjectClass(ctx, js_body_class_id);
+    if (JS_IsException(obj)) {
+        free(body);
+        return obj;
+    }
+    
+    JS_SetOpaque(obj, body);
+    return obj;
+}
+
+static JSValue js_joint_group_create(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJointGroup *group = malloc(sizeof(JSJointGroup));
+    if (!group) {
+        return JS_EXCEPTION;
+    }
+    
+    group->group = dJointGroupCreate(0);
+    
+    if (!group->group) {
+        free(group);
+        return JS_ThrowInternalError(ctx, "Failed to create joint group");
+    }
+    
+    JSValue obj = JS_NewObjectClass(ctx, js_joint_group_class_id);
+    if (JS_IsException(obj)) {
+        dJointGroupDestroy(group->group);
+        free(group);
+        return obj;
+    }
+    
+    JS_SetOpaque(obj, group);
+    return obj;
+}
+
+static JSValue js_joint_group_empty(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJointGroup *group = JS_GetOpaque(this_val, js_joint_group_class_id);
+    dJointGroupEmpty(group->group);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_joint_group_destroy(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJointGroup *group = JS_GetOpaque(this_val, js_joint_group_class_id);
+    
+    if (group->group) {
+        dJointGroupDestroy(group->group);
+        group->group = NULL;
+    }
+    return JS_UNDEFINED;
+}
+
+void updateBodyPosRot(athena_object_data *obj) {
+    dBodyID body = (dBodyID)obj->physics;
+    
+    const dReal *pos = dBodyGetPosition(body);
+    const dReal *rot = dBodyGetRotation(body);
+    
+    obj->position[0] = pos[0];
+    obj->position[1] = pos[1];
+    obj->position[2] = pos[2];
+    
+    dQuaternion q;
+    dRtoQ(rot, q);
+    
+    float angle = 2.0f * acosf(q[0]);
+    if (angle > 0.001f) {
+        float sin_half = sinf(angle * 0.5f);
+        obj->rotation[0] = (q[1] / sin_half) * angle;
+        obj->rotation[1] = (q[2] / sin_half) * angle;
+        obj->rotation[2] = (q[3] / sin_half) * angle;
+    } else {
+        obj->rotation[0] = 0;
+        obj->rotation[1] = 0;
+        obj->rotation[2] = 0;
+    }
+
+    update_object_space(obj);
+}
+
+typedef enum {
+    JOINT_BALL,
+    JOINT_HINGE,
+    JOINT_SLIDER,
+    JOINT_HINGE2,
+    JOINT_UNIVERSAL,
+    JOINT_FIXED, 
+    JOINT_NULL,
+    JOINT_AMOTOR
+} eJointTypes;
+
+static const dJointID (*joint_funcs[])(dWorldID, dJointGroupID) = {
+    dJointCreateBall,
+    dJointCreateHinge,
+    dJointCreateSlider,
+    dJointCreateHinge2,
+    dJointCreateUniversal,
+    dJointCreateFixed,
+    dJointCreateNull,
+    dJointCreateAMotor
+};
+
+static JSValue js_joint_create(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv, int magic) {
+    JSJoint *joint = malloc(sizeof(JSJoint));
+    if (!joint) {
+        return JS_EXCEPTION;
+    }
+
+    JSWorld *world = JS_GetOpaque(argv[0], js_world_class_id);
+    JSJointGroup *group = JS_GetOpaque(argv[1], js_joint_group_class_id);
+
+    joint->joint = joint_funcs[magic](world->world, group->group);
+
+    if (!joint->joint) {
+        free(joint);
+        return JS_ThrowInternalError(ctx, "Failed to create joint");
+    }
+    
+    JSValue obj = JS_NewObjectClass(ctx, js_joint_group_class_id);
+    if (JS_IsException(obj)) {
+        dJointDestroy(joint->joint);
+        free(joint);
+        return obj;
+    }
+    
+    JS_SetOpaque(obj, joint);
+    return obj;
+}
+
+static JSValue js_joint_destroy(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+    
+    if (joint->joint) {
+        dJointDestroy(joint->joint);
+        joint->joint = NULL;
+    }
+    return JS_UNDEFINED;
+}
+
+static JSValue js_joint_attach(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+    JSBody *body1 = JS_GetOpaque(argv[0], js_body_class_id);
+    JSBody *body2 = JS_GetOpaque(argv[1], js_body_class_id);
+
+    dJointAttach (joint->joint, body1->body, body2->body);
+
+    return JS_UNDEFINED;
+}
+
+static JSValue js_joint_set_ball_anchor(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+    
+    float x, y, z;
+    if (JS_ToFloat32(ctx, &x, argv[0]) ||
+        JS_ToFloat32(ctx, &y, argv[1]) ||
+        JS_ToFloat32(ctx, &z, argv[2])) {
+        return JS_EXCEPTION;
+    }
+    
+    dJointSetBallAnchor(joint->joint, x, y, z);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_joint_set_hinge_anchor(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+    
+    float x, y, z;
+    if (JS_ToFloat32(ctx, &x, argv[0]) ||
+        JS_ToFloat32(ctx, &y, argv[1]) ||
+        JS_ToFloat32(ctx, &z, argv[2])) {
+        return JS_EXCEPTION;
+    }
+    
+    dJointSetHingeAnchor(joint->joint, x, y, z);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_joint_set_hinge_axis(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+    
+    float x, y, z;
+    if (JS_ToFloat32(ctx, &x, argv[0]) ||
+        JS_ToFloat32(ctx, &y, argv[1]) ||
+        JS_ToFloat32(ctx, &z, argv[2])) {
+        return JS_EXCEPTION;
+    }
+    
+    dJointSetHingeAxis(joint->joint, x, y, z);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_joint_add_hinge_torque(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+    
+    float x;
+    if (JS_ToFloat32(ctx, &x, argv[0])) {
+        return JS_EXCEPTION;
+    }
+    
+    dJointAddHingeTorque(joint->joint, x);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_joint_set_slider_axis(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+    
+    float x, y, z;
+    if (JS_ToFloat32(ctx, &x, argv[0]) ||
+        JS_ToFloat32(ctx, &y, argv[1]) ||
+        JS_ToFloat32(ctx, &z, argv[2])) {
+        return JS_EXCEPTION;
+    }
+    
+    dJointSetSliderAxis(joint->joint, x, y, z);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_joint_add_slider_force(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+    
+    float x;
+    if (JS_ToFloat32(ctx, &x, argv[0])) {
+        return JS_EXCEPTION;
+    }
+    
+    dJointAddSliderForce(joint->joint, x);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_joint_set_hinge2_anchor(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+    
+    float x, y, z;
+    if (JS_ToFloat32(ctx, &x, argv[0]) ||
+        JS_ToFloat32(ctx, &y, argv[1]) ||
+        JS_ToFloat32(ctx, &z, argv[2])) {
+        return JS_EXCEPTION;
+    }
+    
+    dJointSetHinge2Anchor(joint->joint, x, y, z);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_joint_set_hinge2_axis1(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+    
+    float x, y, z;
+    if (JS_ToFloat32(ctx, &x, argv[0]) ||
+        JS_ToFloat32(ctx, &y, argv[1]) ||
+        JS_ToFloat32(ctx, &z, argv[2])) {
+        return JS_EXCEPTION;
+    }
+    
+    dJointSetHinge2Axis1(joint->joint, x, y, z);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_joint_set_hinge2_axis2(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+    
+    float x, y, z;
+    if (JS_ToFloat32(ctx, &x, argv[0]) ||
+        JS_ToFloat32(ctx, &y, argv[1]) ||
+        JS_ToFloat32(ctx, &z, argv[2])) {
+        return JS_EXCEPTION;
+    }
+    
+    dJointSetHinge2Axis2(joint->joint, x, y, z);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_joint_add_hinge2_torques(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+    
+    float t1, t2;
+    if (JS_ToFloat32(ctx, &t1, argv[0]) || JS_ToFloat32(ctx, &t2, argv[1])) {
+        return JS_EXCEPTION;
+    }
+    
+    dJointAddHinge2Torques(joint->joint, t1, t2);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_joint_set_universal_anchor(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+    
+    float x, y, z;
+    if (JS_ToFloat32(ctx, &x, argv[0]) ||
+        JS_ToFloat32(ctx, &y, argv[1]) ||
+        JS_ToFloat32(ctx, &z, argv[2])) {
+        return JS_EXCEPTION;
+    }
+    
+    dJointSetUniversalAnchor(joint->joint, x, y, z);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_joint_set_universal_axis1(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+    
+    float x, y, z;
+    if (JS_ToFloat32(ctx, &x, argv[0]) ||
+        JS_ToFloat32(ctx, &y, argv[1]) ||
+        JS_ToFloat32(ctx, &z, argv[2])) {
+        return JS_EXCEPTION;
+    }
+    
+    dJointSetUniversalAxis1(joint->joint, x, y, z);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_joint_set_universal_axis2(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+    
+    float x, y, z;
+    if (JS_ToFloat32(ctx, &x, argv[0]) ||
+        JS_ToFloat32(ctx, &y, argv[1]) ||
+        JS_ToFloat32(ctx, &z, argv[2])) {
+        return JS_EXCEPTION;
+    }
+    
+    dJointSetUniversalAxis2(joint->joint, x, y, z);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_joint_add_universal_torques(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+    
+    float t1, t2;
+    if (JS_ToFloat32(ctx, &t1, argv[0]) || JS_ToFloat32(ctx, &t2, argv[1])) {
+        return JS_EXCEPTION;
+    }
+    
+    dJointAddUniversalTorques(joint->joint, t1, t2);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_joint_set_fixed(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+    
+    dJointSetFixed(joint->joint);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_joint_set_amotor_num_axes(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+    
+    int num;
+    if (JS_ToInt32(ctx, &num, argv[0])) {
+        return JS_EXCEPTION;
+    }
+    
+    dJointSetAMotorNumAxes(joint->joint, num);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_joint_set_amotor_axis(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+    
+    int anum, rel;
+    float x, y, z;
+    if (JS_ToInt32(ctx, &anum, argv[0]) ||
+        JS_ToInt32(ctx, &rel, argv[1]) ||
+        JS_ToFloat32(ctx, &x, argv[2]) ||
+        JS_ToFloat32(ctx, &y, argv[3]) ||
+        JS_ToFloat32(ctx, &z, argv[4])
+    ) {
+        return JS_EXCEPTION;
+    }
+    
+    dJointSetAMotorAxis(joint->joint, anum, rel, x, y, z);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_joint_set_amotor_angle(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+    
+    int anum;
+    float a;
+    if (JS_ToInt32(ctx, &anum, argv[0]) ||
+        JS_ToFloat32(ctx, &a, argv[1])
+    ) {
+        return JS_EXCEPTION;
+    }
+    
+    dJointSetAMotorAngle(joint->joint, anum, a);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_joint_set_amotor_mode(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+    
+    int mode;
+    if (JS_ToInt32(ctx, &mode, argv[0])) {
+        return JS_EXCEPTION;
+    }
+    
+    dJointSetAMotorMode(joint->joint, mode);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_joint_add_amotor_torques(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+    
+    float t1, t2, t3;
+    if (JS_ToFloat32(ctx, &t1, argv[0]) || JS_ToFloat32(ctx, &t2, argv[1]) || JS_ToFloat32(ctx, &t3, argv[2])) {
+        return JS_EXCEPTION;
+    }
+    
+    dJointAddAMotorTorques(joint->joint, t1, t2, t3);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_joint_get_ball_anchor(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+
+    JSValue arr = JS_NewArray(ctx);
+
+    dVector3 vel;
+
+    dJointGetBallAnchor (joint->joint, vel);
+    
+    JS_SetPropertyUint32(ctx, arr, 0, JS_NewFloat32(ctx, vel[0]));
+    JS_SetPropertyUint32(ctx, arr, 1, JS_NewFloat32(ctx, vel[1]));
+    JS_SetPropertyUint32(ctx, arr, 2, JS_NewFloat32(ctx, vel[2]));
+    
+    return arr;
+}
+
+static JSValue js_joint_get_hinge_anchor(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+
+    JSValue arr = JS_NewArray(ctx);
+
+    dVector3 vel;
+
+    dJointGetHingeAnchor (joint->joint, vel);
+    
+    JS_SetPropertyUint32(ctx, arr, 0, JS_NewFloat32(ctx, vel[0]));
+    JS_SetPropertyUint32(ctx, arr, 1, JS_NewFloat32(ctx, vel[1]));
+    JS_SetPropertyUint32(ctx, arr, 2, JS_NewFloat32(ctx, vel[2]));
+    
+    return arr;
+}
+
+static JSValue js_joint_get_hinge_axis(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+
+    JSValue arr = JS_NewArray(ctx);
+
+    dVector3 vel;
+
+    dJointGetHingeAxis (joint->joint, vel);
+    
+    JS_SetPropertyUint32(ctx, arr, 0, JS_NewFloat32(ctx, vel[0]));
+    JS_SetPropertyUint32(ctx, arr, 1, JS_NewFloat32(ctx, vel[1]));
+    JS_SetPropertyUint32(ctx, arr, 2, JS_NewFloat32(ctx, vel[2]));
+    
+    return arr;
+}
+static JSValue js_joint_get_hinge_angle(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+
+    return JS_NewFloat32(ctx, dJointGetHingeAngle(joint->joint));
+}
+
+static JSValue js_joint_get_hinge_angle_rate(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+
+    return JS_NewFloat32(ctx, dJointGetHingeAngleRate(joint->joint));
+}
+
+static JSValue js_joint_get_slider_position(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+
+    return JS_NewFloat32(ctx, dJointGetSliderPosition(joint->joint));
+}
+
+static JSValue js_joint_get_slider_position_rate(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+
+    return JS_NewFloat32(ctx, dJointGetSliderPositionRate(joint->joint));
+}
+
+static JSValue js_joint_get_slider_axis(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+
+    JSValue arr = JS_NewArray(ctx);
+
+    dVector3 vel;
+
+    dJointGetSliderAxis (joint->joint, vel);
+    
+    JS_SetPropertyUint32(ctx, arr, 0, JS_NewFloat32(ctx, vel[0]));
+    JS_SetPropertyUint32(ctx, arr, 1, JS_NewFloat32(ctx, vel[1]));
+    JS_SetPropertyUint32(ctx, arr, 2, JS_NewFloat32(ctx, vel[2]));
+    
+    return arr;
+}
+
+static JSValue js_joint_get_hinge2_anchor(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+
+    JSValue arr = JS_NewArray(ctx);
+
+    dVector3 vel;
+
+    dJointGetHinge2Anchor (joint->joint, vel);
+    
+    JS_SetPropertyUint32(ctx, arr, 0, JS_NewFloat32(ctx, vel[0]));
+    JS_SetPropertyUint32(ctx, arr, 1, JS_NewFloat32(ctx, vel[1]));
+    JS_SetPropertyUint32(ctx, arr, 2, JS_NewFloat32(ctx, vel[2]));
+    
+    return arr;
+}
+
+static JSValue js_joint_get_hinge2_axis1(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+
+    JSValue arr = JS_NewArray(ctx);
+
+    dVector3 vel;
+
+    dJointGetHinge2Axis1 (joint->joint, vel);
+    
+    JS_SetPropertyUint32(ctx, arr, 0, JS_NewFloat32(ctx, vel[0]));
+    JS_SetPropertyUint32(ctx, arr, 1, JS_NewFloat32(ctx, vel[1]));
+    JS_SetPropertyUint32(ctx, arr, 2, JS_NewFloat32(ctx, vel[2]));
+    
+    return arr;
+}
+
+static JSValue js_joint_get_hinge2_axis2(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+
+    JSValue arr = JS_NewArray(ctx);
+
+    dVector3 vel;
+
+    dJointGetHinge2Axis2 (joint->joint, vel);
+    
+    JS_SetPropertyUint32(ctx, arr, 0, JS_NewFloat32(ctx, vel[0]));
+    JS_SetPropertyUint32(ctx, arr, 1, JS_NewFloat32(ctx, vel[1]));
+    JS_SetPropertyUint32(ctx, arr, 2, JS_NewFloat32(ctx, vel[2]));
+    
+    return arr;
+}
+
+static JSValue js_joint_get_hinge2_angle1(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+
+    return JS_NewFloat32(ctx, dJointGetHinge2Angle1(joint->joint));
+}
+
+static JSValue js_joint_get_hinge2_angle1_rate(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+
+    return JS_NewFloat32(ctx, dJointGetHinge2Angle1Rate(joint->joint));
+}
+
+static JSValue js_joint_get_hinge2_angle2_rate(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+
+    return JS_NewFloat32(ctx, dJointGetHinge2Angle2Rate(joint->joint));
+}
+
+static JSValue js_joint_get_universal_anchor(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+
+    JSValue arr = JS_NewArray(ctx);
+
+    dVector3 vel;
+
+    dJointGetUniversalAnchor (joint->joint, vel);
+    
+    JS_SetPropertyUint32(ctx, arr, 0, JS_NewFloat32(ctx, vel[0]));
+    JS_SetPropertyUint32(ctx, arr, 1, JS_NewFloat32(ctx, vel[1]));
+    JS_SetPropertyUint32(ctx, arr, 2, JS_NewFloat32(ctx, vel[2]));
+    
+    return arr;
+}
+
+static JSValue js_joint_get_universal_axis1(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+
+    JSValue arr = JS_NewArray(ctx);
+
+    dVector3 vel;
+
+    dJointGetUniversalAxis1 (joint->joint, vel);
+    
+    JS_SetPropertyUint32(ctx, arr, 0, JS_NewFloat32(ctx, vel[0]));
+    JS_SetPropertyUint32(ctx, arr, 1, JS_NewFloat32(ctx, vel[1]));
+    JS_SetPropertyUint32(ctx, arr, 2, JS_NewFloat32(ctx, vel[2]));
+    
+    return arr;
+}
+
+static JSValue js_joint_get_universal_axis2(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+
+    JSValue arr = JS_NewArray(ctx);
+
+    dVector3 vel;
+
+    dJointGetUniversalAxis2 (joint->joint, vel);
+    
+    JS_SetPropertyUint32(ctx, arr, 0, JS_NewFloat32(ctx, vel[0]));
+    JS_SetPropertyUint32(ctx, arr, 1, JS_NewFloat32(ctx, vel[1]));
+    JS_SetPropertyUint32(ctx, arr, 2, JS_NewFloat32(ctx, vel[2]));
+    
+    return arr;
+}
+
+static JSValue js_joint_get_universal_angle1(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+
+    return JS_NewFloat32(ctx, dJointGetUniversalAngle1(joint->joint));
+}
+
+static JSValue js_joint_get_universal_angle2(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+
+    return JS_NewFloat32(ctx, dJointGetUniversalAngle2(joint->joint));
+}
+
+static JSValue js_joint_get_universal_angle1_rate(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+
+    return JS_NewFloat32(ctx, dJointGetUniversalAngle1Rate(joint->joint));
+}
+
+static JSValue js_joint_get_universal_angle2_rate(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+
+    return JS_NewFloat32(ctx, dJointGetUniversalAngle2Rate(joint->joint));
+}
+
+static JSValue js_joint_get_amotor_num_axes(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+
+    return JS_NewInt32(ctx, dJointGetAMotorNumAxes(joint->joint));
+}
+
+static JSValue js_joint_get_amotor_axis(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+
+    int anum;
+    JS_ToInt32(ctx, &anum, argv[0]);
+
+    JSValue arr = JS_NewArray(ctx);
+
+    dVector3 res;
+
+    dJointGetAMotorAxis(joint->joint, anum, res);
+    
+    JS_SetPropertyUint32(ctx, arr, 0, JS_NewFloat32(ctx, res[0]));
+    JS_SetPropertyUint32(ctx, arr, 1, JS_NewFloat32(ctx, res[1]));
+    JS_SetPropertyUint32(ctx, arr, 2, JS_NewFloat32(ctx, res[2]));
+    
+    return arr;
+}
+
+static JSValue js_joint_get_amotor_axis_rel(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+
+    int anum;
+    JS_ToInt32(ctx, &anum, argv[0]);
+
+    return JS_NewInt32(ctx, dJointGetAMotorAxisRel(joint->joint, anum));
+}
+
+static JSValue js_joint_get_amotor_angle(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+
+    int anum;
+    JS_ToInt32(ctx, &anum, argv[0]);
+
+    return JS_NewFloat32(ctx, dJointGetAMotorAngle(joint->joint, anum));
+}
+
+static JSValue js_joint_get_amotor_angle_rate(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+
+    int anum;
+    JS_ToInt32(ctx, &anum, argv[0]);
+
+    return JS_NewFloat32(ctx, dJointGetAMotorAngleRate(joint->joint, anum));
+}
+
+static JSValue js_joint_get_amotor_mode(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSJoint *joint = JS_GetOpaque(this_val, js_joint_class_id);
+
+    return JS_NewInt32(ctx, dJointGetAMotorMode(joint->joint));
+}
+
+static const JSCFunctionListEntry js_world_proto_funcs[] = {
+    JS_CFUNC_DEF("setGravity", 3, js_world_set_gravity),
+    JS_CFUNC_DEF("getGravity", 0, js_world_get_gravity),
+    JS_CFUNC_DEF("setCFM", 1, js_world_set_cfm),
+    JS_CFUNC_DEF("setERP", 1, js_world_set_erp),
+    JS_CFUNC_DEF("step", 1, js_world_step),
+    JS_CFUNC_DEF("quickStep", 1, js_world_quick_step),
+    JS_CFUNC_DEF("setQuickStepIterations", 1, js_world_set_quick_step_iterations),
+    JS_CFUNC_DEF("stepWithContacts", 3, js_world_step_with_contacts),
+
+    JS_CFUNC_DEF("destroyWorld", 0, js_world_destroy),
+};
+
+static const JSCFunctionListEntry js_body_proto_funcs[] = {
+    JS_CFUNC_DEF("setPosition", 3, js_body_set_position),
+    JS_CFUNC_DEF("getPosition", 0, js_body_get_position),
+    JS_CFUNC_DEF("setRotation", 1, js_body_set_rotation),
+    JS_CFUNC_DEF("getRotation", 0, js_body_get_rotation),
+    JS_CFUNC_DEF("setLinearVel", 3, js_body_set_linear_vel),
+    JS_CFUNC_DEF("getLinearVel", 0, js_body_get_linear_vel),
+    JS_CFUNC_DEF("setAngularVel", 3, js_body_set_angular_vel),
+    JS_CFUNC_DEF("getAngularVel", 0, js_body_get_angular_vel),
+    JS_CFUNC_DEF("setMass", 1, js_body_set_mass),
+    JS_CFUNC_DEF("setMassBox", 4, js_body_set_mass_box),
+    JS_CFUNC_DEF("setMassSphere", 2, js_body_set_mass_sphere),
+    JS_CFUNC_DEF("addForce", 3, js_body_add_force),
+    JS_CFUNC_DEF("addTorque", 3, js_body_add_torque),
+    JS_CFUNC_DEF("enable", 0, js_body_enable),
+    JS_CFUNC_DEF("disable", 0, js_body_disable),
+    JS_CFUNC_DEF("enabled", 0, js_body_is_enabled),
+
+    JS_CFUNC_DEF("free", 0, js_body_destroy),
+};
+
+static const JSCFunctionListEntry js_geom_proto_funcs[] = {
+    JS_CFUNC_DEF("setPosition", 3, js_geom_set_position),
+    JS_CFUNC_DEF("setRotation", 1, js_geom_set_rotation),
+    JS_CFUNC_DEF("getPosition", 0, js_geom_get_position),
+    JS_CFUNC_DEF("getRotation", 0, js_geom_get_rotation),
+
+    JS_CFUNC_DEF("setBody", 1, js_geom_set_body),
+    JS_CFUNC_DEF("getBody", 0, js_geom_get_body),
+
+    JS_CFUNC_DEF("free", 0, js_geom_destroy),
+};
+
+static const JSCFunctionListEntry js_space_proto_funcs[] = {
+    JS_CFUNC_DEF("collide", 1, js_space_collide),
+    JS_CFUNC_DEF("free", 0, js_space_destroy),
+};
+
+static const JSCFunctionListEntry js_joint_group_proto_funcs[] = {
+    JS_CFUNC_DEF("empty", 0, js_joint_group_empty),
+    JS_CFUNC_DEF("free", 0, js_joint_group_destroy),
+};
+
+static const JSCFunctionListEntry js_joint_proto_funcs[] = {
+    JS_CFUNC_DEF("free", 0, js_joint_destroy),
+    JS_CFUNC_DEF("attach", 2, js_joint_attach),
+
+    // SET
+    JS_CFUNC_DEF("setBallAnchor", 3, js_joint_set_ball_anchor),
+
+    JS_CFUNC_DEF("setHingeAnchor", 3, js_joint_set_hinge_anchor),
+    JS_CFUNC_DEF("setHingeAxis", 3, js_joint_set_hinge_axis),
+    JS_CFUNC_DEF("addHingeTorque", 1, js_joint_add_hinge_torque),
+
+    JS_CFUNC_DEF("setSliderAxis", 3, js_joint_set_slider_axis),
+    JS_CFUNC_DEF("addSliderForce", 1, js_joint_add_slider_force),
+
+    JS_CFUNC_DEF("setHinge2Anchor", 3, js_joint_set_hinge2_anchor),
+    JS_CFUNC_DEF("setHinge2Axis1", 3, js_joint_set_hinge2_axis1),
+    JS_CFUNC_DEF("setHinge2Axis2", 3, js_joint_set_hinge2_axis2),
+    JS_CFUNC_DEF("AddHinge2Torques", 2, js_joint_add_hinge2_torques),
+
+    JS_CFUNC_DEF("setUniversalAnchor", 3, js_joint_set_universal_anchor),
+    JS_CFUNC_DEF("setUniversalAxis1", 3, js_joint_set_universal_axis1),
+    JS_CFUNC_DEF("setUniversalAxis2", 3, js_joint_set_universal_axis2),
+    JS_CFUNC_DEF("setUniversalTorques", 2, js_joint_add_universal_torques),
+
+    JS_CFUNC_DEF("setFixed", 0, js_joint_set_fixed),
+
+    JS_CFUNC_DEF("setAMotorNumAxes", 1,  js_joint_set_amotor_num_axes),
+    JS_CFUNC_DEF("setAMotorAxis", 5,   js_joint_set_amotor_axis),
+    JS_CFUNC_DEF("setAMotorAngle", 2,   js_joint_set_amotor_angle),
+    JS_CFUNC_DEF("setAMotorMode", 1, js_joint_set_amotor_mode),
+    JS_CFUNC_DEF("setAMotorTorques", 3, js_joint_add_amotor_torques),
+
+    // GET
+    JS_CFUNC_DEF("getBallAnchor", 0, js_joint_get_ball_anchor),
+
+    JS_CFUNC_DEF("getHingeAnchor", 0, js_joint_get_hinge_anchor),
+    JS_CFUNC_DEF("getHingeAxis", 0, js_joint_get_hinge_axis),
+    JS_CFUNC_DEF("getHingeAngle", 0, js_joint_get_hinge_angle),
+    JS_CFUNC_DEF("getHingeAngleRate", 0, js_joint_get_hinge_angle_rate),
+
+    JS_CFUNC_DEF("getSliderPosition", 0, js_joint_get_slider_position),
+    JS_CFUNC_DEF("getSliderPositionRate", 0, js_joint_get_slider_position_rate),
+    JS_CFUNC_DEF("getSliderAxis", 0, js_joint_get_slider_axis),
+
+    JS_CFUNC_DEF("getHinge2Anchor", 0, js_joint_get_hinge2_anchor),
+    JS_CFUNC_DEF("getHinge2Axis1", 0, js_joint_get_hinge2_axis1),
+    JS_CFUNC_DEF("getHinge2Axis2", 0, js_joint_get_hinge2_axis2),
+    JS_CFUNC_DEF("getHinge2Angle1", 0, js_joint_get_hinge2_angle1),
+    JS_CFUNC_DEF("getHinge2Angle1Rate", 0, js_joint_get_hinge2_angle1_rate),
+    JS_CFUNC_DEF("getHinge2Angle2Rate", 0, js_joint_get_hinge2_angle2_rate),
+
+    JS_CFUNC_DEF("getUniversalAnchor", 0, js_joint_get_universal_anchor),
+    JS_CFUNC_DEF("getUniversalAxis1", 0, js_joint_get_universal_axis1),
+    JS_CFUNC_DEF("getUniversalAxis2", 0, js_joint_get_universal_axis2),
+    JS_CFUNC_DEF("getUniversalAngle1", 0, js_joint_get_universal_angle1),
+    JS_CFUNC_DEF("getUniversalAngle2", 0, js_joint_get_universal_angle2),
+    JS_CFUNC_DEF("getUniversalAngle1Rate1", 0, js_joint_get_universal_angle1_rate),
+    JS_CFUNC_DEF("getUniversalAngle2Rate2", 0, js_joint_get_universal_angle2_rate),
+
+    JS_CFUNC_DEF("getAMotorNumAxes", 0, js_joint_get_amotor_num_axes),
+    JS_CFUNC_DEF("getAMotorAxis", 1, js_joint_get_amotor_axis),
+    JS_CFUNC_DEF("getAMotorAxisRel", 1, js_joint_get_amotor_axis_rel),
+    JS_CFUNC_DEF("getAMotorAngle", 1, js_joint_get_amotor_angle),
+    JS_CFUNC_DEF("getAMotorAngleRate", 1, js_joint_get_amotor_angle_rate),
+    JS_CFUNC_DEF("getAMotorMode", 0, js_joint_get_amotor_mode),
+};
+
+
+static const JSCFunctionListEntry js_ode_funcs[] = {
+    JS_CFUNC_DEF("cleanup", 0, js_ode_cleanup),
+
+    JS_CFUNC_DEF("GeomRenderObject", 2, js_geom_create_from_render_object),
+    JS_CFUNC_DEF("GeomBox", 4, js_geom_create_box),
+    JS_CFUNC_DEF("GeomRay", 2, js_geom_create_ray),
+    JS_CFUNC_DEF("GeomSphere", 2, js_geom_create_sphere),
+    JS_CFUNC_DEF("GeomPlane", 5, js_geom_create_plane),
+    JS_CFUNC_DEF("GeomTransform", 2, js_geom_create_transform),
+
+    JS_CFUNC_MAGIC_DEF("JointBall", 2, js_joint_create, JOINT_BALL),
+    JS_CFUNC_MAGIC_DEF("JointHinge", 2, js_joint_create, JOINT_HINGE),
+    JS_CFUNC_MAGIC_DEF("JointSlider", 2, js_joint_create, JOINT_SLIDER),
+    JS_CFUNC_MAGIC_DEF("JointHinge2", 2, js_joint_create, JOINT_HINGE2),
+    JS_CFUNC_MAGIC_DEF("JointUniversal", 2, js_joint_create, JOINT_UNIVERSAL),
+    JS_CFUNC_MAGIC_DEF("JointFixed", 2, js_joint_create, JOINT_FIXED),
+    JS_CFUNC_MAGIC_DEF("JointNull", 2, js_joint_create, JOINT_NULL),
+    JS_CFUNC_MAGIC_DEF("JointAMotor", 2, js_joint_create, JOINT_AMOTOR),
+
+    JS_CFUNC_DEF("World", 0, js_world_create),
+    JS_CFUNC_DEF("Space", 0, js_space_create),
+    JS_CFUNC_DEF("Body", 1, js_body_create),
+    JS_CFUNC_DEF("JointGroup", 0, js_joint_group_create),
+
+    JS_CFUNC_DEF("geomCollide", 2, js_geom_collide),
+};
+
+static int js_ode_init_module(JSContext *ctx, JSModuleDef *m) {
+    JSValue proto;
+
+    JS_NewClassID(&js_space_class_id);
+    JS_NewClass(JS_GetRuntime(ctx), js_space_class_id, &js_space_class);
+    proto = JS_NewObject(ctx);
+    JS_SetPropertyFunctionList(ctx, proto, js_space_proto_funcs, countof(js_space_proto_funcs));
+    JS_SetClassProto(ctx, js_space_class_id, proto);
+
+    JS_NewClassID(&js_geom_class_id);
+    JS_NewClass(JS_GetRuntime(ctx), js_geom_class_id, &js_geom_class);
+    proto = JS_NewObject(ctx);
+    JS_SetPropertyFunctionList(ctx, proto, js_geom_proto_funcs, countof(js_geom_proto_funcs));
+    JS_SetClassProto(ctx, js_geom_class_id, proto);
+
+    JS_NewClassID(&js_world_class_id);
+    JS_NewClass(JS_GetRuntime(ctx), js_world_class_id, &js_world_class);
+    proto = JS_NewObject(ctx);
+    JS_SetPropertyFunctionList(ctx, proto, js_world_proto_funcs, countof(js_world_proto_funcs));
+    JS_SetClassProto(ctx, js_world_class_id, proto);
+
+    JS_NewClassID(&js_body_class_id);
+    JS_NewClass(JS_GetRuntime(ctx), js_body_class_id, &js_body_class);
+    proto = JS_NewObject(ctx);
+    JS_SetPropertyFunctionList(ctx, proto, js_body_proto_funcs, countof(js_body_proto_funcs));
+    JS_SetClassProto(ctx, js_body_class_id, proto);
+
+    JS_NewClassID(&js_joint_class_id);
+    JS_NewClass(JS_GetRuntime(ctx), js_joint_class_id, &js_joint_class);
+    proto = JS_NewObject(ctx);
+    JS_SetPropertyFunctionList(ctx, proto, js_joint_proto_funcs, countof(js_joint_proto_funcs));
+    JS_SetClassProto(ctx, js_joint_class_id, proto);
+
+    JS_NewClassID(&js_joint_group_class_id);
+    JS_NewClass(JS_GetRuntime(ctx), js_joint_group_class_id, &js_joint_group_class);
+    proto = JS_NewObject(ctx);
+    JS_SetPropertyFunctionList(ctx, proto, js_joint_group_proto_funcs, countof(js_joint_group_proto_funcs));
+    JS_SetClassProto(ctx, js_joint_group_class_id, proto);
+
+    JS_SetModuleExportList(ctx, m, js_ode_funcs, countof(js_ode_funcs));
+    
+    return 0;
+}
+
+JSModuleDef *athena_ode_init(JSContext *ctx) {
+    return athena_push_module(ctx, js_ode_init_module, js_ode_funcs, countof(js_ode_funcs), "ODE");
+}

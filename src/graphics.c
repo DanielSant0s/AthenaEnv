@@ -5,25 +5,32 @@
 #include <math.h>
 #include <fcntl.h>
 
-#include <jpeglib.h>
 #include <time.h>
-#include <png.h>
 
-#include "include/graphics.h"
-#include "include/athena_math.h"
-#include "include/dbgprintf.h"
-#include "include/fntsys.h"
+#include <graphics.h>
+#include <athena_math.h>
+#include <dbgprintf.h>
+#include <fntsys.h>
 
-#include "include/pad.h"
+#include <owl_packet.h>
+
+#include <pad.h>
+
+#include <osd_config.h>
+#include <rom0_info.h>
+
+#include <texture_manager.h>
 
 static const u64 BLACK_RGBAQ   = GS_SETREG_RGBAQ(0x00,0x00,0x00,0x80,0x00);
 
-#define RENDER_QUEUE_PER_POOLSIZE 1024 * 256 // 256K of persistent renderqueue
-/* Size of Oneshot drawbuffer (Double Buffered, so it uses this size * 2) */
-#define RENDER_QUEUE_OS_POOLSIZE 1024 * 1024 * 2 // 2048K of oneshot renderqueue
+GSCONTEXT *gsGlobal = NULL;
 
-GSGLOBAL *gsGlobal = NULL;
-static GSFONTM *gsFontM = NULL;
+GSSURFACE draw_buffer;
+GSSURFACE display_buffer;
+GSSURFACE depth_buffer;
+
+GSSURFACE *cur_screen_buffer[3] = { NULL };
+GSSURFACE *main_screen_buffer[3] = { NULL };
 
 void (*flipScreen)();
 
@@ -37,805 +44,587 @@ static float fps = 0.0f;
 static int frames = 0;
 static int frame_interval = -1;
 
-//2D drawing functions
-int athena_load_png(GSTEXTURE* tex, FILE* File, bool delayed)
-{
-	tex->Delayed = delayed;
-
-	if (File == NULL)
-	{
-		dbgprintf("Failed to load PNG file\n");
-		return NULL;
-	}
-
-	png_structp png_ptr;
-	png_infop info_ptr;
-	png_uint_32 width, height;
-	png_bytep *row_pointers;
-
-	u32 sig_read = 0;
-        int row, i, k=0, j, bit_depth, color_type, interlace_type;
-
-	png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, (png_voidp) NULL, NULL, NULL);
-
-	if(!png_ptr)
-	{
-		dbgprintf("PNG Read Struct Init Failed\n");
-		fclose(File);
-		return NULL;
-	}
-
-	info_ptr = png_create_info_struct(png_ptr);
-
-	if(!info_ptr)
-	{
-		dbgprintf("PNG Info Struct Init Failed\n");
-		fclose(File);
-		png_destroy_read_struct(&png_ptr, (png_infopp)NULL, (png_infopp)NULL);
-		return NULL;
-	}
-
-	if(setjmp(png_jmpbuf(png_ptr)))
-	{
-		dbgprintf("Got PNG Error!\n");
-		png_destroy_read_struct(&png_ptr, &info_ptr, (png_infopp)NULL);
-		fclose(File);
-		return NULL;
-	}
-
-	png_init_io(png_ptr, File);
-
-	png_set_sig_bytes(png_ptr, sig_read);
-
-	png_read_info(png_ptr, info_ptr);
-
-	png_get_IHDR(png_ptr, info_ptr, &width, &height, &bit_depth, &color_type,&interlace_type, NULL, NULL);
-
-	if (bit_depth == 16) 
-		png_set_strip_16(png_ptr);
-
-	if (color_type == PNG_COLOR_TYPE_GRAY || color_type == PNG_COLOR_TYPE_GRAY_ALPHA || bit_depth < 4) 
-		png_set_expand(png_ptr);
-
-	png_set_filler(png_ptr, 0xff, PNG_FILLER_AFTER);
-
-	png_read_update_info(png_ptr, info_ptr);
-
-	tex->Width = width;
-	tex->Height = height;
-
-    tex->VramClut = 0;
-    tex->Clut = NULL;
-	tex->ClutStorageMode = GS_CLUT_STORAGE_CSM1;
-
-	color_type = png_get_color_type(png_ptr, info_ptr);
-
-	if(color_type == PNG_COLOR_TYPE_RGB_ALPHA)
-	{
-		int row_bytes = png_get_rowbytes(png_ptr, info_ptr);
-		tex->PSM = GS_PSM_CT32;
-		tex->Mem = (u32*)memalign(128, gsKit_texture_size_ee(tex->Width, tex->Height, tex->PSM));
-
-		row_pointers = (png_byte**)calloc(height, sizeof(png_bytep));
-
-		for (row = 0; row < height; row++) row_pointers[row] = (png_bytep)malloc(row_bytes);
-
-		png_read_image(png_ptr, row_pointers);
-
-		struct pixel { u8 r,g,b,a; };
-		struct pixel *Pixels = (struct pixel *) tex->Mem;
-
-		for (i = 0; i < tex->Height; i++) {
-			for (j = 0; j < tex->Width; j++) {
-				memcpy(&Pixels[k], &row_pointers[i][4 * j], 3);
-				Pixels[k++].a = row_pointers[i][4 * j + 3] >> 1;
-			}
-		}
-
-		for(row = 0; row < height; row++) free(row_pointers[row]);
-
-		free(row_pointers);
-	}
-	else if(color_type == PNG_COLOR_TYPE_RGB)
-	{
-		int row_bytes = png_get_rowbytes(png_ptr, info_ptr);
-		tex->PSM = GS_PSM_CT24;
-		tex->Mem = (u32*)memalign(128, gsKit_texture_size_ee(tex->Width, tex->Height, tex->PSM));
-
-		row_pointers = (png_byte**)calloc(height, sizeof(png_bytep));
-
-		for(row = 0; row < height; row++) row_pointers[row] = (png_bytep)malloc(row_bytes);
-
-		png_read_image(png_ptr, row_pointers);
-
-		struct pixel3 { u8 r,g,b; };
-		struct pixel3 *Pixels = (struct pixel3 *) tex->Mem;
-
-		for (i = 0; i < tex->Height; i++) {
-			for (j = 0; j < tex->Width; j++) {
-				memcpy(&Pixels[k++], &row_pointers[i][4 * j], 3);
-			}
-		}
-
-		for(row = 0; row < height; row++) free(row_pointers[row]);
-
-		free(row_pointers);
-	}
-	else if(color_type == PNG_COLOR_TYPE_PALETTE){
-
-		struct png_clut { u8 r, g, b, a; };
-
-		png_colorp palette = NULL;
-		int num_pallete = 0;
-		png_bytep trans = NULL;
-		int num_trans = 0;
-
-        png_get_PLTE(png_ptr, info_ptr, &palette, &num_pallete);
-        png_get_tRNS(png_ptr, info_ptr, &trans, &num_trans, NULL);
-        tex->ClutPSM = GS_PSM_CT32;
-
-		if (bit_depth == 4) {
-
-			int row_bytes = png_get_rowbytes(png_ptr, info_ptr);
-			tex->PSM = GS_PSM_T4;
-			tex->Mem = (u32*)memalign(128, gsKit_texture_size_ee(tex->Width, tex->Height, tex->PSM));
-
-			row_pointers = (png_byte**)calloc(height, sizeof(png_bytep));
-
-			for(row = 0; row < height; row++) row_pointers[row] = (png_bytep)malloc(row_bytes);
-
-			png_read_image(png_ptr, row_pointers);
-
-            tex->Clut = memalign(128, gsKit_texture_size_ee(8, 2, GS_PSM_CT32));
-            memset(tex->Clut, 0, gsKit_texture_size_ee(8, 2, GS_PSM_CT32));
-
-            unsigned char *pixel = (unsigned char *)tex->Mem;
-    		struct png_clut *clut = (struct png_clut *)tex->Clut;
-
-    		int i, j, k = 0;
-
-    		for (i = num_pallete; i < 16; i++) {
-    		    memset(&clut[i], 0, sizeof(clut[i]));
-    		}
-
-    		for (i = 0; i < num_pallete; i++) {
-    		    clut[i].r = palette[i].red;
-    		    clut[i].g = palette[i].green;
-    		    clut[i].b = palette[i].blue;
-    		    clut[i].a = 0x80;
-    		}
-
-    		for (i = 0; i < num_trans; i++)
-    		    clut[i].a = trans[i] >> 1;
-
-    		for (i = 0; i < tex->Height; i++) {
-    		    for (j = 0; j < tex->Width / 2; j++)
-    		        memcpy(&pixel[k++], &row_pointers[i][1 * j], 1);
-    		}
-
-    		int byte;
-    		unsigned char *tmpdst = (unsigned char *)tex->Mem;
-    		unsigned char *tmpsrc = (unsigned char *)pixel;
-
-    		for (byte = 0; byte < gsKit_texture_size_ee(tex->Width, tex->Height, tex->PSM); byte++) tmpdst[byte] = (tmpsrc[byte] << 4) | (tmpsrc[byte] >> 4);
-
-			for(row = 0; row < height; row++) free(row_pointers[row]);
-
-			free(row_pointers);
-
-        } else if (bit_depth == 8) {
-			int row_bytes = png_get_rowbytes(png_ptr, info_ptr);
-			tex->PSM = GS_PSM_T8;
-			tex->Mem = (u32*)memalign(128, gsKit_texture_size_ee(tex->Width, tex->Height, tex->PSM));
-
-			row_pointers = (png_byte**)calloc(height, sizeof(png_bytep));
-
-			for(row = 0; row < height; row++) row_pointers[row] = (png_bytep)malloc(row_bytes);
-
-			png_read_image(png_ptr, row_pointers);
-
-            tex->Clut = memalign(128, gsKit_texture_size_ee(16, 16, GS_PSM_CT32));
-            memset(tex->Clut, 0, gsKit_texture_size_ee(16, 16, GS_PSM_CT32));
-
-            unsigned char *pixel = (unsigned char *)tex->Mem;
-    		struct png_clut *clut = (struct png_clut *)tex->Clut;
-
-    		int i, j, k = 0;
-
-    		for (i = num_pallete; i < 256; i++) {
-    		    memset(&clut[i], 0, sizeof(clut[i]));
-    		}
-
-    		for (i = 0; i < num_pallete; i++) {
-    		    clut[i].r = palette[i].red;
-    		    clut[i].g = palette[i].green;
-    		    clut[i].b = palette[i].blue;
-    		    clut[i].a = 0x80;
-    		}
-
-    		for (i = 0; i < num_trans; i++)
-    		    clut[i].a = trans[i] >> 1;
-
-    		// rotate clut
-    		for (i = 0; i < num_pallete; i++) {
-    		    if ((i & 0x18) == 8) {
-    		        struct png_clut tmp = clut[i];
-    		        clut[i] = clut[i + 8];
-    		        clut[i + 8] = tmp;
-    		    }
-    		}
-
-    		for (i = 0; i < tex->Height; i++) {
-    		    for (j = 0; j < tex->Width; j++) {
-    		        memcpy(&pixel[k++], &row_pointers[i][1 * j], 1);
-    		    }
-    		}
-
-			for(row = 0; row < height; row++) free(row_pointers[row]);
-
-			free(row_pointers);
-        }
-	}
-	else
-	{
-		dbgprintf("This texture depth is not supported yet!\n");
-		return NULL;
-	}
-
-	tex->Filter = GS_FILTER_NEAREST;
-	png_read_end(png_ptr, NULL);
-	png_destroy_read_struct(&png_ptr, &info_ptr, (png_infopp) NULL);
-	fclose(File);
-
-	if(!tex->Delayed)
-	{
-		tex->Vram = gsKit_vram_alloc(gsGlobal, gsKit_texture_size(tex->Width, tex->Height, tex->PSM), GSKIT_ALLOC_USERBUFFER);
-		if(tex->Vram == GSKIT_ALLOC_ERROR)
-		{
-			dbgprintf("VRAM Allocation Failed. Will not upload texture.\n");
-			return NULL;
-		}
-
-		if(tex->Clut != NULL)
-		{
-			if(tex->PSM == GS_PSM_T4)
-				tex->VramClut = gsKit_vram_alloc(gsGlobal, gsKit_texture_size(8, 2, GS_PSM_CT32), GSKIT_ALLOC_USERBUFFER);
-			else
-				tex->VramClut = gsKit_vram_alloc(gsGlobal, gsKit_texture_size(16, 16, GS_PSM_CT32), GSKIT_ALLOC_USERBUFFER);
-
-			if(tex->VramClut == GSKIT_ALLOC_ERROR)
-			{
-				dbgprintf("VRAM CLUT Allocation Failed. Will not upload texture.\n");
-				return NULL;
-			}
-		}
-
-		// Upload texture
-		gsKit_texture_upload(gsGlobal, tex);
-		// Free texture
-		free(tex->Mem);
-		tex->Mem = NULL;
-		// Free texture CLUT
-		if(tex->Clut != NULL)
-		{
-			free(tex->Clut);
-			tex->Clut = NULL;
-		}
-	}
-	else
-	{
-		gsKit_setup_tbw(tex);
-	}
-
-	return 0;
-
-}
-
-int athena_load_bmp(GSTEXTURE* tex, FILE* File, bool delayed)
-{
-	GSBITMAP Bitmap;
-	int x, y;
-	int cy;
-	u32 FTexSize;
-	u8  *image;
-	u8  *p;
-
-	tex->Delayed = delayed;
-
-	if (File == NULL)
-	{
-		dbgprintf("BMP: Failed to load bitmap\n");
-		return NULL;
-	}
-	if (fread(&Bitmap.FileHeader, sizeof(Bitmap.FileHeader), 1, File) <= 0)
-	{
-		dbgprintf("BMP: Could not load bitmap\n");
-		fclose(File);
-		return NULL;
-	}
-
-	if (fread(&Bitmap.InfoHeader, sizeof(Bitmap.InfoHeader), 1, File) <= 0)
-	{
-		dbgprintf("BMP: Could not load bitmap\n");
-		fclose(File);
-		return NULL;
-	}
-
-	tex->Width = Bitmap.InfoHeader.Width;
-	tex->Height = Bitmap.InfoHeader.Height;
-	tex->Filter = GS_FILTER_NEAREST; 
-
-    tex->VramClut = 0;
-    tex->Clut = NULL;
-	tex->ClutStorageMode = GS_CLUT_STORAGE_CSM1;
-
-	if(Bitmap.InfoHeader.BitCount == 4)
-	{
-		tex->PSM = GS_PSM_T4;
-		tex->Clut = (u32*)memalign(128, gsKit_texture_size_ee(8, 2, GS_PSM_CT32));
-		tex->ClutPSM = GS_PSM_CT32;
-
-		memset(tex->Clut, 0, gsKit_texture_size_ee(8, 2, GS_PSM_CT32));
-		fseek(File, 54, SEEK_SET);
-		if (fread(tex->Clut, Bitmap.InfoHeader.ColorUsed*sizeof(u32), 1, File) <= 0)
-		{
-			if (tex->Clut) {
-				free(tex->Clut);
-				tex->Clut = NULL;
-			}
-			dbgprintf("BMP: Could not load bitmap\n");
-			fclose(File);
-			return NULL;
-		}
-
-		GSBMCLUT *clut = (GSBMCLUT *)tex->Clut;
-		int i;
-		for (i = Bitmap.InfoHeader.ColorUsed; i < 16; i++)
-		{
-			memset(&clut[i], 0, sizeof(clut[i]));
-		}
-
-		for (i = 0; i < 16; i++)
-		{
-			u8 tmp = clut[i].Blue;
-			clut[i].Blue = clut[i].Red;
-			clut[i].Red = tmp;
-			clut[i].Alpha = 0x80;
-		}
-
-	}
-	else if(Bitmap.InfoHeader.BitCount == 8)
-	{
-		tex->PSM = GS_PSM_T8;
-		tex->Clut = (u32*)memalign(128, gsKit_texture_size_ee(16, 16, GS_PSM_CT32));
-		tex->ClutPSM = GS_PSM_CT32;
-
-		memset(tex->Clut, 0, gsKit_texture_size_ee(16, 16, GS_PSM_CT32));
-		fseek(File, 54, SEEK_SET);
-		if (fread(tex->Clut, Bitmap.InfoHeader.ColorUsed*sizeof(u32), 1, File) <= 0)
-		{
-			if (tex->Clut) {
-				free(tex->Clut);
-				tex->Clut = NULL;
-			}
-			dbgprintf("BMP: Could not load bitmap\n");
-			fclose(File);
-			return NULL;
-		}
-
-		GSBMCLUT *clut = (GSBMCLUT *)tex->Clut;
-		int i;
-		for (i = Bitmap.InfoHeader.ColorUsed; i < 256; i++)
-		{
-			memset(&clut[i], 0, sizeof(clut[i]));
-		}
-
-		for (i = 0; i < 256; i++)
-		{
-			u8 tmp = clut[i].Blue;
-			clut[i].Blue = clut[i].Red;
-			clut[i].Red = tmp;
-			clut[i].Alpha = 0x80;
-		}
-
-		// rotate clut
-		for (i = 0; i < 256; i++)
-		{
-			if ((i&0x18) == 8)
-			{
-				GSBMCLUT tmp = clut[i];
-				clut[i] = clut[i+8];
-				clut[i+8] = tmp;
-			}
-		}
-	}
-	else if(Bitmap.InfoHeader.BitCount == 16)
-	{
-		tex->PSM = GS_PSM_CT16;
-		tex->VramClut = 0;
-		tex->Clut = NULL;
-	}
-	else if(Bitmap.InfoHeader.BitCount == 24)
-	{
-		tex->PSM = GS_PSM_CT24;
-		tex->VramClut = 0;
-		tex->Clut = NULL;
-	}
-
-	fseek(File, 0, SEEK_END);
-	FTexSize = ftell(File);
-	FTexSize -= Bitmap.FileHeader.Offset;
-
-	fseek(File, Bitmap.FileHeader.Offset, SEEK_SET);
-
-	u32 TextureSize = gsKit_texture_size_ee(tex->Width, tex->Height, tex->PSM);
-
-	tex->Mem = (u32*)memalign(128,TextureSize);
-
-	if(Bitmap.InfoHeader.BitCount == 24)
-	{
-		image = (u8*)memalign(128, FTexSize);
-		if (image == NULL) {
-			dbgprintf("BMP: Failed to allocate memory\n");
-			if (tex->Mem) {
-				free(tex->Mem);
-				tex->Mem = NULL;
-			}
-			if (tex->Clut) {
-				free(tex->Clut);
-				tex->Clut = NULL;
-			}
-			fclose(File);
-			return NULL;
-		}
-
-		fread(image, FTexSize, 1, File);
-		p = (u8*)((u32)tex->Mem);
-		for (y = tex->Height - 1, cy = 0; y >= 0; y--, cy++) {
-			for (x = 0; x < tex->Width; x++) {
-				p[(y * tex->Width + x) * 3 + 2] = image[(cy * tex->Width + x) * 3 + 0];
-				p[(y * tex->Width + x) * 3 + 1] = image[(cy * tex->Width + x) * 3 + 1];
-				p[(y * tex->Width + x) * 3 + 0] = image[(cy * tex->Width + x) * 3 + 2];
-			}
-		}
-		free(image);
-		image = NULL;
-	}
-	else if(Bitmap.InfoHeader.BitCount == 16)
-	{
-		image = (u8*)memalign(128, FTexSize);
-		if (image == NULL) {
-			dbgprintf("BMP: Failed to allocate memory\n");
-			if (tex->Mem) {
-				free(tex->Mem);
-				tex->Mem = NULL;
-			}
-			if (tex->Clut) {
-				free(tex->Clut);
-				tex->Clut = NULL;
-			}
-			fclose(File);
-			return NULL;
-		}
-
-		fread(image, FTexSize, 1, File);
-
-		p = (u8*)((u32*)tex->Mem);
-		for (y = tex->Height - 1, cy = 0; y >= 0; y--, cy++) {
-			for (x = 0; x < tex->Width; x++) {
-				u16 value;
-				value = *(u16*)&image[(cy * tex->Width + x) * 2];
-				value = (value & 0x8000) | value << 10 | (value & 0x3E0) | (value & 0x7C00) >> 10;	//ARGB -> ABGR
-
-				*(u16*)&p[(y * tex->Width + x) * 2] = value;
-			}
-		}
-		free(image);
-		image = NULL;
-	}
-	else if(Bitmap.InfoHeader.BitCount == 8 || Bitmap.InfoHeader.BitCount == 4)
-	{
-		char *text = (char *)((u32)tex->Mem);
-		image = (u8*)memalign(128,FTexSize);
-		if (image == NULL) {
-			dbgprintf("BMP: Failed to allocate memory\n");
-			if (tex->Mem) {
-				free(tex->Mem);
-				tex->Mem = NULL;
-			}
-			if (tex->Clut) {
-				free(tex->Clut);
-				tex->Clut = NULL;
-			}
-			fclose(File);
-			return NULL;
-		}
-
-		if (fread(image, FTexSize, 1, File) != 1)
-		{
-			if (tex->Mem) {
-				free(tex->Mem);
-				tex->Mem = NULL;
-			}
-			if (tex->Clut) {
-				free(tex->Clut);
-				tex->Clut = NULL;
-			}
-			dbgprintf("BMP: Read failed!, Size %d\n", FTexSize);
-			free(image);
-			image = NULL;
-			fclose(File);
-			return NULL;
-		}
-		for (y = tex->Height - 1; y >= 0; y--)
-		{
-			if(Bitmap.InfoHeader.BitCount == 8)
-				memcpy(&text[y * tex->Width], &image[(tex->Height - y - 1) * tex->Width], tex->Width);
-			else
-				memcpy(&text[y * (tex->Width / 2)], &image[(tex->Height - y - 1) * (tex->Width / 2)], tex->Width / 2);
-		}
-		free(image);
-		image = NULL;
-
-		if(Bitmap.InfoHeader.BitCount == 4)
-		{
-			int byte;
-			u8 *tmpdst = (u8 *)((u32)tex->Mem);
-			u8 *tmpsrc = (u8 *)text;
-
-			for(byte = 0; byte < FTexSize; byte++)
-			{
-				tmpdst[byte] = (tmpsrc[byte] << 4) | (tmpsrc[byte] >> 4);
-			}
-		}
-	}
-	else
-	{
-		dbgprintf("BMP: Unknown bit depth format %d\n", Bitmap.InfoHeader.BitCount);
-	}
-
-	fclose(File);
-
-	if(!tex->Delayed)
-	{
-		tex->Vram = gsKit_vram_alloc(gsGlobal, gsKit_texture_size(tex->Width, tex->Height, tex->PSM), GSKIT_ALLOC_USERBUFFER);
-		if(tex->Vram == GSKIT_ALLOC_ERROR)
-		{
-			dbgprintf("VRAM Allocation Failed. Will not upload texture.\n");
-			return NULL;
-		}
-
-		if(tex->Clut != NULL)
-		{
-			if(tex->PSM == GS_PSM_T4)
-				tex->VramClut = gsKit_vram_alloc(gsGlobal, gsKit_texture_size(8, 2, GS_PSM_CT32), GSKIT_ALLOC_USERBUFFER);
-			else
-				tex->VramClut = gsKit_vram_alloc(gsGlobal, gsKit_texture_size(16, 16, GS_PSM_CT32), GSKIT_ALLOC_USERBUFFER);
-
-			if(tex->VramClut == GSKIT_ALLOC_ERROR)
-			{
-				dbgprintf("VRAM CLUT Allocation Failed. Will not upload texture.\n");
-				return NULL;
-			}
-		}
-
-		// Upload texture
-		gsKit_texture_upload(gsGlobal, tex);
-		// Free texture
-		free(tex->Mem);
-		tex->Mem = NULL;
-		// Free texture CLUT
-		if(tex->Clut != NULL)
-		{
-			free(tex->Clut);
-			tex->Clut = NULL;
-		}
-	}
-	else
-	{
-		gsKit_setup_tbw(tex);
-	}
-
-	return 0;
-
-}
-
-struct my_error_mgr {
-  struct jpeg_error_mgr pub;    /* "public" fields */
-
-  jmp_buf setjmp_buffer;        /* for return to caller */
+#define OWL_PACKET_BUFFER_SIZE 2048
+
+static owl_qword owl_packet_buffer[OWL_PACKET_BUFFER_SIZE] qw_aligned = { 0 };
+
+uint64_t gs_reg_cache[GS_CACHE_SIZE];
+
+const uint8_t gs_reg_map[] = {
+	GS_REG_TEX0,
+	GS_REG_TEX0_2,
+	GS_REG_CLAMP,
+	GS_REG_CLAMP_2,
+	GS_REG_TEX1,
+	GS_REG_TEX1_2,
+	GS_REG_TEX2,
+	GS_REG_TEX2_2,
+	GS_REG_XYOFFSET,
+	GS_REG_XYOFFSET_2,
+	GS_REG_PRMODECONT,
+	GS_REG_PRMODE,
+	GS_REG_TEXCLUT,
+	GS_REG_MIPTBP1,
+	GS_REG_MIPTBP1_2,
+	GS_REG_MIPTBP2,
+	GS_REG_MIPTBP2_2,
+	GS_REG_TEXA,
+	GS_REG_SCISSOR,
+	GS_REG_SCISSOR_2,
+	GS_REG_ALPHA,
+	GS_REG_ALPHA_2,
+	GS_REG_DIMX,
+	GS_REG_DTHE,
+	GS_REG_COLCLAMP,
+	GS_REG_TEST,
+	GS_REG_TEST_2,
+	GS_REG_PABE,
+	GS_REG_FBA,
+	GS_REG_FBA_2,
+	GS_REG_FRAME,
+	GS_REG_FRAME_2,
+	GS_REG_ZBUF,
+	GS_REG_ZBUF_2
 };
 
-typedef struct my_error_mgr *my_error_ptr;
+// TODO: USE MMI INSTEAD!
 
-METHODDEF(void)
-my_error_exit(j_common_ptr cinfo)
+static inline uint8_t
+from8to5(uint8_t c, const int8_t dither)
 {
-  /* cinfo->err really points to a my_error_mgr struct, so coerce pointer */
-  my_error_ptr myerr = (my_error_ptr)cinfo->err;
-
-  /* Always display the message. */
-  /* We could postpone this until after returning, if we chose. */
-  (*cinfo->err->output_message) (cinfo);
-
-  /* Return control to the setjmp point */
-  longjmp(myerr->setjmp_buffer, 1);
+	if((c+dither) > 255)
+		return 255>>3;
+	else if((c+dither) < 0)
+		return 0;
+	else
+		return (c+dither)>>3;
 }
 
-// Following official documentation max width or height of the texture is 1024
-#define MAX_TEXTURE 1024
-static void  _ps2_load_JPEG_generic(GSTEXTURE *Texture, struct jpeg_decompress_struct *cinfo, struct my_error_mgr *jerr, bool scale_down)
+static inline uint16_t
+fromRGBto16(const int8_t dither, uint8_t r, uint8_t g, uint8_t b)
 {
-	int textureSize = 0;
-	if (scale_down) {
-		unsigned int longer = cinfo->image_width > cinfo->image_height ? cinfo->image_width : cinfo->image_height;
-		float downScale = (float)longer / (float)MAX_TEXTURE;
-		cinfo->scale_denom = ceil(downScale);
-	}
-
-	jpeg_start_decompress(cinfo);
-
-	int psm = cinfo->out_color_components == 3 ? GS_PSM_CT24 : GS_PSM_CT32;
-
-	Texture->Width =  cinfo->output_width;
-	Texture->Height = cinfo->output_height;
-	Texture->PSM = psm;
-	Texture->Filter = GS_FILTER_NEAREST;
-	Texture->VramClut = 0;
-	Texture->Clut = NULL;
-	Texture->ClutStorageMode = GS_CLUT_STORAGE_CSM1;
-
-	textureSize = cinfo->output_width*cinfo->output_height*cinfo->out_color_components;
-	#ifdef DEBUG
-	dbgprintf("Texture Size = %i\n",textureSize);
-	#endif
-	Texture->Mem = (u32*)memalign(128, textureSize);
-
-	unsigned int row_stride = textureSize/Texture->Height;
-	unsigned char *row_pointer = (unsigned char *)Texture->Mem;
-	while (cinfo->output_scanline < cinfo->output_height) {
-		jpeg_read_scanlines(cinfo, (JSAMPARRAY)&row_pointer, 1);
-		row_pointer += row_stride;
-	}
-
-	jpeg_finish_decompress(cinfo);
+	// A1 B5 G5 R5
+	return 0x8000 | (from8to5(b, dither)<<10) | (from8to5(g, dither)<<5) | from8to5(r, dither);
 }
 
-int athena_load_jpeg(GSTEXTURE* tex, FILE* fp, bool scale_down, bool delayed)
+static inline uint16_t
+from24to16(const int8_t dither, uint8_t *c)
 {
-	tex->Delayed = delayed;
+	return fromRGBto16(dither, c[0], c[1], c[2]);
+}
 
-	struct jpeg_decompress_struct cinfo;
-	struct my_error_mgr jerr;
+void athena_texture_optimize(GSSURFACE *Texture)
+{
+	int x, y;
+	const int8_t dither_matrix[16] = {-4,2,-3,3,0,-2,1,-1,-3,3,-4,2,1,-1,0,-2};
+	size_t size;
+	uint16_t *pixels16;
+	uint8_t  *pixels24;
 
-	if (tex == NULL) {
-		dbgprintf("jpeg: error Texture is NULL\n");
-		return NULL;
+	// Only 24bit to 16bit supported
+	if (Texture->PSM != GS_PSM_CT24)
+		return;
+
+	size = Texture->Width * Texture->Height * 2;
+	pixels16 = (uint16_t*)memalign(128, size);
+	pixels24 = (uint8_t *)Texture->Mem;
+
+	for(y=0; y < Texture->Height; y++) {
+		for(x=0; x < Texture->Width; x++) {
+			int i = y * Texture->Width + x;
+			int8_t dither = dither_matrix[(y&3)*4+(x&3)];
+			pixels16[i] = from24to16(dither, &pixels24[i*3]);
+		}
 	}
 
-	if (fp == NULL)
+	free(Texture->Mem);
+	Texture->Mem = (void*)pixels16;
+	Texture->PSM = GS_PSM_CT16S;
+}
+
+uint32_t athena_surface_size(int width, int height, int psm)
+{
+	switch (psm) {
+		case GS_PSM_CT32:  
+		case GS_PSM_CT24:
+		case GS_PSMZ_32:  
+		case GS_PSMZ_24:
+			return (width*height*4);
+		case GS_PSM_CT16:  
+		case GS_PSM_CT16S:
+		case GS_PSMZ_16:  
+		case GS_PSMZ_16S:
+			return (width*height*2);
+		case GS_PSM_T8:    
+			return (width*height  );
+		case GS_PSM_T4:    
+			return (width*height/2);
+	}
+
+	return -1;
+}
+
+uint32_t athena_vram_surface_size(int width, int height, int psm)
+{
+	int widthBlocks, heightBlocks;
+	int widthAlign, heightAlign;
+
+	// Calculate the number of blocks width and height
+	// A block is 256 bytes in size
+	switch (psm) {
+		case GS_PSM_CT32:
+		case GS_PSM_CT24:
+		case GS_PSMZ_32:
+		case GS_PSMZ_24:
+			// 1 block = 8x8 pixels
+			widthBlocks  = (width  + 7) / 8;
+			heightBlocks = (height + 7) / 8;
+			break;
+		case GS_PSM_CT16:
+		case GS_PSM_CT16S:
+		case GS_PSMZ_16:
+		case GS_PSMZ_16S:
+			// 1 block = 16x8 pixels
+			widthBlocks  = (width  + 15) / 16;
+			heightBlocks = (height +  7) /  8;
+			break;
+		case GS_PSM_T8:
+			// 1 block = 16x16 pixels
+			widthBlocks  = (width  + 15) / 16;
+			heightBlocks = (height + 15) / 16;
+			break;
+		case GS_PSM_T4:
+			// 1 block = 32x16 pixels
+			widthBlocks  = (width  + 31) / 32;
+			heightBlocks = (height + 15) / 16;
+			break;
+		default:
+			printf("gsKit: unsupported PSM %d\n", psm);
+			return -1;
+	}
+
+	// Calculate the minimum block alignment
+	if(psm == GS_PSM_CT32 || psm == GS_PSM_CT24 || psm == GS_PSMZ_32 || psm == GS_PSMZ_24 || psm == GS_PSM_T8) {
+		// 8x4 blocks in a page.
+		// block traversing order:
+		// 0145....
+		// 2367....
+		// ........
+		// ........
+		if(widthBlocks <= 2 && heightBlocks <= 1) {
+			widthAlign = 1;
+			heightAlign = 1;
+		}
+		else if(widthBlocks <= 4 && heightBlocks <= 2) {
+			widthAlign = 2;
+			heightAlign = 2;
+		}
+		else if(widthBlocks <= 8 && heightBlocks <= 4) {
+			widthAlign = 4;
+			heightAlign = 4;
+		}
+		else {
+			widthAlign = 8;
+			heightAlign = 4;
+		}
+	}
+	else if(psm == GS_PSM_CT16 || psm == GS_PSMZ_16 || psm == GS_PSM_T4) {
+		// 4x8 blocks in a page.
+		// block traversing order:
+		// 02..
+		// 13..
+		// 46..
+		// 57..
+		// ....
+		// ....
+		// ....
+		// ....
+		if(widthBlocks <= 1 && heightBlocks <= 2) {
+			widthAlign = 1;
+			heightAlign = 1;
+		}
+		else if(widthBlocks <= 2 && heightBlocks <= 4) {
+			widthAlign = 2;
+			heightAlign = 2;
+		}
+		else if(widthBlocks <= 4 && heightBlocks <= 8) {
+			widthAlign = 4;
+			heightAlign = 4;
+		}
+		else {
+			widthAlign = 4;
+			heightAlign = 8;
+		}
+	}
+	else /* if(psm == GS_PSM_CT16S) */ {
+		// 4x8 blocks in a page.
+		// block traversing order:
+		// 02..
+		// 13..
+		// ....
+		// ....
+		// 46..
+		// 57..
+		// ....
+		// ....
+		if(widthBlocks <= 1 && heightBlocks <= 2) {
+			widthAlign = 1;
+			heightAlign = 1;
+		}
+		else if(widthBlocks <= 2 && heightBlocks <= 2) {
+			widthAlign = 2;
+			heightAlign = 2;
+		}
+		else if(widthBlocks <= 2 && heightBlocks <= 8) {
+			widthAlign = 2;
+			heightAlign = 8;
+		}
+		else {
+			widthAlign = 4;
+			heightAlign = 8;
+		}
+	}
+
+	widthBlocks  = (-widthAlign)  & (widthBlocks  + widthAlign  - 1);
+	heightBlocks = (-heightAlign) & (heightBlocks + heightAlign - 1);
+
+	return widthBlocks * heightBlocks * 256;
+}
+
+void athena_calculate_tbw(GSSURFACE *Texture)
+{
+	if(Texture->PSM == GS_PSM_T8 || Texture->PSM == GS_PSM_T4)
 	{
-		dbgprintf("jpeg: Failed to load file\n");
-		return NULL;
-	}
-
-	/* We set up the normal JPEG error routines, then override error_exit. */
-	cinfo.err = jpeg_std_error(&jerr.pub);
-	jerr.pub.error_exit = my_error_exit;
-	/* Establish the setjmp return context for my_error_exit to use. */
-	if (setjmp(jerr.setjmp_buffer)) {
-		/* If we get here, the JPEG code has signaled an error.
-		* We need to clean up the JPEG object, close the input file, and return.
-		*/
-		jpeg_destroy_decompress(&cinfo);
-		fclose(fp);
-		if (tex->Mem)
-			free(tex->Mem);
-		dbgprintf("jpeg: error during processing file\n");
-		return NULL;
-	}
-	jpeg_create_decompress(&cinfo);
-	jpeg_stdio_src(&cinfo, fp);
-	jpeg_read_header(&cinfo, TRUE);
-
-	_ps2_load_JPEG_generic(tex, &cinfo, &jerr, scale_down);
-	
-	jpeg_destroy_decompress(&cinfo);
-	fclose(fp);
-
-	
-	if(!tex->Delayed)
-	{
-		tex->Vram = gsKit_vram_alloc(gsGlobal, gsKit_texture_size(tex->Width, tex->Height, tex->PSM), GSKIT_ALLOC_USERBUFFER);
-		if(tex->Vram == GSKIT_ALLOC_ERROR)
-		{
-			dbgprintf("VRAM Allocation Failed. Will not upload texture.\n");
-			return NULL;
-		}
-
-		if(tex->Clut != NULL)
-		{
-			if(tex->PSM == GS_PSM_T4)
-				tex->VramClut = gsKit_vram_alloc(gsGlobal, gsKit_texture_size(8, 2, GS_PSM_CT32), GSKIT_ALLOC_USERBUFFER);
-			else
-				tex->VramClut = gsKit_vram_alloc(gsGlobal, gsKit_texture_size(16, 16, GS_PSM_CT32), GSKIT_ALLOC_USERBUFFER);
-
-			if(tex->VramClut == GSKIT_ALLOC_ERROR)
-			{
-				dbgprintf("VRAM CLUT Allocation Failed. Will not upload texture.\n");
-				return NULL;
-			}
-		}
-
-		// Upload texture
-		gsKit_texture_upload(gsGlobal, tex);
-		// Free texture
-		free(tex->Mem);
-		tex->Mem = NULL;
-		// Free texture CLUT
-		if(tex->Clut != NULL)
-		{
-			free(tex->Clut);
-			tex->Clut = NULL;
-		}
+		Texture->TBW = (-GS_VRAM_TBWALIGN_CLUT)&(Texture->Width+GS_VRAM_TBWALIGN_CLUT-1);
+		if(Texture->TBW / 64 > 0)
+			Texture->TBW = (Texture->TBW / 64);
+		else
+			Texture->TBW = 1;
 	}
 	else
 	{
-		gsKit_setup_tbw(tex);
+		Texture->TBW = (-GS_VRAM_TBWALIGN)&(Texture->Width+GS_VRAM_TBWALIGN-1);
+		if(Texture->TBW / 64 > 0)
+			Texture->TBW = (Texture->TBW / 64);
+		else
+			Texture->TBW = 1;
 	}
-
-	return 0;
-
 }
 
+void gs_copy_block(GSSURFACE *src, int src_x, int src_y, GSSURFACE *dst, int dst_x, int dst_y) {
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 6);
+ 
+	owl_add_cnt_tag(packet, 5, owl_vif_code_double(VIF_CODE(5, 0, VIF_DIRECT, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
 
-int load_image(GSTEXTURE* image, const char* path, bool delayed){
-	FILE* file = fopen(path, "rb");
-	uint16_t magic;
-	fread(&magic, 1, 2, file);
-	fseek(file, 0, SEEK_SET);
-	if (magic == 0x4D42) athena_load_bmp(image, file, delayed);
-	else if (magic == 0xD8FF) athena_load_jpeg(image, file, false, delayed);
-	else if (magic == 0x5089) athena_load_png(image, file, delayed);
+    owl_add_tag(packet, GIF_AD, GIFTAG(4, 1, 0, 0, 0, 1));
+    
+    owl_add_tag(packet, GS_BITBLTBUF, GS_SETREG_BITBLTBUF(src->Vram / 256, 
+                                            src->TBW, 
+                                            src->PSM, 
+                                            dst->Vram / 256, 
+                                            dst->TBW, 
+                                            dst->PSM));
 
-	return 0;
+    owl_add_tag(packet, GS_TRXPOS, GS_SETREG_TRXPOS(src_x, src_y, dst_x, dst_y, 0)); 
+    
+    owl_add_tag(packet, GS_TRXREG, GS_SETREG_TRXREG(dst->Width, dst->Height)); 
+    
+    owl_add_tag(packet, GS_TRXDIR, 2); 
 }
 
+void gs_channel_shuffle_slow(GSSURFACE *dst, uint32_t in, uint32_t out, uint32_t blockX, uint32_t blockY, GSSURFACE *source, uint32_t width, uint32_t height, GSSURFACE *pal) {
+    int tw, th;
 
-void gsKit_clear_screens()
-{
-	int i;
+	// For the BLUE and ALPHA channels, we need to offset our 'U's by 8 texels
+	const uint32_t horz_block_offset = (in == CHANNEL_SHUFFLE_BLUE || in == CHANNEL_SHUFFLE_ALPHA);
+	// For the GREEN and ALPHA channels, we need to offset our 'T's by 2 texels
+	const uint32_t vert_block_offset = (in == CHANNEL_SHUFFLE_GREEN || in == CHANNEL_SHUFFLE_ALPHA);
 
-	for (i=0; i<2; i++)
+	const uint32_t clamp_horz = horz_block_offset ? 8 : 0;
+	const uint32_t clamp_vert = vert_block_offset ? 2 : 0;
+
+    owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 502);
+
+	owl_add_cnt_tag(packet, 501, 0);
+
+	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+	owl_add_uint(packet, VIF_CODE(500, 0, VIF_DIRECT, 0)); 
+
+    owl_add_tag(packet, GIF_AD, GIF_SET_TAG(5, 1, 0, 0, 0, 1));
+
+    owl_add_tag(packet, GS_XYOFFSET_1, GS_SETREG_XYOFFSET_1(0, 0));
+
+    athena_set_tw_th(width, height, &tw, &th);
+
+    owl_add_tag(packet, GS_TEX0_1, GS_SETREG_TEX0(source->Vram/256, source->TBW, GS_PSM_T8, tw, th, 1, COLOR_DECAL, pal->Vram/256, GS_PSM_CT32, 0, 0, 1));
+
+    owl_add_tag(packet, GS_CLAMP_1, GS_SETREG_CLAMP(3, 3, 0xF7, clamp_horz, 0xFD, clamp_vert));
+
+    owl_add_tag(packet, GS_TEXFLUSH, 1);
+
+    owl_add_tag(packet, GS_FRAME_1, GS_SETREG_FRAME(dst->Vram/8192, dst->TBW, GS_PSM_CT32, ~out));
+
+    owl_add_tag(packet, (GS_UV) | (GS_XYZ2 << 4) | (GS_UV << 8) | (GS_XYZ2 << 12), 
+             GIF_SET_TAG(96, 1, 1, GS_SETREG_PRIM(GS_PRIM_SPRITE, 0, 1, 0, 0, 0, 1, 0, 0), 0, 4)
+    );
+
+    int y;
+	for (y = 0; y < 32; y += 2)
 	{
-		gsKit_clear(gsGlobal, BLACK_RGBAQ);
-		gsKit_queue_exec(gsGlobal);
-		gsKit_sync_flip(gsGlobal);
+		if (((y % 4) == 0) ^ (vert_block_offset == 1)) // Even (4 16x2 sprites)
+		{
+            int x;
+			for (x = 0; x < 64; x += 16)
+			{
+				// UV
+                owl_add_tag(packet, 0, GS_SETREG_STQ(8 + ((8 + x * 2) << 4), 8 + ((y * 2) << 4)));
+				// XYZ2
+                owl_add_tag(packet, 1, (uint64_t)((x + blockX) << 4) | ((uint64_t)((y + blockY) << 4) << 32));
+				// UV
+                owl_add_tag(packet, 0, GS_SETREG_STQ(8 + ((24 + x * 2) << 4), 8 + ((2 + y * 2) << 4)));
+				// XYZ2
+                owl_add_tag(packet, 1, (uint64_t)((x + 16 + blockX) << 4) | ((uint64_t)((y + 2 + blockY) << 4) << 32));
+			}
+		}
+		else // Odd (Eight 8x2 sprites)
+		{
+            int x;
+			for (x = 0; x < 64; x += 8)
+			{
+				// UV
+                owl_add_tag(packet, 0, GS_SETREG_STQ(8 + ((4 + x * 2) << 4), 8 + ((y * 2) << 4)));
+				// XYZ2
+                owl_add_tag(packet, 1, (uint64_t)((x + blockX) << 4) | ((uint64_t)((y + blockY) << 4) << 32));
+				// UV
+                owl_add_tag(packet, 0, GS_SETREG_STQ(8 + ((12 + x * 2) << 4), 8 + ((2 + y * 2) << 4)));
+				// XYZ2
+                owl_add_tag(packet, 1, (uint64_t)((x + 8 + blockX) << 4) | ((uint64_t)((y + 2 + blockY) << 4) << 32));
+			}
+		}
 	}
+
+    owl_add_tag(packet, GIF_AD, GIF_SET_TAG(3, 1, 0, 0, 0, 1));
+
+    owl_add_tag(packet, GS_CLAMP_1, gs_reg_cache[GS_CACHE_CLAMP]);
+
+    owl_add_tag(packet, GS_FRAME_1, gs_reg_cache[GS_CACHE_FRAME]);
+
+    owl_add_tag(packet, GS_XYOFFSET_1, gs_reg_cache[GS_CACHE_XYOFFSET]);
+}
+
+void set_screen_buffer(eScreenBuffers id, GSSURFACE *buf, uint32_t mask) {
+	buf->Mask = mask;
+	switch (id) {
+		case DRAW_BUFFER:
+			set_register(GS_CACHE_FRAME+gsGlobal->PrimContext, GS_SETREG_FRAME_1( buf->Vram / 8192, buf->TBW, buf->PSM, buf->Mask ));
+			break;
+		case DISPLAY_BUFFER:
+			break;
+		case DEPTH_BUFFER:
+			set_register(GS_CACHE_ZBUF+gsGlobal->PrimContext, GS_SETREG_ZBUF_1( buf->Vram / 8192, buf->PSM-0x30, buf->Mask ));
+			break;
+	}
+
+	if (!gsGlobal->PrimContext) {
+		cur_screen_buffer[id] = buf;
+	}
+}
+
+int screen_switch_context() {
+	gsGlobal->PrimContext ^= 1;
+	return gsGlobal->PrimContext;
+}
+
+void set_screen_param(uint8_t param, uint64_t value) {
+	test_reg test = { .data = get_register(GS_CACHE_TEST+gsGlobal->PrimContext) };
+
+	switch (param) {
+		case ALPHA_TEST_ENABLE:
+			test.fields.alpha_test_enabled = (bool)value;
+			break;
+		case ALPHA_TEST_METHOD:
+			test.fields.alpha_test_method = (int)value;
+			break;
+		case ALPHA_TEST_REF:
+			test.fields.alpha_test_ref = (uint8_t)value;
+			break;
+		case ALPHA_TEST_FAIL:
+			test.fields.alpha_fail_processing = (int)value;
+			break;
+		case DST_ALPHA_TEST_ENABLE:
+			test.fields.dest_alpha_test_enabled = (bool)value;
+			break;
+		case DST_ALPHA_TEST_METHOD:
+			test.fields.dest_alpha_test_method = (int)value;
+			break;
+		case DEPTH_TEST_ENABLE:
+			if (value) {
+				test.fields.depth_test_enabled = (bool)value;
+			} else {
+				test.fields.depth_test_enabled = true;
+				test.fields.depth_test_method = DEPTH_ALWAYS;
+			}
+			break;
+		case DEPTH_TEST_METHOD:
+			test.fields.depth_test_method = (int)value;
+			break;
+		case ALPHA_BLEND_EQUATION: 
+			set_register(GS_CACHE_ALPHA+gsGlobal->PrimContext, value);
+			return;
+		case SCISSOR_BOUNDS:
+			set_register(GS_CACHE_SCISSOR+gsGlobal->PrimContext, value);
+			return;
+		case PIXEL_ALPHA_BLEND_ENABLE:
+			set_register(GS_CACHE_PABE, value);
+			return;
+		case COLOR_CLAMP_MODE:
+			set_register(GS_CACHE_COLCLAMP, value);
+			return;
+	}
+
+	set_register(GS_CACHE_TEST+gsGlobal->PrimContext, test.data);
+}
+
+uint64_t get_screen_param(uint8_t param) {
+	test_reg test = { .data = get_register(GS_CACHE_TEST+gsGlobal->PrimContext) };
+
+	switch (param) {
+		case ALPHA_TEST_ENABLE:
+			return test.fields.alpha_test_enabled;
+		case ALPHA_TEST_METHOD:
+			return test.fields.alpha_test_method;
+		case ALPHA_TEST_REF:
+			return test.fields.alpha_test_ref;
+		case ALPHA_TEST_FAIL:
+			return test.fields.alpha_fail_processing;
+		case DST_ALPHA_TEST_ENABLE:
+			return test.fields.dest_alpha_test_enabled;
+		case DST_ALPHA_TEST_METHOD:
+			return test.fields.dest_alpha_test_method;
+		case DEPTH_TEST_ENABLE:
+			if (test.fields.depth_test_enabled && (test.fields.depth_test_method == DEPTH_ALWAYS)) {
+				return false;
+			}
+			return test.fields.depth_test_enabled;
+		case DEPTH_TEST_METHOD:
+			return test.fields.depth_test_method;
+		case ALPHA_BLEND_EQUATION:
+			return get_register(GS_CACHE_ALPHA+gsGlobal->PrimContext);
+		case SCISSOR_BOUNDS:
+			return get_register(GS_CACHE_SCISSOR+gsGlobal->PrimContext);
+		case PIXEL_ALPHA_BLEND_ENABLE:
+			return get_register(GS_CACHE_PABE);
+		case COLOR_CLAMP_MODE:
+			return get_register(GS_CACHE_COLCLAMP);
+	}
+}
+
+void set_finish()
+{
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 4);
+ 
+	owl_add_cnt_tag(packet, 3, 0);
+
+	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+	owl_add_uint(packet, VIF_CODE(2, 0, VIF_DIRECT, 0)); // 3 giftags
+
+	owl_add_tag(packet, GIF_AD, VU_GS_GIFTAG(1, 1, NULL, 0, 0, 0, 1));
+
+	owl_add_tag(packet, GS_FINISH, 0);
+}
+
+void set_register(int reg_id, uint64_t data) {
+	if (gs_reg_cache[reg_id] == data) return;
+
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 4);
+ 
+	owl_add_cnt_tag(packet, 3, 0);
+
+	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+	owl_add_uint(packet, VIF_CODE(2, 0, VIF_DIRECT, 0)); 
+
+	owl_add_tag(packet, GIF_AD, VU_GS_GIFTAG(1, 1, NULL, 0, 0, 0, 1));
+
+	owl_add_tag(packet, gs_reg_map[reg_id], data);
+
+	gs_reg_cache[reg_id] = data;
+}
+
+void flush_gs_texcache() {
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 4);
+ 
+	owl_add_cnt_tag(packet, 3, 0);
+
+	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+	owl_add_uint(packet, VIF_CODE(2, 0, VIF_DIRECT, 0)); 
+
+	owl_add_tag(packet, GIF_AD, VU_GS_GIFTAG(1, 1, NULL, 0, 0, 0, 1));
+
+	owl_add_tag(packet, GS_TEXFLUSH, 1);
+}
+
+uint64_t get_register(int reg_id) {
+	return gs_reg_cache[reg_id];
+}
+
+void page_clear(Color color) {
+	const uint32_t page_count = gsGlobal->Width * (gsGlobal->Height) / 2048;
+
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 11+page_count);
+
+	owl_add_cnt_tag(packet, 10+page_count, 0);
+
+	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+	owl_add_uint(packet, VIF_CODE(9+page_count, 0, VIF_DIRECT, 0)); // 3 giftags
+
+	owl_add_tag(packet, GIF_AD, VU_GS_GIFTAG(4, 1, NULL, 1, 0, 0, 1));
+
+	owl_add_tag(packet, GS_TEST_1+gsGlobal->PrimContext, GS_SETREG_TEST(0, 0, 0, 0, 0, 0, 1, 1)); // Ignore cache because it is a single operation
+	//owl_add_tag(packet, GS_SCISSOR_1, GS_SETREG_SCISSOR(0, 64 - 1, 0, 2048 - 1));
+	owl_add_tag(packet, GS_XYOFFSET_1+gsGlobal->PrimContext, GS_SETREG_XYOFFSET(0, 0));
+
+	// Clear
+	owl_add_tag(packet, GS_RGBAQ, color);
+	owl_add_tag(packet, GS_PRIM, VU_GS_PRIM(GS_PRIM_PRIM_SPRITE, 0, 0, 0, 0, 0, 0, gsGlobal->PrimContext, 0));
+
+	owl_add_tag(packet, GS_XYZ2 | (GS_XYZ2 << 4), VU_GS_GIFTAG(page_count, 1, NULL, 1, 0, 1, 2));
+
+	int b = 0;
+	for (int i = 0; i < gsGlobal->Width; i += 64)
+	{
+		for (int j = 0; j < gsGlobal->Height; j += 32)
+		{
+			asm volatile ( 	
+				"pcpyld   $7,     %[xy1],        %[xy2]      \n"
+				"psllh    $7,     $7,            4           \n"
+				"sq       $7,     0x00(%[ptr])               \n"
+				"daddiu   %[ptr], %[ptr],        0x10        \n" // packet->ptr++;
+				 : [ptr] "+r" (packet->ptr) : [xy1] "r" (GS_SETREG_XYZ(i, j, 0)), [xy2] "r" (GS_SETREG_XYZ(i+64, j+32, 0)): "$7", "memory");
+
+			//owl_add_tag(packet, GS_XYZ2, GS_SETREG_XYZ(i << 4, j << 4, 0));
+			//owl_add_tag(packet, GS_XYZ2, GS_SETREG_XYZ((i + 64) << 4, (j + 32) << 4, 0));
+		}
+	}
+
+	owl_add_tag(packet, GIF_AD, VU_GS_GIFTAG(2, 1, NULL, 0, 0, 0, 1));
+	
+	owl_add_tag(packet, GS_TEST_1, get_register(GS_CACHE_TEST+gsGlobal->PrimContext));
+	owl_add_tag(packet, GS_XYOFFSET_1, get_register(GS_CACHE_XYOFFSET+gsGlobal->PrimContext));
 }
 
 void clearScreen(Color color)
 {
-	gsKit_clear(gsGlobal, color);
-	
-}
-
-void loadFontM()
-{
-	gsFontM = gsKit_init_fontm();
-	gsKit_fontm_upload(gsGlobal, gsFontM);
-	gsFontM->Spacing = 0.68f;
-}
-
-void printFontMText(const char* text, float x, float y, float scale, Color color)
-{
-	gsKit_set_test(gsGlobal, GS_ATEST_ON);
-	gsKit_fontm_print_scaled(gsGlobal, gsFontM, x-0.5f, y-0.5f, 1, scale, color, text);
-}
-
-void unloadFontM()
-{
-	gsKit_free_fontm(gsGlobal, gsFontM);
+	page_clear(color);
 }
 
 float FPSCounter(int interval)
@@ -844,182 +633,19 @@ float FPSCounter(int interval)
 	return fps;
 }
 
-GSFONT* loadFont(const char* path){
-	int file = open(path, O_RDONLY, 0777);
-	uint16_t magic;
-	read(file, &magic, 2);
-	close(file);
-	GSFONT* font = NULL;
-	if (magic == 0x4D42) {
-		font = gsKit_init_font(GSKIT_FTYPE_BMP_DAT, (char*)path);
-		gsKit_font_upload(gsGlobal, font);
-	} else if (magic == 0x4246) {
-		font = gsKit_init_font(GSKIT_FTYPE_FNT, (char*)path);
-		gsKit_font_upload(gsGlobal, font);
-	} else if (magic == 0x5089) { 
-		font = gsKit_init_font(GSKIT_FTYPE_PNG_DAT, (char*)path);
-		gsKit_font_upload(gsGlobal, font);
+int getFreeVRAM(int mode) {
+	switch (mode) {
+		case VRAM_SIZE:
+			return 4*1024*1024;
+		case VRAM_USED_TOTAL:
+			return texture_manager_used_memory();
+		case VRAM_USED_STATIC:
+			return texture_manager_get_locked_memory();
+		case VRAM_USED_DYNAMIC:
+			return texture_manager_get_unlocked_memory();
 	}
 
-	return font;
-}
-
-void printFontText(GSFONT* font, const char* text, float x, float y, float scale, Color color)
-{
-	gsKit_set_test(gsGlobal, GS_ATEST_ON);
-	gsKit_font_print_scaled(gsGlobal, font, x-0.5f, y-0.5f, 1, scale, color, text);
-}
-
-void unloadFont(GSFONT* font)
-{
-	gsKit_TexManager_free(gsGlobal, font->Texture);
-	// clut was pointing to static memory, so do not free
-	font->Texture->Clut = NULL;
-	// mem was pointing to 'TexBase', so do not free
-	font->Texture->Mem = NULL;
-	// free texture
-	free(font->Texture);
-	font->Texture = NULL;
-
-	if (font->RawData != NULL)
-		free(font->RawData);
-
-	free(font);
-	font = NULL;
-}
-
-int getFreeVRAM(){
-	return (4096 - (gsGlobal->CurrentPointer / 1024));
-}
-
-
-void drawImageCentered(GSTEXTURE* source, float x, float y, float width, float height, float startx, float starty, float endx, float endy, Color color)
-{
-
-	if (source->Delayed == true) {
-		gsKit_TexManager_bind(gsGlobal, source);
-	}
-	gsKit_prim_sprite_texture(gsGlobal, source, 
-					x-width/2, // X1
-					y-height/2, // Y1
-					startx,  // U1
-					starty,  // V1
-					(width/2+x), // X2
-					(height/2+y), // Y2
-					endx, // U2
-					endy, // V2
-					1, 
-					color);	
-
-}
-
-void drawImage(GSTEXTURE* source, float x, float y, float width, float height, float startx, float starty, float endx, float endy, Color color)
-{
-
-	if (source->Delayed == true) {
-		gsKit_TexManager_bind(gsGlobal, source);
-	}
-	gsKit_prim_sprite_texture(gsGlobal, source, 
-					x-0.5f, // X1
-					y-0.5f, // Y1
-					startx,  // U1
-					starty,  // V1
-					(width+x)-0.5f, // X2
-					(height+y)-0.5f, // Y2
-					endx, // U2
-					endy, // V2
-					1, 
-					color);	
-}
-
-
-void drawImageRotate(GSTEXTURE* source, float x, float y, float width, float height, float startx, float starty, float endx, float endy, float angle, Color color){
-
-	float c = cosf(angle);
-	float s = sinf(angle);
-
-	if (source->Delayed == true) {
-		gsKit_TexManager_bind(gsGlobal, source);
-	}
-	gsKit_prim_quad_texture(gsGlobal, source, 
-							(-width/2)*c - (-height/2)*s+x, (-height/2)*c + (-width/2)*s+y, startx, starty, 
-							(-width/2)*c - height/2*s+x, height/2*c + (-width/2)*s+y, startx, endy, 
-							width/2*c - (-height/2)*s+x, (-height/2)*c + width/2*s+y, endx, starty, 
-							width/2*c - height/2*s+x, height/2*c + width/2*s+y, endx, endy, 
-							1, color);
-
-}
-
-void drawPixel(float x, float y, Color color)
-{
-	gsKit_prim_point(gsGlobal, x, y, 1, color);
-}
-
-void drawLine(float x, float y, float x2, float y2, Color color)
-{
-	gsKit_prim_line(gsGlobal, x, y, x2, y2, 1, color);
-}
-
-
-void drawRect(float x, float y, int width, int height, Color color)
-{
-	gsKit_prim_sprite(gsGlobal, x-0.5f, y-0.5f, (x+width)-0.5f, (y+height)-0.5f, 1, color);
-}
-
-void drawRectCentered(float x, float y, int width, int height, Color color)
-{
-	gsKit_prim_sprite(gsGlobal, x-width/2, y-height/2, (x+width)-width/2, (y+height)-height/2, 1, color);
-}
-
-void drawTriangle(float x, float y, float x2, float y2, float x3, float y3, Color color)
-{
-	gsKit_prim_triangle(gsGlobal, x, y, x2, y2, x3, y3, 1, color);
-}
-
-void drawTriangle_gouraud(float x, float y, float x2, float y2, float x3, float y3, Color color, Color color2, Color color3)
-{
-	gsKit_prim_triangle_gouraud(gsGlobal, x, y, x2, y2, x3, y3, 1, color, color2, color3);
-}
-
-void drawQuad(float x, float y, float x2, float y2, float x3, float y3, float x4, float y4, Color color)
-{
-	gsKit_prim_quad(gsGlobal, x, y, x2, y2, x3, y3, x4, y4, 1, color);
-}
-
-void drawQuad_gouraud(float x, float y, float x2, float y2, float x3, float y3, float x4, float y4, Color color, Color color2, Color color3, Color color4)
-{
-	gsKit_prim_quad_gouraud(gsGlobal, x, y, x2, y2, x3, y3, x4, y4, 1, color, color2, color3, color4);
-}
-
-void drawCircle(float x, float y, float radius, u64 color, u8 filled)
-{
-	float v[37*2];
-	int a;
-
-	for (a = 0; a < 36; a++) {
-		v[a*2] = (cosf(a * (M_PI*2)/36) * radius) + x;
-		v[a*2+1] = (sinf(a * (M_PI*2)/36) * radius) + y;
-	}
-
-	if (filled) {
-		gsKit_prim_triangle_fan(gsGlobal, v, 36, 1, color);
-	} else {
-		v[36*2] = radius + x;
-		v[36*2 + 1] = y;
-
-		gsKit_prim_line_strip(gsGlobal, v, 37, 1, color);
-	}
-}
-
-void InvalidateTexture(GSTEXTURE *txt)
-{
-    gsKit_TexManager_invalidate(gsGlobal, txt);
-}
-
-void UnloadTexture(GSTEXTURE *txt)
-{
-	gsKit_TexManager_free(gsGlobal, txt);
-	
+	return 0;
 }
 
 int GetInterlacedFrameMode()
@@ -1029,63 +655,9 @@ int GetInterlacedFrameMode()
 
     return 0;
 }
-GSGLOBAL *getGSGLOBAL(){ return gsGlobal; }
+GSCONTEXT *getGSGLOBAL(){ return gsGlobal; }
 
 static void switchFlipScreenFunction();
-
-void setVideoMode(s16 mode, int width, int height, int psm, s16 interlace, s16 field, bool zbuffering, int psmz, bool double_buffering, uint8_t pass_count) {
-	gsGlobal->Mode = mode;
-	gsGlobal->Width = width;
-	if ((interlace == GS_INTERLACED) && (field == GS_FRAME))
-		gsGlobal->Height = height / 2;
-	else
-		gsGlobal->Height = height;
-
-	gsGlobal->PSM = psm;
-	gsGlobal->PSMZ = psmz;
-
-	gsGlobal->ZBuffering = zbuffering;
-	gsGlobal->DoubleBuffering = double_buffering;
-	gsGlobal->PrimAlphaEnable = GS_SETTING_ON;
-	gsGlobal->Dithering = GS_SETTING_OFF;
-
-	gsGlobal->Interlace = interlace;
-	gsGlobal->Field = field;
-
-	gsKit_set_primalpha(gsGlobal, GS_SETREG_ALPHA(0, 1, 0, 1, 0), 0);
-
-	dbgprintf("\nGraphics: created video surface of (%d, %d)\n",
-		gsGlobal->Width, gsGlobal->Height);
-
-	gsKit_set_clamp(gsGlobal, GS_CMODE_REPEAT);
-	gsKit_vram_clear(gsGlobal);
-
-	if (pass_count > 1) {
-		gsKit_hires_init_screen(gsGlobal, pass_count);
-		hires = true;
-	} else {
-		gsKit_init_screen(gsGlobal);
-		hires = false;
-	}
-
-	switchFlipScreenFunction();
-	
-	gsKit_set_display_offset(gsGlobal, -0.5f, -0.5f);
-	gsKit_sync_flip(gsGlobal);
-
-	gsKit_mode_switch(gsGlobal, GS_ONESHOT);
-    gsKit_clear(gsGlobal, BLACK_RGBAQ);	
-}
-
-void fntDrawQuad(rm_quad_t *q)
-{
-    gsKit_TexManager_bind(gsGlobal, q->txt);
-    gsKit_prim_sprite_texture(gsGlobal, q->txt,
-                              q->ul.x-0.5f, q->ul.y-0.5f,
-                              q->ul.u, q->ul.v,
-                              q->br.x-0.5f, q->br.y-0.5f,
-                              q->br.u, q->br.v, 1, q->color);
-}
 
 /* PRIVATE METHODS */
 static int vsync_handler()
@@ -1101,21 +673,46 @@ void setVSync(bool vsync_flag){
 	switchFlipScreenFunction();
 }
 
+
 void toggleFrameCounter(bool enable){ 
 	perf = enable;
 	switchFlipScreenFunction();
 }
 
-/* Copy of gsKit_sync_flip, but without the 'flip' */
-static void gsKit_sync(GSGLOBAL *gsGlobal)
+void setactive(GSCONTEXT *gsGlobal)
+{
+	owl_packet *packet = owl_query_packet(DMA_CHANNEL_VIF1, 5);
+
+	owl_add_cnt_tag(packet, 4, 0);
+
+	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+	owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+	owl_add_uint(packet, VIF_CODE(3, 0, VIF_DIRECT, 0)); // 3 giftags
+
+	owl_add_tag(packet, GIF_AD, VU_GS_GIFTAG(2, 1, NULL, 0, 0, 0, 1));
+
+	draw_buffer.Vram = gsGlobal->ScreenBuffer[gsGlobal->ActiveBuffer & 1];
+	display_buffer.Vram = gsGlobal->ScreenBuffer[gsGlobal->ActiveBuffer];
+
+	gs_reg_cache[GS_CACHE_SCISSOR] = GS_SETREG_SCISSOR_1( 0, gsGlobal->Width - 1, 0, gsGlobal->Height - 1 );
+	gs_reg_cache[GS_CACHE_FRAME] = GS_SETREG_FRAME_1( draw_buffer.Vram / 8192, gsGlobal->Width / 64, gsGlobal->PSM, draw_buffer.Mask );
+
+	// Context 1
+	owl_add_tag(packet, GS_SCISSOR_1, gs_reg_cache[GS_CACHE_SCISSOR]);
+	owl_add_tag(packet, GS_FRAME_1, gs_reg_cache[GS_CACHE_FRAME]);
+}
+
+/* Copy of sync_screen_flip, but without the 'flip' */
+static void sync_screen(GSCONTEXT *gsGlobal)
 {
    if (!gsGlobal->FirstFrame) WaitSema(vsync_sema_id);
    while (PollSema(vsync_sema_id) >= 0)
    	;
 }
 
-/* Copy of gsKit_sync_flip, but without the 'sync' */
-static void gsKit_flip(GSGLOBAL *gsGlobal)
+/* Copy of sync_screen_flip, but without the 'sync' */
+static void flip_screen(GSCONTEXT *gsGlobal)
 {
    if (!gsGlobal->FirstFrame)
    {
@@ -1130,36 +727,34 @@ static void gsKit_flip(GSGLOBAL *gsGlobal)
 
    }
 
-   gsKit_setactive(gsGlobal);
+   setactive(gsGlobal);
 }
 
 void athena_error_screen(const char* errMsg, bool dark_mode) {
-    gsKit_clear_screens();
-
     uint64_t color = GS_SETREG_RGBAQ(0x20,0x20,0x20,0x80,0x00);
     uint64_t color2 = GS_SETREG_RGBAQ(0x80,0x80,0x80,0x80,0x00);
 
-    if (errMsg != NULL)
+    if (errMsg)
     {
         printf("AthenaEnv ERROR!\n%s", errMsg);
 
-        if (strstr(errMsg, "EvalError") != NULL) {
+        if (strstr(errMsg, "EvalError")) {
             color = GS_SETREG_RGBAQ(0x56,0x71,0x7D,0x80,0x00);
-        } else if (strstr(errMsg, "SyntaxError") != NULL) {
+        } else if (strstr(errMsg, "SyntaxError")) {
             color = GS_SETREG_RGBAQ(0x20,0x60,0xB0,0x80,0x00);
-        } else if (strstr(errMsg, "TypeError") != NULL) {
+        } else if (strstr(errMsg, "TypeError")) {
             color = GS_SETREG_RGBAQ(0x3b,0x81,0x32,0x80,0x00);
-        } else if (strstr(errMsg, "ReferenceError") != NULL) {
+        } else if (strstr(errMsg, "ReferenceError")) {
             color = GS_SETREG_RGBAQ(0xE5,0xDE,0x00,0x80,0x00);
-        } else if (strstr(errMsg, "RangeError") != NULL) {
+        } else if (strstr(errMsg, "RangeError")) {
             color = GS_SETREG_RGBAQ(0xD0,0x31,0x3D,0x80,0x00);
-        } else if (strstr(errMsg, "InternalError") != NULL) {
+        } else if (strstr(errMsg, "InternalError")) {
             color = GS_SETREG_RGBAQ(0x8A,0x00,0xC2,0x80,0x00);
-        } else if (strstr(errMsg, "URIError") != NULL) {
+        } else if (strstr(errMsg, "URIError")) {
             color = GS_SETREG_RGBAQ(0xFF,0x78,0x1F,0x80,0x00);
-        } else if (strstr(errMsg, "AggregateError") != NULL) {
+        } else if (strstr(errMsg, "AggregateError")) {
             color = GS_SETREG_RGBAQ(0xE2,0x61,0x9F,0x80,0x00);
-        } else if (strstr(errMsg, "AthenaError") != NULL) {
+        } else if (strstr(errMsg, "AthenaError")) {
             color = GS_SETREG_RGBAQ(0x70,0x29,0x63,0x80,0x00);
         }
 
@@ -1170,16 +765,21 @@ void athena_error_screen(const char* errMsg, bool dark_mode) {
             color2 = GS_SETREG_RGBAQ(0x80,0x80,0x80,0x80,0x00);
         }
 
-		fntLoadDefault(NULL);
-		fntSetCharSize(0, FNTSYS_CHAR_SIZE*64*0.8f, FNTSYS_CHAR_SIZE*64*0.8f);
+		int slot = fntLoadFile(NULL);
+		fntSetCharSize(slot, FNTSYS_CHAR_SIZE*64, FNTSYS_CHAR_SIZE*64);
+
+		set_screen_param(DEPTH_TEST_ENABLE, false);
 
     	while (!isButtonPressed(PAD_START)) {
 			clearScreen(color);
-			fntRenderString(0, 15, 15, 0, 640, 448, "AthenaEnv ERROR!", color2);
-			fntRenderString(0, 15, 80, 0, 640, 448, errMsg, color2);
-			fntRenderString(0, 15, 400, 0, 640, 448, "Press [start] to restart", color2);
+			fntRenderString(slot, 15, 15, 0, 625, 448, "AthenaEnv ERROR!", 1.2f, color2);
+			fntRenderString(slot, 15, 80, 0, 625, 448, errMsg, 0.8f, color2);
+			fntRenderString(slot, 15, 400, 0, 625, 448, "Press [start] to restart", 0.8f, color2);
 			flipScreen();
 		} 
+
+		set_screen_param(DEPTH_TEST_ENABLE, true);
+		set_screen_param(DEPTH_TEST_METHOD, DEPTH_GEQUAL);
     }
 }
 
@@ -1196,66 +796,84 @@ inline void processFrameCounter()
 	frames++;
 }
 
-void vu1_queue_init(GSGLOBAL *gsGlobal, GSQUEUE *Queue, u8 mode, int size)
-{
-	// Init pool 0
-	Queue->pool[0]		= gsKit_alloc_ucab(size);
-	Queue->pool_max[0]	= (u64 *)((u32)Queue->pool[0] + size);
-
-	Queue->pool[1]		= gsKit_alloc_ucab(size);
-	Queue->pool_max[1]	= (u64 *)((u32)Queue->pool[1] + size);
-
-	Queue->dma_tag		= Queue->pool[0];
-	Queue->pool_cur		= (u64 *)((u32)Queue->pool[0] + 16);
-	Queue->dbuf			= 0;
-	Queue->tag_size		= 0;
-	Queue->last_tag		= Queue->pool_cur;
-	Queue->last_type	= GIF_RESERVED;
-	Queue->mode			= mode;
-}
-
 static void flipScreenSingleBuffering()
 {
+	owl_flush_packet();
 	//gsKit_set_finish(gsGlobal);
-	gsKit_sync(gsGlobal);
-	gsKit_queue_exec(gsGlobal);
+	sync_screen(gsGlobal);
+	//gsKit_queue_exec(gsGlobal);
 
-	gsKit_TexManager_nextFrame(gsGlobal);
+	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
+
+	dmaKit_wait(DMA_CHANNEL_GIF, 0);
+
+	texture_manager_nextFrame(gsGlobal);
 }
 
 static void flipScreenSingleBufferingPerf()
 {
-	//gsKit_set_finish(gsGlobal);
-	gsKit_sync(gsGlobal);
-	gsKit_queue_exec(gsGlobal);
+	owl_flush_packet();
 
-	gsKit_TexManager_nextFrame(gsGlobal);
+	//gsKit_set_finish(gsGlobal);
+	sync_screen(gsGlobal);
+
+	//gsKit_queue_exec(gsGlobal);
+
+	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
+
+	dmaKit_wait(DMA_CHANNEL_GIF, 0);
+
+	texture_manager_nextFrame(gsGlobal);
 
 	processFrameCounter();
 }
 
 static void flipScreenDoubleBuffering()
 {	
-	//gsKit_set_finish(gsGlobal);
-
-	gsKit_sync(gsGlobal);
-	gsKit_flip(gsGlobal);
-	gsKit_queue_exec(gsGlobal);
-	gsKit_finish();
+	dmaKit_wait(DMA_CHANNEL_GIF, 0);
+	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
 	
-	gsKit_TexManager_nextFrame(gsGlobal);
+	set_finish();
+
+	owl_flush_packet();
+
+	sync_screen(gsGlobal);
+
+	if(!gsGlobal->FirstFrame)
+		while(!(GS_CSR_FINISH));
+
+	GS_SETREG_CSR_FINISH(1);
+
+	gsGlobal->FirstFrame = GS_SETTING_OFF;
+
+	flip_screen(gsGlobal);
+	//gsKit_queue_exec(gsGlobal);
+	
+	texture_manager_nextFrame(gsGlobal);
 }
 
 static void flipScreenDoubleBufferingPerf()
 {	
-	//gsKit_set_finish(gsGlobal);
+	sync_screen(gsGlobal);
 
-	gsKit_sync(gsGlobal);
-	gsKit_flip(gsGlobal);
-	gsKit_queue_exec(gsGlobal);
-	gsKit_finish();
+	dmaKit_wait(DMA_CHANNEL_GIF, 0);
+	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
 	
-	gsKit_TexManager_nextFrame(gsGlobal);
+	set_finish();
+
+	owl_flush_packet();
+
+	if(!gsGlobal->FirstFrame)
+		while(!(GS_CSR_FINISH));
+
+	GS_SETREG_CSR_FINISH(1);
+
+	gsGlobal->FirstFrame = GS_SETTING_OFF;
+
+	flip_screen(gsGlobal);
+	//gsKit_queue_exec(gsGlobal);
+	
+	texture_manager_nextFrame(gsGlobal);
 
 	processFrameCounter();
 }
@@ -1264,65 +882,79 @@ static void flipScreenDoubleBufferingPerf()
 
 static void flipScreenSingleBufferingNoVSync()
 {
-	gsKit_queue_exec(gsGlobal);
-	gsKit_TexManager_nextFrame(gsGlobal);
+	//gsKit_queue_exec(gsGlobal);
+
+	owl_flush_packet();
+
+	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
+
+	dmaKit_wait(DMA_CHANNEL_GIF, 0);
+
+	texture_manager_nextFrame(gsGlobal);
 }
 
 static void flipScreenSingleBufferingPerfNoVSync()
 {
+	//gsKit_queue_exec(gsGlobal);
+	owl_flush_packet();
 
-	gsKit_queue_exec(gsGlobal);
-	gsKit_TexManager_nextFrame(gsGlobal);
+	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
+
+	dmaKit_wait(DMA_CHANNEL_GIF, 0);
+
+	texture_manager_nextFrame(gsGlobal);
 
 	processFrameCounter();
 }
 
 static void flipScreenDoubleBufferingNoVSync()
 {	
-	gsKit_flip(gsGlobal);
-	gsKit_queue_exec(gsGlobal);
-	gsKit_finish();
-	gsKit_TexManager_nextFrame(gsGlobal);
+	owl_flush_packet();
+
+	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
+
+	dmaKit_wait(DMA_CHANNEL_GIF, 0);
+
+	if(!gsGlobal->FirstFrame)
+		while(!(GS_CSR_FINISH));
+
+	GS_SETREG_CSR_FINISH(1);
+
+	flip_screen(gsGlobal);
+	//gsKit_queue_exec(gsGlobal);	
+
+	texture_manager_nextFrame(gsGlobal);
 }
 
 static void flipScreenDoubleBufferingPerfNoVSync()
 {	
-	gsKit_flip(gsGlobal);
-	gsKit_queue_exec(gsGlobal);
-	gsKit_finish();
-	gsKit_TexManager_nextFrame(gsGlobal);
+	dmaKit_wait(DMA_CHANNEL_GIF, 0);
+	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
+	
+	set_finish();
+
+	owl_flush_packet();
+
+	if(!gsGlobal->FirstFrame)
+		while(!(GS_CSR_FINISH));
+
+	GS_SETREG_CSR_FINISH(1);
+
+	gsGlobal->FirstFrame = GS_SETTING_OFF;
+
+	flip_screen(gsGlobal);
+	//gsKit_queue_exec(gsGlobal);
+	
+	texture_manager_nextFrame(gsGlobal);
 
 	processFrameCounter();
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////
 
-static void flipScreenHiRes()
-{
-	gsKit_hires_sync(gsGlobal);
-	gsKit_hires_flip(gsGlobal);
-	gsKit_TexManager_nextFrame(gsGlobal);
-
-}
-
-static void flipScreenHiResPerf()
-{
-	gsKit_hires_sync(gsGlobal);
-	gsKit_hires_flip(gsGlobal);
-	gsKit_TexManager_nextFrame(gsGlobal);
-
-	processFrameCounter();
-}
-
 static void switchFlipScreenFunction()
 {
-	if (hires) {
-		if(perf) {
-			flipScreen = flipScreenHiResPerf;
-		} else {
-			flipScreen = flipScreenHiRes;
-		}
-	} else {
+	{
 		if (vsync) {
 			if (gsGlobal->DoubleBuffering == GS_SETTING_OFF) {
 				if(perf) {
@@ -1357,69 +989,576 @@ static void switchFlipScreenFunction()
 	}
 }
 
-void init_graphics()
+#define posixIODriver { open, close, (int (*)(int, void *, int))read, O_RDONLY }
+
+uint8_t __modelSupportsGetGsDxDyOffset;
+
+short int check_rom(void)
 {
-	ee_sema_t sema;
+	static int default_signal = -1;
+	char romname[15];
+
+	if(default_signal < 0)
+	{
+		_io_driver driver = posixIODriver;
+		GetRomNameWithIODriver((char *)romname, &driver);
+		romname[14] = '\0';
+
+		//ROMVER string format: VVVVRTYYYYMMDD
+		default_signal = (romname[4] == 'E') ? GS_MODE_PAL : GS_MODE_NTSC;
+		__modelSupportsGetGsDxDyOffset = (20010608 < atoi(&romname[6]));
+	}
+
+	return default_signal;
+}
+
+static void set_buffer_attributes(GSCONTEXT *gsGlobal)
+{
+	int gs_DX, gs_DY, gs_DW, gs_DH;
+
+	gsGlobal->StartXOffset = 0;
+	gsGlobal->StartYOffset = 0;
+
+	switch (gsGlobal->Mode) {
+		case GS_MODE_NTSC:
+			gsGlobal->StartX = 492;
+			gsGlobal->StartY = 34;
+			gsGlobal->DW = 2880;
+			gsGlobal->DH = 480;
+			break;
+		case GS_MODE_PAL:
+			gsGlobal->StartX = 520;
+			gsGlobal->StartY = 40;
+			gsGlobal->DW = 2880;
+			gsGlobal->DH = 576;
+			break;
+		case GS_MODE_VGA_640_60:
+			gsGlobal->StartX = 280;
+			gsGlobal->StartY = 18;
+			gsGlobal->DW = 1280;
+			gsGlobal->DH = 480;
+			break;
+		case GS_MODE_VGA_640_72:
+			gsGlobal->StartX = 330;
+			gsGlobal->StartY = 18;
+			gsGlobal->DW = 1280;
+			gsGlobal->DH = 480;
+			break;
+		case GS_MODE_VGA_640_75:
+			gsGlobal->StartX = 360;
+			gsGlobal->StartY = 18;
+			gsGlobal->DW = 1280;
+			gsGlobal->DH = 480;
+			break;
+		case GS_MODE_VGA_640_85:
+			gsGlobal->StartX = 260;
+			gsGlobal->StartY = 18;
+			gsGlobal->DW = 1280;
+			gsGlobal->DH = 480;
+			break;
+		case GS_MODE_VGA_800_56:
+			gsGlobal->StartX = 450;
+			gsGlobal->StartY = 25;
+			gsGlobal->DW = 1600;
+			gsGlobal->DH = 600;
+			break;
+		case GS_MODE_VGA_800_60:
+		case GS_MODE_VGA_800_72:
+			gsGlobal->StartX = 465;
+			gsGlobal->StartY = 25;
+			gsGlobal->DW = 1600;
+			gsGlobal->DH = 600;
+			break;
+		case GS_MODE_VGA_800_75:
+			gsGlobal->StartX = 510;
+			gsGlobal->StartY = 25;
+			gsGlobal->DW = 1600;
+			gsGlobal->DH = 600;
+			break;
+		case GS_MODE_VGA_800_85:
+			gsGlobal->StartX = 500;
+			gsGlobal->StartY = 25;
+			gsGlobal->DW = 1600;
+			gsGlobal->DH = 600;
+			break;
+		case GS_MODE_VGA_1024_60:
+			gsGlobal->StartX = 580;
+			gsGlobal->StartY = 30;
+			gsGlobal->DW = 2048; // does this really need doubling? can't test
+			gsGlobal->DH = 768;
+			break;
+		case GS_MODE_VGA_1024_70:
+			gsGlobal->StartX = 266;
+			gsGlobal->StartY = 30;
+			gsGlobal->DW = 1024;
+			gsGlobal->DH = 768;
+			break;
+		case GS_MODE_VGA_1024_75:
+			gsGlobal->StartX = 260;
+			gsGlobal->StartY = 30;
+			gsGlobal->DW = 1024;
+			gsGlobal->DH = 768;
+			break;
+		case GS_MODE_VGA_1024_85:
+			gsGlobal->StartX = 290;
+			gsGlobal->StartY = 30;
+			gsGlobal->DW = 1024;
+			gsGlobal->DH = 768;
+			break;
+		case GS_MODE_VGA_1280_60:
+		case GS_MODE_VGA_1280_75:
+			gsGlobal->StartX = 350;
+			gsGlobal->StartY = 40;
+			gsGlobal->DW = 1280;
+			gsGlobal->DH = 1024;
+			break;
+		case GS_MODE_DTV_480P:
+			gsGlobal->StartX = 232;
+			gsGlobal->StartY = 35;
+			gsGlobal->DW = 1440;
+			gsGlobal->DH = 480; // though rare there are tv's that can handle an interlaced 480p source
+			break;
+		case GS_MODE_DTV_576P:
+			gsGlobal->StartX = 255;
+			gsGlobal->StartY = 44;
+			gsGlobal->DW = 1440;
+			gsGlobal->DH = 576;
+			break;
+		case GS_MODE_DTV_720P:
+			gsGlobal->StartX = 306;
+			gsGlobal->StartY = 24;
+			gsGlobal->DW = 1280;
+			gsGlobal->DH = 720;
+			break;
+		case GS_MODE_DTV_1080I:
+			gsGlobal->StartX = 236;
+			gsGlobal->StartY = 38;
+			gsGlobal->DW = 1920;
+			gsGlobal->DH = 1080;
+			break;
+	}
+
+	if((gsGlobal->Mode == GS_MODE_NTSC || gsGlobal->Mode == GS_MODE_PAL) && (gsGlobal->Interlace == GS_NONINTERLACED)) {
+		// NTSC 240p instead of 480i
+		// PAL  288p instead of 576i
+		gsGlobal->StartY /= 2;
+		gsGlobal->DH /= 2;
+	}
+
+	gsGlobal->MagH = (gsGlobal->DW / gsGlobal->Width) - 1; // gsGlobal->DW should be a multiple of the screen width
+	gsGlobal->MagV = (gsGlobal->DH / gsGlobal->Height) - 1; // gsGlobal->DH should be a multiple of the screen height
+
+	// For other video modes, other than NTSC and PAL: if this model supports the GetGsDxDy syscall, get the board-specific offsets.
+	if(gsGlobal->Mode != GS_MODE_NTSC && gsGlobal->Mode != GS_MODE_PAL)
+	{
+		check_rom();
+		if(__modelSupportsGetGsDxDyOffset)
+		{
+			_GetGsDxDyOffset(gsGlobal->Mode, &gs_DX, &gs_DY, &gs_DW, &gs_DH);
+			gsGlobal->StartX += gs_DX;
+			gsGlobal->StartY += gs_DY;
+		}
+	}
+
+	// Keep the framebuffer in the center of the screen
+	gsGlobal->StartX += (gsGlobal->DW - ((gsGlobal->MagH + 1) * gsGlobal->Width )) / 2;
+	gsGlobal->StartY += (gsGlobal->DH - ((gsGlobal->MagV + 1) * gsGlobal->Height)) / 2;
+
+	if (gsGlobal->Interlace == GS_INTERLACED) {
+		// Do not change odd/even start position in interlaced mode
+		gsGlobal->StartY &= ~1;
+	}
+
+	// Calculate the actual display width and height
+	gsGlobal->DW = (gsGlobal->MagH + 1) * gsGlobal->Width;
+	gsGlobal->DH = (gsGlobal->MagV + 1) * gsGlobal->Height;
+
+	if ((gsGlobal->Interlace == GS_INTERLACED) && (gsGlobal->Field == GS_FRAME)) {
+		gsGlobal->MagV--;
+	}
+}
+
+void init_screen(GSCONTEXT *gsGlobal)
+{
+	u64	*p_data;
+	u64	*p_store;
+	int	size = 18;
+
+	if((gsGlobal->Dithering == GS_SETTING_ON) &&
+	   ((gsGlobal->PSM == GS_PSM_CT16) || (gsGlobal->PSM == GS_PSM_CT16S)))
+		size++;
+
+    set_buffer_attributes(gsGlobal);
+
+    GS_RESET();
+
+    __asm__("sync.p; nop;");
+
+    *GS_CSR = 0x00000000; // Clean CSR registers
+
+    GsPutIMR(0x00007F00); // Masks all interrupts
+
+	SetGsCrt(gsGlobal->Interlace, gsGlobal->Mode, gsGlobal->Field);
+
+	// Fix 1080i frame mode
+	if ((gsGlobal->Mode == GS_MODE_DTV_1080I) && (gsGlobal->Field == GS_FRAME))
+		GS_SET_SMODE2(1, 1, 0);
+
+	gsGlobal->FirstFrame = GS_SETTING_ON;
+
+	DIntr(); // disable interrupts
+
+	GS_SET_PMODE(	0,		// Read Circuit 1
+			1,		// Read Circuit 2
+			0,		// Use ALP Register for Alpha Blending
+			1,		// Alpha Value of Read Circuit 2 for Output Selection
+			0,		// Blend Alpha with output of Read Circuit 2
+			0x80);		// Alpha Value = 1.0
+
+	GS_SET_DISPFB1(	0,			// Frame Buffer Base Pointer (Address/2048)
+			gsGlobal->Width / 64,	// Buffer Width (Address/64)
+			gsGlobal->PSM,		// Pixel Storage Format
+			0,			// Upper Left X in Buffer
+			0);
+
+	GS_SET_DISPFB2(	0,			// Frame Buffer Base Pointer (Address/2048)
+			gsGlobal->Width / 64,	// Buffer Width (Address/64)
+			gsGlobal->PSM,		// Pixel Storage Format
+			0,			// Upper Left X in Buffer
+			0);			// Upper Left Y in Buffer
+
+	GS_SET_DISPLAY1(
+			gsGlobal->StartX + gsGlobal->StartXOffset,	// X position in the display area (in VCK unit
+			gsGlobal->StartY + gsGlobal->StartYOffset,	// Y position in the display area (in Raster u
+			gsGlobal->MagH,			// Horizontal Magnification
+			gsGlobal->MagV,			// Vertical Magnification
+			gsGlobal->DW - 1,	// Display area width
+			gsGlobal->DH - 1);		// Display area height
+
+	GS_SET_DISPLAY2(
+			gsGlobal->StartX + gsGlobal->StartXOffset,	// X position in the display area (in VCK units)
+			gsGlobal->StartY + gsGlobal->StartYOffset,	// Y position in the display area (in Raster units)
+			gsGlobal->MagH,			// Horizontal Magnification
+			gsGlobal->MagV,			// Vertical Magnification
+			gsGlobal->DW - 1,	// Display area width
+			gsGlobal->DH - 1);		// Display area height
+
+	GS_SET_BGCOLOR(0, 0, 0);
+
+    EIntr(); //enable interrupts
+
+	owl_packet *packet = owl_query_packet(CHANNEL_GIF, size+2);
+
+	owl_add_cnt_tag(packet, size+1, 0);
+
+	owl_add_tag(packet, GIF_AD, GIFTAG( size, 1, 0, 0, 0, 1 ));
+
+	owl_add_tag(packet, GS_PRMODECONT, 1);
+
+	gs_reg_cache[GS_CACHE_FRAME] = GS_SETREG_FRAME_1( gsGlobal->ScreenBuffer[0] / 8192, gsGlobal->Width / 64, gsGlobal->PSM, 0 );
+	owl_add_tag(packet, GS_FRAME, gs_reg_cache[GS_CACHE_FRAME]);
+
+	gs_reg_cache[GS_CACHE_XYOFFSET] = GS_SETREG_XYOFFSET_1( gsGlobal->OffsetX, gsGlobal->OffsetY);
+	owl_add_tag(packet, GS_XYOFFSET_1, gs_reg_cache[GS_CACHE_XYOFFSET]);
+
+	gs_reg_cache[GS_CACHE_SCISSOR] = GS_SETREG_SCISSOR_1( 0, gsGlobal->Width - 1, 0, gsGlobal->Height - 1 );
+	owl_add_tag(packet, GS_SCISSOR_1, gs_reg_cache[GS_CACHE_SCISSOR]);
+
+	gs_reg_cache[GS_CACHE_TEST] = GS_SETREG_TEST(0, 1, 0x80, 0, 0, 0, 1, 2);
+	owl_add_tag(packet, GS_TEST_1, gs_reg_cache[GS_CACHE_TEST]);
+
+	gs_reg_cache[GS_CACHE_CLAMP] = GS_SETREG_CLAMP(GS_CMODE_REPEAT, GS_CMODE_REPEAT, 0, 0, 0, 0);
+	owl_add_tag(packet, GS_CLAMP_1, gs_reg_cache[GS_CACHE_CLAMP]);
+
+	if(gsGlobal->ZBuffering == GS_SETTING_ON)
+	{
+	    if((gsGlobal->PSM == GS_PSM_CT16) && (gsGlobal->PSMZ != GS_ZBUF_16))
+            gsGlobal->PSMZ = GS_ZBUF_16; // seems only non-S 16-bit z depth works with this mode
+        if((gsGlobal->PSM != GS_PSM_CT16) && (gsGlobal->PSMZ == GS_ZBUF_16))
+            gsGlobal->PSMZ = GS_ZBUF_16S; // other depths don't seem to work with 16-bit non-S z depth
+
+		gs_reg_cache[GS_CACHE_ZBUF] = GS_SETREG_ZBUF_1( gsGlobal->ZBuffer / 8192, gsGlobal->PSMZ, 0 );
+	} else {
+		gs_reg_cache[GS_CACHE_ZBUF] = GS_SETREG_ZBUF_1( 0, gsGlobal->PSM, 1 );
+	}
+	owl_add_tag(packet, GS_ZBUF_1, gs_reg_cache[GS_CACHE_ZBUF]);
+
+	gs_reg_cache[GS_CACHE_COLCLAMP] = GS_SETREG_COLCLAMP( 255 );
+	owl_add_tag(packet, GS_COLCLAMP, gs_reg_cache[GS_CACHE_COLCLAMP]);
+
+	gs_reg_cache[GS_CACHE_FRAME_2] = GS_SETREG_FRAME_1( gsGlobal->ScreenBuffer[1] / 8192, gsGlobal->Width / 64, gsGlobal->PSM, 0 );
+	owl_add_tag(packet, GS_FRAME_2, gs_reg_cache[GS_CACHE_FRAME_2]);
+
+	gs_reg_cache[GS_CACHE_XYOFFSET_2] = gs_reg_cache[GS_CACHE_XYOFFSET];
+	owl_add_tag(packet, GS_XYOFFSET_2, gs_reg_cache[GS_CACHE_XYOFFSET_2]);
+
+	gs_reg_cache[GS_CACHE_SCISSOR_2] = gs_reg_cache[GS_CACHE_SCISSOR];
+	owl_add_tag(packet, GS_SCISSOR_2, gs_reg_cache[GS_CACHE_SCISSOR_2]);
+
+	gs_reg_cache[GS_CACHE_TEST_2] = gs_reg_cache[GS_CACHE_TEST];
+	owl_add_tag(packet, GS_TEST_2, gs_reg_cache[GS_CACHE_TEST_2]);
+
+	gs_reg_cache[GS_CACHE_CLAMP_2] = gs_reg_cache[GS_CACHE_CLAMP];
+	owl_add_tag(packet, GS_CLAMP_2, gs_reg_cache[GS_CACHE_CLAMP_2]);
+
+	gs_reg_cache[GS_CACHE_ZBUF_2] = gs_reg_cache[GS_CACHE_ZBUF];
+	owl_add_tag(packet, GS_ZBUF_2, gs_reg_cache[GS_CACHE_ZBUF_2]);
+
+	gs_reg_cache[GS_CACHE_ALPHA] = GS_ALPHA_BLEND_NORMAL;
+	owl_add_tag(packet, GS_ALPHA_1, gs_reg_cache[GS_CACHE_ALPHA]);
+
+	gs_reg_cache[GS_CACHE_ALPHA_2] = gs_reg_cache[GS_CACHE_ALPHA];
+	owl_add_tag(packet, GS_ALPHA_2, gs_reg_cache[GS_CACHE_ALPHA_2]);
+
+	owl_add_tag(packet, GS_DIMX, 
+		GS_SETREG_DIMX(gsGlobal->DitherMatrix[0],gsGlobal->DitherMatrix[1],
+                gsGlobal->DitherMatrix[2],gsGlobal->DitherMatrix[3],gsGlobal->DitherMatrix[4],
+                gsGlobal->DitherMatrix[5],gsGlobal->DitherMatrix[6],gsGlobal->DitherMatrix[7],
+                gsGlobal->DitherMatrix[8],gsGlobal->DitherMatrix[9],gsGlobal->DitherMatrix[10],
+                gsGlobal->DitherMatrix[11],gsGlobal->DitherMatrix[12],gsGlobal->DitherMatrix[13],
+                gsGlobal->DitherMatrix[14],gsGlobal->DitherMatrix[15]));
+
+	owl_add_tag(packet, GS_TEXA, GS_SETREG_TEXA(0x80, 0, 0x80));
+
+	if((gsGlobal->Dithering == GS_SETTING_ON) && ((gsGlobal->PSM == GS_PSM_CT16) || (gsGlobal->PSM == GS_PSM_CT16S))) {
+		owl_add_tag(packet, GS_DTHE, 1);
+	}
+
+	owl_flush_packet();
+
+}
+
+GSCONTEXT *temp_init_global()
+{
+    //int8_t dither_matrix[16] = {-4,2,-3,3,0,-2,1,-1,-3,3,-4,2,1,-1,0,-2};
+    int8_t dither_matrix[16] = {4,2,5,3,0,6,1,7,5,3,4,2,1,7,0,6}; //different matrix
+    int i = 0;
+
+	GSCONTEXT *gsGlobal = calloc(1,sizeof(GSCONTEXT));
+
+	/* Generic Values */
+	_io_driver driver = posixIODriver;
+	if(configGetTvScreenTypeWithIODriver(&driver) == 2) gsGlobal->Aspect = GS_ASPECT_16_9;
+    else
+    gsGlobal->Aspect = GS_ASPECT_4_3;
+
+    gsGlobal->PSM = GS_PSM_CT24;
+    gsGlobal->PSMZ = GS_ZBUF_32;
+
+    gsGlobal->Dithering = GS_SETTING_OFF;
+    gsGlobal->DoubleBuffering = GS_SETTING_ON;
+    gsGlobal->ZBuffering = GS_SETTING_ON;
+
+    // Setup a mode automatically
+    gsGlobal->Mode = check_rom();
+    gsGlobal->Interlace = GS_INTERLACED;
+	gsGlobal->Field = GS_FIELD;
+    gsGlobal->Width = 640;
+
+    if(gsGlobal->Mode == GS_MODE_PAL) gsGlobal->Height = 512;
+    else gsGlobal->Height = 448;
+
+	gsGlobal->DrawOrder = GS_PER_OS;
+
+	gsGlobal->EvenOrOdd = 0;
+
+	gsGlobal->OffsetX = (int)(2048.0f * 16.0f);
+	gsGlobal->OffsetY = (int)(2048.0f * 16.0f);
+	gsGlobal->ActiveBuffer = 1;
+	gsGlobal->PrimFogEnable = GS_SETTING_OFF;
+	gsGlobal->PrimAAEnable = GS_SETTING_OFF;
+	gsGlobal->PrimContext = 0;
+	gsGlobal->FirstFrame = GS_SETTING_ON;
+
+	for(i = 0; i < 15; i++) {
+	    gsGlobal->DitherMatrix[i] = dither_matrix[i];
+	}
+
+
+	return gsGlobal;
+}
+
+void set_display_offset(GSCONTEXT *gsGlobal, int x, int y)
+{
+	gsGlobal->StartXOffset = x;
+	gsGlobal->StartYOffset = y;
+
+	if (gsGlobal->Interlace == GS_INTERLACED) {
+		// Do not change odd/even start position in interlaced mode
+		gsGlobal->StartYOffset &= ~1;
+	}
+
+	GS_SET_DISPLAY1(
+			gsGlobal->StartX + gsGlobal->StartXOffset,	// X position in the display area (in VCK unit
+			gsGlobal->StartY + gsGlobal->StartYOffset,	// Y position in the display area (in Raster u
+			gsGlobal->MagH,			// Horizontal Magnification
+			gsGlobal->MagV,			// Vertical Magnification
+			gsGlobal->DW - 1,	// Display area width
+			gsGlobal->DH - 1);		// Display area height
+
+	GS_SET_DISPLAY2(
+			gsGlobal->StartX + gsGlobal->StartXOffset,	// X position in the display area (in VCK units)
+			gsGlobal->StartY + gsGlobal->StartYOffset,	// Y position in the display area (in Raster units)
+			gsGlobal->MagH,			// Horizontal Magnification
+			gsGlobal->MagV,			// Vertical Magnification
+			gsGlobal->DW - 1,	// Display area width
+			gsGlobal->DH - 1);		// Display area height
+}
+
+void setup_buffer_textures() {
+   	draw_buffer.Width = gsGlobal->Width;
+	draw_buffer.Height = gsGlobal->Height;
+	draw_buffer.PSM = gsGlobal->PSM;
+    draw_buffer.ClutPSM = GS_PSM_CT32;
+
+	draw_buffer.Mem = NULL;
+	draw_buffer.Clut = NULL;
+	draw_buffer.Vram = 0;
+	draw_buffer.VramClut = 0;
+	depth_buffer.PageAligned = true;
+	draw_buffer.Filter = GS_FILTER_NEAREST;
+
+	texture_manager_lock_and_bind(gsGlobal, &draw_buffer, false);
+
+   	display_buffer.Width = gsGlobal->Width;
+	display_buffer.Height = gsGlobal->Height;
+	display_buffer.PSM = gsGlobal->PSM;
+    display_buffer.ClutPSM = GS_PSM_CT32;
+
+	display_buffer.Mem = NULL;
+	display_buffer.Clut = NULL;
+	display_buffer.Vram = 0;
+	display_buffer.VramClut = 0;
+	depth_buffer.PageAligned = true;
+	display_buffer.Filter = GS_FILTER_NEAREST;
+
+	if (gsGlobal->DoubleBuffering) {
+		texture_manager_lock_and_bind(gsGlobal, &display_buffer, false);
+	}
+
+   	depth_buffer.Width = gsGlobal->Width;
+	depth_buffer.Height = gsGlobal->Height;
+	depth_buffer.PSM = gsGlobal->PSMZ+0x30;
+    depth_buffer.ClutPSM = GS_PSM_CT32;
+
+	depth_buffer.Mem = NULL;
+	depth_buffer.Clut = NULL;
+	depth_buffer.Vram = 0;
+	depth_buffer.VramClut = 0;
+	depth_buffer.PageAligned = true;
+	depth_buffer.Filter = GS_FILTER_NEAREST;
+
+	if (gsGlobal->ZBuffering) {
+		texture_manager_lock_and_bind(gsGlobal, &depth_buffer, false);
+	}
+
+	gsGlobal->ScreenBuffer[0] = draw_buffer.Vram;
+	gsGlobal->ScreenBuffer[1] = display_buffer.Vram;
+	gsGlobal->ZBuffer = depth_buffer.Vram;
+}
+
+void setVideoMode(s16 mode, int width, int height, int psm, s16 interlace, s16 field, bool zbuffering, int psmz, bool double_buffering, uint8_t pass_count) {
+	gsGlobal->Mode = mode;
+	gsGlobal->Width = width;
+	if ((interlace == GS_INTERLACED) && (field == GS_FRAME))
+		gsGlobal->Height = height / 2;
+	else
+		gsGlobal->Height = height;
+
+	gsGlobal->PSM = psm;
+	gsGlobal->PSMZ = psmz;
+
+	gsGlobal->ZBuffering = zbuffering;
+	gsGlobal->DoubleBuffering = double_buffering;
+	gsGlobal->Dithering = GS_SETTING_OFF;
+
+	gsGlobal->Interlace = interlace;
+	gsGlobal->Field = field;
+
+	dbgprintf("\nGraphics: created video surface of (%d, %d)\n",
+		gsGlobal->Width, gsGlobal->Height);
+
+	texture_manager_init(gsGlobal);
+
+	setup_buffer_textures();
+
+	init_screen(gsGlobal);
+
+	cur_screen_buffer[DRAW_BUFFER] = &draw_buffer;
+	cur_screen_buffer[DISPLAY_BUFFER] = &display_buffer;
+	cur_screen_buffer[DEPTH_BUFFER] = &depth_buffer;
+
+	main_screen_buffer[DRAW_BUFFER] = &draw_buffer;
+	main_screen_buffer[DISPLAY_BUFFER] = &display_buffer;
+	main_screen_buffer[DEPTH_BUFFER] = &depth_buffer;
+
+	switchFlipScreenFunction();
+	
+	set_display_offset(gsGlobal, -0.5f, -0.5f);
+}
+ 
+void init_graphics() {
+	dmaKit_init(D_CTRL_RELE_OFF, D_CTRL_MFD_OFF, D_CTRL_STS_UNSPEC, D_CTRL_STD_OFF, D_CTRL_RCYC_8, 1 << DMA_CHANNEL_GIF);
+	dmaKit_chan_init(DMA_CHANNEL_GIF);
+	dmaKit_chan_init(DMA_CHANNEL_VIF0);
+	dmaKit_chan_init(DMA_CHANNEL_VIF1);
+	dmaKit_wait(DMA_CHANNEL_GIF, 0);
+	dmaKit_wait(DMA_CHANNEL_VIF0, 0);
+	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
+
+	ee_sema_t sema; 
     sema.init_count = 0;
     sema.max_count = 1;
     sema.option = 0;
     vsync_sema_id = CreateSema(&sema);
 
-	gsGlobal = gsKit_init_global_custom(RENDER_QUEUE_OS_POOLSIZE, RENDER_QUEUE_PER_POOLSIZE);
+	owl_init(owl_packet_buffer, OWL_PACKET_BUFFER_SIZE);
 
-	gsGlobal->Mode = gsKit_check_rom();
-	if (gsGlobal->Mode == GS_MODE_PAL){
-		gsGlobal->Height = 512;
-	} else {
-		gsGlobal->Height = 448;
-	}
+	gsGlobal = temp_init_global();
 
 	//gsGlobal->OffsetX = (int)((2048.0f-(gsGlobal->Width/2)) * 16.0f);
 	//gsGlobal->OffsetY = (int)((2048.0f-(gsGlobal->Height/2)) * 16.0f);
 
 	gsGlobal->PSM  = GS_PSM_CT24;
-	gsGlobal->PSMZ = GS_PSMZ_16S;
+	gsGlobal->PSMZ = GS_ZBUF_16S;
 	gsGlobal->ZBuffering = GS_SETTING_OFF;
 	gsGlobal->DoubleBuffering = GS_SETTING_ON;
 	gsGlobal->PrimAlphaEnable = GS_SETTING_ON;
 	gsGlobal->Dithering = GS_SETTING_OFF;
-
-	gsKit_set_primalpha(gsGlobal, GS_SETREG_ALPHA(0, 1, 0, 1, 0), 0);
-
-	dmaKit_init(D_CTRL_RELE_OFF, D_CTRL_MFD_OFF, D_CTRL_STS_UNSPEC, D_CTRL_STD_OFF, D_CTRL_RCYC_8, 1 << DMA_CHANNEL_GIF);
-	dmaKit_chan_init(DMA_CHANNEL_GIF);
-	dmaKit_chan_init(DMA_CHANNEL_VIF1);
-	dmaKit_wait(DMA_CHANNEL_GIF, 0);
-	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
-
 
 	flipScreen = flipScreenDoubleBuffering;
 
 	dbgprintf("\nGraphics: created %ix%i video surface\n",
 		gsGlobal->Width, gsGlobal->Height);
 
-	gsKit_set_clamp(gsGlobal, GS_CMODE_REPEAT);
+	texture_manager_init(gsGlobal);
 
-	gsKit_vram_clear(gsGlobal);
+	setup_buffer_textures();
 
-	gsKit_init_screen(gsGlobal);
+	init_screen(gsGlobal);
 
-	gsKit_TexManager_init(gsGlobal);
+	cur_screen_buffer[DRAW_BUFFER] = &draw_buffer;
+	cur_screen_buffer[DISPLAY_BUFFER] = &display_buffer;
+	cur_screen_buffer[DEPTH_BUFFER] = &depth_buffer;
 
-	gsKit_add_vsync_handler(vsync_handler);
+	main_screen_buffer[DRAW_BUFFER] = &draw_buffer;
+	main_screen_buffer[DISPLAY_BUFFER] = &display_buffer;
+	main_screen_buffer[DEPTH_BUFFER] = &depth_buffer;
 
-	gsKit_mode_switch(gsGlobal, GS_ONESHOT);
+	DIntr();
+	int callback_id = AddIntcHandler(INTC_VBLANK_S, vsync_handler, 0);
+	EnableIntc(INTC_VBLANK_S);
+	// Unmask VSync interrupt
+	GsPutIMR(GsGetIMR() & ~0x0800);
+	EIntr();
 
-    gsKit_clear(gsGlobal, BLACK_RGBAQ);	
-	gsKit_vsync_wait();
-	flipScreen();
-	gsKit_clear(gsGlobal, BLACK_RGBAQ);	
-	gsKit_vsync_wait();
-	flipScreen();
+	for (int i = 0; i < 2; i++) {
+    	clearScreen(BLACK_RGBAQ);	
+		flipScreen();
+	}
 }
 
 void graphicWaitVblankStart(){
-
-	gsKit_vsync_wait();
-
+	*GS_CSR = *GS_CSR & 8;
+	while(!(*GS_CSR & 8));
 }

@@ -1,11 +1,11 @@
 // {"name": "Pong", "author": "Daniel Santos", "version": "04252023","file": "pong.js"}
 Sound.setVolume(100);
-Sound.setVolume(100, 0);
+const main_sfx_channel = Sound.findChannel();
 
 let sounds = {
-    unpause:Sound.load("pong/unpause.adp"),
-    score:Sound.load("pong/score.adp"),
-    over:Sound.load("pong/over.adp")
+    unpause:Sound.Sfx("pong/unpause.adp"),
+    score:Sound.Sfx("pong/score.adp"),
+    over:Sound.Sfx("pong/over.adp")
 }
 
 const screen = Screen.getMode();
@@ -13,6 +13,8 @@ const screen = Screen.getMode();
 const dark_gray = Color.new(32, 32, 32);
 const gray = Color.new(64, 64, 64);
 const white = Color.new(255, 255, 255);
+
+Screen.setParam(Screen.DEPTH_TEST_ENABLE, false);
 
 function rectRect(rect1, rect2) {
     return rect1.x < rect2.x + rect2.w && rect1.x + rect1.w > rect2.x && rect1.y < rect2.y + rect2.h && rect1.h + rect1.y > rect2.y;
@@ -176,7 +178,7 @@ while(true) {
         }
         game_over = false;
 
-        Sound.play(sounds.unpause);
+        sounds.unpause.play(main_sfx_channel);
     }
 
     if(!paused) {
@@ -190,7 +192,7 @@ while(true) {
 
         if (ball.collide(player)) {
             score++;
-            Sound.play(sounds.score);
+            sounds.score.play(main_sfx_channel);
             if(score > score_threshold) {
                 score_threshold *= 2;
                 ball.speed++;
@@ -201,7 +203,7 @@ while(true) {
         if(ball.escape()) {
             game_over = true;
             paused = true;
-            Sound.play(sounds.over);
+            sounds.over.play(main_sfx_channel);
         }
 
         ball.move();

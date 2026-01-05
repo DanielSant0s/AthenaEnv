@@ -1,16 +1,12 @@
 
 #include <audsrv.h>
 #include <vorbis/vorbisfile.h>
+#include <stdbool.h>
 
 #define WAV_AUDIO 0
 #define OGG_AUDIO 1
-#define ADPCM_AUDIO 2
 
-#define STREAM_THREAD_BASE_PRIO  0x10
-#define STREAM_THREAD_STACK_SIZE 0x1000
-
-#define STREAM_RING_BUFFER_COUNT 16
-#define STREAM_RING_BUFFER_SIZE  4096
+#define AUDIO_STREAM_BUFFER_SIZE  4096
 
 typedef struct _wave
 {
@@ -33,27 +29,35 @@ typedef struct {
     void* fp;
     struct audsrv_fmt_t fmt;
     int type;
-} Sound;
+    bool loop;
+} SoundStream;
 
-void sound_setadpcmvolume(int slot, int volume);
+SoundStream *sound_load(const char* path);
+
+void sound_play(SoundStream * snd);
 
 void sound_setvolume(int volume);
-int is_sound_playing(void);
-int sound_get_duration(Sound* snd);
-void set_sound_repeat(bool repeat);
+int is_sound_playing(SoundStream* snd);
+int sound_get_duration(SoundStream* snd);
 void sound_pause(void);
-void sound_resume(Sound* snd);
-void sound_free(Sound* snd);
-void sound_deinit(void);
-void sound_restart(void);
-void sound_set_position(Sound* snd, int ms);
-int sound_get_position(Sound* snd);
+void sound_free(SoundStream* snd);
+void sound_rewind(SoundStream* snd);
+void sound_set_position(SoundStream* snd, int ms);
+int sound_get_position(SoundStream* snd);
 
-audsrv_adpcm_t* sound_loadadpcm(const char* path);
-void sound_playadpcm(int slot, audsrv_adpcm_t *sample);
+typedef struct {
+    audsrv_adpcm_t sound;
+    int sample_rate;
+    int volume;
+    int pan;
+} Sfx;
 
-Sound* load_wav(const char* path);
-void play_wav(Sound* wav);
-
-Sound* load_ogg(const char* path);
-void play_ogg(Sound* ogg);
+Sfx* sound_sfx_load(const char* path);
+void sound_sfx_free(Sfx* snd);
+int sound_sfx_play(int channel, Sfx *snd);
+void sound_sfx_channel_volume(int channel, int volume, int pan);
+int sound_sfx_length(Sfx *snd);
+int sound_sfx_find_channel();
+bool sound_sfx_is_playing(Sfx *snd, int channel);
+int sound_sfx_get_pitch(Sfx *snd);
+void sound_sfx_set_pitch(Sfx *snd, int pitch);

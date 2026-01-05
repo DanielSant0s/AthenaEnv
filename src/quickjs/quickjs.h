@@ -228,6 +228,7 @@ static inline JS_BOOL JS_VALUE_IS_NAN(JSValue v)
 
 typedef union JSValueUnion {
     int32_t int32;
+    float float32;
     double float64;
     void *ptr;
 } JSValueUnion;
@@ -244,6 +245,7 @@ typedef struct JSValue {
 #define JS_VALUE_GET_NORM_TAG(v) JS_VALUE_GET_TAG(v)
 #define JS_VALUE_GET_INT(v) ((v).u.int32)
 #define JS_VALUE_GET_BOOL(v) ((v).u.int32)
+#define JS_VALUE_GET_FLOAT32(v) ((v).u.float32)
 #define JS_VALUE_GET_FLOAT64(v) ((v).u.float64)
 #define JS_VALUE_GET_PTR(v) ((v).u.ptr)
 
@@ -711,6 +713,16 @@ JSValue __js_printf_like(2, 3) JS_ThrowRangeError(JSContext *ctx, const char *fm
 JSValue __js_printf_like(2, 3) JS_ThrowInternalError(JSContext *ctx, const char *fmt, ...);
 JSValue JS_ThrowOutOfMemory(JSContext *ctx);
 
+static inline int JS_GetRefCount(JSContext *ctx, JSValue v)
+{
+    if (JS_VALUE_HAS_REF_COUNT(v)) {
+        JSRefCountHeader *p = (JSRefCountHeader *)JS_VALUE_GET_PTR(v);
+        return p->ref_count;
+    }
+
+    return 1;
+}
+
 void __JS_FreeValue(JSContext *ctx, JSValue v);
 static inline void JS_FreeValue(JSContext *ctx, JSValue v)
 {
@@ -1082,10 +1094,11 @@ typedef struct JSCFunctionListEntry {
 #define JS_DEF_PROP_STRING    3
 #define JS_DEF_PROP_INT32     4
 #define JS_DEF_PROP_INT64     5
-#define JS_DEF_PROP_DOUBLE    6
-#define JS_DEF_PROP_UNDEFINED 7
-#define JS_DEF_OBJECT         8
-#define JS_DEF_ALIAS          9
+#define JS_DEF_PROP_FLOAT     6
+#define JS_DEF_PROP_DOUBLE    7
+#define JS_DEF_PROP_UNDEFINED 8
+#define JS_DEF_OBJECT         9
+#define JS_DEF_ALIAS          10
 
 /* Note: c++ does not like nested designators */
 #define JS_CFUNC_DEF(name, length, func1) { name, JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE, JS_DEF_CFUNC, 0, .u = { .func = { length, JS_CFUNC_generic, { .generic = func1 } } } }
@@ -1097,6 +1110,7 @@ typedef struct JSCFunctionListEntry {
 #define JS_PROP_STRING_DEF(name, cstr, prop_flags) { name, prop_flags, JS_DEF_PROP_STRING, 0, .u = { .str = cstr } }
 #define JS_PROP_INT32_DEF(name, val, prop_flags) { name, prop_flags, JS_DEF_PROP_INT32, 0, .u = { .i32 = val } }
 #define JS_PROP_INT64_DEF(name, val, prop_flags) { name, prop_flags, JS_DEF_PROP_INT64, 0, .u = { .i64 = val } }
+#define JS_PROP_FLOAT_DEF(name, val, prop_flags) { name, prop_flags, JS_DEF_PROP_FLOAT, 0, .u = { .f32 = val } }
 #define JS_PROP_DOUBLE_DEF(name, val, prop_flags) { name, prop_flags, JS_DEF_PROP_DOUBLE, 0, .u = { .f64 = val } }
 #define JS_PROP_UNDEFINED_DEF(name, prop_flags) { name, prop_flags, JS_DEF_PROP_UNDEFINED, 0, .u = { .i32 = 0 } }
 #define JS_OBJECT_DEF(name, tab, len, prop_flags) { name, prop_flags, JS_DEF_OBJECT, 0, .u = { .prop_list = { tab, len } } }
@@ -1122,6 +1136,19 @@ int JS_SetModuleExport(JSContext *ctx, JSModuleDef *m, const char *export_name,
                        JSValue val);
 int JS_SetModuleExportList(JSContext *ctx, JSModuleDef *m,
                            const JSCFunctionListEntry *tab, int len);
+
+/* Native compiler support - get bytecode info from a JS function */
+typedef struct {
+    const uint8_t *bytecode;
+    int bytecode_len;
+    int arg_count;
+    int var_count;
+    int stack_size;
+} JSFunctionBytecodeInfo;
+
+/* Returns 0 on success, -1 if not a bytecode function, -2 on other errors */
+int JS_GetFunctionBytecodeInfo(JSContext *ctx, JSValueConst func_val, 
+                               JSFunctionBytecodeInfo *info);
 
 #undef js_unlikely
 #undef js_force_inline

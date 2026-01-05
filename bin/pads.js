@@ -1,12 +1,12 @@
-// {"name": "Gamepad tester", "author": "Daniel Santos", "version": "04072023", "icon": "pads_icon.png", "file": "pads.js"}
+// {"name": "Gamepad tester", "author": "Daniel Santos", "version": "08122024", "icon": "pads_icon.png", "file": "pads.js"}
 
 const canvas = Screen.getMode();
 
-//canvas.psm = CT24;
-//canvas.zbuffering = false;
-//canvas.double_buffering = false;
+canvas.psm = Screen.CT24;
+canvas.zbuffering = true;
+canvas.double_buffering = true;
 
-//Screen.setMode(canvas);
+Screen.setMode(canvas);
 
 Screen.setVSync(false);
 Screen.setFrameCounter(true);
@@ -19,30 +19,42 @@ const font = new Font("fonts/minecraft.ttf");
 font.color = Color.new(128, 0, 255);
 font.scale = Math.fround(0.4);
 
-const circle = new Image("pads/circle.png", VRAM);
-const cross = new Image("pads/cross.png", VRAM);
-const square = new Image("pads/square.png", VRAM);
-const triangle = new Image("pads/triangle.png", VRAM);
-const up = new Image("pads/up.png", VRAM);
-const down = new Image("pads/down.png", VRAM);
-const left = new Image("pads/left.png", VRAM);
-const right = new Image("pads/right.png", VRAM);
-const start = new Image("pads/start.png", VRAM);
-const pad_select = new Image("pads/select.png", VRAM);
-const r1 = new Image("pads/r1.png", VRAM);
-const r2 = new Image("pads/r2.png", VRAM);
-const l1 = new Image("pads/l1.png", VRAM);
-const l2 = new Image("pads/l2.png", VRAM);
-const l3 = new Image("pads/l3.png", VRAM);
-const r3 = new Image("pads/r3.png", VRAM);
+const circle = new Image("pads/circle.png");
+const cross = new Image("pads/cross.png");
+const square = new Image("pads/square.png");
+const triangle = new Image("pads/triangle.png");
+const up = new Image("pads/up.png");
+const down = new Image("pads/down.png");
+const left = new Image("pads/left.png");
+const right = new Image("pads/right.png");
+const start = new Image("pads/start.png");
+const pad_select = new Image("pads/select.png");
+const r1 = new Image("pads/r1.png");
+const r2 = new Image("pads/r2.png");
+const l1 = new Image("pads/l1.png");
+const l2 = new Image("pads/l2.png");
+const l3 = new Image("pads/l3.png");
+const r3 = new Image("pads/r3.png");
 
 var rumble = false;
 var pad = Pads.get(0);
 
 Screen.display(() => {
+
+    const connectedCount = Pads.getConnectedCount();
+    const connectedPorts = Pads.getConnected();
+    const isActivePort0 = Pads.isActive(0);
+    const isActivePort1 = Pads.isActive(1);
+
     pad.update();
 
     font.print(220, 25, "\nAthena project: Controls demo\n");
+    
+    font.print(10, 40, "Connected pads: " + connectedCount);
+    font.print(10, 55, "Active ports: [" + connectedPorts.join(', ') + "]");
+    font.print(10, 70, "Port 0 status: " + (isActivePort0 ? "ACTIVE" : "INACTIVE"));
+    font.print(10, 85, "Port 1 status: " + (isActivePort1 ? "ACTIVE" : "INACTIVE"));
+    
     font.print(100, 370, "\nTips:\n");
     font.print(100, 390, "\nPress R2+L2 to start rumble and press again to stop it.\n");
     font.print(100, 405, "\nButtons transparency varies with the pressure applied to them.\n");

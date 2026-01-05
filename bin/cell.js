@@ -3,6 +3,10 @@
 Screen.setFrameCounter(true);
 Screen.setVSync(false);
 
+const transparent = Color.new(255, 255, 255, 40);
+const purple = Color.new(64, 0, 128);
+const white = Color.new(255, 255, 255);
+
 let font = new Font("fonts/LEMONMILK-Regular.otf");
 font.scale = (2);
 
@@ -27,32 +31,20 @@ function World2Screen(rect, camera){
 
 function drawCell(coords, radius, color, hollow){
     Draw.circle(coords[0], coords[1], radius, color);
-    if(hollow) Draw.circle(coords[0], coords[1], radius, Color.new(255, 255, 255), false);
+    if(hollow) Draw.circle(coords[0], coords[1], radius, white, false);
 }
 
 function circleCircleColl(c1, c2) {
-    let distX = c1.x - c2.x;
-    let distY = c1.y - c2.y;
-    let dist = Math.sqrtf( (distX*distX) + (distY*distY) );
+    const distX = c1.x - c2.x;
+    const distY = c1.y - c2.y;
+    const dist = Math.sqrtf( (distX*distX) + (distY*distY) );
 
-    if (dist <= c1.r + c2.r) {
-        return true;
-    }
-    return false;
-}
-
-function randint(min, max) {
-    min = Math.ceilf(min);
-    max = Math.floorf(max);
-    return Math.floorf(Math.random() * (max - min + 1)) + min;
+    return dist <= c1.r + c2.r;
 }
 
 let main_menu_ptr = 0;
 
-let pad = Pads.get();
-
-const transparent = Color.new(255, 255, 255, 40);
-const purple = Color.new(64, 0, 128);
+const pad = Pads.get();
 
 Screen.clearColor(purple);
 
@@ -85,11 +77,11 @@ Screen.display(() => {
                     camera.y = -224;
 
 
-                    let enemies_qt = randint(8, 15);
+                    let enemies_qt = Math.randomi(8, 15);
 
                     while(enemies_qt > enemies.length){
-                        let color = Color.new(randint(0, 255), randint(0, 255), randint(0, 255));
-                        let enemy = {color:color, x:randint(0, 640), y:randint(0, 448), r:randint(5, 75)};
+                        let color = Color.new(Math.randomi(0, 255), Math.randomi(0, 255), Math.randomi(0, 255));
+                        let enemy = {color:color, x:Math.randomi(0, 640), y:Math.randomi(0, 448), r:Math.randomi(5, 75)};
 
                         let found_collision = false;
 
@@ -165,7 +157,7 @@ Screen.display(() => {
                 drawCell(enemy_coords, enemies[i].r, enemies[i].color, false);
                 if (circleCircleColl(enemies[i], player)) {
                     if (enemies[i].r < player.r) {
-                        player.r += enemies[i].r/2.0f;
+                        player.r += enemies[i].r/2
                         enemies.splice(i, 1);
                         if (!enemies.length){
                             game_state = GAME_OVER;

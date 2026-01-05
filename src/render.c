@@ -4,58 +4,134 @@
 #include <malloc.h>
 #include <math.h>
 #include <fcntl.h>
-#include "fast_obj/fast_obj.h"
+#include <string.h>
+#include <matrix.h>
+#include <render.h>
+#include <dbgprintf.h>
 
-#include "include/render.h"
+#include <owl_packet.h>
 
-#include "include/dbgprintf.h"
+#include <mpg_manager.h>
 
-#include "vif.h"
+#include <texture_manager.h>
+
+#include <vector.h>
 
 #define DEG2RAD(deg) ((deg) * (M_PI / 180.0f))
 
-register_vu_program(VU1Draw3DPVC);
-
-register_vu_program(VU1Draw3DColors);
 register_vu_program(VU1Draw3DCS);
-
-register_vu_program(VU1Draw3DLightsColors);
 register_vu_program(VU1Draw3DLCS);
-
-register_vu_program(VU1Draw3DSpec);
 register_vu_program(VU1Draw3DLCSS);
+
+register_vu_program(VU1Draw3DCS_Skin);
+register_vu_program(VU1Draw3DLCS_Skin);
+register_vu_program(VU1Draw3DLCSS_Skin);
+
+register_vu_program(VU1Draw3DLCS_Ref);
+
+vu_mpg *vu1_colors = NULL;
+vu_mpg *vu1_lights = NULL;
+vu_mpg *vu1_specular = NULL;
+
+vu_mpg *vu1_colors_skinned = NULL;
+vu_mpg *vu1_lights_skinned = NULL;
+vu_mpg *vu1_specular_skinned = NULL;
+
+vu_mpg *vu1_lights_reflection = NULL;
 
 MATRIX view_screen;
 MATRIX world_view;
+MATRIX world_screen;
 
 FIVECTOR screen_scale;
-
-void init3D(float fov, float near, float far)
-{
-	GSGLOBAL* gsGlobal = getGSGLOBAL();
-
-	initCamera(&world_view);
-	create_view(view_screen, DEG2RAD(fov), near, far, gsGlobal->Width, gsGlobal->Height);
-	vu1_set_double_buffer_settings(141, 400);
-
-	screen_scale.x = gsGlobal->Width/2;
-	screen_scale.y = gsGlobal->Height/2;
-	screen_scale.z = ((float)get_max_z(gsGlobal));
-	screen_scale.w = 0; // model attributes
-
-}
 
 static int active_aaa_lights = 0;
 static int active_bbb_lights = 0;
 static int active_pnt_lights = 0;
 static int active_dir_lights = 0;
 
-static LightData dir_lights;
+static LightData dir_lights = { };
+static render_stats_t g_render_stats = { 0 };
+
+static inline uint32_t render_calc_triangles(const athena_render_data *data) {
+	if (!data)
+		return 0;
+
+	if (data->tristrip) {
+		if (data->index_count < 2)
+			return 0;
+		return data->index_count - 2;
+	}
+
+	return data->index_count / 3;
+}
+
+void render_init() {
+	initCamera(&world_screen, &world_view, &view_screen);
+	
+	vu1_set_double_buffer_settings(270, 339); // Skinned layout
+
+	vu1_colors   = vu_mpg_load_buffer(embed_vu_code_ptr(VU1Draw3DCS),   embed_vu_code_size(VU1Draw3DCS),   VECTOR_UNIT_1, false); 
+	vu1_lights   = vu_mpg_load_buffer(embed_vu_code_ptr(VU1Draw3DLCS),  embed_vu_code_size(VU1Draw3DLCS),  VECTOR_UNIT_1, false);
+	vu1_specular = vu_mpg_load_buffer(embed_vu_code_ptr(VU1Draw3DLCSS), embed_vu_code_size(VU1Draw3DLCSS), VECTOR_UNIT_1, false);
+
+	vu1_colors_skinned = vu_mpg_load_buffer(embed_vu_code_ptr(VU1Draw3DCS_Skin), embed_vu_code_size(VU1Draw3DCS_Skin), VECTOR_UNIT_1, false);
+	vu1_lights_skinned = vu_mpg_load_buffer(embed_vu_code_ptr(VU1Draw3DLCS_Skin), embed_vu_code_size(VU1Draw3DLCS_Skin), VECTOR_UNIT_1, false);
+	vu1_specular_skinned = vu_mpg_load_buffer(embed_vu_code_ptr(VU1Draw3DLCSS_Skin), embed_vu_code_size(VU1Draw3DLCSS_Skin), VECTOR_UNIT_1, false);
+
+	vu1_lights_reflection = vu_mpg_load_buffer(embed_vu_code_ptr(VU1Draw3DLCS_Ref), embed_vu_code_size(VU1Draw3DLCS_Ref), VECTOR_UNIT_1, false);
+}
+
+void render_begin() {
+	vu1_set_double_buffer_settings(270, 339); // Skinned layout
+
+	render_reset_stats();
+
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 17);
+
+	owl_add_unpack_data_cnt(packet, 10, 16, 0);
+	owl_add_uquad_ptr(packet, (dir_lights.direction[0]));
+	owl_add_uquad_ptr(packet, (dir_lights.direction[1]));
+	owl_add_uquad_ptr(packet, (dir_lights.direction[2]));
+	owl_add_uquad_ptr(packet, (dir_lights.direction[3]));
+	owl_add_uquad_ptr(packet, &(dir_lights.ambient[0]));
+	owl_add_uquad_ptr(packet, &(dir_lights.ambient[1]));
+	owl_add_uquad_ptr(packet, &(dir_lights.ambient[2]));
+	owl_add_uquad_ptr(packet, &(dir_lights.ambient[3]));
+	owl_add_uquad_ptr(packet, (dir_lights.diffuse[0]));
+	owl_add_uquad_ptr(packet, (dir_lights.diffuse[1]));
+	owl_add_uquad_ptr(packet, (dir_lights.diffuse[2]));
+	owl_add_uquad_ptr(packet, (dir_lights.diffuse[3]));
+	owl_add_uquad_ptr(packet, (dir_lights.specular[0]));
+	owl_add_uquad_ptr(packet, (dir_lights.specular[1]));
+	owl_add_uquad_ptr(packet, (dir_lights.specular[2]));
+	owl_add_uquad_ptr(packet, (dir_lights.specular[3]));
+}
+
+void render_set_view(float fov, float near, float far, float width, float height) {
+	if (width == 0.0f && height == 0.0f) {
+		width = gsGlobal->Width;
+		height = gsGlobal->Height * ((gsGlobal->Interlace == GS_INTERLACED) && (gsGlobal->Field == GS_FRAME)? 2 : 1);
+	}
+
+	create_view(view_screen, DEG2RAD(fov), near, far, width, height);
+	matrix_functions->multiply(world_screen, world_view, view_screen);
+
+	screen_scale.x = width/2;
+	screen_scale.y = height/2;
+	screen_scale.z = ((float)get_max_z(gsGlobal)) / 2.0f;
+	screen_scale.w = 0;
+}
 
 int NewLight() {
-	if (active_dir_lights < 4)
+	if (active_dir_lights < 4) {
+		dir_lights.ambient[0].w = active_dir_lights+1;
+		owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 2);
+		owl_add_unpack_data_cnt(packet, 14, 1, 0);
+		owl_add_uquad_ptr(packet, &(dir_lights.ambient[0]));
 		return active_dir_lights++;
-
+	}
+		
 	return -1;
 }
  
@@ -63,293 +139,166 @@ void SetLightAttribute(int id, float x, float y, float z, int attr) {
 	if (id < 0)
 		return;
 
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 2);
+
 	switch (attr) {
 		case ATHENA_LIGHT_DIRECTION:
 			dir_lights.direction[id][0] = x;
 			dir_lights.direction[id][1] = y;
 			dir_lights.direction[id][2] = z;
-			dir_lights.direction[id][3] = 1.00f;
+			owl_add_unpack_data_cnt(packet, 10+id, 1, 0);
+			owl_add_uquad_ptr(packet, (dir_lights.direction[id]));
 			break;
 		case ATHENA_LIGHT_AMBIENT:
-			dir_lights.ambient[id][0] = x;
-			dir_lights.ambient[id][1] = y;
-			dir_lights.ambient[id][2] = z;
-			dir_lights.ambient[id][3] = 1.00f;
+			dir_lights.ambient[id].x = x;
+			dir_lights.ambient[id].y = y;
+			dir_lights.ambient[id].z = z;
+			owl_add_unpack_data_cnt(packet, 14+id, 1, 0);
+			owl_add_uquad_ptr(packet, &(dir_lights.ambient[id]));
 			break;
 		case ATHENA_LIGHT_DIFFUSE:
 			dir_lights.diffuse[id][0] = x;
 			dir_lights.diffuse[id][1] = y;
 			dir_lights.diffuse[id][2] = z;
-			dir_lights.diffuse[id][3] = 1.00f;
+			owl_add_unpack_data_cnt(packet, 18+id, 1, 0);
+			owl_add_uquad_ptr(packet, (dir_lights.diffuse[id]));
 			break;
 		case ATHENA_LIGHT_SPECULAR:
 			dir_lights.specular[id][0] = x;
 			dir_lights.specular[id][1] = y;
 			dir_lights.specular[id][2] = z;
-			dir_lights.specular[id][3] = 1.00f;
+			owl_add_unpack_data_cnt(packet, 22+id, 1, 0);
+			owl_add_uquad_ptr(packet, (dir_lights.specular[id]));
 			break;
 	}
 }
 
-void draw_vu1_pvc(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z);
-
-void draw_vu1_with_colors(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z);
-
-void draw_vu1_with_lights(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z);
-
-void draw_vu1_with_spec_lights(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z);
-
-int athena_render_set_pipeline(model* m, int pl_id) {
-	switch (pl_id) {
-		case PL_PVC:
-			m->render = draw_vu1_pvc;
-			m->pipeline = PL_PVC;
-			break;
-		case PL_NO_LIGHTS:
-			m->render = draw_vu1_with_colors;
-			m->pipeline = PL_NO_LIGHTS;
-			break;
-		case PL_DEFAULT:
-			m->render = draw_vu1_with_lights;
-			m->pipeline = PL_DEFAULT;
-			break;
-		case PL_SPECULAR:
-			m->render = draw_vu1_with_spec_lights;
-			m->pipeline = PL_SPECULAR;
-			break;
-	}
-	return m->pipeline;
+const render_stats_t *render_get_stats(void) {
+	return &g_render_stats;
 }
 
-void calculate_bbox(model* res_m) {
-	float lowX, lowY, lowZ, hiX, hiY, hiZ;
+void render_reset_stats(void) {
+	memset(&g_render_stats, 0, sizeof(g_render_stats));
+}
 
-    lowX = hiX = res_m->positions[0][0];
-    lowY = hiY = res_m->positions[0][1];
-    lowZ = hiZ = res_m->positions[0][2];
+
+VECTOR zero_bump_offset = { 0.0f, 0.0f, 0.0f, 0.0f };
+
+void draw_vu1_with_colors(athena_object_data *obj, int pass_state);
+void draw_vu1_with_lights(athena_object_data *obj, int pass_state);
+void draw_vu1_with_spec_lights(athena_object_data *obj, int pass_state);
+void draw_vu1_with_lights_ref(athena_object_data *obj, int pass_state);
+
+void (*render_funcs[])(athena_object_data *obj, int pass_state) = {
+	draw_vu1_with_colors,
+	draw_vu1_with_lights,
+	draw_vu1_with_spec_lights
+};
+
+void render_object(athena_object_data *obj) {
+	if (obj->update_physics)
+		obj->update_physics(obj);
+
+	if (obj && obj->data) {
+		g_render_stats.draw_calls++;
+		g_render_stats.triangles += render_calc_triangles(obj->data);
+	}
+
+	uint64_t old_alpha = get_screen_param(ALPHA_BLEND_EQUATION);
+	uint64_t old_colclamp = get_screen_param(COLOR_CLAMP_MODE);
+
+	render_funcs[obj->data->pipeline](obj, 0);
+
+	if (obj->data->attributes.has_decal) {
+		render_funcs[obj->data->pipeline](obj, 2);
+	}
 	
-    for (int i = 0; i < res_m->index_count; i++) {
-        float* pos = res_m->positions[i];
-        lowX = fmin(lowX, pos[0]);
-        hiX =  fmax(hiX,  pos[0]);
-        lowY = fmin(lowY, pos[1]);
-        hiY =  fmax(hiY,  pos[1]);
-        lowZ = fmin(lowZ, pos[2]);
-        hiZ =  fmax(hiZ,  pos[2]);
-    }
+	if (obj->data->attributes.has_refmap) {
+		set_screen_param(ALPHA_BLEND_EQUATION, ALPHA_EQUATION(SRC_RGB, ZERO_RGB, ALPHA_FIX, DST_RGB, 0x40));
 
-    VECTOR bbox[8] = {
-        {lowX, lowY, lowZ, 1.0f}, {lowX, lowY, hiZ, 1.0f}, {lowX, hiY, lowZ, 1.0f}, {lowX, hiY, hiZ, 1.0f},
-        {hiX,  lowY, lowZ, 1.0f}, {hiX,  lowY, hiZ, 1.0f}, {hiX,  hiY, lowZ, 1.0f}, {hiX,  hiY, hiZ, 1.0f}
-    };
+		draw_vu1_with_lights_ref(obj, 0);
+	}
 
-    memcpy(res_m->bounding_box, bbox, sizeof(bbox));
-}
+	if (obj->data->attributes.has_bumpmap) {
+    	VECTOR light_dir;
 
-void obj_transfer_vertex(model* m, uint32_t dst_idx, fastObjMesh* obj, uint32_t src_idx) {
-	copy_vector(&m->positions[dst_idx], obj->positions + (3 * obj->indices[src_idx].p));
-	m->positions[dst_idx][3] = 1.0f;
+		matrix_functions->apply(light_dir, obj->transform, dir_lights.direction[0]);
 
-	m->texcoords[dst_idx][0] = obj->texcoords[2 * obj->indices[src_idx].t];
-    m->texcoords[dst_idx][1] = 1.0f - obj->texcoords[2 * obj->indices[src_idx].t + 1];
-    m->texcoords[dst_idx][2] = 1.0f;
-    m->texcoords[dst_idx][3] = 1.0f;
-
-	copy_vector(&m->normals[dst_idx],  obj->normals + (3 * obj->indices[src_idx].n));
-	m->normals[dst_idx][3] = 1.0f;
-}
-
-void loadOBJ(model* res_m, const char* path, GSTEXTURE* text) {
-    fastObjMesh* m = fast_obj_read(path);
-
-	res_m->texture_count = 0;
-	res_m->textures = NULL;
-
-	if (m->material_count && !m->strip_count) {
-		res_m->materials = (ath_mat *)malloc(m->material_count*sizeof(ath_mat));
-		res_m->material_count = m->material_count;
-
-		// Allocate a initial size so we can grow this buffer using realloc if necessary
-		res_m->material_indices = (material_index *)malloc(m->material_count*sizeof(material_index)); 
-		res_m->material_index_count = m->material_count;
+		vector_functions->normalize(light_dir, light_dir);
 		
-		for (int i = 0; i < res_m->material_count; i++) {
-			copy_init_w_vector(res_m->materials[i].ambient,             m->materials[i].Ka);  
-			copy_init_w_vector(res_m->materials[i].diffuse,             m->materials[i].Kd);
-			copy_init_w_vector(res_m->materials[i].specular,            m->materials[i].Ks);
-			copy_init_w_vector(res_m->materials[i].emission,            m->materials[i].Ke);
-			copy_init_w_vector(res_m->materials[i].transmittance,       m->materials[i].Kt);
-			copy_init_w_vector(res_m->materials[i].transmission_filter, m->materials[i].Tf);
+    	obj->bump_offset[0] = light_dir[0] * 0.008f;
+    	obj->bump_offset[1] = light_dir[1] * 0.008f;
 
-			res_m->materials[i].shininess =  m->materials[i].Ns;
-			res_m->materials[i].refraction =  m->materials[i].Ni;
-			res_m->materials[i].disolve =   m->materials[i].d;
+		set_screen_param(COLOR_CLAMP_MODE, 1);
 
-			res_m->materials[i].texture_id = -1;
+		obj->bump_offset_buffer = &obj->bump_offset;
+		set_screen_param(ALPHA_BLEND_EQUATION, ALPHA_EQUATION(SRC_RGB, ZERO_RGB, ALPHA_FIX, DST_RGB, 0x34));
+		draw_vu1_with_colors(obj, 1);
 
-			if (m->materials[i].map_Kd.name) {
-				bool prev_loaded = false;
+		obj->bump_offset_buffer = &zero_bump_offset;
+		set_screen_param(ALPHA_BLEND_EQUATION, ALPHA_EQUATION(ZERO_RGB, SRC_RGB, ALPHA_FIX, DST_RGB, 0x34));
+		draw_vu1_with_colors(obj, 1);
+	}	
 
-				if (!prev_loaded) {
-					res_m->materials[i].texture_id = res_m->texture_count;
-					GSTEXTURE* tex = malloc(sizeof(GSTEXTURE));
-					load_image(tex, m->materials[i].map_Kd.name, true);
-
-					append_texture(res_m, tex);
-				}
-			}
-
-
-		}
-	} else {
-		res_m->materials = (ath_mat *)malloc(sizeof(ath_mat));
-		res_m->material_count = 1;
-
-		res_m->material_indices = (material_index *)malloc(sizeof(material_index)); 
-		res_m->material_index_count = 1;
-
-		init_vector(res_m->materials[0].ambient);
-		init_vector(res_m->materials[0].diffuse);
-		init_vector(res_m->materials[0].specular);
-		init_vector(res_m->materials[0].emission);
-		init_vector(res_m->materials[0].transmittance);
-		init_vector(res_m->materials[0].transmission_filter);
-
-		res_m->materials[0].shininess = 1.0f;
-		res_m->materials[0].refraction = 1.0f;
-		res_m->materials[0].disolve = 1.0f;
-
-		res_m->materials[0].texture_id = -1;
-
-		if((text)) {
-			res_m->materials[0].texture_id = 0;
-			append_texture(res_m, text);
-		}
-	}
-
-    int cur_mat_index = (m->material_count? m->face_materials[0] : 0);
-	char* old_tex = NULL;
-	char* cur_tex = NULL;
-
-	res_m->tristrip = m->strip_count > 0;
-
-	if (res_m->tristrip) {
-		res_m->index_count = m->index_count + (2 * m->strip_count) + (((m->index_count + (2 * m->strip_count)) / (BATCH_SIZE - 2)) * 2) + 1;
-
-		res_m->positions = alloc_vectors(res_m->index_count);
-    	res_m->texcoords = alloc_vectors(res_m->index_count);
-    	res_m->normals =   alloc_vectors(res_m->index_count);
-		res_m->colours =   alloc_vectors(res_m->index_count);
-
-		int unified_strip_count = 0;  
-		int* unified_strip_indices = malloc(sizeof(int) * (m->index_count + 2 * m->strip_count));
-
-		for (int i = 0; i < m->strip_count; i++) {
-		    int strip_start = m->strips[i];
-		    int strip_end = (i + 1 < m->strip_count) ? m->strips[i + 1] : m->index_count;
-
-		    for (int j = strip_start; j < strip_end; j++) {
-		        unified_strip_indices[unified_strip_count++] = j;
-
-		        if (j == strip_end - 1 && i + 1 < m->strip_count) {
-		            unified_strip_indices[unified_strip_count++] = j;
-		            unified_strip_indices[unified_strip_count++] = m->strips[i + 1];
-		        }
-		    }
-		}
-
-		int batch_index = 0;
-		int index = 0;
-
-		for (int i = 0; i < unified_strip_count; i++) {
-		    obj_transfer_vertex(res_m, index, m, unified_strip_indices[i]);
-
-        	res_m->colours[index][0] = 1.0f;
-        	res_m->colours[index][1] = 1.0f;
-        	res_m->colours[index][2] = 1.0f;
-        	res_m->colours[index][3] = 1.0f;
-
-		    index++;
-		    batch_index++;
-
-		    if (batch_index == BATCH_SIZE) {
-				copy_vector(&res_m->positions[index], &res_m->positions[index - 2]);
-				copy_vector(&res_m->texcoords[index], &res_m->texcoords[index - 2]);
-				copy_vector(&res_m->normals[index],   &res_m->normals[index - 2]);
-				copy_vector(&res_m->colours[index],   &res_m->colours[index - 2]);
-        	    index++;
-
-				copy_vector(&res_m->positions[index], &res_m->positions[index - 2]);
-				copy_vector(&res_m->texcoords[index], &res_m->texcoords[index - 2]);
-				copy_vector(&res_m->normals[index],   &res_m->normals[index - 2]);
-				copy_vector(&res_m->colours[index],   &res_m->colours[index - 2]);
-        	    index++;
-
-        	    batch_index = 2;
-		    }
-		}
-
-		free(unified_strip_indices);
-
-		res_m->index_count = index-1;
-	} else {
-		res_m->index_count = m->index_count;
-
-    	res_m->positions = alloc_vectors(res_m->index_count);
-    	res_m->texcoords = alloc_vectors(res_m->index_count);
-    	res_m->normals =   alloc_vectors(res_m->index_count);
-		res_m->colours =   alloc_vectors(res_m->index_count);
-
-
-		uint32_t added_material_indices = 0;
-		for (int i = 0; i < res_m->index_count; i++) {
-			obj_transfer_vertex(res_m, i, m, i);
-
-			if (m->material_count > 0) {
-				if (m->face_materials[i / 3] != cur_mat_index) {
-					added_material_indices++;
-
-					if (added_material_indices > res_m->material_index_count) {
-						res_m->material_indices = (material_index*)realloc(res_m->material_indices, added_material_indices);
-						res_m->material_index_count++;
-					}
-
-					res_m->material_indices[added_material_indices-1].index = cur_mat_index;
-					res_m->material_indices[added_material_indices-1].end = i-1;
-					cur_mat_index = m->face_materials[i / 3];
-				}
-			}
-    	}
-
-		added_material_indices++;
-
-		if (added_material_indices > res_m->material_index_count) {
-			res_m->material_indices = (material_index*)realloc(res_m->material_indices, added_material_indices);
-			res_m->material_index_count++;
-		}
-
-		res_m->material_indices[added_material_indices-1].index = cur_mat_index;
-		res_m->material_indices[added_material_indices-1].end = res_m->index_count;
-	}
-
-    calculate_bbox(res_m);
-
-	athena_render_set_pipeline(res_m, PL_DEFAULT);
-
-	fast_obj_destroy(m);
+	set_screen_param(COLOR_CLAMP_MODE, old_colclamp);
+	set_screen_param(ALPHA_BLEND_EQUATION, old_alpha);
 }
 
-void draw_bbox(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z, Color color) {
+void new_render_object(athena_object_data *obj, athena_render_data *data) {
+	obj->data = data;
+
+	obj->bump_offset_buffer = &zero_bump_offset;
+
+	if (data->skin_data) {
+		obj->anim_controller.current = NULL;
+
+		obj->bones = (athena_bone_transform*)malloc(data->skeleton->bone_count * sizeof(athena_bone_transform));
+		obj->bone_matrices = (MATRIX*)malloc(data->skeleton->bone_count * sizeof(MATRIX));
+
+		for (int i = 0; i < data->skeleton->bone_count; i++) {
+			copy_vector(obj->bones[i].position, data->skeleton->bones[i].position);
+			copy_vector(obj->bones[i].rotation, data->skeleton->bones[i].rotation);
+			copy_vector(obj->bones[i].scale, data->skeleton->bones[i].scale);
+		}
+
+		update_bone_transforms(obj);
+	}
+
+	obj->position[0] = 0.0f;
+	obj->position[1] = 0.0f;
+	obj->position[2] = 0.0f;
+	obj->position[3] = 1.0f;
+
+	obj->rotation[0] = 0.0f;
+	obj->rotation[1] = 0.0f;
+	obj->rotation[2] = 0.0f;
+	obj->rotation[3] = 1.0f;
+
+	obj->scale[0] = 1.0f;
+	obj->scale[1] = 1.0f;
+	obj->scale[2] = 1.0f;
+	obj->scale[3] = 1.0f;
+
+	obj->collision = NULL;
+	obj->update_collision = NULL;
+
+	obj->physics = NULL;
+	obj->update_physics = NULL;
+
+	update_object_space(obj);
+}
+
+void draw_bbox(athena_object_data* obj, Color color) {
 	
 
-	VECTOR object_position = { pos_x, pos_y, pos_z, 1.00f };
+	/*VECTOR object_position = { pos_x, pos_y, pos_z, 1.00f };
 	VECTOR object_rotation = { rot_x, rot_y, rot_z, 1.00f };
 
 	// Matrices to setup the 3D environment and camera
 	MATRIX local_world;
 	MATRIX local_screen;
 
-	create_local_world(local_world, object_position, object_rotation);
+	create_local_world(local_world, obj->position ,obj->rotation);
 	create_local_screen(local_screen, local_world, world_view, view_screen);
 	if(clip_bounding_box(local_screen, m->bounding_box)) return;
 
@@ -369,613 +318,699 @@ void draw_bbox(model* m, float pos_x, float pos_y, float pos_z, float rot_x, flo
 	athena_line_goraud_3d(gsGlobal, xyz[2].x, xyz[2].y, xyz[2].z, xyz[6].x, xyz[6].y, xyz[6].z, color, color);
 	athena_line_goraud_3d(gsGlobal, xyz[3].x, xyz[3].y, xyz[3].z, xyz[7].x, xyz[7].y, xyz[7].z, color, color);
 
-	free(xyz);
+	free(xyz);*/
 }
 
+void append_texture_tags(owl_packet* packet, GSSURFACE *texture, int texture_id, eColorFunctions func) {
+	if (texture_id != -1) {
+		owl_add_cnt_tag(packet, 4, 0); // 4 quadwords for vif
+		owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0)); 
+		owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0)); 
+		owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSH, 0));
+		owl_add_uint(packet, VIF_CODE(2, 0, VIF_DIRECT, 0));
 
-u64 vif_packets[2][44] __attribute__((aligned(64)));
-u64* curr_vif_packet;
+		owl_add_tag(packet, GIF_AD, GIFTAG(1, 1, 0, 0, 0, 1));
+		owl_add_tag(packet, GIF_NOP, 0);
 
-/** Cube data */
-u64 cube_packet[20] __attribute__((aligned(64)));
+		owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));
+		owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+		owl_add_uint(packet, VIF_CODE(texture_id, 0, VIF_MARK, 0));
+		owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 1));
 
-dma_packet draw_packet;
-dma_packet attr_packet;
-
-u8 context = 0;
-
-static u32* last_mpg = NULL;
-
-#define update_vu_program(name) \
-	do { \
-		if (last_mpg != &name##_CodeStart) { \
-			dmaKit_wait(DMA_CHANNEL_VIF1, 0); \
-			vu1_upload_micro_program(&name##_CodeStart, &name##_CodeEnd); \
-			last_mpg = &name##_CodeStart; \
-		} \
-	} while (0)
-
-void append_texture_tags(dma_packet* packet, GSTEXTURE *texture, eColorFunctions func) {
-	dma_packet_add_cnt_tag(packet, 4); // 4 quadwords for vif
-	dma_packet_add_uint(packet, VIF_NOP);
-	dma_packet_add_uint(packet, VIF_NOP);
-	dma_packet_add_uint(packet, VIF_NOP);
-	dma_packet_add_uint(packet, (VIF_DIRECT << 24) | 3); // 3 giftags
-	
-	dma_packet_add_tag(packet, GIF_AD, GIFTAG(2, 1, 0, 0, 0, 1));
-	
-	dma_packet_add_tag(packet, GS_TEX1_1, GS_SETREG_TEX1(1, 0, texture->Filter, texture->Filter, 0, 0, 0));
-	
-	int tw, th;
-	athena_set_tw_th(texture, &tw, &th);
-
-	dma_packet_add_tag(packet, 
-					   GS_TEX0_1, 
-					   GS_SETREG_TEX0(texture->Vram/256, 
-									  texture->TBW, 
-									  texture->PSM,
-									  tw, th, 
-									  gsGlobal->PrimAlphaEnable, 
-									  func,
-									  texture->VramClut/256, 
-									  texture->ClutPSM, 
-									  0, 0, 
-									  texture->VramClut? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD)
-						);
+	} 
 }
 
-void draw_vu1_pvc(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z) {
-	VECTOR object_position = { pos_x, pos_y, pos_z, 1.00f };
-	VECTOR object_rotation = { rot_x, rot_y, rot_z, 1.00f };
+void process_animation(athena_object_data *obj) {
+	if (obj->anim_controller.current) {
+		if (!obj->anim_controller.is_playing) {
+			obj->anim_controller.initial_time = (clock()  / (float)CLOCKS_PER_SEC);
 
-	MATRIX local_world;
-	MATRIX local_light;
-	MATRIX local_screen;
+			obj->anim_controller.is_playing = true;
+		}
 
-	update_vu_program(VU1Draw3DPVC);
+		obj->anim_controller.current_time = (clock() / (float)CLOCKS_PER_SEC) - obj->anim_controller.initial_time;
 
-	gsGlobal->PrimAAEnable = GS_SETTING_ON;
-	gsKit_set_test(gsGlobal, GS_ZTEST_ON);
+		apply_animation(obj, obj->anim_controller.current_time); 
 
-	create_local_world(local_world, object_position, object_rotation);
-	create_local_screen(local_screen, local_world, world_view, view_screen);
-
-	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
-
-	dma_packet_create(&draw_packet, vif_packets[context], 0);
-
-	unpack_list_open(&draw_packet, 0, false);
-	{
-		unpack_list_append(&draw_packet, &screen_scale,       1);
-
-		unpack_list_append(&draw_packet, &local_screen,       4);
+		if (obj->anim_controller.current_time > obj->anim_controller.current->duration) {
+			if (obj->anim_controller.loop) {
+				obj->anim_controller.initial_time = (clock()  / (float)CLOCKS_PER_SEC);
+			} else {
+				obj->anim_controller.is_playing = false;
+				obj->anim_controller.current = NULL;
+			}
+		}
 	}
-	unpack_list_close(&draw_packet);
+}
 
-	dma_packet_add_end_tag(&draw_packet);
+void update_object_space(athena_object_data *obj) {
+  	matrix_functions->identity(obj->transform);
 
-	dma_packet_send(&draw_packet, DMA_CHANNEL_VIF1);
+  	matrix_functions->rotate(obj->transform, obj->transform, obj->rotation);
+	matrix_functions->scale(obj->transform, obj->transform, obj->scale);
+  	matrix_functions->translate(obj->transform, obj->transform, obj->position);
 
-	dma_packet_destroy(&draw_packet);
+	if (obj->update_collision)
+		obj->update_collision(obj);
+}
 
-	dma_packet_create(&attr_packet, cube_packet, 0);
+static void bake_giftags(owl_packet *packet, athena_render_data *data, bool texture_mapping, int mat_id) {
+	prim_reg_t prim_data = {
+		.PRIM = GS_PRIM_PRIM_TRIFAN,
+		.IIP = data->attributes.shade_model,
+		.TME = texture_mapping,
+		.FGE = gsGlobal->PrimFogEnable,
+		.ABE = gsGlobal->PrimAlphaEnable,
+		.AA1 = gsGlobal->PrimAAEnable,
+		.FST = 0,
+		.CTXT = gsGlobal->PrimContext,
+		.FIX = 0
+	};
+
+	giftag_t clip_tag = {
+		.NLOOP = 0,
+		.EOP = 1,
+		.PRE = 1,
+		.PRIM = prim_data.data,
+		.FLG = 0,
+		.NREG = 3
+	};
+
+	prim_data.PRIM = (data->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE);
+
+	giftag_t prim_tag = {
+		.NLOOP = 0,
+		.EOP = 1,
+		.PRE = 1,
+		.PRIM = prim_data.data,
+		.FLG = 0,
+		.NREG = 3
+	};
+
+	owl_add_unpack_data_cnt(packet, 26, 1, 0);
+	owl_add_uint(packet, 0);
+	owl_add_uint(packet, data->attributes.accurate_clipping? (clip_tag.data >> 32) : 0);
+	owl_add_uint(packet, data->tristrip);
+	owl_add_uint(packet, data->attributes.face_culling);
+	owl_add_unpack_data_cnt(packet, 0, 1, 1);
+	owl_add_ulong(packet, prim_tag.data);
+	owl_add_ulong(packet, DRAW_STQ2_REGLIST);
+}
+
+void draw_vu1_with_colors(athena_object_data *obj, int pass_state) {
+	athena_render_data *data = obj->data;
+
+	int batch_size = BATCH_SIZE, mpg_addr = 0;
+
+	if (data->skeleton) {
+		batch_size = BATCH_SIZE_SKINNED;
+
+		process_animation(obj);
+
+		update_bone_transforms(obj);
+
+		mpg_addr = vu_mpg_preload(vu1_colors_skinned, true);
+	} else {
+		mpg_addr = vu_mpg_preload(vu1_colors, true);
+	}
+
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 14);
+
+	if (obj->bone_matrices) {
+		owl_add_unpack_data_ref(packet, 141, (void*)obj->bone_matrices, data->skeleton->bone_count*4, 0);
+	}
+
+	owl_add_unpack_data_cnt(packet, 0, 1, 0);
+	owl_add_uquad_ptr(packet, &screen_scale);
+
+	owl_add_unpack_data_cnt(packet, 1, 4, 0);
+	owl_add_uquad_ptr(packet, &(world_screen[0]));
+	owl_add_uquad_ptr(packet, &(world_screen[4]));
+	owl_add_uquad_ptr(packet, &(world_screen[8]));
+	owl_add_uquad_ptr(packet, &(world_screen[12]));
+
+	owl_add_unpack_data_cnt(packet, 5, 4, 0);
+	owl_add_uquad_ptr(packet, &(obj->transform[0]));
+	owl_add_uquad_ptr(packet, &(obj->transform[4]));
+	owl_add_uquad_ptr(packet, &(obj->transform[8]));
+	owl_add_uquad_ptr(packet, &(obj->transform[12]));
+
+	owl_add_unpack_data_cnt(packet, 269, 1, 0);
+	owl_add_uquad_ptr(packet, obj->bump_offset_buffer);
+
+	//owl_add_end_tag(packet);
 
 	int last_index = -1;
-	GSTEXTURE* tex = NULL;
-	for(int i = 0; i < m->material_index_count; i++) {
-		bool texture_mapping = ((m->materials[m->material_indices[i].index].texture_id != -1) && m->attributes.texture_mapping);
+	GSSURFACE* tex = NULL;
+	int texture_id;
+	for(int i = 0; i < data->material_index_count; i++) {
+		bool texture_mapping = ((((data->materials[data->material_indices[i].index].texture_id != -1)) && data->attributes.texture_mapping) || pass_state);
 
 		if (texture_mapping) {
-			GSTEXTURE *cur_tex = m->textures[m->materials[m->material_indices[i].index].texture_id];
+			GSSURFACE *cur_tex = NULL;
+			switch (pass_state) {
+				case 1: // bump map 
+					cur_tex = data->textures[data->materials[data->material_indices[i].index].bump_texture_id];
+					break;
+				case 2: // decal
+					cur_tex = data->textures[data->materials[data->material_indices[i].index].decal_texture_id];
+					break;
+				default: 
+					cur_tex = data->textures[data->materials[data->material_indices[i].index].texture_id];
+			}
+
 			if (cur_tex != tex) {
-				gsKit_TexManager_bind(gsGlobal, cur_tex);
+				texture_id = texture_manager_bind(gsGlobal, cur_tex, true);
 				tex = cur_tex;
 			}
 		}
 
-		VECTOR* positions = &m->positions[last_index+1];
-		VECTOR* texcoords = texture_mapping? &m->texcoords[last_index+1] : NULL;
-		VECTOR* colours = &m->colours[last_index+1];
+		VECTOR* positions = &data->positions[last_index+1];
+		VECTOR* colours = &data->colours[last_index+1];
+		VECTOR* texcoords = texture_mapping? &data->texcoords[last_index+1] : NULL;
+		vertex_skin_data* skin_data = data->skin_data? &data->skin_data[last_index+1] : NULL;
 
-		int idxs_to_draw = (m->material_indices[i].end-last_index);
+		int idxs_to_draw = (data->material_indices[i].end-last_index);
 		int idxs_drawn = 0;
 
 		while (idxs_to_draw > 0) {
-			dmaKit_wait(DMA_CHANNEL_VIF1, 0);
+			owl_query_packet(CHANNEL_VIF1, texture_mapping? 20 : 10);    
 
-			int count = BATCH_SIZE;
-			if (idxs_to_draw < BATCH_SIZE)
+			int count = batch_size;
+			if (idxs_to_draw < batch_size)
 			{
 				count = idxs_to_draw;
 			}
 
-			dma_packet_reset(&attr_packet);
+			if (texture_mapping) {
+				append_texture_tags(packet, tex, texture_id, COLOR_MODULATE);
+			}
+  
+			bake_giftags(packet, data, texture_mapping, i);
 
-			dma_packet_add_tag(&attr_packet,  
-			                   DRAW_STQ2_REGLIST, 
-							   VU_GS_GIFTAG(count, 
-							                1, NO_CUSTOM_DATA, 1, 
-											VU_GS_PRIM(m->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE, 
-													   m->attributes.shade_model, texture_mapping, 
-													   gsGlobal->PrimFogEnable, 
-													   gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 0, 0, 0),
-    		    							0, 3)
-								);
+			owl_add_unpack_data_ref(packet, 1, (void*)&data->materials[data->material_indices[i].index].diffuse, 1, 1);
 
-			dma_packet_add_float(&attr_packet, 128.0f);
-			dma_packet_add_float(&attr_packet, 128.0f);
-			dma_packet_add_float(&attr_packet, 128.0f);
-			dma_packet_add_float(&attr_packet, 128.0f);
+			if (data->skin_data) 
+				owl_add_unpack_data_ref(packet, 2, &skin_data[idxs_drawn], count*2, 1);
 
-			dma_packet_create(&draw_packet, vif_packets[context], 0);
+			owl_add_unpack_data_ref(packet, 2+batch_size*(data->skin_data? 2 : 0), &positions[idxs_drawn], count, 1);
+			//owl_add_unpack_data_ref(packet, 2+batch_size*(data->skin_data? 3 : 1), &normals[idxs_drawn], count, 1);
+			owl_add_unpack_data_ref(packet, 2+batch_size*(data->skin_data? 4 : 2), &colours[idxs_drawn], count, 1);
+
+			if (texcoords) 
+				owl_add_unpack_data_ref(packet, 2+batch_size*(data->skin_data? 5 : 3), &texcoords[idxs_drawn], count, 1);
+
+			owl_add_cnt_tag(packet, texture_mapping? 5 : 1, owl_vif_code_double(VIF_CODE(0, 0, VIF_NOP, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
 
 			if (texture_mapping) {
-				append_texture_tags(&draw_packet, tex, COLOR_MODULATE);
+				owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));
+				owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+				owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+				owl_add_uint(packet, VIF_CODE(3, 0, VIF_DIRECT, 0)); 
+
+				owl_add_tag(packet, GIF_AD, GIFTAG(2, 1, 0, 0, 0, 1));
+
+				int tw, th;
+				athena_set_tw_th(tex, &tw, &th);
+
+				owl_add_tag(packet, 
+					GS_TEX0_1+gsGlobal->PrimContext, 
+					GS_SETREG_TEX0((tex->Vram & ~TRANSFER_REQUEST_MASK)/256, 
+								  tex->TBW, 
+								  tex->PSM,
+								  tw, th, 
+								  gsGlobal->PrimAlphaEnable, 
+								  COLOR_MODULATE,
+								  (tex->VramClut & ~TRANSFER_REQUEST_MASK)/256, 
+								  tex->ClutPSM, 
+								  0, 0, 
+								  tex->VramClut? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD)
+				);
+
+				owl_add_tag(packet, GS_TEX1_1+gsGlobal->PrimContext, GS_SETREG_TEX1(1, 0, tex->Filter, tex->Filter, 0, 0, 0));
 			}
-
-			unpack_list_open(&draw_packet, 0, true);
-			{
-				unpack_list_append(&draw_packet, attr_packet.base, 2);
-				unpack_list_append(&draw_packet, &positions[idxs_drawn], count);
-				unpack_list_append(&draw_packet,   &colours[idxs_drawn], count);
-				if (texcoords) 
-					unpack_list_append(&draw_packet, &texcoords[idxs_drawn], count);
-			}
-			unpack_list_close(&draw_packet);
-
-			dma_packet_start_program(&draw_packet, last_index == -1);
-			dma_packet_add_end_tag(&draw_packet);
-
-			dma_packet_send(&draw_packet, DMA_CHANNEL_VIF1);
-
-			dma_packet_destroy(&draw_packet);
+			
+			owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));  
+			owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+			owl_add_uint(packet, VIF_CODE(count, 0, VIF_ITOP, 0));
+			owl_add_uint(packet, VIF_CODE(mpg_addr, 0, (last_index == -1? VIF_MSCALF : VIF_MSCNT), 0)); 
 
 			idxs_to_draw -= count;
 			idxs_drawn += count;
 		}
 
-		last_index = m->material_indices[i].end;
+		last_index = data->material_indices[i].end;
 	}
 
-	context = !context;
+	owl_query_packet(CHANNEL_VIF1, 1);
+
+	owl_add_cnt_tag(packet, 0, owl_vif_code_double(VIF_CODE(0, 0, VIF_FLUSH, 0), VIF_CODE(0, 0, VIF_FLUSH, 0)));
 }
 
-void draw_vu1_with_colors(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z) {
-	VECTOR object_position = { pos_x, pos_y, pos_z, 1.00f };
-	VECTOR object_rotation = { rot_x, rot_y, rot_z, 1.00f };
+void draw_vu1_with_lights(athena_object_data *obj, int pass_state) {
+	athena_render_data *data = obj->data;
 
-	MATRIX local_world;
-	MATRIX local_light;
-	MATRIX local_screen;
+	int batch_size = BATCH_SIZE, mpg_addr = 0;
 
-	if (m->attributes.accurate_clipping)
-		update_vu_program(VU1Draw3DCS);
-	else
-		update_vu_program(VU1Draw3DColors);
+	if (data->skeleton) {
+		batch_size = BATCH_SIZE_SKINNED;
 
-	gsGlobal->PrimAAEnable = GS_SETTING_ON;
-	gsKit_set_test(gsGlobal, GS_ZTEST_ON);
+		process_animation(obj);
 
-	create_local_world(local_world, object_position, object_rotation);
-	create_local_screen(local_screen, local_world, world_view, view_screen);
+		update_bone_transforms(obj);
 
-	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
-
-	dma_packet_create(&draw_packet, vif_packets[context], 0);
-
-	unpack_list_open(&draw_packet, 0, false);
-	{
-		unpack_list_append(&draw_packet, &screen_scale,       1);
-
-		unpack_list_append(&draw_packet, &local_screen,       4);
+		mpg_addr = vu_mpg_preload(vu1_lights_skinned, true);
+	} else {
+		mpg_addr = vu_mpg_preload(vu1_lights, true);
 	}
-	unpack_list_close(&draw_packet);
 
-	dma_packet_add_end_tag(&draw_packet);
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 16); // 5 for unpack static data + 2 for flush with end
 
-	dma_packet_send(&draw_packet, DMA_CHANNEL_VIF1);
+	owl_add_cnt_tag(packet, 0, owl_vif_code_double(VIF_CODE(0, 0, VIF_FLUSHE, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
 
-	dma_packet_destroy(&draw_packet);
+	owl_add_unpack_data_cnt(packet, 0, 1, 0);
+	owl_add_uquad_ptr(packet, &screen_scale);
 
-	dma_packet_create(&attr_packet, cube_packet, 0);
+	owl_add_unpack_data_cnt(packet, 1, 4, 0);
+	owl_add_uquad_ptr(packet, &(world_screen[0]));
+	owl_add_uquad_ptr(packet, &(world_screen[4]));
+	owl_add_uquad_ptr(packet, &(world_screen[8]));
+	owl_add_uquad_ptr(packet, &(world_screen[12]));
+
+	owl_add_unpack_data_cnt(packet, 5, 4, 0);
+	owl_add_uquad_ptr(packet, &(obj->transform[0]));
+	owl_add_uquad_ptr(packet, &(obj->transform[4]));
+	owl_add_uquad_ptr(packet, &(obj->transform[8]));
+	owl_add_uquad_ptr(packet, &(obj->transform[12]));
+
+	owl_add_unpack_data_cnt(packet, 9, 1, 0);
+	owl_add_uquad_ptr(packet, getCameraPosition());
+
+	if (obj->bone_matrices) {
+		owl_add_unpack_data_ref(packet, 141, (void*)obj->bone_matrices, data->skeleton->bone_count*4, 0);
+	}
 
 	int last_index = -1;
-	GSTEXTURE* tex = NULL;
-	for(int i = 0; i < m->material_index_count; i++) {
-		bool texture_mapping = ((m->materials[m->material_indices[i].index].texture_id != -1) && m->attributes.texture_mapping);
+	GSSURFACE* tex = NULL;
+	int texture_id;
+	for(int i = 0; i < data->material_index_count; i++) {
+		bool texture_mapping = (((data->materials[data->material_indices[i].index].texture_id != -1) && data->attributes.texture_mapping) || pass_state);
 
 		if (texture_mapping) {
-			GSTEXTURE *cur_tex = m->textures[m->materials[m->material_indices[i].index].texture_id];
+			GSSURFACE *cur_tex = NULL;
+			switch (pass_state) {
+				case 1: // bump map 
+					cur_tex = data->textures[data->materials[data->material_indices[i].index].bump_texture_id];
+					break;
+				case 2: // decal
+					cur_tex = data->textures[data->materials[data->material_indices[i].index].decal_texture_id];
+					break;
+				default: 
+					cur_tex = data->textures[data->materials[data->material_indices[i].index].texture_id];
+			}
+
 			if (cur_tex != tex) {
-				gsKit_TexManager_bind(gsGlobal, cur_tex);
+				texture_id = texture_manager_bind(gsGlobal, cur_tex, true);
 				tex = cur_tex;
 			}
 		}
 
-		VECTOR* positions = &m->positions[last_index+1];
-		VECTOR* texcoords = texture_mapping? &m->texcoords[last_index+1] : NULL;
+		VECTOR* positions = &data->positions[last_index+1];
+		VECTOR* texcoords = texture_mapping? &data->texcoords[last_index+1] : NULL;
+		VECTOR* normals = &data->normals[last_index+1];
+		VECTOR* colours = &data->colours[last_index+1];
+		vertex_skin_data* skin_data = data->skin_data? &data->skin_data[last_index+1] : NULL;
 
-		int idxs_to_draw = (m->material_indices[i].end-last_index);
+		int idxs_to_draw = (data->material_indices[i].end-last_index);
 		int idxs_drawn = 0;
 
 		while (idxs_to_draw > 0) {
-			dmaKit_wait(DMA_CHANNEL_VIF1, 0);
+			owl_query_packet(CHANNEL_VIF1, texture_mapping? 22 : 12);
 
-			int count = BATCH_SIZE;
-			if (idxs_to_draw < BATCH_SIZE)
+			int count = batch_size;
+			if (idxs_to_draw < batch_size)
 			{
 				count = idxs_to_draw;
 			}
 
-			dma_packet_reset(&attr_packet);
+			if (texture_mapping) {
+				append_texture_tags(packet, tex, texture_id, COLOR_MODULATE);
+			}
+
+			bake_giftags(packet, data, texture_mapping, i);
+			
+			owl_add_unpack_data_ref(packet, 1, (void*)&data->materials[data->material_indices[i].index].diffuse, 1, 1);
+
+			if (data->skin_data) 
+				owl_add_unpack_data_ref(packet, 2, &skin_data[idxs_drawn], count*2, 1);
+
+			owl_add_unpack_data_ref(packet, 2+batch_size*(data->skin_data? 2 : 0), &positions[idxs_drawn], count, 1);
+			owl_add_unpack_data_ref(packet, 2+batch_size*(data->skin_data? 3 : 1), &normals[idxs_drawn], count, 1);
+			owl_add_unpack_data_ref(packet, 2+batch_size*(data->skin_data? 4 : 2), &colours[idxs_drawn], count, 1);
+
+			if (texcoords) 
+				owl_add_unpack_data_ref(packet, 2+batch_size*(data->skin_data? 5 : 3), &texcoords[idxs_drawn], count, 1);
+			
+			owl_add_cnt_tag(packet, texture_mapping? 5 : 1, owl_vif_code_double(VIF_CODE(0, 0, VIF_NOP, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
+
+			if (texture_mapping) {
+				owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));
+				owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+				owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+				owl_add_uint(packet, VIF_CODE(3, 0, VIF_DIRECT, 0)); 
+
+				owl_add_tag(packet, GIF_AD, GIFTAG(2, 1, 0, 0, 0, 1));
+
+				int tw, th;
+				athena_set_tw_th(tex, &tw, &th);
+
+				owl_add_tag(packet, 
+					GS_TEX0_1+gsGlobal->PrimContext, 
+					GS_SETREG_TEX0((tex->Vram & ~TRANSFER_REQUEST_MASK)/256, 
+								  tex->TBW, 
+								  tex->PSM,
+								  tw, th, 
+								  gsGlobal->PrimAlphaEnable, 
+								  COLOR_MODULATE,
+								  (tex->VramClut & ~TRANSFER_REQUEST_MASK)/256, 
+								  tex->ClutPSM, 
+								  0, 0, 
+								  tex->VramClut? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD)
+				);
+
+				owl_add_tag(packet, GS_TEX1_1+gsGlobal->PrimContext, GS_SETREG_TEX1(1, 0, tex->Filter, tex->Filter, 0, 0, 0));
+			}
+			
+			owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));
+			owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+			owl_add_uint(packet, VIF_CODE(count, 0, VIF_ITOP, 0));
+			owl_add_uint(packet, VIF_CODE(mpg_addr, 0, (last_index == -1? VIF_MSCALF : VIF_MSCNT), 0)); 
+
+			idxs_to_draw -= count;
+			idxs_drawn += count;
+			
+		}
+
+		last_index = data->material_indices[i].end;
+	}
+
+	owl_query_packet(CHANNEL_VIF1, 1);
+
+	owl_add_cnt_tag(packet, 0, owl_vif_code_double(VIF_CODE(0, 0, VIF_FLUSH, 0), VIF_CODE(0, 0, VIF_FLUSH, 0)));
+}
+
+void draw_vu1_with_spec_lights(athena_object_data *obj, int pass_state) {
+	athena_render_data *data = obj->data;
+
+	int batch_size = BATCH_SIZE, mpg_addr = 0;
+
+	if (data->skeleton) {
+		batch_size = BATCH_SIZE_SKINNED;
+
+		process_animation(obj);
+
+		update_bone_transforms(obj);
+
+		mpg_addr = vu_mpg_preload(vu1_specular_skinned, true);
+	} else {
+		mpg_addr = vu_mpg_preload(vu1_specular, true);
+	}
+
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 16); // 5 for unpack static data + 2 for flush with end
+
+	owl_add_cnt_tag(packet, 0, owl_vif_code_double(VIF_CODE(0, 0, VIF_FLUSHE, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
+
+	owl_add_unpack_data_cnt(packet, 0, 1, 0);
+	owl_add_uquad_ptr(packet, &screen_scale);
+
+	owl_add_unpack_data_cnt(packet, 1, 4, 0);
+	owl_add_uquad_ptr(packet, &(world_screen[0]));
+	owl_add_uquad_ptr(packet, &(world_screen[4]));
+	owl_add_uquad_ptr(packet, &(world_screen[8]));
+	owl_add_uquad_ptr(packet, &(world_screen[12]));
+
+	owl_add_unpack_data_cnt(packet, 5, 4, 0);
+	owl_add_uquad_ptr(packet, &(obj->transform[0]));
+	owl_add_uquad_ptr(packet, &(obj->transform[4]));
+	owl_add_uquad_ptr(packet, &(obj->transform[8]));
+	owl_add_uquad_ptr(packet, &(obj->transform[12]));
+
+	owl_add_unpack_data_cnt(packet, 9, 1, 0);
+	owl_add_uquad_ptr(packet, getCameraPosition());
+
+	if (obj->bone_matrices) {
+		owl_add_unpack_data_ref(packet, 141, (void*)obj->bone_matrices, data->skeleton->bone_count*4, 0);
+	}
+
+	//owl_add_end_tag(packet);
+
+	int last_index = -1;
+	GSSURFACE* tex = NULL;
+	int texture_id;
+	for(int i = 0; i < data->material_index_count; i++) {
+		bool texture_mapping = (((data->materials[data->material_indices[i].index].texture_id != -1) && data->attributes.texture_mapping) || pass_state);
+
+		if (texture_mapping) {
+			GSSURFACE *cur_tex = NULL;
+			switch (pass_state) {
+				case 1: // bump map 
+					cur_tex = data->textures[data->materials[data->material_indices[i].index].bump_texture_id];
+					break;
+				case 2: // decal
+					cur_tex = data->textures[data->materials[data->material_indices[i].index].decal_texture_id];
+					break;
+				default: 
+					cur_tex = data->textures[data->materials[data->material_indices[i].index].texture_id];
+			}
+
+			if (cur_tex != tex) {
+				texture_id = texture_manager_bind(gsGlobal, cur_tex, true);
+				tex = cur_tex;
+			}
+		}
+
+		VECTOR* positions = &data->positions[last_index+1];
+		VECTOR* texcoords = texture_mapping? &data->texcoords[last_index+1] : NULL;
+		VECTOR* normals = &data->normals[last_index+1];
+		VECTOR* colours = &data->colours[last_index+1];
+		vertex_skin_data* skin_data = data->skin_data? &data->skin_data[last_index+1] : NULL;
+
+		int idxs_to_draw = (data->material_indices[i].end-last_index);
+		int idxs_drawn = 0;
+
+		while (idxs_to_draw > 0) {
+			owl_query_packet(CHANNEL_VIF1, texture_mapping? 21 : 11);
+
+			int count = batch_size;
+			if (idxs_to_draw < batch_size)
+			{
+				count = idxs_to_draw;
+			}
+			if (texture_mapping) {
+				append_texture_tags(packet, tex, texture_id, COLOR_MODULATE);
+			}
+
+			bake_giftags(packet, data, texture_mapping, i);
+			
+			owl_add_unpack_data_ref(packet, 1, (void*)&data->materials[data->material_indices[i].index].diffuse, 1, 1);
+
+			if (data->skin_data) 
+				owl_add_unpack_data_ref(packet, 2, &skin_data[idxs_drawn], count*2, 1);
+
+			owl_add_unpack_data_ref(packet, 2+batch_size*(data->skin_data? 2 : 0), &positions[idxs_drawn], count, 1);
+			owl_add_unpack_data_ref(packet, 2+batch_size*(data->skin_data? 3 : 1), &normals[idxs_drawn], count, 1);
+			owl_add_unpack_data_ref(packet, 2+batch_size*(data->skin_data? 4 : 2), &colours[idxs_drawn], count, 1);
+
+			if (texcoords) 
+				owl_add_unpack_data_ref(packet, 2+batch_size*(data->skin_data? 5 : 3), &texcoords[idxs_drawn], count, 1);
+
+			owl_add_cnt_tag(packet, texture_mapping? 5 : 1, owl_vif_code_double(VIF_CODE(0, 0, VIF_NOP, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
+
+			if (texture_mapping) {
+				owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));
+				owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+				owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+				owl_add_uint(packet, VIF_CODE(3, 0, VIF_DIRECT, 0)); 
+
+				owl_add_tag(packet, GIF_AD, GIFTAG(2, 1, 0, 0, 0, 1));
+
+				int tw, th;
+				athena_set_tw_th(tex, &tw, &th);
+
+				owl_add_tag(packet, 
+					GS_TEX0_1+gsGlobal->PrimContext, 
+					GS_SETREG_TEX0((tex->Vram & ~TRANSFER_REQUEST_MASK)/256, 
+								  tex->TBW, 
+								  tex->PSM,
+								  tw, th, 
+								  gsGlobal->PrimAlphaEnable, 
+								  COLOR_MODULATE,
+								  (tex->VramClut & ~TRANSFER_REQUEST_MASK)/256, 
+								  tex->ClutPSM, 
+								  0, 0, 
+								  tex->VramClut? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD)
+				);
+
+				owl_add_tag(packet, GS_TEX1_1+gsGlobal->PrimContext, GS_SETREG_TEX1(1, 0, tex->Filter, tex->Filter, 0, 0, 0));
+			}
+			
+			owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+			owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+			owl_add_uint(packet, VIF_CODE(count, 0, VIF_ITOP, 0));
+			owl_add_uint(packet, VIF_CODE(mpg_addr, 0, (last_index == -1? VIF_MSCALF : VIF_MSCNT), 0)); 
+
+			idxs_to_draw -= count;
+			idxs_drawn += count;
+		}
+
+		last_index = data->material_indices[i].end;
+	}
+
+	owl_query_packet(CHANNEL_VIF1, 1);
+
+	owl_add_cnt_tag(packet, 0, owl_vif_code_double(VIF_CODE(0, 0, VIF_FLUSH, 0), VIF_CODE(0, 0, VIF_FLUSH, 0)));
+}
+
+void draw_vu1_with_lights_ref(athena_object_data *obj, int pass_state) {
+	athena_render_data *data = obj->data;
+
+	int batch_size = BATCH_SIZE, mpg_addr = 0;
+
+	if (data->skeleton) {
+		batch_size = BATCH_SIZE_SKINNED;
+
+		process_animation(obj);
+
+		update_bone_transforms(obj);
+
+		mpg_addr = vu_mpg_preload(vu1_lights_reflection, true);
+	} else {
+		mpg_addr = vu_mpg_preload(vu1_lights_reflection, true);
+	}
 		
-			dma_packet_add_tag(&attr_packet, 
-			                   DRAW_STQ2_REGLIST, 
-							   VU_GS_GIFTAG(count, 
-							                1, NO_CUSTOM_DATA, 1, 
-											VU_GS_PRIM(m->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE, 
-													   m->attributes.shade_model, texture_mapping, 
-													   gsGlobal->PrimFogEnable, 
-													   gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 0, 0, 0),
-    		    							0, 3)
-								);
+	
 
-			union {
-				VECTOR v;
-				__uint128_t q;
-			} diffuse;
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 16); // 5 for unpack static data + 2 for flush with end
 
-			__asm volatile ( 	
-				"lq    $7,0x0(%1)\n"
-				"sq    $7,0x0(%0)\n"
-				 : : "r" (&diffuse), "r" (m->materials[m->material_indices[i].index].diffuse):"$7","memory");
+	owl_add_cnt_tag(packet, 0, owl_vif_code_double(VIF_CODE(0, 0, VIF_FLUSHE, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
 
-			dma_packet_add_uquad(&attr_packet, diffuse.q);
+	owl_add_unpack_data_cnt(packet, 0, 1, 0);
+	owl_add_uquad_ptr(packet, &screen_scale);
 
-			dma_packet_create(&draw_packet, vif_packets[context], 0);
+	owl_add_unpack_data_cnt(packet, 1, 4, 0);
+	owl_add_uquad_ptr(packet, &(world_screen[0]));
+	owl_add_uquad_ptr(packet, &(world_screen[4]));
+	owl_add_uquad_ptr(packet, &(world_screen[8]));
+	owl_add_uquad_ptr(packet, &(world_screen[12]));
 
-			if (texture_mapping) {
-				append_texture_tags(&draw_packet, tex, COLOR_MODULATE);
-			}
+	owl_add_unpack_data_cnt(packet, 5, 4, 0);
+	owl_add_uquad_ptr(packet, &(obj->transform[0]));
+	owl_add_uquad_ptr(packet, &(obj->transform[4]));
+	owl_add_uquad_ptr(packet, &(obj->transform[8]));
+	owl_add_uquad_ptr(packet, &(obj->transform[12]));
 
-			unpack_list_open(&draw_packet, 0, true);
-			{
-				unpack_list_append(&draw_packet, attr_packet.base, 2);
-				unpack_list_append(&draw_packet, &positions[idxs_drawn], count);
-				if (texcoords) 
-					unpack_list_append(&draw_packet, &texcoords[idxs_drawn], count);
-			}
-			unpack_list_close(&draw_packet);
+	owl_add_unpack_data_cnt(packet, 9, 1, 0);
+	owl_add_uquad_ptr(packet, getCameraPosition());
 
-			dma_packet_start_program(&draw_packet, last_index == -1);
-			dma_packet_add_end_tag(&draw_packet);
-
-			dma_packet_send(&draw_packet, DMA_CHANNEL_VIF1);
-
-			dma_packet_destroy(&draw_packet);
-
-			idxs_to_draw -= count;
-			idxs_drawn += count;
-		}
-
-		last_index = m->material_indices[i].end;
+	if (obj->bone_matrices) {
+		owl_add_unpack_data_ref(packet, 141, (void*)obj->bone_matrices, data->skeleton->bone_count*4, 0);
 	}
 
-	context = !context;
-}
-
-void draw_vu1_with_lights(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z) {
-	if (m->attributes.accurate_clipping)
-		update_vu_program(VU1Draw3DLCS);
-	else
-		update_vu_program(VU1Draw3DLightsColors);
-
-	gsGlobal->PrimAAEnable = GS_SETTING_ON;
-	gsKit_set_test(gsGlobal, GS_ZTEST_ON);
-
-	VECTOR object_position = { pos_x, pos_y, pos_z, 1.00f };
-	VECTOR object_rotation = { rot_x, rot_y, rot_z, 1.00f };
-
-	MATRIX local_world;
-	MATRIX local_light;
-	MATRIX local_screen;
-
-  	// Create the local_world matrix.
-  	matrix_unit(local_world);
-  	matrix_rotate(local_world, local_world, object_rotation);
-  	matrix_translate(local_world, local_world, object_position);
-
-  	// Create the local_light matrix.
-  	matrix_unit(local_light);
-  	matrix_rotate(local_light, local_light, object_rotation);
-
-  	// Create the local_screen matrix.
-  	matrix_unit(local_screen);
-
-  	matrix_multiply(local_screen, local_screen, local_world);
-  	matrix_multiply(local_screen, local_screen, world_view);
-  	matrix_multiply(local_screen, local_screen, view_screen);
-
-	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
-
-	dma_packet_create(&draw_packet, vif_packets[context], 0);
-
-	unpack_list_open(&draw_packet, 0, false);
-	{
-		unpack_list_append(&draw_packet, &screen_scale,       1);
-
-		unpack_list_append(&draw_packet, &local_screen,       4);
-		unpack_list_append(&draw_packet, &local_light,        4);
-
-		static FIVECTOR camera_pos_light_qt; // xyz for camera position and w for directional light quantity
-
-		memcpy(&camera_pos_light_qt, getCameraPosition(), sizeof(FIVECTOR));
-		camera_pos_light_qt.w = active_dir_lights;
-
-		unpack_list_append(&draw_packet, &camera_pos_light_qt, 1);
-		unpack_list_append(&draw_packet, &dir_lights,        16);
-	}
-	unpack_list_close(&draw_packet);
-
-	dma_packet_add_end_tag(&draw_packet);
-
-	dma_packet_send(&draw_packet, DMA_CHANNEL_VIF1);
-
-	dma_packet_destroy(&draw_packet);
-
-	dma_packet_create(&attr_packet, cube_packet, 0);
+	//owl_add_end_tag(packet);
 
 	int last_index = -1;
-	GSTEXTURE* tex = NULL;
-	for(int i = 0; i < m->material_index_count; i++) {
-		bool texture_mapping = ((m->materials[m->material_indices[i].index].texture_id != -1) && m->attributes.texture_mapping);
+	GSSURFACE* tex = NULL;
+	int texture_id;
+	for(int i = 0; i < data->material_index_count; i++) {
+		bool texture_mapping = ((data->materials[data->material_indices[i].index].ref_texture_id != -1));
 
 		if (texture_mapping) {
-			GSTEXTURE *cur_tex = m->textures[m->materials[m->material_indices[i].index].texture_id];
+			GSSURFACE *cur_tex = data->textures[data->materials[data->material_indices[i].index].ref_texture_id];
 			if (cur_tex != tex) {
-				gsKit_TexManager_bind(gsGlobal, cur_tex);
+				texture_id = texture_manager_bind(gsGlobal, cur_tex, true);
 				tex = cur_tex;
 			}
+		} else {
+			continue;
 		}
 
-		VECTOR* positions = &m->positions[last_index+1];
-		VECTOR* texcoords = texture_mapping? &m->texcoords[last_index+1] : NULL;
-		VECTOR* normals = &m->normals[last_index+1];
+		VECTOR* positions = &data->positions[last_index+1];
+		VECTOR* normals = &data->normals[last_index+1];
+		VECTOR* colours = &data->colours[last_index+1];
+		vertex_skin_data* skin_data = data->skin_data? &data->skin_data[last_index+1] : NULL;
 
-		int idxs_to_draw = (m->material_indices[i].end-last_index);
+		int idxs_to_draw = (data->material_indices[i].end-last_index);
 		int idxs_drawn = 0;
 
 		while (idxs_to_draw > 0) {
-			dmaKit_wait(DMA_CHANNEL_VIF1, 0);
+			owl_query_packet(CHANNEL_VIF1, texture_mapping? 21 : 11);
 
-			int count = BATCH_SIZE;
-			if (idxs_to_draw < BATCH_SIZE)
+			int count = batch_size;
+			if (idxs_to_draw < batch_size)
 			{
 				count = idxs_to_draw;
 			}
 
-			dma_packet_reset(&attr_packet);
+			if (texture_mapping) {
+				append_texture_tags(packet, tex, texture_id, COLOR_MODULATE);
+			}
 
-			dma_packet_add_tag(&attr_packet, 
-			                   DRAW_STQ2_REGLIST, 
-							   VU_GS_GIFTAG(count, 
-							                1, NO_CUSTOM_DATA, 1, 
-											VU_GS_PRIM(m->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE, 
-													   m->attributes.shade_model, texture_mapping, 
-													   gsGlobal->PrimFogEnable, 
-													   gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 0, 0, 0),
-    		    							0, 3)
-								);
+			bake_giftags(packet, data, texture_mapping, i);
+			
+			owl_add_unpack_data_ref(packet, 1, (void*)&data->materials[data->material_indices[i].index].diffuse, 1, 1);
 
-			union {
-				VECTOR v;
-				__uint128_t q;
-			} diffuse;
+			if (data->skin_data) {
+				// unpack_list_append(packet, &skin_data[idxs_drawn], count*2);
+			}
 
-			__asm volatile ( 	
-				"lq    $7,0x0(%1)\n"
-				"sq    $7,0x0(%0)\n"
-				 : : "r" (&diffuse), "r" (m->materials[m->material_indices[i].index].diffuse):"$7","memory");
+			owl_add_unpack_data_ref(packet, 2,                &positions[idxs_drawn], count, 1);
+			owl_add_unpack_data_ref(packet, 2+batch_size,     &normals[idxs_drawn], count, 1);
+			owl_add_unpack_data_ref(packet, 2+(batch_size*2), &colours[idxs_drawn], count, 1);
 
-			dma_packet_add_uquad(&attr_packet, diffuse.q);
-
-			dma_packet_create(&draw_packet, vif_packets[context], 0);
+			owl_add_cnt_tag(packet, texture_mapping? 5 : 1, owl_vif_code_double(VIF_CODE(0, 0, VIF_NOP, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
 
 			if (texture_mapping) {
-				append_texture_tags(&draw_packet, tex, COLOR_MODULATE);
+				owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));
+				owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+				owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+				owl_add_uint(packet, VIF_CODE(3, 0, VIF_DIRECT, 0)); 
+
+				owl_add_tag(packet, GIF_AD, GIFTAG(2, 1, 0, 0, 0, 1));
+
+				int tw, th;
+				athena_set_tw_th(tex, &tw, &th);
+
+				owl_add_tag(packet, 
+					GS_TEX0_1+gsGlobal->PrimContext, 
+					GS_SETREG_TEX0((tex->Vram & ~TRANSFER_REQUEST_MASK)/256, 
+								  tex->TBW, 
+								  tex->PSM,
+								  tw, th, 
+								  gsGlobal->PrimAlphaEnable, 
+								  COLOR_MODULATE,
+								  (tex->VramClut & ~TRANSFER_REQUEST_MASK)/256, 
+								  tex->ClutPSM, 
+								  0, 0, 
+								  tex->VramClut? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD)
+				);
+
+				owl_add_tag(packet, GS_TEX1_1+gsGlobal->PrimContext, GS_SETREG_TEX1(1, 0, tex->Filter, tex->Filter, 0, 0, 0));
 			}
-
-			uint64_t clipfan_tag[2] = {  
-						VU_GS_GIFTAG(11, 1, NULL, 1, 
-							VU_GS_PRIM(GS_PRIM_PRIM_TRIFAN, m->attributes.shade_model, texture_mapping, gsGlobal->PrimFogEnable, gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 0, 0, 0), 
-						0, 3) ,
-						DRAW_STQ2_REGLIST
-			};
-
-			vu_add_unpack_data(&draw_packet, 26, clipfan_tag, 1, 0);
-
-			unpack_list_open(&draw_packet, 0, true);
-			{
-				unpack_list_append(&draw_packet, attr_packet.base, 2);
-				unpack_list_append(&draw_packet, &positions[idxs_drawn], count);
-				unpack_list_append(&draw_packet, &normals[idxs_drawn], count);
-				if (texcoords) 
-					unpack_list_append(&draw_packet, &texcoords[idxs_drawn], count);
-			}
-			unpack_list_close(&draw_packet);
-
-			dma_packet_start_program(&draw_packet, last_index == -1);
-			dma_packet_add_end_tag(&draw_packet);
-
-			dma_packet_send(&draw_packet, DMA_CHANNEL_VIF1);
-
-			dma_packet_destroy(&draw_packet);
+			
+			owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));
+			owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
+			owl_add_uint(packet, VIF_CODE(count, 0, VIF_ITOP, 0));
+			owl_add_uint(packet, VIF_CODE(mpg_addr, 0, (last_index == -1? VIF_MSCALF : VIF_MSCNT), 0)); 
 
 			idxs_to_draw -= count;
 			idxs_drawn += count;
+			
 		}
 
-		last_index = m->material_indices[i].end;
+		last_index = data->material_indices[i].end;
 	}
 
-	context = !context;
-}
+	owl_query_packet(CHANNEL_VIF1, 1);
 
-void draw_vu1_with_spec_lights(model* m, float pos_x, float pos_y, float pos_z, float rot_x, float rot_y, float rot_z) {
-	if (m->attributes.accurate_clipping)
-		update_vu_program(VU1Draw3DLCSS);
-	else
-		update_vu_program(VU1Draw3DSpec);
-
-	gsGlobal->PrimAAEnable = GS_SETTING_ON;
-	gsKit_set_test(gsGlobal, GS_ZTEST_ON);
-
-	VECTOR object_position = { pos_x, pos_y, pos_z, 1.00f };
-	VECTOR object_rotation = { rot_x, rot_y, rot_z, 1.00f };
-
-	MATRIX local_world;
-	MATRIX local_light;
-	MATRIX local_screen;
-
-  	// Create the local_world matrix.
-  	matrix_unit(local_world);
-  	matrix_rotate(local_world, local_world, object_rotation);
-  	matrix_translate(local_world, local_world, object_position);
-
-  	// Create the local_light matrix.
-  	matrix_unit(local_light);
-  	matrix_rotate(local_light, local_light, object_rotation);
-
-  	// Create the local_screen matrix.
-  	matrix_unit(local_screen);
-
-  	matrix_multiply(local_screen, local_screen, local_world);
-  	matrix_multiply(local_screen, local_screen, world_view);
-  	matrix_multiply(local_screen, local_screen, view_screen);
-
-	dmaKit_wait(DMA_CHANNEL_VIF1, 0);
-
-	dma_packet_create(&draw_packet, vif_packets[context], 0);
-
-	screen_scale.w = *((uint32_t*)&m->attributes);
-
-	unpack_list_open(&draw_packet, 0, false);
-	{
-		unpack_list_append(&draw_packet, &screen_scale,       1);
-
-		unpack_list_append(&draw_packet, &local_screen,       4);
-		unpack_list_append(&draw_packet, &local_light,        4);
-
-		static FIVECTOR camera_pos_light_qt; // xyz for camera position and w for directional light quantity
-
-		memcpy(&camera_pos_light_qt, getCameraPosition(), sizeof(FIVECTOR));
-		camera_pos_light_qt.w = active_dir_lights;
-
-		unpack_list_append(&draw_packet, &camera_pos_light_qt, 1);
-		unpack_list_append(&draw_packet, &dir_lights,         16);
-	}
-	unpack_list_close(&draw_packet);
-
-	dma_packet_add_end_tag(&draw_packet);
-
-	dma_packet_send(&draw_packet, DMA_CHANNEL_VIF1);
-
-	dma_packet_destroy(&draw_packet);
-
-	dma_packet_create(&attr_packet, cube_packet, 0);
-
-	int last_index = -1;
-	GSTEXTURE* tex = NULL;
-	for(int i = 0; i < m->material_index_count; i++) {
-		bool texture_mapping = ((m->materials[m->material_indices[i].index].texture_id != -1) && m->attributes.texture_mapping);
-
-		if (texture_mapping) {
-			GSTEXTURE *cur_tex = m->textures[m->materials[m->material_indices[i].index].texture_id];
-			if (cur_tex != tex) {
-				gsKit_TexManager_bind(gsGlobal, cur_tex);
-				tex = cur_tex;
-			}
-		}
-
-		VECTOR* positions = &m->positions[last_index+1];
-		VECTOR* texcoords = texture_mapping? &m->texcoords[last_index+1] : NULL;
-		VECTOR* normals = &m->normals[last_index+1];
-
-		int idxs_to_draw = (m->material_indices[i].end-last_index);
-		int idxs_drawn = 0;
-
-		while (idxs_to_draw > 0) {
-			dmaKit_wait(DMA_CHANNEL_VIF1, 0);
-
-			int count = BATCH_SIZE;
-			if (idxs_to_draw < BATCH_SIZE)
-			{
-				count = idxs_to_draw;
-			}
-
-			dma_packet_reset(&attr_packet);
-
-			dma_packet_add_tag(&attr_packet, 
-			                   DRAW_STQ2_REGLIST, 
-							   VU_GS_GIFTAG(count, 
-							                1, NO_CUSTOM_DATA, 1, 
-											VU_GS_PRIM(m->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE, 
-													   m->attributes.shade_model, texture_mapping, 
-													   gsGlobal->PrimFogEnable, 
-													   gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 0, 0, 0),
-    		    							0, 3)
-								);
-
-			union {
-				VECTOR v;
-				__uint128_t q;
-			} diffuse;
-
-			__asm volatile ( 	
-				"lq    $7,0x0(%1)\n"
-				"sq    $7,0x0(%0)\n"
-				 : : "r" (&diffuse), "r" (m->materials[m->material_indices[i].index].diffuse):"$7","memory");
-
-			dma_packet_add_uquad(&attr_packet, diffuse.q);
-
-			dma_packet_create(&draw_packet, vif_packets[context], 0);
-
-			if (texture_mapping) {
-				append_texture_tags(&draw_packet, tex, COLOR_MODULATE);
-			}
-
-			uint64_t clipfan_tag[2] = {  
-						VU_GS_GIFTAG(11, 1, NULL, 1, 
-							VU_GS_PRIM(GS_PRIM_PRIM_TRIFAN, m->attributes.shade_model, texture_mapping, gsGlobal->PrimFogEnable, gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 0, 0, 0), 
-						0, 3) ,
-						DRAW_STQ2_REGLIST
-			};
-
-			vu_add_unpack_data(&draw_packet, 26, clipfan_tag, 1, 0);
-
-			unpack_list_open(&draw_packet, 0, true);
-			{
-				unpack_list_append(&draw_packet, attr_packet.base, 2);
-				unpack_list_append(&draw_packet, &positions[idxs_drawn], count);
-				unpack_list_append(&draw_packet, &normals[idxs_drawn], count);
-				if (texcoords) 
-					unpack_list_append(&draw_packet, &texcoords[idxs_drawn], count);
-			}
-			unpack_list_close(&draw_packet);
-
-			dma_packet_start_program(&draw_packet, last_index == -1);
-			dma_packet_add_end_tag(&draw_packet);
-
-			dma_packet_send(&draw_packet, DMA_CHANNEL_VIF1);
-
-			dma_packet_destroy(&draw_packet);
-
-			idxs_to_draw -= count;
-			idxs_drawn += count;
-		}
-
-		last_index = m->material_indices[i].end;
-	}
-
-	context = !context;
+	owl_add_cnt_tag(packet, 0, owl_vif_code_double(VIF_CODE(0, 0, VIF_FLUSH, 0), VIF_CODE(0, 0, VIF_FLUSH, 0)));
 }

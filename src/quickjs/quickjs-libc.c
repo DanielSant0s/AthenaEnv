@@ -43,12 +43,14 @@
 #include <sys/ioctl.h>
 #include <sys/wait.h>
 
-#include "../include/graphics.h"
-#include "../ath_env.h"
+#include <graphics.h>
+#include <ath_env.h>
 
 #include "cutils.h"
 #include "list.h"
 #include "quickjs-libc.h"
+
+#include <erl.h>
 
 /* TODO:
    - add socket calls
@@ -455,9 +457,31 @@ static JSValue js_std_loadFile(JSContext *ctx, JSValueConst this_val,
 typedef JSModuleDef *(JSInitModuleFunc)(JSContext *ctx,
                                         const char *module_name);
 
-static JSModuleDef *js_module_loader_so(JSContext *ctx,
-                                        const char *module_name)
+typedef JSModuleDef *(*extern_loader_function)(JSContext* ctx);
+
+static JSModuleDef *js_module_loader_erl(JSContext *ctx, const char *module_name)
 {
+  	struct erl_record_t *erl = _init_load_erl_from_file(module_name, 0);
+    
+
+	if (erl) {
+        struct symbol_t *symbol = erl_find_local_symbol("js_init_module", erl);
+		if (symbol) {
+            extern_loader_function load_extern_module = symbol->address;
+
+            JSModuleDef *m = load_extern_module(ctx);
+
+            if (!m) {
+                JS_ThrowReferenceError(ctx, "could not load module filename '%s': initialization error",
+                                       module_name);
+
+                return NULL;
+            }
+
+            return m;
+        }
+    }
+    
     return NULL;
 }
 
@@ -519,8 +543,8 @@ JSModuleDef *js_module_loader(JSContext *ctx,
 {
     JSModuleDef *m;
 
-    if (has_suffix(module_name, ".so")) {
-        m = js_module_loader_so(ctx, module_name);
+    if (has_suffix(module_name, ".erl")) {
+        m = js_module_loader_erl(ctx, module_name);
     } else {
         size_t buf_len;
         uint8_t *buf;
@@ -669,6 +693,10 @@ static JSValue js_std_gc(JSContext *ctx, JSValueConst this_val,
 {
     JS_RunGC(JS_GetRuntime(ctx));
     return JS_UNDEFINED;
+}
+
+static JSValue js_std_refcount(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    return JS_NewUint32(ctx, JS_GetRefCount(ctx, argv[0])-1);
 }
 
 static int interrupt_handler(JSRuntime *rt, void *opaque)
@@ -832,6 +860,8 @@ static JSValue js_std_exists(JSContext *ctx, JSValueConst this_val,
 
     if (!f)
         return JS_NewBool(ctx, FALSE);
+
+    fclose(f);
 
     return JS_NewBool(ctx, TRUE);
 
@@ -1275,6 +1305,7 @@ static const JSCFunctionListEntry js_std_error_props[] = {
 static const JSCFunctionListEntry js_std_funcs[] = {
     JS_CFUNC_DEF("exit", 1, js_std_exit ),
     JS_CFUNC_DEF("gc", 0, js_std_gc ),
+    JS_CFUNC_DEF("getRefCount", 0, js_std_refcount ),
     JS_CFUNC_DEF("evalScript", 1, js_evalScript ),
     JS_CFUNC_DEF("loadScript", 1, js_loadScript ),
     JS_CFUNC_DEF("reload", 1, js_reload ),
@@ -3576,9 +3607,15 @@ void js_std_promise_rejection_tracker(JSContext *ctx, JSValueConst promise,
 /* main loop which calls the user JS callbacks */
 
 static JSValueConst render_loop_func = JS_UNDEFINED;
+static JSValueConst global_obj_ref = JS_UNDEFINED;
 static uint64_t clear_color = GS_SETREG_RGBAQ(0x00, 0x00, 0x00, 0x80, 0x00);
 
-void js_set_render_loop_func(JSValueConst func) {
+void js_set_render_loop_func(JSContext *ctx, JSValueConst func) {
+    if (func == JS_UNDEFINED || func == JS_NULL) {
+        js_destroy_render_loop(ctx);
+        return;
+    }
+
     render_loop_func = func;
 }
 
@@ -3622,8 +3659,9 @@ void js_delete_input_event(int id) {
 }
 
 void js_destroy_render_loop(JSContext *ctx) {
-    if (render_loop_func != JS_UNDEFINED)
+    if (render_loop_func != JS_UNDEFINED) {
         JS_FreeValue(ctx, render_loop_func);
+    }
 
     render_loop_func = JS_UNDEFINED;
 }
