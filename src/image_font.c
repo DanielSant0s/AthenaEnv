@@ -173,13 +173,8 @@ static void render_font_char_glyph(GSFONT *gsFont, unsigned char c, owl_packet *
 	u2 = u1 + (float)charsiz;
 	v2 = v1 + (float)gsFont->CharHeight;
 
-	owl_add_tag(packet, 0, GS_SETREG_STQ( owl_uv_transform(u1, 1024), owl_uv_transform(v1, 1024) << 4 ));
-
-	owl_add_tag(packet, 1, (uint64_t)(owl_coord_transform(x1, gsGlobal->OffsetX)) | ((uint64_t)(owl_coord_transform(y1, gsGlobal->OffsetY)) << 32));
-
-	owl_add_tag(packet, 0, GS_SETREG_STQ( owl_uv_transform(u2, 1024), owl_uv_transform(v2, 1024) << 4 ));
-
-	owl_add_tag(packet, 1, (uint64_t)(owl_coord_transform(x2, gsGlobal->OffsetX)) | ((uint64_t)(owl_coord_transform(y2, gsGlobal->OffsetY)) << 32));
+	owl_add_tag(packet, (uint64_t)(owl_coord_transform(x1, gsGlobal->OffsetX)) | ((uint64_t)(owl_coord_transform(y1, gsGlobal->OffsetY)) << 16), GS_SETREG_UV( owl_uv_transform(u1, 1024), owl_uv_transform(v1, 1024)));
+	owl_add_tag(packet, (uint64_t)(owl_coord_transform(x2, gsGlobal->OffsetX)) | ((uint64_t)(owl_coord_transform(y2, gsGlobal->OffsetY)) << 16), GS_SETREG_UV( owl_uv_transform(u2, 1024), owl_uv_transform(v2, 1024)));
 }
 
 void athena_font_print_scaled(GSCONTEXT *gsGlobal, GSFONT *gsFont, float X, float Y, int Z,
