@@ -260,6 +260,7 @@ extern const int16_t OWL_XYOFFSET_FIXED[8] qw_aligned;
 extern const uint16_t OWL_XYMAX_FIXED[8] qw_aligned;
 
 extern const float XYUV_MAX_FLOAT[4] qw_aligned;
+extern const float OWL_XYOFFSET_FLOAT[4] qw_aligned;
 
 inline void owl_add_uv(owl_packet *packet, int u, int v) { // each call increases 8 bytes in pointer
 	asm volatile ( 	
@@ -376,59 +377,6 @@ inline void owl_add_xy_uv(owl_packet *packet, int x1, int y1, int u1, int v1) {
          : "$7", "$8", "$9", "memory");
 }
 
-inline void vu0_ftoi4_clamp_8x(float values[8], int results[8], float max_clamps[4]) {
-    __asm__ volatile (
-        "lqc2    $vf1, 0(%1)\n"     
-        "lqc2    $vf2, 16(%1)\n" 
-
-        "lqc2    $vf3, 0(%2)\n"  
-        
-        "vmax.xyzw $vf1, $vf1, $vf0\n"
-        "vmax.xyzw $vf2, $vf2, $vf0\n"
-
-        "vmini.xyzw $vf1, $vf1, $vf3\n"
-        "vmini.xyzw $vf2, $vf2, $vf3\n"
-
-        "vftoi4.xyzw $vf4, $vf1\n"  
-        "vftoi4.xyzw $vf5, $vf2\n"  
-
-        "sqc2    $vf4, 0(%0)\n"     
-        "sqc2    $vf5, 16(%0)\n"    
-        : 
-        : "r" (results), "r" (values), "r" (max_clamps)
-        : "memory"
-    );
-}
-
-inline void owl_add_xy_uv_2x_font(owl_packet *packet, int x1, int y1, int u1, int v1, int x2, int y2, int u2, int v2) {
-	asm volatile ( 	
-        "lq      $8, %[xyoffset] \n"
-        
-        "pcpyld $7, %[xy2], %[xy1]    \n" // upper: x1, y1 - lower: x2, y2
-        "paddsh $7, $7, $8    \n" // Add XYOFFSET
-
-        "pcpyld  $9, %[uv2], %[uv1]   \n" // upper: u1, v1 - lower: u2, v2
-
-        //"psllh  $9, $9, 4     \n"  // ftoi4 - convert UVs to 12:4
-
-        "pcpyld  $8, $7, $9   \n" // upper: u1, v1 - lower: x1, y1
-        "pcpyud  $7, $9, $7   \n" // upper: u2, u2 - lower: x2, y2
-
-        "sq    $8, 0x00(%[ptr])    \n"
-		"sq    $7, 0x10(%[ptr])    \n"
-
-        "daddiu   %0, %0, 0x20    \n" // packet->ptr += 2;
-		 : [ptr] "+r" (packet->ptr) : 
-            [xy1] "r"  (((union { int16_t coors[2]; uint32_t w; }){ .coors = {x1, y1} }).w),
-            [xy2] "r"  (((union { int16_t coors[2]; uint32_t w; }){ .coors = {x2, y2} }).w),
-            [uv1] "r"  (((union { int16_t coors[2]; uint32_t w; }){ .coors = {u1, v1} }).w),
-            [uv2] "r"  (((union { int16_t coors[2]; uint32_t w; }){ .coors = {u2, v2} }).w),
-            [xyoffset] "m" (OWL_XYOFFSET_FIXED)
-         : "$7", "$8", "$9", "memory");
-}
-
-
-
 inline void owl_add_rgba_xy(owl_packet *packet, uint64_t rgba, int x, int y) {
 	asm volatile ( 	
         "lq      $8, %[xyoffset] \n"
@@ -461,6 +409,37 @@ inline void owl_add_color(owl_packet *packet, uint64_t color) {
 	     : : "r" (packet->ptr), "r" (color):"$7", "memory");
 
     packet->ptr++;
+}
+
+// took from gsKit (plans for VU0)
+
+inline int owl_uv_transform(float fuv, int imax)
+{
+	int iuv = (int)(fuv * 16.0f);
+
+	if (iuv < 0)
+		iuv = 0;
+
+	if (iuv > imax*16)
+		iuv = imax*16;
+
+	if (iuv >= (1024 * 16))
+		iuv = (1024 * 16) - 1;
+
+	return iuv;
+}
+
+inline int owl_coord_transform(float fxy, int offset)
+{
+	int ixy = (int)(fxy * 16.0f) + offset;
+
+	if (ixy < 0)
+		ixy = 0;
+
+	if (ixy >= (4096 * 16))
+		ixy = (4096 * 16) - 1;
+
+	return ixy;
 }
 
 #endif

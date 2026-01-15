@@ -2,6 +2,7 @@
 
 IOP.reset();
 
+IOP.loadModule("padman");
 IOP.loadModule("SMAP");
 
 Network.init();
@@ -11,7 +12,7 @@ font.scale = 0.7;
 
 var nw_config = Network.getConfig();
 
-var s = new Socket(AF_INET, SOCK_STREAM);
+var s = new Socket(Socket.AF_INET, Socket.SOCK_STREAM);
 
 const host = Network.getHostbyName("www.google.com");
 
@@ -23,7 +24,7 @@ const msg = s.recv(1024);
 console.log(msg);
 s.close();
 
-for(var i = 0; i < 1250; i++){
+for (var i = 0; i < 1250; i++) {
     Screen.clear();
     font.print(5, 250, "IP Address: " + nw_config.ip);
     font.print(5, 265, "Netmask: " + nw_config.netmask);

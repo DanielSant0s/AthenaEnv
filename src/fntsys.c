@@ -512,11 +512,13 @@ void fntRenderGlyph(fnt_glyph_cache_entry_t *glyph, owl_packet *packet, int pen_
     u2 = glyph->allocation->x + glyph->width + 0.5f;
     v2 = glyph->allocation->y + glyph->height + 0.5f;
 
-    float float_pos[8] = { x1, y1, u1, v1, x2, y2, u2, v2 };
-    int fixed_pos[8];
-    vu0_ftoi4_clamp_8x(float_pos, fixed_pos, XYUV_MAX_FLOAT);
+	owl_add_tag(packet, 0, GS_SETREG_STQ( owl_uv_transform(u1, 1024), owl_uv_transform(v1, 1024) << 4 ));
 
-    owl_add_xy_uv_2x_font(packet, fixed_pos[0], fixed_pos[1], fixed_pos[2], fixed_pos[3], fixed_pos[4], fixed_pos[5], fixed_pos[6], fixed_pos[7]);
+	owl_add_tag(packet, 1, (uint64_t)(owl_coord_transform(x1, gsGlobal->OffsetX)) | ((uint64_t)(owl_coord_transform(y1, gsGlobal->OffsetY)) << 32));
+
+	owl_add_tag(packet, 0, GS_SETREG_STQ( owl_uv_transform(u2, 1024), owl_uv_transform(v2, 1024) << 4 ));
+
+	owl_add_tag(packet, 1, (uint64_t)(owl_coord_transform(x2, gsGlobal->OffsetX)) | ((uint64_t)(owl_coord_transform(y2, gsGlobal->OffsetY)) << 32));
 }
 
 #ifndef __RTL  
