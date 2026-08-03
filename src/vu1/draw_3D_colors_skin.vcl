@@ -83,19 +83,24 @@ culled_init:
     vertexLoop:
 
         ;////////// --- Load loop data --- //////////
-        lq inVert,  SKINNED_POSITION_OFFSET(iBase)   
-        lq inColor, SKINNED_COLOR_OFFSET(iBase)    
-        lq stq,     SKINNED_TEXCOORD_OFFSET(iBase)       
-        ;////////////////////////////////////////////    
+        lq inVert,  SKINNED_POSITION_OFFSET(iBase)
+        DecompressPositionW inVert
+
+        lq inColorPacked, SKINNED_COLOR_OFFSET(iBase)
+        DecompressColor8 inColor, inColorPacked
+
+        lq stqPacked, SKINNED_TEXCOORD_OFFSET(iBase)
+        DecompressUV16 stq, stqPacked
+        ;////////////////////////////////////////////
 
         iaddiu  currentWeight, vi00, 4
 
-        lq boneIndices,    SKINNED_SKELETON_OFFSET(skinData) 
-        lq boneWeights,    SKINNED_SKELETON_OFFSET+1(skinData) 
+        lq boneIndices,    SKINNED_SKELETON_OFFSET(skinData)
+        lq boneWeights,    SKINNED_SKELETON_OFFSET+1(skinData)
 
         move final_vertex, vf00
 
-        skinWeightLoop_cull: 
+        skinWeightLoop_cull:
             mtir           boneIndex, boneIndices[x]
 
             MatrixLoad	BoneMatrix, BONE_MATRICES, boneIndex
@@ -224,19 +229,24 @@ init:
 
     loop:
         ;////////// --- Load loop data --- //////////
-        lq inVert,  SKINNED_POSITION_OFFSET(iBase)   
-        lq inColor, SKINNED_COLOR_OFFSET(iBase)    
-        lq stq,     SKINNED_TEXCOORD_OFFSET(iBase)       
-        ;////////////////////////////////////////////    
+        lq inVert,  SKINNED_POSITION_OFFSET(iBase)
+        DecompressPositionW inVert
+
+        lq inColorPacked, SKINNED_COLOR_OFFSET(iBase)
+        DecompressColor8 inColor, inColorPacked
+
+        lq stqPacked, SKINNED_TEXCOORD_OFFSET(iBase)
+        DecompressUV16 stq, stqPacked
+        ;////////////////////////////////////////////
 
         iaddiu  currentWeight, vi00, 4
 
-        lq boneIndices,    SKINNED_SKELETON_OFFSET(skinData) 
-        lq boneWeights,    SKINNED_SKELETON_OFFSET+1(skinData) 
+        lq boneIndices,    SKINNED_SKELETON_OFFSET(skinData)
+        lq boneWeights,    SKINNED_SKELETON_OFFSET+1(skinData)
 
         move final_vertex, vf00
 
-        skinWeightLoop: 
+        skinWeightLoop:
             mtir           boneIndex, boneIndices[x]
 
             MatrixLoad	BoneMatrix, BONE_MATRICES, boneIndex

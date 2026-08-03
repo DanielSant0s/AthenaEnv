@@ -50,9 +50,13 @@ sky.height = canvas.height;
 
 const skin_anims = new AnimCollection("Twerk.gltf");
 const gltf_skin = new RenderData("Twerk.gltf");
-gltf_skin.accurate_clipping = true;
-gltf_skin.face_culling = Render.CULL_FACE_BACK;
+gltf_skin.accurate_clipping = false;
+gltf_skin.face_culling = Render.CULL_FACE_NONE;
 gltf_skin.pipeline = Render.PL_DEFAULT;
+// Skinned meshes animate via bone matrices in the VU, not by touching
+// positions/normals/etc, and this mesh isn't used with ODE trimesh
+// collision -- safe to reclaim its float source now that setup is done.
+gltf_skin.freeze();
 
 const skin_object = new RenderObject(gltf_skin);
 skin_object.rotation = {x:Math.PI/2, y:0.0, z:0.0};
@@ -92,6 +96,10 @@ scene.getTexture(0).filter = LINEAR;
 const scene_object = new RenderObject(scene);
 // ODE space for projector raycasts against the scene
 
+// NOT calling scene.freeze() here: ODE.GeomRenderObject builds its trimesh
+// collision straight off scene's positions and keeps reading that pointer
+// on every query, not just at setup -- freezing (which frees it) would
+// leave the collision geometry dangling.
 const scene_collision = ODE.GeomRenderObject(space, scene_object);
 
 const box = new RenderData("box_bump.gltf");
@@ -99,6 +107,9 @@ box.face_culling = Render.CULL_FACE_NONE;
 
 //box.getTexture(0).filter = LINEAR;
 //box.getTexture(1).filter = LINEAR;
+
+// Not used with ODE trimesh collision in this demo -- safe to freeze.
+box.freeze();
 
 const box_object = new RenderObject(box);
 box_object.position = {x:2.0, y:0.2, z:2.0};

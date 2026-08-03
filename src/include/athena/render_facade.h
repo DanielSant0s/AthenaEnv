@@ -47,6 +47,9 @@ athena_render_data *athena_render_data_native(AthenaRenderData *rd);
 
 void athena_render_data_set_pipeline(AthenaRenderData *rd, eRenderPipelines pipeline);
 eRenderPipelines athena_render_data_get_pipeline(const AthenaRenderData *rd);
+void athena_render_data_invalidate_compact_cache(AthenaRenderData *rd);
+void athena_render_data_invalidate_chain_cache(AthenaRenderData *rd);
+void athena_render_data_freeze(AthenaRenderData *rd);
 int athena_render_data_set_texture(AthenaRenderData *rd, uint32_t index, GSSURFACE *tex);
 GSSURFACE *athena_render_data_get_texture(const AthenaRenderData *rd, uint32_t index);
 uint32_t athena_render_data_push_texture(AthenaRenderData *rd, GSSURFACE *tex);

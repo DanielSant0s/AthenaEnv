@@ -43,6 +43,7 @@ typedef struct ath_shadow_projector {
 
     // Grid nodes and mapping (allocated with grid)
     VECTOR *nodes;               // gx*gz world-space nodes updated per frame
+    VECTOR *nodeNormals;         // gx*gz raycast hit normals, only touched when enableRaycast; same lifecycle as nodes (was alloc/free'd every shadow_projector_render() call before, which is wasteful)
     uint32_t *triNodeIdx;        // vtxCount entries mapping vertex -> node index
     int vtxCount;                // cached vertex count
 } ath_shadow_projector;

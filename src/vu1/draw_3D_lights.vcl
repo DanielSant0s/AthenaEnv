@@ -83,11 +83,18 @@ culled_init:
     vertexLoop:
 
         ;////////// --- Load loop data --- //////////
-        lq inVert,  POSITION_OFFSET(iBase) 
-        lq stq,     TEXCOORD_OFFSET(iBase)      
-        lq inNorm,  NORMAL_OFFSET(iBase)          
-        lq inColor, COLOR_OFFSET(iBase)           
-        ;////////////////////////////////////////////    
+        lq inVert,  POSITION_OFFSET(iBase)
+        DecompressPositionW inVert
+
+        lq stqPacked, TEXCOORD_OFFSET(iBase)
+        DecompressUV16 stq, stqPacked
+
+        lq inNormPacked, NORMAL_OFFSET(iBase)
+        DecompressNormal8 inNorm, inNormPacked
+
+        lq inColorPacked, COLOR_OFFSET(iBase)
+        DecompressColor8 inColor, inColorPacked
+        ;////////////////////////////////////////////
 
 
         ;////////////// --- Vertex --- //////////////
@@ -228,11 +235,18 @@ init:
     loop:
 
         ;////////// --- Load loop data --- //////////
-        lq inVert,  POSITION_OFFSET(iBase)   
-        lq stq,     TEXCOORD_OFFSET(iBase)       
-        lq inNorm,  NORMAL_OFFSET(iBase) 
-        lq inColor, COLOR_OFFSET(iBase) 
-        ;////////////////////////////////////////////    
+        lq inVert,  POSITION_OFFSET(iBase)
+        DecompressPositionW inVert
+
+        lq stqPacked, TEXCOORD_OFFSET(iBase)
+        DecompressUV16 stq, stqPacked
+
+        lq inNormPacked, NORMAL_OFFSET(iBase)
+        DecompressNormal8 inNorm, inNormPacked
+
+        lq inColorPacked, COLOR_OFFSET(iBase)
+        DecompressColor8 inColor, inColorPacked
+        ;////////////////////////////////////////////
 
 
         ;////////////// --- Vertex --- //////////////

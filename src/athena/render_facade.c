@@ -79,6 +79,21 @@ void athena_render_data_destroy(AthenaRenderData *rd)
             free(*attribute_ptrs[i]);
     }
 
+    // Compact VIF-unpack cache (render_cook_compact_vertices) -- always
+    // owned internally, never shared/borrowed like the float attributes.
+    free(rd->m.compact_positions);
+    free(rd->m.compact_normals);
+    free(rd->m.compact_colors);
+    free(rd->m.compact_uvs);
+
+    // Pre-baked DMA_CALL chains (render_build_colors_chain), one per
+    // pass_state slot -- same always-owned-internally rule as the
+    // compact_* buffers above.
+    for (int i = 0; i < 3; i++) {
+        free(rd->m.colors_chain[i].buffer);
+        free(rd->m.colors_chain[i].chunk_offset);
+    }
+
     if (rd->m.materials)
         free(rd->m.materials);
 
@@ -127,6 +142,7 @@ AthenaRenderData *athena_render_data_clone(const AthenaRenderData *src)
     rd->m.skin_data = src->m.skin_data;
     rd->m.skeleton = src->m.skeleton;
     rd->m.tristrip = src->m.tristrip;
+    rd->m.frozen = src->m.frozen;
 
     for (int i = 0; i < 4; i++)
         rd->owns_vertices[i] = false;
@@ -183,6 +199,36 @@ void athena_render_data_set_pipeline(AthenaRenderData *rd, eRenderPipelines pipe
 eRenderPipelines athena_render_data_get_pipeline(const AthenaRenderData *rd)
 {
     return rd ? rd->m.pipeline : PL_NO_LIGHTS;
+}
+
+// Call after mutating positions/normals/texcoords/colors in place (their
+// exposed ArrayBuffers) so the next draw picks up the change -- the compact
+// VU wire buffers are otherwise cached across draws for performance.
+void athena_render_data_invalidate_compact_cache(AthenaRenderData *rd)
+{
+    if (rd)
+        render_invalidate_compact_cache(&rd->m);
+}
+
+// Call after mutating materials/material_indices/texture_mapping, or
+// anything else that changes the mesh's chunk structure or the addresses
+// baked into the pre-cooked DMA_CALL chain -- see render_invalidate_chain_
+// cache()'s doc comment in render.h.
+void athena_render_data_invalidate_chain_cache(AthenaRenderData *rd)
+{
+    if (rd)
+        render_invalidate_chain_cache(&rd->m);
+}
+
+// Frees positions/normals/texcoords/colours (~64 bytes/vertex) once a mesh
+// is done being edited, keeping only the ~24 bytes/vertex compact VU wire
+// cache. Reassigning "vertices" afterward un-freezes automatically. Not for
+// meshes still needed by ODE trimesh collision or similar float-source
+// consumers.
+void athena_render_data_freeze(AthenaRenderData *rd)
+{
+    if (rd)
+        render_freeze_compact_vertices(&rd->m);
 }
 
 int athena_render_data_set_texture(AthenaRenderData *rd, uint32_t index, GSSURFACE *tex)

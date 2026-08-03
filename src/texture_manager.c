@@ -123,35 +123,40 @@ void texture_send_macroblock(u32 *mem, int width, int height, u32 tbp, u32 psm, 
 	int mb_width = width >> 4;   // Number of macroblocks in width
 	int mb_height = height >> 4; // Number of macroblocks in height
 	u8* frame_ptr = (u8*)mem;
-	
+
+	// BITBLTBUF (destination buffer) and TRXREG (transfer size) are the
+	// same for every macroblock in this texture -- the GS keeps them
+	// latched between transfers, so send them once instead of on every
+	// block. Only TRXPOS (destination x,y) and TRXDIR (transfer trigger)
+	// actually change per macroblock.
+	owl_add_cnt_tag_fill(async_upload_packet, 3);
+	owl_add_tag(async_upload_packet, GIF_AD, GIFTAG(2, 0, 0, 0, 0, 1));
+	owl_add_tag(async_upload_packet, GS_BITBLTBUF,
+		GS_SETREG_BITBLTBUF(0, 0, 0, tbp / 256, tbw, psm));
+	owl_add_tag(async_upload_packet, GS_TRXREG,
+		GS_SETREG_TRXREG(16, 16));
+
 	// Process each macroblock
 	for (int mb_y = 0; mb_y < mb_height; mb_y++) {
 		for (int mb_x = 0; mb_x < mb_width; mb_x++) {
 			int dest_x = mb_x * 16;
 			int dest_y = mb_y * 16;
-			
-			// Setup transfer: CNT tag with 5 qwords of register data
-			owl_add_cnt_tag_fill(async_upload_packet, 5);
-			
-			// GIF AD tag: 4 registers to set
-			owl_add_tag(async_upload_packet, GIF_AD, GIFTAG(4, 0, 0, 0, 0, 1));
-			
-			// Set destination buffer (VRAM address, buffer width, pixel format)
-			owl_add_tag(async_upload_packet, GS_BITBLTBUF, 
-				GS_SETREG_BITBLTBUF(0, 0, 0, tbp / 256, tbw, psm));
-			
+
+			// Setup transfer: CNT tag with 3 qwords of register data
+			owl_add_cnt_tag_fill(async_upload_packet, 3);
+
+			// GIF AD tag: 2 registers to set
+			owl_add_tag(async_upload_packet, GIF_AD, GIFTAG(2, 0, 0, 0, 0, 1));
+
 			// Set transfer position in destination (x, y in VRAM)
-			owl_add_tag(async_upload_packet, GS_TRXPOS, 
+			owl_add_tag(async_upload_packet, GS_TRXPOS,
 				GS_SETREG_TRXPOS(0, 0, dest_x, dest_y, 0));
-			
-			// Set transfer size (16x16 pixels)
-			owl_add_tag(async_upload_packet, GS_TRXREG, 
-				GS_SETREG_TRXREG(16, 16));
-			
-			// Set transfer direction (host to local = upload)
-			owl_add_tag(async_upload_packet, GS_TRXDIR, 
+
+			// Set transfer direction (host to local = upload) -- must be
+			// re-triggered for every macroblock to start its transfer
+			owl_add_tag(async_upload_packet, GS_TRXDIR,
 				GS_SETREG_TRXDIR(0));
-			
+
 			// Send the actual pixel data for this macroblock
 			// Each macroblock is 16x16 = 256 pixels * 4 bytes = 1024 bytes = 64 quadwords
 			owl_add_tag(async_upload_packet, 0, DMA_TAG(1, 0, DMA_CNT, 0, 0, 0));

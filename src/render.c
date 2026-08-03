@@ -247,6 +247,50 @@ void render_object(athena_object_data *obj) {
 void new_render_object(athena_object_data *obj, athena_render_data *data) {
 	obj->data = data;
 
+	// Compact vertex cache (render_cook_compact_vertices): free whatever a
+	// previous life of this render_data cooked (e.g. shadows.c rebuilding
+	// its projector geometry with a new vertex count) and reset so the next
+	// draw call reallocates at the current index_count.
+	//
+	// Skip all of this if already frozen: a frozen object's positions/
+	// normals/texcoords/colours are NULL (freed by render_freeze_compact_
+	// vertices) and its compact cache is the only valid copy of the
+	// geometry left. Resetting compact_dirty/frozen here regardless of
+	// that would make the next draw call's cook loop dereference the
+	// (still-NULL) float source -- e.g. wrapping an already-frozen
+	// RenderData in a second RenderObject, or freezing before the first
+	// `new RenderObject(...)` call finishes constructing it.
+	if (!data->frozen) {
+		free(data->compact_positions);
+		free(data->compact_normals);
+		free(data->compact_colors);
+		free(data->compact_uvs);
+		data->compact_positions = NULL;
+		data->compact_normals = NULL;
+		data->compact_colors = NULL;
+		data->compact_uvs = NULL;
+		data->compact_capacity = 0;
+		data->compact_dirty = RENDER_DIRTY_ALL;
+	}
+
+	// Pre-baked DMA_CALL chains (draw_vu1_with_colors), one per pass_state
+	// slot: independent of the frozen float source (built from the
+	// compact_* buffers and pointers that survive freezing), so reset
+	// unconditionally -- covers the same "previous life of this
+	// render_data" case as above (e.g. shadows.c rebuilding geometry with a
+	// different chunk count).
+	for (int i = 0; i < 3; i++) {
+		free(data->colors_chain[i].buffer);
+		free(data->colors_chain[i].chunk_offset);
+		data->colors_chain[i].buffer = NULL;
+		data->colors_chain[i].chunk_offset = NULL;
+		data->colors_chain[i].qwc_alloc = 0;
+		data->colors_chain[i].chunk_count = 0;
+		data->colors_chain[i].mpg_addr = -1;
+		data->colors_chain[i].built_version = 0;
+	}
+	data->chain_version = 1;
+
 	obj->bump_offset_buffer = &zero_bump_offset;
 
 	if (data->skin_data) {
@@ -417,8 +461,263 @@ static void bake_giftags(owl_packet *packet, athena_render_data *data, bool text
 	owl_add_ulong(packet, DRAW_STQ2_REGLIST);
 }
 
+static inline float render_clampf(float v, float lo, float hi) {
+	if (v < lo) return lo;
+	if (v > hi) return hi;
+	return v;
+}
+
+void render_invalidate_compact_cache(athena_render_data *data) {
+	if (data)
+		data->compact_dirty |= RENDER_DIRTY_ALL;
+}
+
+void render_invalidate_compact_positions(athena_render_data *data) {
+	if (data)
+		data->compact_dirty |= RENDER_DIRTY_POSITIONS;
+}
+
+void render_invalidate_chain_cache(athena_render_data *data) {
+	if (data)
+		data->chain_version++;
+}
+
+// Cooks the compact VIF-unpack wire formats (see render.h) from
+// positions/normals/colours/texcoords, but only the attributes actually
+// marked dirty (RENDER_DIRTY_* bits), and only when there's at least one:
+// on the first draw, whenever index_count outgrows the current cache, or
+// after an explicit render_invalidate_compact_cache()/_positions() call.
+// These don't change frame-to-frame for almost all meshes (skinned meshes
+// animate via bone matrices in the VU, not by touching this data), and
+// callers that DO touch something every frame typically only touch one
+// attribute (e.g. shadows.c's projector grid only ever rewrites positions),
+// so treating this as a single all-or-nothing flag would still re-cook 4x
+// the data for nothing on every one of those calls.
+//
+// positions/colours are assumed non-NULL, matching the existing invariant
+// of this file (they're already dereferenced unconditionally below in the
+// batch loops); normals/texcoords are optional, matching their existing
+// NULL-checked usage.
+static void render_cook_compact_vertices(athena_render_data *data) {
+	if (!data || data->index_count == 0 || data->frozen)
+		return;
+
+	if (data->compact_capacity < data->index_count) {
+		uint32_t new_capacity = data->index_count + 4;
+
+		free(data->compact_positions);
+		free(data->compact_normals);
+		free(data->compact_colors);
+		free(data->compact_uvs);
+
+		data->compact_positions = (athena_compact_position*)memalign(16, new_capacity * sizeof(athena_compact_position));
+		data->compact_normals   = (athena_compact_normal*)memalign(16, new_capacity * sizeof(athena_compact_normal));
+		data->compact_colors    = (athena_compact_color*)memalign(16, new_capacity * sizeof(athena_compact_color));
+		data->compact_uvs       = (athena_compact_uv*)memalign(16, new_capacity * sizeof(athena_compact_uv));
+
+		// The cook loop below only ever writes [0, index_count); the spare
+		// tail exists solely to absorb owl_add_unpack_data_ref_packed's
+		// element-count rounding (up to +3). Zero it so that harmless
+		// over-read never decodes as a NaN/denormal on the VU.
+		memset(data->compact_positions, 0, new_capacity * sizeof(athena_compact_position));
+		memset(data->compact_normals,   0, new_capacity * sizeof(athena_compact_normal));
+		memset(data->compact_colors,    0, new_capacity * sizeof(athena_compact_color));
+		memset(data->compact_uvs,       0, new_capacity * sizeof(athena_compact_uv));
+
+		data->compact_capacity = new_capacity;
+		data->compact_dirty |= RENDER_DIRTY_ALL;
+
+		// The pre-baked DMA_CALL chains (draw_vu1_with_colors) embed these
+		// buffers' addresses in DMA_REF tags -- a realloc here just moved
+		// them, so every cached chain now points at freed memory.
+		data->chain_version++;
+	}
+
+	if (!data->compact_dirty)
+		return;
+
+	bool cook_positions = data->compact_dirty & RENDER_DIRTY_POSITIONS;
+	bool cook_colors     = data->compact_dirty & RENDER_DIRTY_COLORS;
+	bool cook_normals    = (data->compact_dirty & RENDER_DIRTY_NORMALS) && data->normals;
+	bool cook_uvs        = (data->compact_dirty & RENDER_DIRTY_UVS) && data->texcoords;
+
+	data->compact_dirty = 0;
+
+	if (!cook_positions && !cook_colors && !cook_normals && !cook_uvs)
+		return;
+
+	for (uint32_t i = 0; i < data->index_count; i++) {
+		if (cook_positions) {
+			data->compact_positions[i].x = data->positions[i][0];
+			data->compact_positions[i].y = data->positions[i][1];
+			data->compact_positions[i].z = data->positions[i][2];
+		}
+
+		if (cook_colors) {
+			data->compact_colors[i].r = (uint8_t)(render_clampf(data->colours[i][0], 0.0f, 1.0f) * 255.0f);
+			data->compact_colors[i].g = (uint8_t)(render_clampf(data->colours[i][1], 0.0f, 1.0f) * 255.0f);
+			data->compact_colors[i].b = (uint8_t)(render_clampf(data->colours[i][2], 0.0f, 1.0f) * 255.0f);
+			data->compact_colors[i].a = (uint8_t)(render_clampf(data->colours[i][3], 0.0f, 1.0f) * 255.0f);
+		}
+
+		if (cook_normals) {
+			data->compact_normals[i].x = (int8_t)(render_clampf(data->normals[i][0], -1.0f, 1.0f) * 127.0f);
+			data->compact_normals[i].y = (int8_t)(render_clampf(data->normals[i][1], -1.0f, 1.0f) * 127.0f);
+			data->compact_normals[i].z = (int8_t)(render_clampf(data->normals[i][2], -1.0f, 1.0f) * 127.0f);
+			data->compact_normals[i].w = 0;
+		}
+
+		if (cook_uvs) {
+			data->compact_uvs[i].u = (int16_t)(render_clampf(data->texcoords[i][0], -127.99f, 127.99f) * 256.0f);
+			data->compact_uvs[i].v = (int16_t)(render_clampf(data->texcoords[i][1], -127.99f, 127.99f) * 256.0f);
+		}
+	}
+}
+
+void render_freeze_compact_vertices(athena_render_data *data) {
+	if (!data || data->frozen)
+		return;
+
+	// Make sure the compact cache reflects the latest data before the float
+	// source it was cooked from goes away for good.
+	render_cook_compact_vertices(data);
+
+	free(data->positions);
+	free(data->normals);
+	free(data->texcoords);
+	free(data->colours);
+
+	data->positions = NULL;
+	data->normals = NULL;
+	data->texcoords = NULL;
+	data->colours = NULL;
+
+	data->frozen = true;
+}
+
+// Cooks the pre-baked DMA_CALL sub-chain for draw_vu1_with_colors: the
+// diffuse/skin_data/positions/colours/uvs unpacks (all DMA_REF -- pointer
+// only, so live JS mutation of the underlying buffers keeps working with no
+// extra code here) plus the FLUSHA/NOP/ITOP/MSCALF-or-MSCNT trailer, one
+// sub-chain per material chunk. Mirrors the material/chunk loop in
+// draw_vu1_with_colors exactly (including the last_index==-1 MSCALF-vs-MSCNT
+// condition), but does NOT touch texture tags or bake_giftags() -- those
+// embed the live GS VRAM address (subject to eviction) and
+// gsGlobal->PrimContext (flips every frame), so they must stay dynamic in
+// the caller's packet stream. See athena_chain_cache's doc comment in
+// render.h for the full rationale.
+static void render_build_colors_chain(athena_object_data *obj, int pass_state, int batch_size, int mpg_addr) {
+	athena_render_data *data = obj->data;
+	athena_chain_cache *chain = &data->colors_chain[pass_state];
+
+	int chunk_cap = batch_size - (batch_size % 12);
+
+	// First pass: just count chunks, to size the buffer/offset-table
+	// allocations up front.
+	uint32_t chunk_count = 0;
+	int last_index = -1;
+	for (int i = 0; i < data->material_index_count; i++) {
+		int idxs_to_draw = (data->material_indices[i].end - last_index);
+
+		while (idxs_to_draw > 0) {
+			int count = idxs_to_draw < chunk_cap ? idxs_to_draw : chunk_cap;
+			idxs_to_draw -= count;
+			chunk_count++;
+		}
+
+		last_index = data->material_indices[i].end;
+	}
+
+	if (chunk_count == 0) {
+		free(chain->buffer);
+		free(chain->chunk_offset);
+		chain->buffer = NULL;
+		chain->chunk_offset = NULL;
+		chain->qwc_alloc = 0;
+		chain->chunk_count = 0;
+		chain->mpg_addr = mpg_addr;
+		chain->built_version = data->chain_version;
+		return;
+	}
+
+	// Worst case per chunk: diffuse + skin_data + positions + colours + uvs
+	// (1 quadword each) + trailer (cnt-tag + FLUSHA/NOP/ITOP/MSCALF, 2
+	// quadwords) + DMA_RET (1 quadword) = 8. A generous fixed upper bound
+	// keeps this a single allocation pass; this buffer is built once (not
+	// per frame), so wasted tail bytes are harmless.
+	uint32_t qwc_budget = chunk_count * 8;
+
+	if (chain->qwc_alloc < qwc_budget) {
+		free(chain->buffer);
+		chain->buffer = (owl_qword*)memalign(16, qwc_budget * sizeof(owl_qword));
+		chain->qwc_alloc = qwc_budget;
+	}
+
+	free(chain->chunk_offset);
+	chain->chunk_offset = (uint32_t*)malloc(chunk_count * sizeof(uint32_t));
+	chain->chunk_count = chunk_count;
+	chain->mpg_addr = mpg_addr;
+	chain->built_version = data->chain_version;
+
+	owl_packet chain_pkt = { 0 };
+	chain_pkt.ptr = chain->buffer;
+
+	uint32_t chunk_idx = 0;
+	last_index = -1;
+
+	for (int i = 0; i < data->material_index_count; i++) {
+		bool texture_mapping = ((((data->materials[data->material_indices[i].index].texture_id != -1)) && data->attributes.texture_mapping) || pass_state);
+
+		athena_compact_position* positions = &data->compact_positions[last_index+1];
+		athena_compact_color* colours = &data->compact_colors[last_index+1];
+		athena_compact_uv* texcoords = texture_mapping? &data->compact_uvs[last_index+1] : NULL;
+		vertex_skin_data* skin_data = data->skin_data? &data->skin_data[last_index+1] : NULL;
+
+		int idxs_to_draw = (data->material_indices[i].end-last_index);
+		int idxs_drawn = 0;
+
+		while (idxs_to_draw > 0) {
+			int count = chunk_cap;
+			if (idxs_to_draw < chunk_cap) {
+				count = idxs_to_draw;
+			}
+
+			chain->chunk_offset[chunk_idx] = (uint32_t)(chain_pkt.ptr - chain->buffer);
+
+			owl_add_unpack_data_ref(&chain_pkt, 1, (void*)&data->materials[data->material_indices[i].index].diffuse, 1, 1);
+
+			if (data->skin_data)
+				owl_add_unpack_data_ref(&chain_pkt, 2, &skin_data[idxs_drawn], count*2, 1);
+
+			owl_add_unpack_data_ref_packed(&chain_pkt, 2+batch_size*(data->skin_data? 2 : 0), &positions[idxs_drawn], count, UNPACK_V3_32, sizeof(athena_compact_position), 1, 1);
+			owl_add_unpack_data_ref_packed(&chain_pkt, 2+batch_size*(data->skin_data? 4 : 2), &colours[idxs_drawn], count, UNPACK_V4_8, sizeof(athena_compact_color), 1, 1);
+
+			if (texcoords)
+				owl_add_unpack_data_ref_packed(&chain_pkt, 2+batch_size*(data->skin_data? 5 : 3), &texcoords[idxs_drawn], count, UNPACK_V2_16, sizeof(athena_compact_uv), 1, 0);
+
+			owl_add_cnt_tag(&chain_pkt, 1, owl_vif_code_double(VIF_CODE(0, 0, VIF_NOP, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
+			owl_add_uint(&chain_pkt, VIF_CODE(0, 0, VIF_FLUSHA, 0));
+			owl_add_uint(&chain_pkt, VIF_CODE(0, 0, VIF_NOP, 0));
+			owl_add_uint(&chain_pkt, VIF_CODE(count, 0, VIF_ITOP, 0));
+			owl_add_uint(&chain_pkt, VIF_CODE(mpg_addr, 0, (last_index == -1? VIF_MSCALF : VIF_MSCNT), 0));
+
+			owl_add_dma_ret(&chain_pkt);
+
+			idxs_to_draw -= count;
+			idxs_drawn += count;
+			chunk_idx++;
+		}
+
+		last_index = data->material_indices[i].end;
+	}
+
+	SyncDCache(chain->buffer, &chain->buffer[qwc_budget - 1]);
+}
+
 void draw_vu1_with_colors(athena_object_data *obj, int pass_state) {
 	athena_render_data *data = obj->data;
+
+	render_cook_compact_vertices(data);
 
 	int batch_size = BATCH_SIZE, mpg_addr = 0;
 
@@ -432,6 +731,19 @@ void draw_vu1_with_colors(athena_object_data *obj, int pass_state) {
 		mpg_addr = vu_mpg_preload(vu1_colors_skinned, true);
 	} else {
 		mpg_addr = vu_mpg_preload(vu1_colors, true);
+	}
+
+	// pass_state selects which of the 3 per-pass_state cache slots this
+	// draw uses -- see athena_render_data.colors_chain's doc comment for
+	// why a single shared slot isn't safe here (same-frame, unflushed
+	// back-to-back draws with different pass_state on render_object()'s
+	// base/decal/bump sequence). mpg_addr going stale (VU code cache
+	// eviction, see mpg_manager.c) also forces a rebuild of this slot --
+	// rare enough that patching just the cached MSCALF/MSCNT immediates
+	// isn't worth the extra bookkeeping yet.
+	athena_chain_cache *chain = &data->colors_chain[pass_state];
+	if (!chain->buffer || chain->built_version != data->chain_version || chain->mpg_addr != mpg_addr) {
+		render_build_colors_chain(obj, pass_state, batch_size, mpg_addr);
 	}
 
 	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 14);
@@ -460,22 +772,39 @@ void draw_vu1_with_colors(athena_object_data *obj, int pass_state) {
 
 	//owl_add_end_tag(packet);
 
+	// batch_size drives the VU-mem destination-offset formulas baked into
+	// the pre-cooked chain (2+batch_size*N, see render_build_colors_chain)
+	// and must stay in lockstep with mem_layout.i's SKINNED_*_OFFSET
+	// strides -- never chunk against it directly. chunk_cap floors it to a
+	// multiple of 12 (not just 4): a multiple of 4 keeps
+	// owl_add_unpack_data_ref_packed's element-count rounding (see
+	// owl_packet.h) from reading/writing past the reserved stride, but for
+	// non-tristrip (indexed triangle list) meshes a chunk boundary that
+	// isn't ALSO a multiple of 3 splits a triangle's vertices across two
+	// separate XGKICKs -- the GS regroups the orphaned 1-2 vertices with
+	// whatever starts the next chunk, joining unrelated triangles across
+	// the mesh and dropping/mangling the split one. BATCH_SIZE (48) and
+	// BATCH_SIZE_SKINNED (30) were already both multiples of 3 by original
+	// design; a naive floor-to-4 (e.g. 30->28) silently breaks that.
+	int chunk_cap = batch_size - (batch_size % 12);
+
 	int last_index = -1;
 	GSSURFACE* tex = NULL;
 	int texture_id;
+	uint32_t chunk_idx = 0;
 	for(int i = 0; i < data->material_index_count; i++) {
 		bool texture_mapping = ((((data->materials[data->material_indices[i].index].texture_id != -1)) && data->attributes.texture_mapping) || pass_state);
 
 		if (texture_mapping) {
 			GSSURFACE *cur_tex = NULL;
 			switch (pass_state) {
-				case 1: // bump map 
+				case 1: // bump map
 					cur_tex = data->textures[data->materials[data->material_indices[i].index].bump_texture_id];
 					break;
 				case 2: // decal
 					cur_tex = data->textures[data->materials[data->material_indices[i].index].decal_texture_id];
 					break;
-				default: 
+				default:
 					cur_tex = data->textures[data->materials[data->material_indices[i].index].texture_id];
 			}
 
@@ -485,78 +814,67 @@ void draw_vu1_with_colors(athena_object_data *obj, int pass_state) {
 			}
 		}
 
-		VECTOR* positions = &data->positions[last_index+1];
-		VECTOR* colours = &data->colours[last_index+1];
-		VECTOR* texcoords = texture_mapping? &data->texcoords[last_index+1] : NULL;
-		vertex_skin_data* skin_data = data->skin_data? &data->skin_data[last_index+1] : NULL;
-
 		int idxs_to_draw = (data->material_indices[i].end-last_index);
-		int idxs_drawn = 0;
 
 		while (idxs_to_draw > 0) {
-			owl_query_packet(CHANNEL_VIF1, texture_mapping? 20 : 10);    
+			owl_query_packet(CHANNEL_VIF1, texture_mapping? 20 : 8);
 
-			int count = batch_size;
-			if (idxs_to_draw < batch_size)
+			int count = chunk_cap;
+			if (idxs_to_draw < chunk_cap)
 			{
 				count = idxs_to_draw;
 			}
 
+			// Texture upload trigger + GS TEX0/TEX1 stay dynamic (live VRAM
+			// address, subject to eviction -- see athena_chain_cache's doc
+			// comment) and bake_giftags() stays dynamic (embeds
+			// gsGlobal->PrimContext, which flips every frame). Everything
+			// else for this chunk (diffuse/skin_data/positions/colours/uvs
+			// unpacks + the FLUSHA/NOP/ITOP/MSCALF-or-MSCNT trigger) lives
+			// in the pre-baked chain reached via DMA_CALL below -- its
+			// trailing FLUSHA there still runs after these GS register
+			// writes complete, so draw ordering is unaffected by moving the
+			// TEX0/TEX1 emission ahead of the vertex-unpack chain.
 			if (texture_mapping) {
 				append_texture_tags(packet, tex, texture_id, COLOR_MODULATE);
 			}
-  
+
 			bake_giftags(packet, data, texture_mapping, i);
 
-			owl_add_unpack_data_ref(packet, 1, (void*)&data->materials[data->material_indices[i].index].diffuse, 1, 1);
-
-			if (data->skin_data) 
-				owl_add_unpack_data_ref(packet, 2, &skin_data[idxs_drawn], count*2, 1);
-
-			owl_add_unpack_data_ref(packet, 2+batch_size*(data->skin_data? 2 : 0), &positions[idxs_drawn], count, 1);
-			//owl_add_unpack_data_ref(packet, 2+batch_size*(data->skin_data? 3 : 1), &normals[idxs_drawn], count, 1);
-			owl_add_unpack_data_ref(packet, 2+batch_size*(data->skin_data? 4 : 2), &colours[idxs_drawn], count, 1);
-
-			if (texcoords) 
-				owl_add_unpack_data_ref(packet, 2+batch_size*(data->skin_data? 5 : 3), &texcoords[idxs_drawn], count, 1);
-
-			owl_add_cnt_tag(packet, texture_mapping? 5 : 1, owl_vif_code_double(VIF_CODE(0, 0, VIF_NOP, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
-
 			if (texture_mapping) {
+				owl_add_cnt_tag(packet, 4, owl_vif_code_double(VIF_CODE(0, 0, VIF_NOP, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
+
 				owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));
 				owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
 				owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
-				owl_add_uint(packet, VIF_CODE(3, 0, VIF_DIRECT, 0)); 
+				owl_add_uint(packet, VIF_CODE(3, 0, VIF_DIRECT, 0));
 
 				owl_add_tag(packet, GIF_AD, GIFTAG(2, 1, 0, 0, 0, 1));
 
 				int tw, th;
 				athena_set_tw_th(tex, &tw, &th);
 
-				owl_add_tag(packet, 
-					GS_TEX0_1+gsGlobal->PrimContext, 
-					GS_SETREG_TEX0((tex->Vram & ~TRANSFER_REQUEST_MASK)/256, 
-								  tex->TBW, 
+				owl_add_tag(packet,
+					GS_TEX0_1+gsGlobal->PrimContext,
+					GS_SETREG_TEX0((tex->Vram & ~TRANSFER_REQUEST_MASK)/256,
+								  tex->TBW,
 								  tex->PSM,
-								  tw, th, 
-								  gsGlobal->PrimAlphaEnable, 
+								  tw, th,
+								  gsGlobal->PrimAlphaEnable,
 								  COLOR_MODULATE,
-								  (tex->VramClut & ~TRANSFER_REQUEST_MASK)/256, 
-								  tex->ClutPSM, 
-								  0, 0, 
+								  (tex->VramClut & ~TRANSFER_REQUEST_MASK)/256,
+								  tex->ClutPSM,
+								  0, 0,
 								  tex->VramClut? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD)
 				);
 
 				owl_add_tag(packet, GS_TEX1_1+gsGlobal->PrimContext, GS_SETREG_TEX1(1, 0, tex->Filter, tex->Filter, 0, 0, 0));
 			}
-			
-			owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));  
-			owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
-			owl_add_uint(packet, VIF_CODE(count, 0, VIF_ITOP, 0));
-			owl_add_uint(packet, VIF_CODE(mpg_addr, 0, (last_index == -1? VIF_MSCALF : VIF_MSCNT), 0)); 
+
+			owl_add_dma_call(packet, &chain->buffer[chain->chunk_offset[chunk_idx]]);
 
 			idxs_to_draw -= count;
-			idxs_drawn += count;
+			chunk_idx++;
 		}
 
 		last_index = data->material_indices[i].end;
@@ -569,6 +887,8 @@ void draw_vu1_with_colors(athena_object_data *obj, int pass_state) {
 
 void draw_vu1_with_lights(athena_object_data *obj, int pass_state) {
 	athena_render_data *data = obj->data;
+
+	render_cook_compact_vertices(data);
 
 	int batch_size = BATCH_SIZE, mpg_addr = 0;
 
@@ -610,6 +930,21 @@ void draw_vu1_with_lights(athena_object_data *obj, int pass_state) {
 		owl_add_unpack_data_ref(packet, 141, (void*)obj->bone_matrices, data->skeleton->bone_count*4, 0);
 	}
 
+	// batch_size drives the VU-mem destination-offset formulas below
+	// (2+batch_size*N) and must stay in lockstep with mem_layout.i's
+	// SKINNED_*_OFFSET strides -- never chunk against it directly.
+	// chunk_cap floors it to a multiple of 12 (not just 4): a multiple of 4
+	// keeps owl_add_unpack_data_ref_packed's element-count rounding (see
+	// owl_packet.h) from reading/writing past the reserved stride, but for
+	// non-tristrip (indexed triangle list) meshes a chunk boundary that
+	// isn't ALSO a multiple of 3 splits a triangle's vertices across two
+	// separate XGKICKs -- the GS regroups the orphaned 1-2 vertices with
+	// whatever starts the next chunk, joining unrelated triangles across
+	// the mesh and dropping/mangling the split one. BATCH_SIZE (48) and
+	// BATCH_SIZE_SKINNED (30) were already both multiples of 3 by original
+	// design; a naive floor-to-4 (e.g. 30->28) silently breaks that.
+	int chunk_cap = batch_size - (batch_size % 12);
+
 	int last_index = -1;
 	GSSURFACE* tex = NULL;
 	int texture_id;
@@ -635,10 +970,10 @@ void draw_vu1_with_lights(athena_object_data *obj, int pass_state) {
 			}
 		}
 
-		VECTOR* positions = &data->positions[last_index+1];
-		VECTOR* texcoords = texture_mapping? &data->texcoords[last_index+1] : NULL;
-		VECTOR* normals = &data->normals[last_index+1];
-		VECTOR* colours = &data->colours[last_index+1];
+		athena_compact_position* positions = &data->compact_positions[last_index+1];
+		athena_compact_uv* texcoords = texture_mapping? &data->compact_uvs[last_index+1] : NULL;
+		athena_compact_normal* normals = &data->compact_normals[last_index+1];
+		athena_compact_color* colours = &data->compact_colors[last_index+1];
 		vertex_skin_data* skin_data = data->skin_data? &data->skin_data[last_index+1] : NULL;
 
 		int idxs_to_draw = (data->material_indices[i].end-last_index);
@@ -647,8 +982,8 @@ void draw_vu1_with_lights(athena_object_data *obj, int pass_state) {
 		while (idxs_to_draw > 0) {
 			owl_query_packet(CHANNEL_VIF1, texture_mapping? 22 : 12);
 
-			int count = batch_size;
-			if (idxs_to_draw < batch_size)
+			int count = chunk_cap;
+			if (idxs_to_draw < chunk_cap)
 			{
 				count = idxs_to_draw;
 			}
@@ -658,57 +993,57 @@ void draw_vu1_with_lights(athena_object_data *obj, int pass_state) {
 			}
 
 			bake_giftags(packet, data, texture_mapping, i);
-			
+
 			owl_add_unpack_data_ref(packet, 1, (void*)&data->materials[data->material_indices[i].index].diffuse, 1, 1);
 
-			if (data->skin_data) 
+			if (data->skin_data)
 				owl_add_unpack_data_ref(packet, 2, &skin_data[idxs_drawn], count*2, 1);
 
-			owl_add_unpack_data_ref(packet, 2+batch_size*(data->skin_data? 2 : 0), &positions[idxs_drawn], count, 1);
-			owl_add_unpack_data_ref(packet, 2+batch_size*(data->skin_data? 3 : 1), &normals[idxs_drawn], count, 1);
-			owl_add_unpack_data_ref(packet, 2+batch_size*(data->skin_data? 4 : 2), &colours[idxs_drawn], count, 1);
+			owl_add_unpack_data_ref_packed(packet, 2+batch_size*(data->skin_data? 2 : 0), &positions[idxs_drawn], count, UNPACK_V3_32, sizeof(athena_compact_position), 1, 1);
+			owl_add_unpack_data_ref_packed(packet, 2+batch_size*(data->skin_data? 3 : 1), &normals[idxs_drawn], count, UNPACK_V4_8, sizeof(athena_compact_normal), 1, 0);
+			owl_add_unpack_data_ref_packed(packet, 2+batch_size*(data->skin_data? 4 : 2), &colours[idxs_drawn], count, UNPACK_V4_8, sizeof(athena_compact_color), 1, 1);
 
-			if (texcoords) 
-				owl_add_unpack_data_ref(packet, 2+batch_size*(data->skin_data? 5 : 3), &texcoords[idxs_drawn], count, 1);
-			
+			if (texcoords)
+				owl_add_unpack_data_ref_packed(packet, 2+batch_size*(data->skin_data? 5 : 3), &texcoords[idxs_drawn], count, UNPACK_V2_16, sizeof(athena_compact_uv), 1, 0);
+
 			owl_add_cnt_tag(packet, texture_mapping? 5 : 1, owl_vif_code_double(VIF_CODE(0, 0, VIF_NOP, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
 
 			if (texture_mapping) {
 				owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));
 				owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
 				owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
-				owl_add_uint(packet, VIF_CODE(3, 0, VIF_DIRECT, 0)); 
+				owl_add_uint(packet, VIF_CODE(3, 0, VIF_DIRECT, 0));
 
 				owl_add_tag(packet, GIF_AD, GIFTAG(2, 1, 0, 0, 0, 1));
 
 				int tw, th;
 				athena_set_tw_th(tex, &tw, &th);
 
-				owl_add_tag(packet, 
-					GS_TEX0_1+gsGlobal->PrimContext, 
-					GS_SETREG_TEX0((tex->Vram & ~TRANSFER_REQUEST_MASK)/256, 
-								  tex->TBW, 
+				owl_add_tag(packet,
+					GS_TEX0_1+gsGlobal->PrimContext,
+					GS_SETREG_TEX0((tex->Vram & ~TRANSFER_REQUEST_MASK)/256,
+								  tex->TBW,
 								  tex->PSM,
-								  tw, th, 
-								  gsGlobal->PrimAlphaEnable, 
+								  tw, th,
+								  gsGlobal->PrimAlphaEnable,
 								  COLOR_MODULATE,
-								  (tex->VramClut & ~TRANSFER_REQUEST_MASK)/256, 
-								  tex->ClutPSM, 
-								  0, 0, 
+								  (tex->VramClut & ~TRANSFER_REQUEST_MASK)/256,
+								  tex->ClutPSM,
+								  0, 0,
 								  tex->VramClut? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD)
 				);
 
 				owl_add_tag(packet, GS_TEX1_1+gsGlobal->PrimContext, GS_SETREG_TEX1(1, 0, tex->Filter, tex->Filter, 0, 0, 0));
 			}
-			
+
 			owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));
 			owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
 			owl_add_uint(packet, VIF_CODE(count, 0, VIF_ITOP, 0));
-			owl_add_uint(packet, VIF_CODE(mpg_addr, 0, (last_index == -1? VIF_MSCALF : VIF_MSCNT), 0)); 
+			owl_add_uint(packet, VIF_CODE(mpg_addr, 0, (last_index == -1? VIF_MSCALF : VIF_MSCNT), 0));
 
 			idxs_to_draw -= count;
 			idxs_drawn += count;
-			
+
 		}
 
 		last_index = data->material_indices[i].end;
@@ -721,6 +1056,8 @@ void draw_vu1_with_lights(athena_object_data *obj, int pass_state) {
 
 void draw_vu1_with_spec_lights(athena_object_data *obj, int pass_state) {
 	athena_render_data *data = obj->data;
+
+	render_cook_compact_vertices(data);
 
 	int batch_size = BATCH_SIZE, mpg_addr = 0;
 
@@ -764,6 +1101,21 @@ void draw_vu1_with_spec_lights(athena_object_data *obj, int pass_state) {
 
 	//owl_add_end_tag(packet);
 
+	// batch_size drives the VU-mem destination-offset formulas below
+	// (2+batch_size*N) and must stay in lockstep with mem_layout.i's
+	// SKINNED_*_OFFSET strides -- never chunk against it directly.
+	// chunk_cap floors it to a multiple of 12 (not just 4): a multiple of 4
+	// keeps owl_add_unpack_data_ref_packed's element-count rounding (see
+	// owl_packet.h) from reading/writing past the reserved stride, but for
+	// non-tristrip (indexed triangle list) meshes a chunk boundary that
+	// isn't ALSO a multiple of 3 splits a triangle's vertices across two
+	// separate XGKICKs -- the GS regroups the orphaned 1-2 vertices with
+	// whatever starts the next chunk, joining unrelated triangles across
+	// the mesh and dropping/mangling the split one. BATCH_SIZE (48) and
+	// BATCH_SIZE_SKINNED (30) were already both multiples of 3 by original
+	// design; a naive floor-to-4 (e.g. 30->28) silently breaks that.
+	int chunk_cap = batch_size - (batch_size % 12);
+
 	int last_index = -1;
 	GSSURFACE* tex = NULL;
 	int texture_id;
@@ -789,10 +1141,10 @@ void draw_vu1_with_spec_lights(athena_object_data *obj, int pass_state) {
 			}
 		}
 
-		VECTOR* positions = &data->positions[last_index+1];
-		VECTOR* texcoords = texture_mapping? &data->texcoords[last_index+1] : NULL;
-		VECTOR* normals = &data->normals[last_index+1];
-		VECTOR* colours = &data->colours[last_index+1];
+		athena_compact_position* positions = &data->compact_positions[last_index+1];
+		athena_compact_uv* texcoords = texture_mapping? &data->compact_uvs[last_index+1] : NULL;
+		athena_compact_normal* normals = &data->compact_normals[last_index+1];
+		athena_compact_color* colours = &data->compact_colors[last_index+1];
 		vertex_skin_data* skin_data = data->skin_data? &data->skin_data[last_index+1] : NULL;
 
 		int idxs_to_draw = (data->material_indices[i].end-last_index);
@@ -801,8 +1153,8 @@ void draw_vu1_with_spec_lights(athena_object_data *obj, int pass_state) {
 		while (idxs_to_draw > 0) {
 			owl_query_packet(CHANNEL_VIF1, texture_mapping? 21 : 11);
 
-			int count = batch_size;
-			if (idxs_to_draw < batch_size)
+			int count = chunk_cap;
+			if (idxs_to_draw < chunk_cap)
 			{
 				count = idxs_to_draw;
 			}
@@ -811,18 +1163,18 @@ void draw_vu1_with_spec_lights(athena_object_data *obj, int pass_state) {
 			}
 
 			bake_giftags(packet, data, texture_mapping, i);
-			
+
 			owl_add_unpack_data_ref(packet, 1, (void*)&data->materials[data->material_indices[i].index].diffuse, 1, 1);
 
-			if (data->skin_data) 
+			if (data->skin_data)
 				owl_add_unpack_data_ref(packet, 2, &skin_data[idxs_drawn], count*2, 1);
 
-			owl_add_unpack_data_ref(packet, 2+batch_size*(data->skin_data? 2 : 0), &positions[idxs_drawn], count, 1);
-			owl_add_unpack_data_ref(packet, 2+batch_size*(data->skin_data? 3 : 1), &normals[idxs_drawn], count, 1);
-			owl_add_unpack_data_ref(packet, 2+batch_size*(data->skin_data? 4 : 2), &colours[idxs_drawn], count, 1);
+			owl_add_unpack_data_ref_packed(packet, 2+batch_size*(data->skin_data? 2 : 0), &positions[idxs_drawn], count, UNPACK_V3_32, sizeof(athena_compact_position), 1, 1);
+			owl_add_unpack_data_ref_packed(packet, 2+batch_size*(data->skin_data? 3 : 1), &normals[idxs_drawn], count, UNPACK_V4_8, sizeof(athena_compact_normal), 1, 0);
+			owl_add_unpack_data_ref_packed(packet, 2+batch_size*(data->skin_data? 4 : 2), &colours[idxs_drawn], count, UNPACK_V4_8, sizeof(athena_compact_color), 1, 1);
 
-			if (texcoords) 
-				owl_add_unpack_data_ref(packet, 2+batch_size*(data->skin_data? 5 : 3), &texcoords[idxs_drawn], count, 1);
+			if (texcoords)
+				owl_add_unpack_data_ref_packed(packet, 2+batch_size*(data->skin_data? 5 : 3), &texcoords[idxs_drawn], count, UNPACK_V2_16, sizeof(athena_compact_uv), 1, 0);
 
 			owl_add_cnt_tag(packet, texture_mapping? 5 : 1, owl_vif_code_double(VIF_CODE(0, 0, VIF_NOP, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
 
@@ -830,34 +1182,34 @@ void draw_vu1_with_spec_lights(athena_object_data *obj, int pass_state) {
 				owl_add_uint(packet, VIF_CODE(0, 0, VIF_FLUSHA, 0));
 				owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
 				owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
-				owl_add_uint(packet, VIF_CODE(3, 0, VIF_DIRECT, 0)); 
+				owl_add_uint(packet, VIF_CODE(3, 0, VIF_DIRECT, 0));
 
 				owl_add_tag(packet, GIF_AD, GIFTAG(2, 1, 0, 0, 0, 1));
 
 				int tw, th;
 				athena_set_tw_th(tex, &tw, &th);
 
-				owl_add_tag(packet, 
-					GS_TEX0_1+gsGlobal->PrimContext, 
-					GS_SETREG_TEX0((tex->Vram & ~TRANSFER_REQUEST_MASK)/256, 
-								  tex->TBW, 
+				owl_add_tag(packet,
+					GS_TEX0_1+gsGlobal->PrimContext,
+					GS_SETREG_TEX0((tex->Vram & ~TRANSFER_REQUEST_MASK)/256,
+								  tex->TBW,
 								  tex->PSM,
-								  tw, th, 
-								  gsGlobal->PrimAlphaEnable, 
+								  tw, th,
+								  gsGlobal->PrimAlphaEnable,
 								  COLOR_MODULATE,
-								  (tex->VramClut & ~TRANSFER_REQUEST_MASK)/256, 
-								  tex->ClutPSM, 
-								  0, 0, 
+								  (tex->VramClut & ~TRANSFER_REQUEST_MASK)/256,
+								  tex->ClutPSM,
+								  0, 0,
 								  tex->VramClut? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD)
 				);
 
 				owl_add_tag(packet, GS_TEX1_1+gsGlobal->PrimContext, GS_SETREG_TEX1(1, 0, tex->Filter, tex->Filter, 0, 0, 0));
 			}
-			
+
 			owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
 			owl_add_uint(packet, VIF_CODE(0, 0, VIF_NOP, 0));
 			owl_add_uint(packet, VIF_CODE(count, 0, VIF_ITOP, 0));
-			owl_add_uint(packet, VIF_CODE(mpg_addr, 0, (last_index == -1? VIF_MSCALF : VIF_MSCNT), 0)); 
+			owl_add_uint(packet, VIF_CODE(mpg_addr, 0, (last_index == -1? VIF_MSCALF : VIF_MSCNT), 0));
 
 			idxs_to_draw -= count;
 			idxs_drawn += count;
@@ -873,6 +1225,8 @@ void draw_vu1_with_spec_lights(athena_object_data *obj, int pass_state) {
 
 void draw_vu1_with_lights_ref(athena_object_data *obj, int pass_state) {
 	athena_render_data *data = obj->data;
+
+	render_cook_compact_vertices(data);
 
 	int batch_size = BATCH_SIZE, mpg_addr = 0;
 
@@ -918,6 +1272,21 @@ void draw_vu1_with_lights_ref(athena_object_data *obj, int pass_state) {
 
 	//owl_add_end_tag(packet);
 
+	// batch_size drives the VU-mem destination-offset formulas below
+	// (2+batch_size*N) and must stay in lockstep with mem_layout.i's
+	// SKINNED_*_OFFSET strides -- never chunk against it directly.
+	// chunk_cap floors it to a multiple of 12 (not just 4): a multiple of 4
+	// keeps owl_add_unpack_data_ref_packed's element-count rounding (see
+	// owl_packet.h) from reading/writing past the reserved stride, but for
+	// non-tristrip (indexed triangle list) meshes a chunk boundary that
+	// isn't ALSO a multiple of 3 splits a triangle's vertices across two
+	// separate XGKICKs -- the GS regroups the orphaned 1-2 vertices with
+	// whatever starts the next chunk, joining unrelated triangles across
+	// the mesh and dropping/mangling the split one. BATCH_SIZE (48) and
+	// BATCH_SIZE_SKINNED (30) were already both multiples of 3 by original
+	// design; a naive floor-to-4 (e.g. 30->28) silently breaks that.
+	int chunk_cap = batch_size - (batch_size % 12);
+
 	int last_index = -1;
 	GSSURFACE* tex = NULL;
 	int texture_id;
@@ -934,9 +1303,9 @@ void draw_vu1_with_lights_ref(athena_object_data *obj, int pass_state) {
 			continue;
 		}
 
-		VECTOR* positions = &data->positions[last_index+1];
-		VECTOR* normals = &data->normals[last_index+1];
-		VECTOR* colours = &data->colours[last_index+1];
+		athena_compact_position* positions = &data->compact_positions[last_index+1];
+		athena_compact_normal* normals = &data->compact_normals[last_index+1];
+		athena_compact_color* colours = &data->compact_colors[last_index+1];
 		vertex_skin_data* skin_data = data->skin_data? &data->skin_data[last_index+1] : NULL;
 
 		int idxs_to_draw = (data->material_indices[i].end-last_index);
@@ -945,8 +1314,8 @@ void draw_vu1_with_lights_ref(athena_object_data *obj, int pass_state) {
 		while (idxs_to_draw > 0) {
 			owl_query_packet(CHANNEL_VIF1, texture_mapping? 21 : 11);
 
-			int count = batch_size;
-			if (idxs_to_draw < batch_size)
+			int count = chunk_cap;
+			if (idxs_to_draw < chunk_cap)
 			{
 				count = idxs_to_draw;
 			}
@@ -956,16 +1325,16 @@ void draw_vu1_with_lights_ref(athena_object_data *obj, int pass_state) {
 			}
 
 			bake_giftags(packet, data, texture_mapping, i);
-			
+
 			owl_add_unpack_data_ref(packet, 1, (void*)&data->materials[data->material_indices[i].index].diffuse, 1, 1);
 
 			if (data->skin_data) {
 				// unpack_list_append(packet, &skin_data[idxs_drawn], count*2);
 			}
 
-			owl_add_unpack_data_ref(packet, 2,                &positions[idxs_drawn], count, 1);
-			owl_add_unpack_data_ref(packet, 2+batch_size,     &normals[idxs_drawn], count, 1);
-			owl_add_unpack_data_ref(packet, 2+(batch_size*2), &colours[idxs_drawn], count, 1);
+			owl_add_unpack_data_ref_packed(packet, 2,                &positions[idxs_drawn], count, UNPACK_V3_32, sizeof(athena_compact_position), 1, 1);
+			owl_add_unpack_data_ref_packed(packet, 2+batch_size,     &normals[idxs_drawn], count, UNPACK_V4_8, sizeof(athena_compact_normal), 1, 0);
+			owl_add_unpack_data_ref_packed(packet, 2+(batch_size*2), &colours[idxs_drawn], count, UNPACK_V4_8, sizeof(athena_compact_color), 1, 1);
 
 			owl_add_cnt_tag(packet, texture_mapping? 5 : 1, owl_vif_code_double(VIF_CODE(0, 0, VIF_NOP, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
 

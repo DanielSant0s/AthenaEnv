@@ -82,10 +82,15 @@ culled_init:
     vertexLoop:
 
         ;////////// --- Load loop data --- //////////
-        lq inVert,       POSITION_OFFSET(iBase) 
-        lq.xyzw inNorm,  NORMAL_OFFSET(iBase)          
-        lq inColor,      COLOR_OFFSET(iBase)           
-        ;////////////////////////////////////////////    
+        lq inVert,       POSITION_OFFSET(iBase)
+        DecompressPositionW inVert
+
+        lq inNormPacked, NORMAL_OFFSET(iBase)
+        DecompressNormal8 inNorm, inNormPacked
+
+        lq inColorPacked, COLOR_OFFSET(iBase)
+        DecompressColor8 inColor, inColorPacked
+        ;////////////////////////////////////////////
 
         ;////////////// --- Vertex --- //////////////
         MatrixMultiplyVertex	vertex, ObjectToScreen, inVert ; transform each vertex by the matrix
@@ -237,10 +242,15 @@ init:
     loop:
 
         ;////////// --- Load loop data --- //////////
-        lq inVert,  POSITION_OFFSET(iBase)   
-        lq inNorm,  NORMAL_OFFSET(iBase) 
-        lq inColor, COLOR_OFFSET(iBase) 
-        ;////////////////////////////////////////////    
+        lq inVert,  POSITION_OFFSET(iBase)
+        DecompressPositionW inVert
+
+        lq inNormPacked, NORMAL_OFFSET(iBase)
+        DecompressNormal8 inNorm, inNormPacked
+
+        lq inColorPacked, COLOR_OFFSET(iBase)
+        DecompressColor8 inColor, inColorPacked
+        ;////////////////////////////////////////////
 
         ;////////////// --- Vertex --- //////////////
         MatrixMultiplyVertex	vertex, ObjectToScreen, inVert ; transform each vertex by the matrix

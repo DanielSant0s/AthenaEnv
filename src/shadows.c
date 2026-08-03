@@ -95,6 +95,7 @@ void shadow_projector_init(ath_shadow_projector *p, GSSURFACE *tex) {
 #endif
 
     p->nodes = NULL;
+    p->nodeNormals = NULL;
     p->triNodeIdx = NULL;
     p->vtxCount = 0;
 
@@ -231,8 +232,11 @@ void shadow_projector_render(ath_shadow_projector *p) {
 	const float halfH = p->height * 0.5f;
 
     const int nodeCount = gx * gz;
-    VECTOR *nodeNormals = NULL;
-    if (p->enableRaycast) nodeNormals = alloc_vectors(nodeCount);
+    // Persistent buffer (allocated in shadow_projector_rebuild_geometry,
+    // sized nodeCount) -- was alloc_vectors()/free_vectors()'d on every
+    // single call before, which is wasteful given this function already
+    // runs once per shadow-casting object per frame.
+    VECTOR *nodeNormals = p->enableRaycast ? p->nodeNormals : NULL;
 
 	int ni = 0;
 	for (int j = 0; j < gz; j++) {
@@ -320,6 +324,21 @@ void shadow_projector_render(ath_shadow_projector *p) {
         copy_vector(data->positions[v], p->nodes[n]);
     }
 
+    // data->positions was just rewritten directly (not through the JS
+    // "vertices" setter, which is the only other place that invalidates
+    // this automatically) -- the projector recomputes its whole grid every
+    // call, e.g. once per shadow-casting object per frame here, each at a
+    // different world position. Without this, the compact VU wire cache
+    // keeps serving whatever was cooked on an earlier call, so every
+    // shadow after the first in a frame renders using a stale, earlier
+    // grid position.
+    //
+    // Positions only, not the full cache: colours/texcoords are set once in
+    // shadow_projector_rebuild_geometry() and never touched again here, so
+    // re-cooking them every render() call (every shadow, every frame) would
+    // just be discarding-and-redoing work for data that never changed.
+    render_invalidate_compact_positions(data);
+
     // Update object transform - keep position as set by JavaScript, update transform matrix
     //for (int r = 0; r < 16; r++) p->obj.transform[r] = p->transform[r];
 
@@ -340,8 +359,6 @@ void shadow_projector_render(ath_shadow_projector *p) {
     draw_vu1_with_colors(&p->obj, 0);
 
 	set_screen_param(ALPHA_BLEND_EQUATION, old_alpha);
-
-    if (nodeNormals) free_vectors(nodeNormals);
 }
 
 void shadow_projector_rebuild_geometry(ath_shadow_projector *p) {
@@ -354,6 +371,7 @@ void shadow_projector_rebuild_geometry(ath_shadow_projector *p) {
 
     // Free previous allocations
     if (p->nodes) { free_vectors(p->nodes); p->nodes = NULL; }
+    if (p->nodeNormals) { free_vectors(p->nodeNormals); p->nodeNormals = NULL; }
     if (p->triNodeIdx) { free(p->triNodeIdx); p->triNodeIdx = NULL; }
 
     athena_render_data *data = &p->data;
@@ -364,8 +382,12 @@ void shadow_projector_rebuild_geometry(ath_shadow_projector *p) {
     if (data->material_indices) { free(data->material_indices); data->material_indices = NULL; }
     if (data->textures) { free(data->textures); data->textures = NULL; }
 
-    // Allocate nodes and mapping
+    // Allocate nodes and mapping. nodeNormals is allocated unconditionally
+    // (not just when enableRaycast is currently on) since raycasting can be
+    // toggled on after this rebuild -- it's cheap (nodeCount VECTORs) and
+    // this only runs when the grid itself changes, not per frame.
     p->nodes = alloc_vectors(nodeCount);
+    p->nodeNormals = alloc_vectors(nodeCount);
     p->triNodeIdx = (uint32_t*)malloc(sizeof(uint32_t) * vtxCount);
     p->vtxCount = vtxCount;
 
@@ -468,6 +490,7 @@ void shadow_projector_rebuild_geometry(ath_shadow_projector *p) {
 void shadow_projector_free(ath_shadow_projector *p) {
     if (!p) return;
     if (p->nodes) { free_vectors(p->nodes); p->nodes = NULL; }
+    if (p->nodeNormals) { free_vectors(p->nodeNormals); p->nodeNormals = NULL; }
     if (p->triNodeIdx) { free(p->triNodeIdx); p->triNodeIdx = NULL; }
     athena_render_data *data = &p->data;
     if (data->positions) { free_vectors(data->positions); data->positions = NULL; }
@@ -476,6 +499,19 @@ void shadow_projector_free(ath_shadow_projector *p) {
     if (data->materials) { free(data->materials); data->materials = NULL; }
     if (data->material_indices) { free(data->material_indices); data->material_indices = NULL; }
     if (data->textures) { free(data->textures); data->textures = NULL; }
+    // Compact VIF-unpack cache (render_cook_compact_vertices)
+    free(data->compact_positions); data->compact_positions = NULL;
+    free(data->compact_normals); data->compact_normals = NULL;
+    free(data->compact_colors); data->compact_colors = NULL;
+    free(data->compact_uvs); data->compact_uvs = NULL;
+    data->compact_capacity = 0;
+    // Pre-baked DMA_CALL chains (render_build_colors_chain), one per pass_state slot
+    for (int ci = 0; ci < 3; ci++) {
+        free(data->colors_chain[ci].buffer); data->colors_chain[ci].buffer = NULL;
+        free(data->colors_chain[ci].chunk_offset); data->colors_chain[ci].chunk_offset = NULL;
+        data->colors_chain[ci].qwc_alloc = 0;
+        data->colors_chain[ci].chunk_count = 0;
+    }
 #ifdef ATHENA_ODE
     if (p->rayGeom) { dGeomDestroy(p->rayGeom); p->rayGeom = NULL; }
 #endif

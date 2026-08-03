@@ -173,6 +173,51 @@ typedef struct {
 	uint32_t end;
 } material_index;
 
+// Compact wire formats fed to the VU1 via VIF unpack (V3_32/V4_8/V2_16).
+// These are derived caches cooked from positions/normals/colours/texcoords
+// every render, never a source of truth -- see render_cook_compact_vertices().
+typedef struct {
+	float x, y, z;
+} athena_compact_position; // V3_32, 12 bytes
+
+typedef struct {
+	int8_t x, y, z, w;
+} athena_compact_normal; // V4_8 signed, 4 bytes
+
+typedef struct {
+	uint8_t r, g, b, a;
+} athena_compact_color; // V4_8 unsigned, 4 bytes
+
+typedef struct {
+	int16_t u, v;
+} athena_compact_uv; // V2_16 signed, 4 bytes
+
+// Per-attribute bits for athena_render_data.compact_dirty -- see its doc
+// comment and render_invalidate_compact_cache()/_positions().
+#define RENDER_DIRTY_POSITIONS (1 << 0)
+#define RENDER_DIRTY_NORMALS   (1 << 1)
+#define RENDER_DIRTY_COLORS    (1 << 2)
+#define RENDER_DIRTY_UVS       (1 << 3)
+#define RENDER_DIRTY_ALL       (RENDER_DIRTY_POSITIONS | RENDER_DIRTY_NORMALS | RENDER_DIRTY_COLORS | RENDER_DIRTY_UVS)
+
+// Pre-baked DMA_CALL sub-chain cache for draw_vu1_with_colors -- see
+// render_build_colors_chain(). Holds only the part of the per-chunk chain
+// that's genuinely static across frames (diffuse/skin_data/positions/
+// colours/uvs unpacks, all DMA_REF -- i.e. they only reference a pointer,
+// never copy data, so live JS mutation keeps working with zero extra code
+// -- plus the FLUSHA/NOP/ITOP/MSCALF-or-MSCNT trailer). Texture tags and
+// bake_giftags() are NOT included: they embed the live GS VRAM address
+// (subject to eviction) and gsGlobal->PrimContext (flips every frame), so
+// they stay dynamic in the main packet stream, same as before.
+typedef struct {
+    owl_qword *buffer;       // NULL until first built
+    uint32_t   qwc_alloc;    // buffer size, in quadwords
+    uint32_t  *chunk_offset; // per-chunk entry point, in quadwords into buffer
+    uint32_t   chunk_count;
+    int        mpg_addr;     // mpg_addr baked into this chain's MSCALF/MSCNT trailers
+    uint32_t   built_version; // athena_render_data.chain_version at last build; see below
+} athena_chain_cache;
+
 typedef struct athena_render_data {
     uint32_t index_count;
 
@@ -183,8 +228,69 @@ typedef struct athena_render_data {
 	VECTOR* normals;
     VECTOR* colours;
 
-    vertex_skin_data* skin_data;    
-	athena_skeleton* skeleton;        
+    // Lazily (re)allocated by render_cook_compact_vertices(); freed/reset by
+    // new_render_object(). Sized index_count+4 to keep DMA_REF QWC rounding
+    // (owl_add_unpack_data_ref_packed) from ever reading past the allocation.
+    athena_compact_position* compact_positions;
+    athena_compact_normal*   compact_normals;
+    athena_compact_color*    compact_colors;
+    athena_compact_uv*       compact_uvs;
+    uint32_t compact_capacity;
+    // Cooked exactly once (on first draw, or after render_invalidate_compact_*())
+    // rather than every draw call: positions/normals/colours/texcoords don't
+    // change frame-to-frame for the overwhelming majority of meshes (skinned
+    // meshes animate via bone matrices in the VU, not by touching this data),
+    // so re-cooking unconditionally on every render_object() call was pure
+    // waste -- doubly so for objects rendered more than once per frame (e.g.
+    // a shadow pass + a main pass). render_invalidate_compact_cache() is
+    // called automatically wherever positions/normals/colours/texcoords get
+    // reassigned (e.g. the JS "vertices" setter) -- nothing JS-facing needs
+    // to call it explicitly.
+    //
+    // Per-attribute bits (RENDER_DIRTY_*), not one whole-object flag: some
+    // callers only ever touch one attribute every frame (e.g. shadows.c's
+    // projector grid, which recomputes positions every render() call but
+    // never touches colours/texcoords after the initial grid build) --
+    // treating the other three as dirty too would re-cook 4x the data for
+    // no reason, every single frame.
+    uint8_t compact_dirty;
+    // Set by render_freeze_compact_vertices(): once true, positions/normals/
+    // texcoords/colours have been freed (set NULL) and only the compact
+    // buffers above remain, reclaiming ~64 bytes/vertex for meshes that are
+    // done being edited. Reassigning positions et al. (the JS "vertices"
+    // setter) un-freezes automatically. A frozen mesh can no longer be used
+    // with anything that needs the float source directly (e.g. ODE trimesh
+    // collision, or shadows.c's procedural grid rewrite) -- that's the
+    // caller's responsibility to avoid, same as any other bake/finalize step.
+    bool frozen;
+
+    // Pre-baked DMA_CALL chains for draw_vu1_with_colors -- see
+    // athena_chain_cache's doc comment. One slot PER pass_state (0 = base,
+    // 1 = bump, 2 = decal), not one shared slot: render_object() can invoke
+    // draw_vu1_with_colors with different pass_state values back-to-back on
+    // the SAME render_data, with no flush in between (base, then decal,
+    // then bump twice, all appended to the same unflushed packet ring) --
+    // and texture_mapping's "|| pass_state" term means the cached chain's
+    // structure (which chunks include a UV unpack) differs between
+    // pass_states. A single shared slot rebuilt in place for pass_state N+1
+    // would overwrite the buffer a still-unflushed DMA_CALL from pass_state
+    // N's draw was just pointed at -- by the time that queued DMA_CALL
+    // actually reaches hardware, it jumps into a chain built for the wrong
+    // pass_state's chunk structure, desyncing the VIF stream. Separate
+    // per-pass_state slots mean rebuilding one never touches memory another
+    // pass_state's in-flight DMA_CALL might still reference.
+    //
+    // Rebuilt whenever a slot's built_version doesn't match chain_version
+    // below (bumped by render_invalidate_chain_cache() and by
+    // render_cook_compact_vertices() growing the compact_* buffers, whose
+    // addresses are baked into every slot's DMA_REF tags) or its cached
+    // mpg_addr goes stale. Reset in new_render_object(), freed alongside
+    // compact_*.
+    athena_chain_cache colors_chain[3];
+    uint32_t chain_version;
+
+    vertex_skin_data* skin_data;
+	athena_skeleton* skeleton;
 
     VECTOR bounding_box[8];
 
@@ -237,6 +343,12 @@ void initCamera(MATRIX *ws, MATRIX *wv, MATRIX *vs);
 void cameraUpdate();
 
 #define BATCH_SIZE 48
+// Must match the VU mem stride baked into mem_layout.i's SKINNED_*_OFFSET
+// constants (62, 92, 122, 152 -- each exactly 30 apart) -- render.c's
+// destination-offset expressions (2+batch_size*N) depend on this equality.
+// Do NOT change this to "fix" the rounding in owl_add_unpack_data_ref_packed;
+// use render_compact_chunk_cap() instead, which floors it to a multiple of 4
+// without touching what the offset formula sees.
 #define BATCH_SIZE_SKINNED 30
 
 int clip_bounding_box(MATRIX local_clip, VECTOR *bounding_box);
@@ -277,6 +389,31 @@ void draw_bbox(athena_object_data *obj, Color color);
 void render_object(athena_object_data *obj);
 
 void new_render_object(athena_object_data *obj, athena_render_data *data);
+
+// Forces the next draw call to re-cook every compact VIF wire buffer from
+// positions/normals/colours/texcoords instead of reusing the cached ones.
+// Only needed after a script mutates those arrays in place post-load.
+void render_invalidate_compact_cache(athena_render_data *data);
+
+// Like render_invalidate_compact_cache(), but only forces positions to be
+// re-cooked, leaving the (still valid) cached normals/colours/texcoords
+// alone -- for callers that only ever touch positions per update, e.g.
+// shadows.c's projector grid.
+void render_invalidate_compact_positions(athena_render_data *data);
+
+// Cooks the compact buffers if needed, then frees positions/normals/
+// texcoords/colours and marks data as frozen -- see the `frozen` field doc
+// in athena_render_data. A no-op if already frozen.
+void render_freeze_compact_vertices(athena_render_data *data);
+
+// Forces draw_vu1_with_colors to rebuild its pre-baked DMA_CALL chains (see
+// athena_chain_cache) on their next use, instead of reusing the cached ones
+// -- bumps chain_version, so every pass_state slot notices the mismatch and
+// rebuilds independently on its own next draw. Needed after anything that
+// changes materials/material_indices/texture_mapping/vertices post-creation,
+// or that reallocates the compact_* buffers whose addresses are baked into
+// the chains' DMA_REF tags.
+void render_invalidate_chain_cache(athena_render_data *data);
 
 void update_object_space(athena_object_data *obj);
 

@@ -31,6 +31,11 @@ const gltf_skin = new RenderData("Twerk.gltf");
 gltf_skin.accurate_clipping = true;
 gltf_skin.face_culling = Render.CULL_FACE_BACK;
 gltf_skin.pipeline = Render.PL_DEFAULT;
+// Skinned meshes animate via bone matrices in the VU, not by touching
+// positions/normals/etc -- safe to reclaim the float source once setup
+// is done. This demo doesn't use ODE trimesh collision on any mesh, so
+// every RenderData below can freeze.
+gltf_skin.freeze();
 
 const skin_object = new RenderObject(gltf_skin);
 skin_object.rotation = {x:Math.PI/2, y:0.0, z:0.0};
@@ -42,6 +47,7 @@ scene.face_culling = Render.CULL_FACE_NONE;
 scene.pipeline = Render.PL_DEFAULT;
 
 scene.getTexture(0).filter = LINEAR;
+scene.freeze();
 
 const scene_object = new RenderObject(scene);
 
@@ -50,6 +56,8 @@ box.face_culling = Render.CULL_FACE_NONE;
 
 //box.getTexture(0).filter = LINEAR;
 //box.getTexture(1).filter = LINEAR;
+
+box.freeze();
 
 const box_object = new RenderObject(box);
 box_object.position = {x:2.0, y:0.2, z:2.0};

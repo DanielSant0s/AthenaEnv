@@ -469,6 +469,26 @@ static JSValue js_rdfree(JSContext *ctx, JSValue this_val, int argc, JSValueCons
 	return JS_UNDEFINED;
 }
 
+static JSValue js_freeze_render_data(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
+	JSRenderData* ro = JS_GetOpaque2(ctx, this_val, js_render_data_class_id);
+	if (!ro)
+		return JS_EXCEPTION;
+
+	// A shared-buffer clone (see .clone()) doesn't own its
+	// positions/normals/texcoords/colours -- freeing them here would leave
+	// the source (or sibling clones) with a dangling pointer. Refuse and
+	// report false rather than corrupt them; deep-clone (.clone(true))
+	// before freezing if independence is needed.
+	for (int i = 0; i < 4; i++) {
+		if (!ro->native.owns_vertices[i])
+			return JS_NewBool(ctx, false);
+	}
+
+	athena_render_data_freeze(&ro->native);
+
+	return JS_NewBool(ctx, true);
+}
+
 static JSValue athena_getpipeline(JSContext *ctx, JSValueConst this_val, int magic)
 {
     JSRenderData* ro = JS_GetOpaque2(ctx, this_val, js_render_data_class_id);
@@ -782,7 +802,11 @@ static JSValue js_render_data_set(JSContext *ctx, JSValueConst this_val, JSValue
 				};
 
 				for (int i = 0; i < 4; i++) {
-					if (*attributes_ptr[i])
+					// Only free what this object actually owns -- a
+					// shared-buffer clone (see .clone()) points these at
+					// the source's memory; freeing it here would leave the
+					// source (or sibling clones) with a dangling pointer.
+					if (*attributes_ptr[i] && ro->native.owns_vertices[i])
 						free(*attributes_ptr[i]);
 
 					vert_arr = JS_GetPropertyStr(ctx, val, vert_attributes[i]);
@@ -797,8 +821,13 @@ static JSValue js_render_data_set(JSContext *ctx, JSValueConst this_val, JSValue
 					if (tmp_vert_ptr) {
 						*attributes_ptr[i] = malloc(size);
 						memcpy(*attributes_ptr[i], tmp_vert_ptr, size);
-					}			
+						ro->native.owns_vertices[i] = true;
+					}
 				}
+
+				ro->native.m.frozen = false;
+				athena_render_data_invalidate_compact_cache(&ro->native);
+				athena_render_data_invalidate_chain_cache(&ro->native);
 
 				FlushCache(WRITEBACK_DCACHE);
 			}
@@ -811,7 +840,7 @@ static JSValue js_render_data_set(JSContext *ctx, JSValueConst this_val, JSValue
 				JS_ToUint32(ctx, &material_count, JS_GetPropertyStr(ctx, val, "length"));
 
 				if (material_count > ro->native.m.material_count) {
-					ro->native.m.materials = realloc(ro->native.m.materials, material_count);
+					ro->native.m.materials = realloc(ro->native.m.materials, material_count * sizeof(ath_mat));
 				}
 
 				for (int i = 0; i < material_count; i++) {
@@ -851,6 +880,8 @@ static JSValue js_render_data_set(JSContext *ctx, JSValueConst this_val, JSValue
 
 				ro->native.m.material_count = material_count;
 
+				athena_render_data_invalidate_chain_cache(&ro->native);
+
 				FlushCache(WRITEBACK_DCACHE);
 			}
 			break;
@@ -861,7 +892,7 @@ static JSValue js_render_data_set(JSContext *ctx, JSValueConst this_val, JSValue
 				JS_ToUint32(ctx, &material_index_count, JS_GetPropertyStr(ctx, val, "length"));
 
 				if (material_index_count > ro->native.m.material_index_count) {
-					ro->native.m.material_indices = realloc(ro->native.m.material_indices, material_index_count);
+					ro->native.m.material_indices = realloc(ro->native.m.material_indices, material_index_count * sizeof(material_index));
 				}
 
 				for (int i = 0; i < material_index_count; i++) {
@@ -875,6 +906,8 @@ static JSValue js_render_data_set(JSContext *ctx, JSValueConst this_val, JSValue
 
 				ro->native.m.material_index_count = material_index_count;
 
+				athena_render_data_invalidate_chain_cache(&ro->native);
+
 				FlushCache(WRITEBACK_DCACHE);
 			}
 			break;
@@ -886,6 +919,7 @@ static JSValue js_render_data_set(JSContext *ctx, JSValueConst this_val, JSValue
 			break;
 		case 5:
 			ro->native.m.attributes.texture_mapping = JS_ToBool(ctx, val);
+			athena_render_data_invalidate_chain_cache(&ro->native);
 			break;
 		case 6:
 			{
@@ -1010,25 +1044,64 @@ static JSValue athena_renderdata_clone(JSContext *ctx, JSValue this_val, int arg
 	if (!src)
 		return JS_EXCEPTION;
 
+	// deep=true gives back an independently editable mesh: its own
+	// positions/normals/texcoords/colours/indices/skin_data, safe to pass
+	// to .vertices=/freeze() without touching src or any other clone of it.
+	// deep=false (default) keeps the original fast, shared-buffer behavior,
+	// meant for "same shape, different material" instancing -- NOT safe to
+	// edit or freeze (see the ownership check in the vertices setter and in
+	// freeze()). Deep-cloning a frozen (see .freeze()) source only carries
+	// over whatever's left (skin_data/skeleton/compact cache); its
+	// positions/normals/texcoords/colours are already gone, so clone before
+	// freezing if you need independently editable copies.
+	bool deep = argc > 0 && JS_ToBool(ctx, argv[0]);
+
 	JSRenderData* ro = js_mallocz(ctx, sizeof(JSRenderData));
 	if (!ro)
 		return JS_EXCEPTION;
 
-	// Share geometry buffers (reference same memory)
 	ro->native.m.index_count = src->native.m.index_count;
-	ro->native.m.indices = src->native.m.indices; // shared
-	ro->native.m.positions = src->native.m.positions; // shared
-	ro->native.m.normals = src->native.m.normals; // shared
-	ro->native.m.texcoords = src->native.m.texcoords; // shared
-	ro->native.m.colours = src->native.m.colours; // shared
-	ro->native.m.skin_data = src->native.m.skin_data; // shared
-	ro->native.m.skeleton = src->native.m.skeleton; // shared
+	ro->native.m.skeleton = src->native.m.skeleton; // shared either way -- bind pose, never mutated by vertex edits
 	ro->native.m.tristrip = src->native.m.tristrip;
 
-	// Mark as not owning vertices (prevent double-free)
-	for (int i = 0; i < 4; i++) {
-		ro->native.owns_vertices[i] = false;
-		ro->vertex_buffers[i] = JS_UNDEFINED;
+	if (deep) {
+		uint32_t n = ro->native.m.index_count;
+
+		VECTOR** src_attrs[] = { &src->native.m.positions, &src->native.m.normals, &src->native.m.texcoords, &src->native.m.colours };
+		VECTOR** dst_attrs[] = { &ro->native.m.positions, &ro->native.m.normals, &ro->native.m.texcoords, &ro->native.m.colours };
+
+		for (int i = 0; i < 4; i++) {
+			if (*src_attrs[i]) {
+				*dst_attrs[i] = malloc(sizeof(VECTOR) * n);
+				memcpy(*dst_attrs[i], *src_attrs[i], sizeof(VECTOR) * n);
+			}
+			ro->native.owns_vertices[i] = true;
+			ro->vertex_buffers[i] = JS_UNDEFINED;
+		}
+
+		if (src->native.m.indices) {
+			ro->native.m.indices = malloc(sizeof(uint32_t) * n);
+			memcpy(ro->native.m.indices, src->native.m.indices, sizeof(uint32_t) * n);
+		}
+
+		if (src->native.m.skin_data) {
+			ro->native.m.skin_data = malloc(sizeof(vertex_skin_data) * n);
+			memcpy(ro->native.m.skin_data, src->native.m.skin_data, sizeof(vertex_skin_data) * n);
+		}
+	} else {
+		// Share geometry buffers (reference same memory)
+		ro->native.m.indices = src->native.m.indices; // shared
+		ro->native.m.positions = src->native.m.positions; // shared
+		ro->native.m.normals = src->native.m.normals; // shared
+		ro->native.m.texcoords = src->native.m.texcoords; // shared
+		ro->native.m.colours = src->native.m.colours; // shared
+		ro->native.m.skin_data = src->native.m.skin_data; // shared
+
+		// Mark as not owning vertices (prevent double-free)
+		for (int i = 0; i < 4; i++) {
+			ro->native.owns_vertices[i] = false;
+			ro->vertex_buffers[i] = JS_UNDEFINED;
+		}
 	}
 
 	// Clone materials (independent copy)
@@ -1095,9 +1168,11 @@ static const JSCFunctionListEntry js_render_data_proto_funcs[] = {
 	JS_CFUNC_DEF("free",  0,  js_rdfree),
 	JS_CFUNC_DEF("dispose",  0,  js_rdfree),
 
-	JS_CFUNC_DEF("clone",  0,  athena_renderdata_clone),
+	JS_CFUNC_DEF("clone",  1,  athena_renderdata_clone),
 
 	JS_CFUNC_DEF("updateMaterial",  2,  athena_renderdata_update_material),
+
+	JS_CFUNC_DEF("freeze",  0,  js_freeze_render_data),
 
 	JS_CGETSET_MAGIC_DEF("vertices",          js_render_data_get, js_render_data_set, 0),
 	JS_CGETSET_MAGIC_DEF("materials",         js_render_data_get, js_render_data_set, 1),
@@ -1583,11 +1658,11 @@ static JSValue athena_render_batch_free(JSContext *ctx, JSValueConst this_val, i
 }
 
 static const JSCFunctionListEntry js_render_batch_proto_funcs[] = {
-	JS_CFUNC_DEF("add", 1, athena_render_batch_add),
-	JS_CFUNC_DEF("clear", 0, athena_render_batch_clear),
-	JS_CFUNC_DEF("render", 0, athena_render_batch_render),
+	JS_CFUNC_DEF("add", 1, js_render_batch_add),
+	JS_CFUNC_DEF("clear", 0, js_render_batch_clear),
+	JS_CFUNC_DEF("render", 0, js_render_batch_render),
 	JS_CFUNC_DEF("free", 0, athena_render_batch_free),
-	JS_CGETSET_MAGIC_DEF("size", athena_render_batch_size, NULL, 0),
+	JS_CGETSET_MAGIC_DEF("size", js_render_batch_size, NULL, 0),
 };
 
 static JSClassDef js_render_batch_class = {
@@ -1835,7 +1910,7 @@ static JSValue athena_scene_node_free(JSContext *ctx, JSValueConst this_val, int
     if (!node || !node->node)
         return JS_UNDEFINED;
 
-    athena_scene_node_destroy(node->node);
+    render_scene_node_destroy(node->node);
     node->node = NULL;
 
     return JS_UNDEFINED;
@@ -1846,7 +1921,7 @@ static const JSCFunctionListEntry js_scene_node_proto_funcs[] = {
 	JS_CFUNC_DEF("removeChild", 1, js_scene_node_remove_child),
 	JS_CFUNC_DEF("attach", 1, js_scene_node_attach),
 	JS_CFUNC_DEF("detach", 1, js_scene_node_detach),
-	JS_CFUNC_DEF("update", 0, athena_scene_node_update),
+	JS_CFUNC_DEF("update", 0, js_scene_node_update),
 	JS_CFUNC_DEF("free", 0, athena_scene_node_free),
 	JS_CGETSET_MAGIC_DEF("position", scene_node_prop_get, scene_node_prop_set, 0),
 	JS_CGETSET_MAGIC_DEF("rotation", scene_node_prop_get, scene_node_prop_set, 1),

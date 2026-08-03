@@ -167,10 +167,16 @@
 
         ;=====================================================================================
         ; Load the STQs from the original data and store them in the clipping work buffer.
+        ; The input stream holds the packed V2_16 UV wire format (see
+        ; athena_compact_uv / DecompressUV16 in athena_macros.i), not a raw
+        ; float STQ -- decode each before use.
         ;=====================================================================================
-        VectorLoad           TempSTQ1, TEXCOORD_OFFSET-2, iBase
-        VectorLoad           TempSTQ2, TEXCOORD_OFFSET-1, iBase
-        VectorLoad           TempSTQ3, TEXCOORD_OFFSET-0, iBase
+        VectorLoad           TempSTQ1Packed, TEXCOORD_OFFSET-2, iBase
+        DecompressUV16       TempSTQ1, TempSTQ1Packed
+        VectorLoad           TempSTQ2Packed, TEXCOORD_OFFSET-1, iBase
+        DecompressUV16       TempSTQ2, TempSTQ2Packed
+        VectorLoad           TempSTQ3Packed, TEXCOORD_OFFSET-0, iBase
+        DecompressUV16       TempSTQ3, TempSTQ3Packed
 
         VectorSave           TempSTQ1,  0, ClipWorkBuf0
         VectorSave           TempSTQ2,  3, ClipWorkBuf0

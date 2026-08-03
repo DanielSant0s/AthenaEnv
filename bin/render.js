@@ -106,6 +106,10 @@ const vertList = Render.vertexList(
 
 const listtest = new RenderData(vertList);
 listtest.face_culling = Render.CULL_FACE_NONE;
+// Not calling listtest.freeze(): built with shareBuffers:true above, so it
+// doesn't own positions/normals/texcoords/colours -- freeze() would just
+// refuse (returns false) since freeing shared memory out from under
+// triPositions/triNormals/etc would corrupt them.
 
 const skytex = new Image("env.png");
 skytex.filter = LINEAR;
@@ -122,6 +126,7 @@ listtest.updateMaterial(0, { shininess: 64.0f, diffuse: { r: 0.7f, g: 0.2f, b: 0
 
 const gltf_box = new RenderData("box_bump.gltf");
 //gltf_box.texture_mapping = false;
+gltf_box.freeze(); // static prop, no ODE trimesh on it -- reclaim the float source
 
 const dragontex = new Image("dragon.png");
 const dragonmesh = new RenderData("dragon.obj", dragontex);
@@ -135,6 +140,7 @@ const dragon_materials = dragonmesh.materials;
 dragon_materials[0].decal_texture_id = dragonmesh.pushTexture(decal_buffer);
 
 dragonmesh.materials = dragon_materials;
+dragonmesh.freeze();
 
 const monkeytex = new Image("monkey.png");
 const monkeymesh = new RenderData("monkey.obj", monkeytex);
@@ -144,6 +150,7 @@ const monkey_materials = monkeymesh.materials;
 monkey_materials[0].decal_texture_id = monkeymesh.pushTexture(decal_buffer);
 
 monkeymesh.materials = monkey_materials;
+monkeymesh.freeze();
 
 const moontex = new Image("moon.png");
 
@@ -164,15 +171,20 @@ const new_materials = car_materials.map((mat) => {
 
 car.materials = new_materials;
 
+// car is intentionally NOT frozen: the commented-out block below reads and
+// mutates car.vertices.positions live, which needs the float source to
+// still exist -- freeze() would make .vertices.positions undefined.
 //const car_vertices = new Float32Array(car.vertices.positions); // Pointer to a float array
 
 //car_vertices.forEach((item, i, positions) => positions[i] = item + (Math.random() * 0.1f));
 
 const mill = new RenderData("cubes.obj");
 mill.setTexture(1, moontex);
+mill.freeze();
 
 const boombox = new RenderData("Boombox.obj");
 boombox.getTexture(0).filter = LINEAR;
+boombox.freeze();
 
 const render_data = [dragonmesh, gltf_box, monkeymesh, car, listtest, boombox, mill];
 
@@ -208,6 +220,7 @@ const streamedObjects = [];
 console.log("[Render] enqueue BoxTextured.gltf");
 asyncLoader.enqueue("BoxTextured.gltf", (path, renderData) => {
     console.log("[Render] loaded:", path, "size:", renderData.size);
+    renderData.freeze();
     const obj = new RenderObject(renderData);
     streamedObjects.push(obj);
 

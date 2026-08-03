@@ -44,6 +44,11 @@ const skin_object = new RenderObject(gltf_skin);
 skin_object.position = {x:0.0, y:8.0, z:0.0};
 skin_object.rotation = {x:Math.PI/2, y:0.0, z:0.0};
 
+// Collision below is a primitive GeomSphere, not GeomRenderObject -- it
+// never reads gltf_skin's own vertex data, so freeing the float source
+// (bone matrices drive the animation, not this data) is safe here.
+gltf_skin.freeze();
+
 const skin_sphere = ODE.GeomSphere(undefined, 1.0f);
 const skin_col_transform = ODE.GeomTransform(space, skin_sphere);
 skin_sphere.setPosition(0, -0.5f, 0);
@@ -65,6 +70,10 @@ scene.pipeline = Render.PL_DEFAULT;
 scene.getTexture(0).filter = LINEAR;
 
 const scene_object = new RenderObject(scene);
+// NOT calling scene.freeze(): GeomRenderObject builds its trimesh collision
+// straight off scene's positions and keeps reading that pointer on every
+// query, not just at setup -- freezing (which frees it) would leave the
+// collision geometry dangling.
 const scene_collision = ODE.GeomRenderObject(space, scene_object);
 
 //const scene_body = ODE.createBody(world);
@@ -83,6 +92,7 @@ const box_object = new RenderObject(box);
 box_object.position = {x:2.0, y:0.2, z:2.0};
 box_object.scale = {x:0.2, y:0.2, z:0.2};
 
+// Also not frozen -- same GeomRenderObject/trimesh caveat as scene above.
 const box_col = ODE.GeomRenderObject(space, box_object);
 box_object.setCollision(box_col);
 
