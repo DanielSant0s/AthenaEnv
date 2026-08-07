@@ -317,14 +317,32 @@ typedef struct athena_object_data {
 	VECTOR rotation;
     VECTOR scale;
 
-    athena_animation_controller anim_controller; 
+    athena_animation_controller anim_controller;
     athena_bone_transform *bones;
     MATRIX *bone_matrices;
+
+    // Frustum-cull bounds for skinned meshes, rebuilt from the live bone
+    // palette every render_object() -- see render_update_skinned_bounds().
+    // NULL (and unused) for everything else, which is culled straight against
+    // data->bounding_box. Allocated alongside bones/bone_matrices.
+    VECTOR *skinned_bounds;
 
     VECTOR *bump_offset_buffer;
     VECTOR bump_offset;
 
     athena_render_data *data;
+
+    // Per-instance frustum culling switch, honoured by render_object() via
+    // render_object_in_frustum(). Defaults to true in new_render_object().
+    //
+    // Turn it off for any object whose drawn geometry can escape the bounds
+    // the test trusts. Skeletal animation is handled -- skinned meshes are
+    // culled against skinned_bounds below, rebuilt from the live bone palette
+    // every frame -- so what is left is a script mutating positions in place
+    // (RenderData built with shareBuffers) without reassigning
+    // RenderData.bounds afterwards. Leaving it on there makes the object blink
+    // out near the screen edge; the renderer cannot detect it by itself.
+    bool frustum_cull;
 
     void *collision;
     void (*update_collision)(struct athena_object_data *obj);
@@ -387,6 +405,17 @@ void loadModel(athena_render_data* res_m, const char* path, GSSURFACE* text);
 void draw_bbox(athena_object_data *obj, Color color);
 
 void render_object(athena_object_data *obj);
+
+// True when obj still has to be drawn: either culling is off for it, or its
+// bounding box is not provably outside the view frustum. See the definition in
+// render.c for what "provably" buys and what it deliberately does not.
+int render_object_in_frustum(athena_object_data *obj);
+
+// Recomputes data->bounding_box from data->positions (axis-aligned, in object
+// space). Implemented in mesh_loaders.c, where the model loaders already call
+// it; declared here because anything that replaces positions after load has to
+// call it too or frustum culling will test a stale box.
+void calculate_bbox(athena_render_data *data);
 
 void new_render_object(athena_object_data *obj, athena_render_data *data);
 
@@ -460,6 +489,10 @@ void append_texture_tags(owl_packet* packet, GSSURFACE *texture, int texture_id,
 typedef struct {
 	uint32_t draw_calls;
 	uint32_t triangles;
+	// Objects render_object() rejected via render_object_in_frustum() this
+	// frame. draw_calls/triangles count only what actually got submitted, so
+	// these three together tell you how much the cull is really saving.
+	uint32_t objects_culled;
 } render_stats_t;
 
 const render_stats_t *render_get_stats(void);

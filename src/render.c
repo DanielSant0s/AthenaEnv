@@ -184,6 +184,9 @@ void render_reset_stats(void) {
 
 VECTOR zero_bump_offset = { 0.0f, 0.0f, 0.0f, 0.0f };
 
+// Defined below, but render_object() (above them) drives the skeleton now.
+void process_animation(athena_object_data *obj);
+
 void draw_vu1_with_colors(athena_object_data *obj, int pass_state);
 void draw_vu1_with_lights(athena_object_data *obj, int pass_state);
 void draw_vu1_with_spec_lights(athena_object_data *obj, int pass_state);
@@ -195,14 +198,149 @@ void (*render_funcs[])(athena_object_data *obj, int pass_state) = {
 	draw_vu1_with_spec_lights
 };
 
+// A skinned mesh's drawn vertices are sum(w_i * BoneMatrix_i * v), never v
+// itself, so data->bounding_box -- measured by calculate_bbox() from the
+// bind-pose positions -- describes geometry that is not what reaches the
+// screen. Culling against it goes wrong precisely where it hurts most: far
+// away the box sits comfortably inside the frustum and the error is invisible,
+// but up close part of the box falls behind the near plane, and a box that is
+// slightly too small or slightly misplaced then reads as "entirely nearer than
+// the near plane" while the real mesh still crosses it -- the object vanishes
+// the moment the camera approaches it.
+//
+// So rebuild the box from the live bone palette instead: transform the bind
+// box by EVERY bone matrix and take the AABB of the union. That is provably
+// conservative, with no assumption about what the animation does. Each
+// M_i * v lies inside M_i(bind box) because v lies inside the bind box, and
+// the skinned vertex is a convex combination of those points (skin weights are
+// normalised to sum to 1 in load_gltf_skinning_data), so it lies inside their
+// convex hull -- which the AABB of the union contains.
+//
+// Corner-by-corner rather than the cheaper centre+extent form on purpose: the
+// latter is only conservative for rigid bone matrices, and would quietly
+// under-cover a skeleton carrying scale. Cost is bone_count*8 VU0 transforms
+// once per object per frame, against the whole-mesh draw it can save.
+static void render_update_skinned_bounds(athena_object_data *obj) {
+	athena_render_data *data = obj->data;
+	uint32_t bone_count = data->skeleton->bone_count;
+
+	if (!obj->skinned_bounds || bone_count == 0)
+		return;
+
+	VECTOR lo, hi;
+	int seeded = 0;
+
+	for (uint32_t b = 0; b < bone_count; b++) {
+		for (int c = 0; c < 8; c++) {
+			VECTOR p;
+			matrix_functions->apply(p, obj->bone_matrices[b], data->bounding_box[c]);
+
+			if (!seeded) {
+				lo[0] = hi[0] = p[0];
+				lo[1] = hi[1] = p[1];
+				lo[2] = hi[2] = p[2];
+				seeded = 1;
+				continue;
+			}
+
+			for (int k = 0; k < 3; k++) {
+				if (p[k] < lo[k]) lo[k] = p[k];
+				if (p[k] > hi[k]) hi[k] = p[k];
+			}
+		}
+	}
+
+	if (!seeded)
+		return;
+
+	// Same corner ordering calculate_bbox() uses; clip_bounding_box() only
+	// cares that all 8 are present, but keeping them consistent means the two
+	// boxes stay interchangeable for anything added later.
+	const float xs[8] = { lo[0], lo[0], lo[0], lo[0], hi[0], hi[0], hi[0], hi[0] };
+	const float ys[8] = { lo[1], lo[1], hi[1], hi[1], lo[1], lo[1], hi[1], hi[1] };
+	const float zs[8] = { lo[2], hi[2], lo[2], hi[2], lo[2], hi[2], lo[2], hi[2] };
+
+	for (int c = 0; c < 8; c++) {
+		obj->skinned_bounds[c][0] = xs[c];
+		obj->skinned_bounds[c][1] = ys[c];
+		obj->skinned_bounds[c][2] = zs[c];
+		obj->skinned_bounds[c][3] = 1.0f;
+	}
+}
+
+// Object-level frustum rejection, run once per render_object() instead of once
+// per vertex on the VU.
+//
+// Transforms the 8 corners of data->bounding_box by (object * world_screen) on
+// VU0 and ANDs their CLIP flags together (clip_bounding_box, calc_3d.c). A
+// non-zero result means all 8 corners violate the SAME frustum plane; since the
+// box is convex and the transform affine, the whole box -- and therefore every
+// vertex the mesh can possibly place inside it -- is on the far side of that
+// plane, so nothing it draws could land on screen.
+//
+// Deliberately one-sided: sharing a plane is sufficient for "invisible" but not
+// necessary, so a box straddling two planes diagonally (outside both, inside
+// neither alone) is reported visible and gets drawn. That is the cheap,
+// conservative half of the test and the only half worth paying for here -- the
+// exact test costs more than the draw call it would save on the handful of
+// objects it catches.
+//
+// Cost is ~8 corners of VU0 macro-mode work plus one 4x4 multiply, against a
+// draw call that would otherwise cook compact vertices, build a DMA chain, push
+// every vertex through VIF1 and run the whole VU1 program on them.
+int render_object_in_frustum(athena_object_data *obj) {
+	if (!obj || !obj->data || !obj->frustum_cull)
+		return 1;
+
+	// skinned_bounds is non-NULL only for skeletal meshes, where it holds the
+	// animated box render_update_skinned_bounds() rebuilt from this frame's
+	// bone palette. Everything else has no bone matrices between its positions
+	// and the screen, so its bind-time box is already the right thing to test.
+	VECTOR *bounds = obj->skinned_bounds ? obj->skinned_bounds : obj->data->bounding_box;
+
+	// A never-computed bounding box is all zeroes, which survives the transform
+	// as (0,0,0,0) and trips no CLIP flag at all -- the AND collapses to 0 and
+	// the object is reported visible. That fail-open is the intended behaviour
+	// for geometry whose bounds nobody filled in (see calculate_bbox's
+	// callers); culling must never be the reason something silently stops
+	// rendering.
+	MATRIX local_screen;
+	matrix_functions->multiply(local_screen, obj->transform, world_screen);
+
+	return !clip_bounding_box(local_screen, bounds);
+}
+
 void render_object(athena_object_data *obj) {
+	if (!obj || !obj->data)
+		return;
+
+	// Physics still has to advance for culled objects: it is game state, not
+	// drawing. Skipping it off-screen would make bodies freeze the moment the
+	// camera looks away.
 	if (obj->update_physics)
 		obj->update_physics(obj);
 
-	if (obj && obj->data) {
-		g_render_stats.draw_calls++;
-		g_render_stats.triangles += render_calc_triangles(obj->data);
+	// Advance the skeleton BEFORE the cull test, because the test's bounds are
+	// derived from the bone palette (render_update_skinned_bounds). This used
+	// to live inside every draw_vu1_* function, which meant an object drawn in
+	// several passes -- base, then decal, then reflection, then bump twice --
+	// re-evaluated its animation and rebuilt every bone matrix once per pass.
+	// Now it happens once per frame per object, and a culled object skips it
+	// entirely (process_animation() is driven by wall clock, so it picks up
+	// again correctly whenever the object comes back into view).
+	if (obj->data->skeleton && obj->bone_matrices) {
+		process_animation(obj);
+		update_bone_transforms(obj);
+		render_update_skinned_bounds(obj);
 	}
+
+	if (!render_object_in_frustum(obj)) {
+		g_render_stats.objects_culled++;
+		return;
+	}
+
+	g_render_stats.draw_calls++;
+	g_render_stats.triangles += render_calc_triangles(obj->data);
 
 	uint64_t old_alpha = get_screen_param(ALPHA_BLEND_EQUATION);
 	uint64_t old_colclamp = get_screen_param(COLOR_CLAMP_MODE);
@@ -293,11 +431,31 @@ void new_render_object(athena_object_data *obj, athena_render_data *data) {
 
 	obj->bump_offset_buffer = &zero_bump_offset;
 
+	// On by default: it is a pure win for the static meshes that make up most
+	// of a scene, and harmless (fail-open) for render_data whose bounding_box
+	// was never filled in. Callers whose geometry outgrows its box at runtime
+	// clear this -- see the field's doc comment in render.h.
+	obj->frustum_cull = true;
+
+	// A previous life of this athena_object_data may have been skinned
+	// (shadows.c rebinds its projector object, JS rebinds RenderData): drop
+	// any animated box before deciding whether this data needs one. Every
+	// creator zeroes the struct first -- calloc in athena_render_object_create,
+	// memset in shadow_projector_init -- so this is free(NULL) on a fresh one.
+	free(obj->skinned_bounds);
+	obj->skinned_bounds = NULL;
+
 	if (data->skin_data) {
 		obj->anim_controller.current = NULL;
 
 		obj->bones = (athena_bone_transform*)malloc(data->skeleton->bone_count * sizeof(athena_bone_transform));
 		obj->bone_matrices = (MATRIX*)malloc(data->skeleton->bone_count * sizeof(MATRIX));
+
+		// Per-object, not per-render_data: two RenderObjects sharing one
+		// skinned RenderData play different animations, so they cannot share
+		// an animated box. memalign because clip_bounding_box() reads it with
+		// lqc2.
+		obj->skinned_bounds = (VECTOR*)memalign(16, 8 * sizeof(VECTOR));
 
 		for (int i = 0; i < data->skeleton->bone_count; i++) {
 			copy_vector(obj->bones[i].position, data->skeleton->bones[i].position);
@@ -724,9 +882,9 @@ void draw_vu1_with_colors(athena_object_data *obj, int pass_state) {
 	if (data->skeleton) {
 		batch_size = BATCH_SIZE_SKINNED;
 
-		process_animation(obj);
-
-		update_bone_transforms(obj);
+		// The skeleton was advanced once already, by render_object() -- see the
+		// comment there. Objects drawn through several passes must not re-run it
+		// per pass, and the cull test upstream depends on it already being done.
 
 		mpg_addr = vu_mpg_preload(vu1_colors_skinned, true);
 	} else {
@@ -895,9 +1053,9 @@ void draw_vu1_with_lights(athena_object_data *obj, int pass_state) {
 	if (data->skeleton) {
 		batch_size = BATCH_SIZE_SKINNED;
 
-		process_animation(obj);
-
-		update_bone_transforms(obj);
+		// The skeleton was advanced once already, by render_object() -- see the
+		// comment there. Objects drawn through several passes must not re-run it
+		// per pass, and the cull test upstream depends on it already being done.
 
 		mpg_addr = vu_mpg_preload(vu1_lights_skinned, true);
 	} else {
@@ -1064,9 +1222,9 @@ void draw_vu1_with_spec_lights(athena_object_data *obj, int pass_state) {
 	if (data->skeleton) {
 		batch_size = BATCH_SIZE_SKINNED;
 
-		process_animation(obj);
-
-		update_bone_transforms(obj);
+		// The skeleton was advanced once already, by render_object() -- see the
+		// comment there. Objects drawn through several passes must not re-run it
+		// per pass, and the cull test upstream depends on it already being done.
 
 		mpg_addr = vu_mpg_preload(vu1_specular_skinned, true);
 	} else {
@@ -1233,9 +1391,9 @@ void draw_vu1_with_lights_ref(athena_object_data *obj, int pass_state) {
 	if (data->skeleton) {
 		batch_size = BATCH_SIZE_SKINNED;
 
-		process_animation(obj);
-
-		update_bone_transforms(obj);
+		// The skeleton was advanced once already, by render_object() -- see the
+		// comment there. Objects drawn through several passes must not re-run it
+		// per pass, and the cull test upstream depends on it already being done.
 
 		mpg_addr = vu_mpg_preload(vu1_lights_reflection, true);
 	} else {

@@ -50,7 +50,7 @@ sky.height = canvas.height;
 
 const skin_anims = new AnimCollection("Twerk.gltf");
 const gltf_skin = new RenderData("Twerk.gltf");
-gltf_skin.accurate_clipping = false;
+gltf_skin.accurate_clipping = true;
 gltf_skin.face_culling = Render.CULL_FACE_NONE;
 gltf_skin.pipeline = Render.PL_DEFAULT;
 // Skinned meshes animate via bone matrices in the VU, not by touching

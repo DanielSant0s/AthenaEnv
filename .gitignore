@@ -20,3 +20,5 @@ src/exports.c
 *.erl
 bin/starfox.js
 bin/starfox_save.json
+
+RENDER_3D_ANALYSIS.md

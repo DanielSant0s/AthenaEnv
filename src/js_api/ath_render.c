@@ -298,7 +298,15 @@ static JSValue athena_render_data_ctor(JSContext *ctx, JSValueConst new_target, 
 
 			JS_FreeValue(ctx, vert_arr);
 		}
-		
+
+		// Without this the box stays zeroed and render_object_in_frustum()
+		// treats the object as "bounds unknown" forever, so script-built
+		// geometry would be the one kind of mesh that never gets culled. Note
+		// that a shareBuffers RenderData whose positions the script keeps
+		// editing needs either a fresh assignment to .bounds or
+		// RenderObject.frustumCull = false; this is a snapshot, not a binding.
+		calculate_bbox(&ro->native.m);
+
 		ro->native.m.materials = (ath_mat *)malloc(sizeof(ath_mat));
 		ro->native.m.material_count = 1;
 
@@ -828,6 +836,11 @@ static JSValue js_render_data_set(JSContext *ctx, JSValueConst this_val, JSValue
 				ro->native.m.frozen = false;
 				athena_render_data_invalidate_compact_cache(&ro->native);
 				athena_render_data_invalidate_chain_cache(&ro->native);
+
+				// New positions mean the old bounding box describes geometry
+				// that no longer exists -- frustum culling would happily reject
+				// the mesh against a box from a previous shape.
+				calculate_bbox(&ro->native.m);
 
 				FlushCache(WRITEBACK_DCACHE);
 			}
@@ -1416,9 +1429,11 @@ static JSValue js_render_object_get(JSContext *ctx, JSValueConst this_val, int m
 				JS_DefinePropertyValueStr(ctx, obj, "x", JS_NewFloat32(ctx, js_ro_data(ro)->scale[0]), JS_PROP_C_W_E);
 				JS_DefinePropertyValueStr(ctx, obj, "y", JS_NewFloat32(ctx, js_ro_data(ro)->scale[1]), JS_PROP_C_W_E);
 				JS_DefinePropertyValueStr(ctx, obj, "z", JS_NewFloat32(ctx, js_ro_data(ro)->scale[2]), JS_PROP_C_W_E);
-				
+
 				return obj;
 			}
+		case 3:
+			return JS_NewBool(ctx, js_ro_data(ro)->frustum_cull);
 	}
 
 	return JS_UNDEFINED;
@@ -1447,6 +1462,12 @@ static JSValue js_render_object_set(JSContext *ctx, JSValueConst this_val, JSVal
 			JS_ToFloat32(ctx, &js_ro_data(ro)->scale[1], JS_GetPropertyStr(ctx, val, "y"));
 			JS_ToFloat32(ctx, &js_ro_data(ro)->scale[2], JS_GetPropertyStr(ctx, val, "z"));
 			break;
+		case 3:
+			// Returns early: this touches no part of the transform, and
+			// update_object_space() would rebuild the matrix (and re-run the
+			// collision callback) for nothing.
+			js_ro_data(ro)->frustum_cull = JS_ToBool(ctx, val);
+			return JS_UNDEFINED;
 	}
 
 	update_object_space(js_ro_data(ro));
@@ -1526,7 +1547,8 @@ static const JSCFunctionListEntry js_render_object_proto_funcs[] = {
 
 	JS_CGETSET_MAGIC_DEF("position",          js_render_object_get, js_render_object_set, 0),
 	JS_CGETSET_MAGIC_DEF("rotation",          js_render_object_get, js_render_object_set, 1),
-	JS_CGETSET_MAGIC_DEF("scale",             js_render_object_get, js_render_object_set, 2)
+	JS_CGETSET_MAGIC_DEF("scale",             js_render_object_get, js_render_object_set, 2),
+	JS_CGETSET_MAGIC_DEF("frustumCull",       js_render_object_get, js_render_object_set, 3)
 };
 
 typedef struct {
@@ -2243,6 +2265,7 @@ static JSValue js_render_stats(JSContext *ctx, JSValue this_val, int argc, JSVal
 
 	JS_DefinePropertyValueStr(ctx, obj, "drawCalls", JS_NewUint32(ctx, stats->draw_calls), JS_PROP_C_W_E);
 	JS_DefinePropertyValueStr(ctx, obj, "triangles", JS_NewUint32(ctx, stats->triangles), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "culled",    JS_NewUint32(ctx, stats->objects_culled), JS_PROP_C_W_E);
 
 	return obj;
 }

@@ -301,6 +301,8 @@ void athena_render_object_destroy(AthenaRenderObject *ro)
         free(ro->obj.bone_matrices);
     }
 
+    free(ro->obj.skinned_bounds);
+
     free(ro);
 }
 

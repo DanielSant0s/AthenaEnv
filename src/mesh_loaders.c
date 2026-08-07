@@ -19,6 +19,14 @@
 void calculate_bbox(athena_render_data* res_m) {
 	float lowX, lowY, lowZ, hiX, hiY, hiZ;
 
+    // Callers outside the loaders (the JS RenderData constructor and its
+    // "vertices" setter) can reach here with nothing to measure. Leave the box
+    // zeroed rather than reading positions[0]: an all-zero box is what
+    // render_object_in_frustum() treats as "bounds unknown, always draw", so
+    // the failure mode is a missed optimisation instead of a null deref.
+    if (!res_m || !res_m->positions || res_m->index_count == 0)
+        return;
+
     lowX = hiX = res_m->positions[0][0];
     lowY = hiY = res_m->positions[0][1];
     lowZ = hiZ = res_m->positions[0][2];
