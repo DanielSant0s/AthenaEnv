@@ -9,8 +9,11 @@ OBJECT_MATRIX       .assign  5
 CAMERA_POSITION     .assign  9 ; xyz
 
 LIGHT_DIRECTION_PTR .assign 10
-LIGHT_AMBIENT_PTR   .assign 14 ; xyz[4]
-NUM_DIR_LIGHTS      .assign 14 ; w[1]
+LIGHT_AMBIENT_SUM   .assign 14 ; xyz = ambients pre-summed on the EE, w = 1.0 so
+                               ; one lq initialises the light accumulator whole
+NUM_DIR_LIGHTS      .assign 15 ; w[1]. Cannot share QW 14: its w is the float 1.0
+                               ; above, whose low 16 bits read back as 0.
+                               ; 16..17 free (were the other 3 ambients).
 LIGHT_DIFFUSE_PTR   .assign 18
 LIGHT_SPECULAR_PTR  .assign 22
 

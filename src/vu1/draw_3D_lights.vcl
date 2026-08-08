@@ -162,15 +162,12 @@ no_tex_kick_cull:
         ;//////////////// - NORMALS - /////////////////
         MatrixMultiplyVector	normal,    ObjectMatrix, inNorm ; transform each normal by the matrix
         
-        move light, vf00
+        lq light, LIGHT_AMBIENT_SUM(vi00)  ; xyz = summed ambient, w = 1.0
         move intensity, vf00
 
         iadd  currDirLight, vi00, vi00
+        ibeq  dirLightQnt, vi00, skip_culled_directionaLightsLoop   ; do-while: 0 lights would never terminate
         culled_directionaLightsLoop:
-            lq LightAmbient, LIGHT_AMBIENT_PTR(currDirLight)
-
-            ; Ambient lighting
-            add.xyz light, light, LightAmbient
 
             lq LightDirection, LIGHT_DIRECTION_PTR(currDirLight)
             
@@ -186,6 +183,7 @@ no_tex_kick_cull:
 
             iaddiu   currDirLight,  currDirLight,  1; increment the loop counter 
             ibne    dirLightQnt,  currDirLight,  culled_directionaLightsLoop	; and repeat if needed
+        skip_culled_directionaLightsLoop:
 
         add.xyzw   color, matDiffuse, inColor
         mul    color, color,      light       ; color = color * light
@@ -301,7 +299,7 @@ no_tex_kick_clip:
         ;//////////////// - NORMALS - /////////////////
         MatrixMultiplyVector	normal,    ObjectMatrix, inNorm ; transform each normal by the matrix
     
-        move light, vf00 
+        lq light, LIGHT_AMBIENT_SUM(vi00)  ; xyz = summed ambient, w = 1.0
         move intensity, vf00
 
         iadd  currDirLight, vi00, vi00
@@ -309,10 +307,6 @@ no_tex_kick_clip:
         ilw.w       dirLightQnt,    NUM_DIR_LIGHTS(vi00) ; load active directional lights
 
         directionaLightsLoop: 
-            lq LightAmbient, LIGHT_AMBIENT_PTR(currDirLight)
-
-            ; Ambient lighting
-            add.xyz light, light, LightAmbient
 
             lq LightDirection, LIGHT_DIRECTION_PTR(currDirLight)
             

@@ -51,6 +51,23 @@ static int active_pnt_lights = 0;
 static int active_dir_lights = 0;
 
 static LightData dir_lights = { };
+
+// Ambients pre-summed for the VU, which used to add one per light inside its
+// per-vertex loop. w = 1.0 so a single lq initialises the light accumulator
+// including the alpha lane. The light count cannot share that w -- see
+// mem_layout.i -- so it lives in its own quadword.
+static VECTOR   light_ambient_sum qw_aligned = { 0.0f, 0.0f, 0.0f, 1.0f };
+static FIVECTOR light_count qw_aligned = { 0.0f, 0.0f, 0.0f, 0 };
+
+static void render_sum_ambient(void) {
+	light_ambient_sum[0] = light_ambient_sum[1] = light_ambient_sum[2] = 0.0f;
+
+	for (int i = 0; i < active_dir_lights; i++) {
+		light_ambient_sum[0] += dir_lights.ambient[i].x;
+		light_ambient_sum[1] += dir_lights.ambient[i].y;
+		light_ambient_sum[2] += dir_lights.ambient[i].z;
+	}
+}
 static render_stats_t g_render_stats = { 0 };
 
 // View block: screen_scale (0), world_screen (1..4), camera position (9). Lives
@@ -133,6 +150,8 @@ void render_begin() {
 
 	render_reset_stats();
 
+	render_sum_ambient();
+
 	// Cheap insurance, not a correctness requirement: VU1 static memory does
 	// survive a frame boundary, so in principle the view block resident from
 	// last frame is still good. Re-uploading once a frame costs 9 quadwords and
@@ -148,10 +167,10 @@ void render_begin() {
 	owl_add_uquad_ptr(packet, (dir_lights.direction[1]));
 	owl_add_uquad_ptr(packet, (dir_lights.direction[2]));
 	owl_add_uquad_ptr(packet, (dir_lights.direction[3]));
-	owl_add_uquad_ptr(packet, &(dir_lights.ambient[0]));
-	owl_add_uquad_ptr(packet, &(dir_lights.ambient[1]));
-	owl_add_uquad_ptr(packet, &(dir_lights.ambient[2]));
-	owl_add_uquad_ptr(packet, &(dir_lights.ambient[3]));
+	owl_add_uquad_ptr(packet, &light_ambient_sum);
+	owl_add_uquad_ptr(packet, &light_count);
+	owl_add_uquad_ptr(packet, &light_count);   // 16..17 unused, see mem_layout.i
+	owl_add_uquad_ptr(packet, &light_count);
 	owl_add_uquad_ptr(packet, (dir_lights.diffuse[0]));
 	owl_add_uquad_ptr(packet, (dir_lights.diffuse[1]));
 	owl_add_uquad_ptr(packet, (dir_lights.diffuse[2]));
@@ -182,10 +201,10 @@ void render_set_view(float fov, float near, float far, float width, float height
 
 int NewLight() {
 	if (active_dir_lights < 4) {
-		dir_lights.ambient[0].w = active_dir_lights+1;
+		light_count.w = active_dir_lights+1;
 		owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 2);
-		owl_add_unpack_data_cnt(packet, 14, 1, 0);
-		owl_add_uquad_ptr(packet, &(dir_lights.ambient[0]));
+		owl_add_unpack_data_cnt(packet, 15, 1, 0);
+		owl_add_uquad_ptr(packet, &light_count);
 		return active_dir_lights++;
 	}
 		
@@ -210,8 +229,9 @@ void SetLightAttribute(int id, float x, float y, float z, int attr) {
 			dir_lights.ambient[id].x = x;
 			dir_lights.ambient[id].y = y;
 			dir_lights.ambient[id].z = z;
-			owl_add_unpack_data_cnt(packet, 14+id, 1, 0);
-			owl_add_uquad_ptr(packet, &(dir_lights.ambient[id]));
+			render_sum_ambient();
+			owl_add_unpack_data_cnt(packet, 14, 1, 0);
+			owl_add_uquad_ptr(packet, &light_ambient_sum);
 			break;
 		case ATHENA_LIGHT_DIFFUSE:
 			dir_lights.diffuse[id][0] = x;

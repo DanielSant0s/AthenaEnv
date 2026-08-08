@@ -76,7 +76,6 @@ cull_init:
     ilw.w       dirLightQnt,    NUM_DIR_LIGHTS(vi00)  ; load active directional lights
     lq.xyz      CamPos,         CAMERA_POSITION(vi00) ; load program params
     iaddiu      lightDirs,      vi00,    LIGHT_DIRECTION_PTR       
-    iaddiu      lightAmbs,      vi00,    LIGHT_AMBIENT_PTR
     iaddiu      lightDiffs,     vi00,    LIGHT_DIFFUSE_PTR    
     iaddiu      lightSpecs,     vi00,    LIGHT_SPECULAR_PTR 
 
@@ -210,15 +209,12 @@ no_tex_kick_cull:
         ;//////////////// - NORMALS - /////////////////
         MatrixMultiplyVector	normal,    ObjectMatrix, final_normal ; transform each normal by the matrix
         
-        move light, vf00
+        lq light, LIGHT_AMBIENT_SUM(vi00)  ; xyz = summed ambient, w = 1.0
         move intensity, vf00
 
         iadd  currDirLight, vi00, vi00
+        ibeq  dirLightQnt, vi00, skip_culled_directionaLightsLoop   ; do-while: 0 lights would never terminate
         culled_directionaLightsLoop:
-            lq LightAmbient, LIGHT_AMBIENT_PTR(currDirLight)
-
-            ; Ambient lighting
-            add.xyz light, light, LightAmbient
 
             lq LightDirection, LIGHT_DIRECTION_PTR(currDirLight)
             
@@ -241,6 +237,7 @@ no_tex_kick_cull:
 
             iaddiu   currDirLight,  currDirLight,  1; increment the loop counter 
             ibne    dirLightQnt,  currDirLight,  culled_directionaLightsLoop	; and repeat if needed
+        skip_culled_directionaLightsLoop:
 
         add.xyzw   color, matDiffuse, inColor
         mul    color, color,      light       ; color = color * light
@@ -386,24 +383,19 @@ no_tex_kick_clip:
         ;//////////////// - NORMALS - /////////////////
         MatrixMultiplyVector	normal,    ObjectMatrix, final_normal ; transform each normal by the matrix
         
-        move light, vf00
+        lq light, LIGHT_AMBIENT_SUM(vi00)  ; xyz = summed ambient, w = 1.0
         move intensity, vf00
 
         iadd  currDirLight, vi00, vi00
         ilw.w       dirLightQnt,    NUM_DIR_LIGHTS(vi00) ; load active directional lights 
+        ibeq  dirLightQnt, vi00, skip_directionaLightsLoop   ; do-while: 0 lights would never terminate
         directionaLightsLoop:
             
             lq.xyz      CamPos,         CAMERA_POSITION(vi00) ; load program params
             iaddiu      lightDirs,      vi00,    LIGHT_DIRECTION_PTR      
-            iaddiu      lightAmbs,      vi00,    LIGHT_AMBIENT_PTR  
             iaddiu      lightDiffs,     vi00,    LIGHT_DIFFUSE_PTR     
             iaddiu      lightSpecs,     vi00,    LIGHT_SPECULAR_PTR  
 
-            iadd  currLightPtr, lightAmbs, currDirLight
-            lq LightAmbient, 0(currLightPtr)
-
-            ; Ambient lighting
-            add.xyz light, light, LightAmbient
 
             iadd  currLightPtr, lightDirs, currDirLight
             lq LightDirection, 0(currLightPtr)
@@ -428,6 +420,7 @@ no_tex_kick_clip:
 
             iaddiu   currDirLight,  currDirLight,  1; increment the loop counter 
             ibne    dirLightQnt,  currDirLight,  directionaLightsLoop	; and repeat if needed
+        skip_directionaLightsLoop:
 
         add.xyzw   color, matDiffuse, inColor
         mul    color, color,      light       ; color = color * light
