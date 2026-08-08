@@ -226,7 +226,7 @@ while(true) {
         Camera.update();
     }
     gltf_skin.texture_mapping = false;
-    gltf_skin.shade_model = Render.SHADE_FLAT;
+    gltf_skin.shade_model = 0;
     gltf_skin.pipeline = Render.PL_NO_LIGHTS;
     skin_object.render();
     // Restore main camera and context
@@ -249,7 +249,7 @@ while(true) {
     world.stepWithContacts(space, jgroup, 0.01f);
 
     gltf_skin.texture_mapping = true;
-    gltf_skin.shade_model = Render.SHADE_GOURAUD;
+    gltf_skin.shade_model = 1;
     gltf_skin.pipeline = Render.PL_DEFAULT;
     skin_object.render();
 

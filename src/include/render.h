@@ -210,7 +210,7 @@ typedef struct {
     uint32_t   chunk_count;
     int        mpg_addr;     // mpg_addr baked into this chain's MSCALF/MSCNT trailers
     uint32_t   built_version; // athena_render_data.chain_version at last build; see below
-    uint8_t    built_kind;    // eChainKind the slot holds; a pipeline switch rebuilds
+
 
     // GS TEX0/TEX1 on PATH1 instead of a PATH2 DIRECT. 3 QW per
     // material_indices entry: AD giftag header + TEX0 + TEX1, EOP=1. The VU
@@ -259,17 +259,13 @@ typedef struct athena_render_data {
     // A frozen mesh cannot be used with ODE trimesh or shadows.c's grid.
     bool frozen;
 
-    // One slot per pass_state (0 base, 1 bump, 2 decal), not one shared: a
-    // single render_object() issues all three back-to-back into the same
-    // unflushed ring, and their chunk structure differs (UV unpack). Sharing
-    // would rewrite a buffer an in-flight DMA_CALL still points at.
-    // Rebuilt when built_version != chain_version, mpg_addr goes stale, or
-    // built_kind changes.
-    //
-    // Shared by colors/lights/spec rather than one array each: only one
-    // pipeline is active per render_data, so separate arrays would be 6 idle
-    // slots. Switching data->pipeline rebuilds via built_kind.
-    athena_chain_cache chain[3];
+    // [pipeline][pass_state]. A dedicated slot per combination, never shared:
+    // render_object() issues base/bump/decal back-to-back into the same
+    // unflushed ring, and a script can flip data->pipeline between passes of the
+    // same frame (shadows.js does). Rebuilding a slot in place while a queued
+    // DMA_CALL still points at it desyncs the VIF stream.
+    // Rebuilt when built_version != chain_version or mpg_addr goes stale.
+    athena_chain_cache chain[3][3];
 
     // The reflection pass runs IN ADDITION to the pipeline above, so it cannot
     // share those slots. Always pass_state 0.

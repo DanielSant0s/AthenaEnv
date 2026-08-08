@@ -89,10 +89,13 @@ void athena_render_data_destroy(AthenaRenderData *rd)
 
     // Baked DMA_CALL chains (render_build_chain): 3 pass_state slots plus the
     // reflection pass. Same always-owned-internally rule as compact_* above.
-    athena_chain_cache *slots[4] = {
-        &rd->m.chain[0], &rd->m.chain[1], &rd->m.chain[2], &rd->m.ref_chain
+    athena_chain_cache *slots[10] = {
+        &rd->m.chain[0][0], &rd->m.chain[0][1], &rd->m.chain[0][2],
+        &rd->m.chain[1][0], &rd->m.chain[1][1], &rd->m.chain[1][2],
+        &rd->m.chain[2][0], &rd->m.chain[2][1], &rd->m.chain[2][2],
+        &rd->m.ref_chain
     };
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 10; i++) {
         free(slots[i]->buffer);
         free(slots[i]->chunk_offset);
         free(slots[i]->tex_giftag);

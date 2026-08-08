@@ -508,10 +508,13 @@ void shadow_projector_free(ath_shadow_projector *p) {
     data->compact_capacity = 0;
     data->compact_group_count = 0;
     // Baked DMA_CALL chains: 3 pass_state slots plus the reflection pass.
-    athena_chain_cache *slots[4] = {
-        &data->chain[0], &data->chain[1], &data->chain[2], &data->ref_chain
+    athena_chain_cache *slots[10] = {
+        &data->chain[0][0], &data->chain[0][1], &data->chain[0][2],
+        &data->chain[1][0], &data->chain[1][1], &data->chain[1][2],
+        &data->chain[2][0], &data->chain[2][1], &data->chain[2][2],
+        &data->ref_chain
     };
-    for (int ci = 0; ci < 4; ci++) {
+    for (int ci = 0; ci < 10; ci++) {
         free(slots[ci]->buffer); slots[ci]->buffer = NULL;
         free(slots[ci]->chunk_offset); slots[ci]->chunk_offset = NULL;
         free(slots[ci]->tex_giftag); slots[ci]->tex_giftag = NULL;

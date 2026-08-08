@@ -468,10 +468,13 @@ void new_render_object(athena_object_data *obj, athena_render_data *data) {
 	// Baked DMA_CALL chains: independent of the frozen float source, so reset
 	// unconditionally -- covers a previous life of this render_data (e.g.
 	// shadows.c rebuilding geometry with a different chunk count).
-	athena_chain_cache *slots[4] = {
-		&data->chain[0], &data->chain[1], &data->chain[2], &data->ref_chain
+	athena_chain_cache *slots[10] = {
+		&data->chain[0][0], &data->chain[0][1], &data->chain[0][2],
+		&data->chain[1][0], &data->chain[1][1], &data->chain[1][2],
+		&data->chain[2][0], &data->chain[2][1], &data->chain[2][2],
+		&data->ref_chain
 	};
-	for (int i = 0; i < 4; i++) {
+	for (int i = 0; i < 10; i++) {
 		free(slots[i]->buffer);
 		free(slots[i]->chunk_offset);
 		free(slots[i]->tex_giftag);
@@ -905,11 +908,9 @@ typedef enum {
 // Bakes one DMA_CALL sub-chain per material chunk: the unpacks (all DMA_REF)
 // plus the FLUSHA/NOP/ITOP/MSCALF-or-MSCNT trailer. Mirrors the caller's chunk
 // loop, including the last_index==-1 MSCALF-vs-MSCNT condition.
-// trailer_flush mirrors what each caller emitted before: spec_lights is the one
-// pipeline that already ran without the FLUSHA (see item 1.2 in the analysis).
 static void render_build_chain(athena_object_data *obj, athena_chain_cache *chain,
                                int pass_state, int batch_size, int mpg_addr,
-                               eChainKind kind, bool trailer_flush) {
+                               eChainKind kind) {
 	athena_render_data *data = obj->data;
 
 	bool is_ref  = (kind == CHAIN_REF);
@@ -949,7 +950,7 @@ static void render_build_chain(athena_object_data *obj, athena_chain_cache *chai
 
 	chain->mpg_addr = mpg_addr;
 	chain->built_version = data->chain_version;
-	chain->built_kind = (uint8_t)kind;
+
 
 	if (chunk_count == 0) {
 		free(chain->buffer);
@@ -1034,8 +1035,13 @@ static void render_build_chain(athena_object_data *obj, athena_chain_cache *chai
 			if (texcoords)
 				owl_add_unpack_data_ref_packed(&chain_pkt, dst_uvs, &texcoords[idxs_drawn], count, UNPACK_V2_16, sizeof(athena_compact_uv), 1, 0);
 
+			// FLUSHA waits for PATH1/2/3 to go idle. PATH3 is the load-bearing
+			// one: render_trigger_texture_upload fires a VIF interrupt whose
+			// handler queues the texture transfer on PATH3, running in parallel
+			// with this VIF1 unpack. Without the wait, the XGKICK below can
+			// reach the GS while that upload is still streaming.
 			owl_add_cnt_tag(&chain_pkt, 1, owl_vif_code_double(VIF_CODE(0, 0, VIF_NOP, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
-			owl_add_uint(&chain_pkt, VIF_CODE(0, 0, trailer_flush ? VIF_FLUSHA : VIF_NOP, 0));
+			owl_add_uint(&chain_pkt, VIF_CODE(0, 0, VIF_FLUSHA, 0));
 			owl_add_uint(&chain_pkt, VIF_CODE(0, 0, VIF_NOP, 0));
 			owl_add_uint(&chain_pkt, VIF_CODE(count, 0, VIF_ITOP, 0));
 			owl_add_uint(&chain_pkt, VIF_CODE(mpg_addr, 0, (last_index == -1? VIF_MSCALF : VIF_MSCNT), 0));
@@ -1119,10 +1125,10 @@ void draw_vu1_with_colors(athena_object_data *obj, int pass_state) {
 	// back-to-back into the same unflushed ring. A stale mpg_addr (VU code
 	// cache eviction) also forces a rebuild -- rare enough that patching just
 	// the cached MSCALF/MSCNT immediates is not worth the bookkeeping.
-	athena_chain_cache *chain = &data->chain[pass_state];
+	athena_chain_cache *chain = &data->chain[PL_NO_LIGHTS][pass_state];
 	if (!chain->buffer || chain->built_version != data->chain_version
-	    || chain->mpg_addr != mpg_addr || chain->built_kind != CHAIN_COLORS) {
-		render_build_chain(obj, chain, pass_state, batch_size, mpg_addr, CHAIN_COLORS, true);
+	    || chain->mpg_addr != mpg_addr) {
+		render_build_chain(obj, chain, pass_state, batch_size, mpg_addr, CHAIN_COLORS);
 	}
 
 	// 8 unconditional quadwords (1 bone-matrix ref + 4+1 transform + 1+1
@@ -1236,10 +1242,10 @@ void draw_vu1_with_lights(athena_object_data *obj, int pass_state) {
 		mpg_addr = vu_mpg_preload(vu1_lights, true);
 	}
 
-	athena_chain_cache *chain = &data->chain[pass_state];
+	athena_chain_cache *chain = &data->chain[PL_DEFAULT][pass_state];
 	if (!chain->buffer || chain->built_version != data->chain_version
-	    || chain->mpg_addr != mpg_addr || chain->built_kind != CHAIN_LIT) {
-		render_build_chain(obj, chain, pass_state, batch_size, mpg_addr, CHAIN_LIT, true);
+	    || chain->mpg_addr != mpg_addr) {
+		render_build_chain(obj, chain, pass_state, batch_size, mpg_addr, CHAIN_LIT);
 	}
 
 	// 7 unconditional quadwords (FLUSHE tag + 4+1 transform + 1 bone-matrix
@@ -1349,10 +1355,10 @@ void draw_vu1_with_spec_lights(athena_object_data *obj, int pass_state) {
 		mpg_addr = vu_mpg_preload(vu1_specular, true);
 	}
 
-	athena_chain_cache *chain = &data->chain[pass_state];
+	athena_chain_cache *chain = &data->chain[PL_SPECULAR][pass_state];
 	if (!chain->buffer || chain->built_version != data->chain_version
-	    || chain->mpg_addr != mpg_addr || chain->built_kind != CHAIN_LIT) {
-		render_build_chain(obj, chain, pass_state, batch_size, mpg_addr, CHAIN_LIT, false);
+	    || chain->mpg_addr != mpg_addr) {
+		render_build_chain(obj, chain, pass_state, batch_size, mpg_addr, CHAIN_LIT);
 	}
 
 	// 7 unconditional quadwords (FLUSHE tag + 4+1 transform + 1 bone-matrix
@@ -1466,8 +1472,8 @@ void draw_vu1_with_lights_ref(athena_object_data *obj, int pass_state) {
 
 	athena_chain_cache *chain = &data->ref_chain;
 	if (!chain->buffer || chain->built_version != data->chain_version
-	    || chain->mpg_addr != mpg_addr || chain->built_kind != CHAIN_REF) {
-		render_build_chain(obj, chain, pass_state, batch_size, mpg_addr, CHAIN_REF, true);
+	    || chain->mpg_addr != mpg_addr) {
+		render_build_chain(obj, chain, pass_state, batch_size, mpg_addr, CHAIN_REF);
 	}
 		
 	

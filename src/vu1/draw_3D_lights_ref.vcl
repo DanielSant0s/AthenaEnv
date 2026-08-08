@@ -166,6 +166,9 @@ no_tex_kick_cull:
 
         ;//////////////// - NORMALS - /////////////////
         MatrixMultiplyVector	normal,    ObjectMatrix, inNorm ; transform each normal by the matrix
+        ; Renormalise: ObjectMatrix carries the object scale, so without this the
+        ; diffuse term scales with it -- an object at scale 2 renders twice as bright.
+        VectorNormalize normal, normal
         
         lq light, LIGHT_AMBIENT_SUM(vi00)  ; xyz = summed ambient, w = 1.0
         move intensity, vf00
@@ -317,6 +320,9 @@ no_tex_kick_clip:
 
         ;//////////////// - NORMALS - /////////////////
         MatrixMultiplyVector	normal,    ObjectMatrix, inNorm ; transform each normal by the matrix
+        ; Renormalise: ObjectMatrix carries the object scale, so without this the
+        ; diffuse term scales with it -- an object at scale 2 renders twice as bright.
+        VectorNormalize normal, normal
     
         lq light, LIGHT_AMBIENT_SUM(vi00)  ; xyz = summed ambient, w = 1.0
         move intensity, vf00
