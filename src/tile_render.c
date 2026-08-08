@@ -104,6 +104,13 @@ void tile_render_render(
 
     owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 3);
 
+    // VU1 static addresses 0..1, which the 3D renderer also uses (screen_scale
+    // at 0, first row of world_screen at 1) and caches there across draws. Tell
+    // it those are gone so the next 3D draw re-uploads instead of rendering
+    // with this tilemap's camera offset. Costs 9 quadwords on the next 3D
+    // object, and only when 2D tiles and 3D are actually interleaved.
+    render_invalidate_vu_view();
+
     owl_add_unpack_data_cnt(packet, 0, 2, 0);
     owl_add_uquad_ptr(packet, offset_camera);
     owl_add_uquad_ptr(packet, &((float []) { x, y, zindex, 0.0f }));

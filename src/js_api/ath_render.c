@@ -919,6 +919,12 @@ static JSValue js_render_data_set(JSContext *ctx, JSValueConst this_val, JSValue
 
 				ro->native.m.material_index_count = material_index_count;
 
+				// The compact buffers are laid out per material group, with
+				// each group's base padded to a quadword boundary (see
+				// athena_render_data.compact_group_base). New group ranges mean
+				// new bases, so whatever is currently cooked sits at the wrong
+				// offsets and has to be rebuilt, not just re-pointed at.
+				athena_render_data_invalidate_compact_cache(&ro->native);
 				athena_render_data_invalidate_chain_cache(&ro->native);
 
 				FlushCache(WRITEBACK_DCACHE);

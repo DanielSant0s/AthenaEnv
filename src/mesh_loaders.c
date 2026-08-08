@@ -170,7 +170,7 @@ void loadOBJ(athena_render_data* res_m, const char* path, GSSURFACE* text) {
 				added_material_indices++;
 
 				if (added_material_indices > res_m->material_index_count) {
-					res_m->material_indices = (material_index*)realloc(res_m->material_indices, added_material_indices);
+					res_m->material_indices = (material_index*)realloc(res_m->material_indices, added_material_indices * sizeof(material_index));
 					res_m->material_index_count++;
 				}
 
@@ -184,12 +184,25 @@ void loadOBJ(athena_render_data* res_m, const char* path, GSSURFACE* text) {
 	added_material_indices++;
 
 	if (added_material_indices > res_m->material_index_count) {
-		res_m->material_indices = (material_index*)realloc(res_m->material_indices, added_material_indices);
+		res_m->material_indices = (material_index*)realloc(res_m->material_indices, added_material_indices * sizeof(material_index));
 		res_m->material_index_count++;
 	}
 
 	res_m->material_indices[added_material_indices-1].index = cur_mat_index;
-	res_m->material_indices[added_material_indices-1].end = res_m->index_count;
+	// index_count-1, not index_count: .end is INCLUSIVE (every other entry
+	// above sets it to i-1, the last vertex of the group, and the draw loops
+	// compute their slice as `end - last_index` off that convention). Using
+	// index_count here handed the final material one phantom vertex past the
+	// real geometry, making its vertex count non-multiple-of-3 -- for Car.obj
+	// the last group asked for 721 vertices instead of 720.
+	//
+	// That phantom used to be invisible: pre-compact-cache, it read
+	// positions[index_count], one VECTOR past a malloc of exactly
+	// index_count entries, so it was heap garbage that almost always
+	// clipped away. render_cook_compact_vertices' +4 spare capacity is
+	// zeroed, so the same read now lands on a well-defined (0,0,0) -- a real
+	// vertex at the object's origin.
+	res_m->material_indices[added_material_indices-1].end = res_m->index_count - 1;
 
     calculate_bbox(res_m);
 

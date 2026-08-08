@@ -34,6 +34,10 @@ void cameraUpdate() {
 	LookAtCameraMatrix(world_view, camera_position, camera_target, camera_up);
 
 	matrix_functions->multiply(world_screen, world_view, view_screen);
+
+	// world_screen and the camera position just changed; the copies sitting in
+	// VU1 static memory are now stale. See render_invalidate_vu_view().
+	render_invalidate_vu_view();
 }
 
 void cameraSave(athena_camera_state *out)

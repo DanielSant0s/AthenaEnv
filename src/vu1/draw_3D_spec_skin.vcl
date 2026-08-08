@@ -59,6 +59,12 @@ ignore_face_culling:
 	fcset   0x000000	; VCL won't let us use CLIP without first zeroing
 				; the clip flags
 
+    ; Mask for the texture flag bake_giftags stuffs into the prim giftag NLOOP
+    ; field. NLOOP occupies bits 0..14 and EOP sits at bit 15, so ilw.x on the
+    ; giftag always comes back with bit 15 set and has to be masked before it
+    ; can be tested. Set before the branch below, because BOTH paths need it.
+    iaddiu  texMask, vi00, 1
+
     ilw.y       accurateClipping,    CLIPFAN_OFFSET(vi00)
     ibne vi00,  accurateClipping, scissor_init
 
@@ -87,7 +93,23 @@ culled_init:
 
     iaddiu  skinData,        iBase,      0           ; pointer to vertex data
  
-    iaddiu    kickAddress,    iBase,  SKINNED_INBUF_SIZE       ; pointer for XGKICK
+    ; texGiftagAddr: 3 QW of AD giftag (header + TEX0 + TEX1) written by the EE
+    ; via render_emit_tex_giftag, EOP=1, a complete standalone packet. Sent on
+    ; its own BEFORE the vertex loop, never chained onto the vertex XGKICK: the
+    ; accurate-clipping path can fire mid-loop XGKICKs that carry no texture
+    ; state of their own and draw with whatever the GS has latched.
+    ;
+    ; Skipped entirely for an untextured chunk -- the EE does not emit the block
+    ; at all in that case, so kicking it would send stale VU memory to the GS.
+    ; bake_giftags flags this in the prim giftag NLOOP field.
+    iaddiu    texGiftagAddr,  iBase,  SKINNED_INBUF_SIZE
+    ilw.x     texEnabled,     GIFTAG_OFFSET(iBase)
+    iand      texEnabled,     texEnabled, texMask
+    ibeq      texEnabled,     vi00,   no_tex_kick_cull
+    xgkick    texGiftagAddr
+no_tex_kick_cull:
+
+    iaddiu    kickAddress,    texGiftagAddr,  3       ; pointer for XGKICK
     iaddiu    destAddress,    kickAddress,  1       ; helper pointer for data inserting
     ;////////////////////////////////////////////
 
@@ -271,7 +293,17 @@ init:
 
     iaddiu  skinData,        iBase,      0           ; pointer to vertex data
 
-    iaddiu     kickAddress,    iBase, SKINNED_INBUF_SIZE
+    ; See the comment in culled_init. Matters more here: this is the
+    ; accurate-clipping path, whose scissored triangles fire their own mid-loop
+    ; XGKICKs with no texture state attached.
+    iaddiu     texGiftagAddr,  iBase, SKINNED_INBUF_SIZE
+    ilw.x      texEnabled,     GIFTAG_OFFSET(iBase)
+    iand       texEnabled,     texEnabled, texMask
+    ibeq       texEnabled,     vi00,   no_tex_kick_clip
+    xgkick     texGiftagAddr
+no_tex_kick_clip:
+
+    iaddiu     kickAddress,    texGiftagAddr, 3
     ;////////////////////////////////////////////
 
     ;/////////// --- Store tags --- /////////////

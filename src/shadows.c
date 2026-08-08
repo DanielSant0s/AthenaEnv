@@ -504,13 +504,19 @@ void shadow_projector_free(ath_shadow_projector *p) {
     free(data->compact_normals); data->compact_normals = NULL;
     free(data->compact_colors); data->compact_colors = NULL;
     free(data->compact_uvs); data->compact_uvs = NULL;
+    free(data->compact_group_base); data->compact_group_base = NULL;
     data->compact_capacity = 0;
-    // Pre-baked DMA_CALL chains (render_build_colors_chain), one per pass_state slot
-    for (int ci = 0; ci < 3; ci++) {
-        free(data->colors_chain[ci].buffer); data->colors_chain[ci].buffer = NULL;
-        free(data->colors_chain[ci].chunk_offset); data->colors_chain[ci].chunk_offset = NULL;
-        data->colors_chain[ci].qwc_alloc = 0;
-        data->colors_chain[ci].chunk_count = 0;
+    data->compact_group_count = 0;
+    // Baked DMA_CALL chains: 3 pass_state slots plus the reflection pass.
+    athena_chain_cache *slots[4] = {
+        &data->chain[0], &data->chain[1], &data->chain[2], &data->ref_chain
+    };
+    for (int ci = 0; ci < 4; ci++) {
+        free(slots[ci]->buffer); slots[ci]->buffer = NULL;
+        free(slots[ci]->chunk_offset); slots[ci]->chunk_offset = NULL;
+        free(slots[ci]->tex_giftag); slots[ci]->tex_giftag = NULL;
+        slots[ci]->qwc_alloc = 0;
+        slots[ci]->chunk_count = 0;
     }
 #ifdef ATHENA_ODE
     if (p->rayGeom) { dGeomDestroy(p->rayGeom); p->rayGeom = NULL; }

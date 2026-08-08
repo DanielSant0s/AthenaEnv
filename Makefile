@@ -305,6 +305,9 @@ PS2_PACKER := ps2-packer
 endif
 
 
+# Header dependency tracking
+-include $(EE_OBJS:.o=.d)
+
 #-------------------------- App Content ---------------------------#
 
 all: $(DIR_GUARD) $(EXT_LIBS) $(EE_OBJS) libs
@@ -374,12 +377,12 @@ $(EE_OBJ_DIR):
 $(EE_OBJ_DIR)%.o: $(EE_SRC_DIR)%.c | $(EE_OBJ_DIR)
 	@echo CC - $<
 	$(DIR_GUARD)
-	$(EE_CC) $(EE_CFLAGS) $(EE_INCS) -c $< -o $@
+	$(EE_CC) $(EE_CFLAGS) $(EE_INCS) -MMD -MP -c $< -o $@
 
 $(EE_OBJ_DIR)main.o: $(EE_SRC_DIR)main.c $(MAIN_BUILD_STAMP) | $(EE_OBJ_DIR)
 	@echo CC - $<
 	$(DIR_GUARD)
-	$(EE_CC) $(EE_CFLAGS) $(EE_INCS) -c $< -o $@
+	$(EE_CC) $(EE_CFLAGS) $(EE_INCS) -MMD -MP -c $< -o $@
 
   $(EE_OBJ_DIR)%.o: $(EE_SRC_DIR)%.s | $(EE_OBJ_DIR)
 	@echo AS - $<
@@ -389,7 +392,7 @@ $(EE_OBJ_DIR)main.o: $(EE_SRC_DIR)main.c $(MAIN_BUILD_STAMP) | $(EE_OBJ_DIR)
   $(EE_OBJ_DIR)%.o: $(EE_SRC_DIR)%.S | $(EE_OBJ_DIR)
 	@echo AS - $<
 	$(DIR_GUARD)
-	$(EE_CC) $(EE_CFLAGS) $(EE_INCS) -c $< -o $@
+	$(EE_CC) $(EE_CFLAGS) $(EE_INCS) -MMD -MP -c $< -o $@
 
 $(EE_OBJ_DIR)%.o: $(EE_SRC_DIR)%.vsm | $(EE_OBJ_DIR)
 	@echo DVP - $<

@@ -85,13 +85,17 @@ void athena_render_data_destroy(AthenaRenderData *rd)
     free(rd->m.compact_normals);
     free(rd->m.compact_colors);
     free(rd->m.compact_uvs);
+    free(rd->m.compact_group_base);
 
-    // Pre-baked DMA_CALL chains (render_build_colors_chain), one per
-    // pass_state slot -- same always-owned-internally rule as the
-    // compact_* buffers above.
-    for (int i = 0; i < 3; i++) {
-        free(rd->m.colors_chain[i].buffer);
-        free(rd->m.colors_chain[i].chunk_offset);
+    // Baked DMA_CALL chains (render_build_chain): 3 pass_state slots plus the
+    // reflection pass. Same always-owned-internally rule as compact_* above.
+    athena_chain_cache *slots[4] = {
+        &rd->m.chain[0], &rd->m.chain[1], &rd->m.chain[2], &rd->m.ref_chain
+    };
+    for (int i = 0; i < 4; i++) {
+        free(slots[i]->buffer);
+        free(slots[i]->chunk_offset);
+        free(slots[i]->tex_giftag);
     }
 
     if (rd->m.materials)

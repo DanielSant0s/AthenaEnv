@@ -63,9 +63,21 @@ culled_init:
     lq      primTag,        0(iBase) ; GIF tag - tell GS how many data we will send
     lq      matDiffuse,     1(iBase) ; RGBA
                                      ; u32 : R, G, B, A (0-128)
-    iaddiu  skinData,        iBase,      0           
+    iaddiu  skinData,        iBase,      0
 
-    iaddiu    kickAddress,    iBase,  SKINNED_INBUF_SIZE       ; pointer for XGKICK
+    ; texGiftagAddr: 3 QW written directly by the EE (an AD giftag header +
+    ; TEX0 + TEX1, see render_build_chain tex_giftag unpack -- EOP=1,
+    ; a complete standalone packet). Sent on its own, right now, BEFORE the
+    ; vertex loop -- not chained onto kickAddress below. Required: a
+    ; scissored triangle further down can fire its own mid-loop XGKICK (see
+    ; process_scissor_clip_offset_skin.i) that carries no texture state of
+    ; its own, only whatever TEX0/TEX1 the GS already has latched.
+    iaddiu    texGiftagAddr,    iBase,  SKINNED_INBUF_SIZE
+    xgkick    texGiftagAddr
+
+    ; kickAddress = where WE store our own PRIM giftag + vertex stream, same
+    ; as always.
+    iaddiu    kickAddress,    texGiftagAddr,  3       ; pointer for XGKICK
     iaddiu    destAddress,    kickAddress,  1       ; helper pointer for data inserting
     ;////////////////////////////////////////////
 
@@ -182,9 +194,10 @@ culled_init:
         iaddi   vertexCounter,  vertexCounter,  -1	; decrement the loop counter 
         ibne    vertexCounter,  vi00,   vertexLoop	; and repeat if needed
 
-    ;//////////////////////////////////////////// 
+    ;////////////////////////////////////////////
 
-    xgkick kickAddress ; dispatch to the GS rasterizer.
+    xgkick kickAddress ; dispatch our primTag+vertices. Texture state already
+                        ; went out earlier, standalone, via texGiftagAddr.
 
 --barrier
 --cont
@@ -207,7 +220,17 @@ init:
 
     iaddiu  skinData,        iBase,      0           ; pointer to vertex data
 
-    iaddiu     kickAddress,    iBase, SKINNED_INBUF_SIZE
+    ; See the comment in culled_init: texGiftagAddr holds the EE-written AD
+    ; giftag (TEX0/TEX1) and gets XGKICKed standalone, right now, before this
+    ; triangle vertex processing starts -- required so a scissored triangle
+    ; below (process_scissor_clip_offset_skin.i mid-loop "triangle fan"
+    ; XGKICK, which carries no texture state of its own) never draws with the
+    ; PREVIOUS chunk texture.
+    iaddiu     texGiftagAddr,    iBase, SKINNED_INBUF_SIZE
+    xgkick     texGiftagAddr
+
+    ; kickAddress = where we store our own PRIM giftag chain, same as always.
+    iaddiu     kickAddress,    texGiftagAddr,  3
     ;////////////////////////////////////////////
 
     ;/////////// --- Store tags --- /////////////

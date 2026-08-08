@@ -178,7 +178,7 @@ inline void owl_add_unpack_data_ref_packed(owl_packet *packet, uint32_t t_dest_a
 // the tag right after this one as the return address, which the sub-chain
 // resumes via owl_add_dma_ret(). Used to skip re-authoring (branch+store
 // into the uncached packet ring) the parts of a draw call's chain that are
-// identical frame-to-frame for a static mesh -- see render_build_colors_chain.
+// identical frame-to-frame for a static mesh -- see render_build_chain.
 inline void owl_add_dma_call(owl_packet *packet, void *t_chain_addr) {
     owl_add_tag(packet, 0, DMA_TAG(0, 0, DMA_CALL, 0, t_chain_addr, 0));
 }
