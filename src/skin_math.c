@@ -184,23 +184,22 @@ void update_bone_transforms(athena_object_data* obj) {
         athena_bone_data* bone = &skeleton->bones[i];
         athena_bone_transform* transform = &bone_transforms[i];
 
-        MATRIX local_transform;
-        create_transform_matrix(local_transform, 
-                              transform->position, 
-                              transform->rotation, 
-                              transform->scale);
-
-        memcpy(transform->transform, local_transform, sizeof(MATRIX));
+        matrix_functions->from_trs(transform->transform,
+                                   transform->position,
+                                   transform->rotation,
+                                   transform->scale);
 
         if (bone->parent_id > -1 && bone->parent_id < (int32_t)skeleton->bone_count) {
             matrix_functions->multiply(transform->transform, bone_transforms[bone->parent_id].transform, transform->transform);
-        } 
+        }
 
-        MATRIX trans_inv;
-        matrix_functions->transpose(trans_inv, bone->inverse_bind);
-        matrix_functions->multiply(obj->bone_matrices[i], transform->transform, trans_inv);
-        
-        matrix_functions->transpose(obj->bone_matrices[i], obj->bone_matrices[i]);
+        // The palette entry is transpose(world * inverse_bind^T), which by
+        // (AB)^T = B^T A^T is just inverse_bind * world^T -- one transpose per
+        // bone instead of two, and inverse_bind is used as stored (glTF hands
+        // it over column-major, i.e. already transposed).
+        MATRIX world_t;
+        matrix_functions->transpose(world_t, transform->transform);
+        matrix_functions->multiply(obj->bone_matrices[i], bone->inverse_bind, world_t);
     }
 
     // The palette is handed to the DMAC by reference (draw_vu1_* unpacks it at

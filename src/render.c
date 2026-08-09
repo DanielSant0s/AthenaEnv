@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <malloc.h>
 #include <math.h>
+#include <float.h>
 #include <fcntl.h>
 #include <string.h>
 #include <matrix.h>
@@ -302,31 +303,12 @@ static void render_update_skinned_bounds(athena_object_data *obj) {
 	if (!obj->skinned_bounds || bone_count == 0)
 		return;
 
-	VECTOR lo, hi;
-	int seeded = 0;
+	// Sentinel seeds rather than "first point wins": bone_count is non-zero
+	// here, so at least 8 corners always land on both.
+	VECTOR lo = {  FLT_MAX,  FLT_MAX,  FLT_MAX, 0.0f };
+	VECTOR hi = { -FLT_MAX, -FLT_MAX, -FLT_MAX, 0.0f };
 
-	for (uint32_t b = 0; b < bone_count; b++) {
-		for (int c = 0; c < 8; c++) {
-			VECTOR p;
-			matrix_functions->apply(p, obj->bone_matrices[b], data->bounding_box[c]);
-
-			if (!seeded) {
-				lo[0] = hi[0] = p[0];
-				lo[1] = hi[1] = p[1];
-				lo[2] = hi[2] = p[2];
-				seeded = 1;
-				continue;
-			}
-
-			for (int k = 0; k < 3; k++) {
-				if (p[k] < lo[k]) lo[k] = p[k];
-				if (p[k] > hi[k]) hi[k] = p[k];
-			}
-		}
-	}
-
-	if (!seeded)
-		return;
+	vu0_bounds_from_palette(lo, hi, obj->bone_matrices, bone_count, data->bounding_box);
 
 	// Same corner ordering calculate_bbox() uses; clip_bounding_box() only
 	// cares that all 8 are present, but keeping them consistent means the two
@@ -644,11 +626,7 @@ void process_animation(athena_object_data *obj) {
 }
 
 void update_object_space(athena_object_data *obj) {
-  	matrix_functions->identity(obj->transform);
-
-  	matrix_functions->rotate(obj->transform, obj->transform, obj->rotation);
-	matrix_functions->scale(obj->transform, obj->transform, obj->scale);
-  	matrix_functions->translate(obj->transform, obj->transform, obj->position);
+  	matrix_functions->trs_euler(obj->transform, obj->position, obj->rotation, obj->scale);
 
 	if (obj->update_collision)
 		obj->update_collision(obj);

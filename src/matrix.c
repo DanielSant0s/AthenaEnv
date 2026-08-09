@@ -291,6 +291,101 @@ void vu0_matrix_rotate(MATRIX m0, MATRIX m1, VECTOR rot) {
     matrix_rotate_x(m0, m0, rot[0]);
 }
 
+// Minimax coefficients for [-pi/2, pi/2], Horner order:
+//   Psin(t) = t + t*t2*(k3 + t2*(k5 + t2*(k7 + t2*k9)))
+//   Pcos(t) = 1 + t2*(b1 + t2*(b2 + t2*(b3 + t2*b4)))
+static const VECTOR TRIG_KS = { -1.6666656733e-01f, 8.3330171183e-03f, -1.9806622004e-04f, 2.6000695925e-06f };
+static const VECTOR TRIG_KC = { -4.9999931455e-01f, 4.1663989425e-02f, -1.3855934376e-03f, 2.3194566893e-05f };
+static const VECTOR TRIG_HALF_PI = { M_PI/2, M_PI/2, M_PI/2, M_PI/2 };
+static const uint32_t TRIG_SIGN_MASK[4] __attribute__((aligned(16))) = {
+    0x80000000u, 0x80000000u, 0x80000000u, 0x80000000u
+};
+
+// sin/cos of three angles at once, for angles already reduced to [-pi, pi].
+// cos(a) = Psin(pi/2-|a|) is even, so it needs no sign; sin(a) = Pcos(pi/2-|a|)
+// comes out non-negative and gets the angle's sign bit grafted on with MMI.
+// The sqrt(1-sin^2) that _ecossin uses for the cosine is what makes it lose
+// three decimal digits near a=0 -- this avoids the square root entirely.
+static void vu0_sincos3(VECTOR sn, VECTOR cs, VECTOR angles) {
+    __asm__ __volatile__(
+	"lqc2    $vf1,  0x0(%2)     \n"
+	"lqc2    $vf20, 0x0(%3)     \n"
+	"lqc2    $vf21, 0x0(%4)     \n"
+	"lqc2    $vf22, 0x0(%5)     \n"
+
+	"vabs.xyz $vf4, $vf1        \n"
+	"vsub.xyz $vf5, $vf22, $vf4 \n"     // t = pi/2 - |a|
+	"vmul.xyz $vf6, $vf5, $vf5  \n"     // t2
+
+	"vmulw.xyz $vf7, $vf6, $vf20\n"     // cos(a) = Psin(t)
+	"vaddz.xyz $vf7, $vf7, $vf20\n"
+	"vmul.xyz  $vf7, $vf7, $vf6 \n"
+	"vaddy.xyz $vf7, $vf7, $vf20\n"
+	"vmul.xyz  $vf7, $vf7, $vf6 \n"
+	"vaddx.xyz $vf7, $vf7, $vf20\n"
+	"vmul.xyz  $vf7, $vf7, $vf6 \n"
+	"vmul.xyz  $vf7, $vf7, $vf5 \n"
+	"vadd.xyz  $vf8, $vf5, $vf7 \n"
+
+	"vmulw.xyz $vf9, $vf6, $vf21\n"     // |sin(a)| = Pcos(t)
+	"vaddz.xyz $vf9, $vf9, $vf21\n"
+	"vmul.xyz  $vf9, $vf9, $vf6 \n"
+	"vaddy.xyz $vf9, $vf9, $vf21\n"
+	"vmul.xyz  $vf9, $vf9, $vf6 \n"
+	"vaddx.xyz $vf9, $vf9, $vf21\n"
+	"vmul.xyz  $vf9, $vf9, $vf6 \n"
+	"vaddw.xyz $vf9, $vf9, $vf0 \n"
+	"vmax.xyz  $vf9, $vf9, $vf0 \n"     // the fit can dip ~1e-7 below 0 at |a|=pi
+
+	"lq      $10, 0x0(%6)       \n"
+	"qmfc2   $8,  $vf9          \n"
+	"qmfc2   $9,  $vf1          \n"
+	"pand    $9,  $9, $10       \n"
+	"por     $8,  $8, $9        \n"
+	"qmtc2   $8,  $vf10         \n"
+
+	"sqc2    $vf10, 0x0(%0)     \n"
+	"sqc2    $vf8,  0x0(%1)     \n"
+	: : "r" (sn), "r" (cs), "r" (angles), "r" (TRIG_KS), "r" (TRIG_KC),
+	    "r" (TRIG_HALF_PI), "r" (TRIG_SIGN_MASK)
+	: "$8", "$9", "$10", "memory");
+}
+
+// Fused object transform: scale*Rz*Ry*Rx with the translation in row 3, which
+// is what identity->rotate->scale->translate produced one matrix pass at a
+// time. Normalises rot in place, as vu0_matrix_rotate did.
+void vu0_matrix_trs_euler(MATRIX m0, VECTOR pos, VECTOR rot, VECTOR scale) {
+    VECTOR sn, cs;
+
+    normalize_angle(rot, rot);
+    vu0_sincos3(sn, cs, rot);
+
+    float sx = sn[0], cx = cs[0];
+    float sy = sn[1], cy = cs[1];
+    float sz = sn[2], cz = cs[2];
+    float czsy = cz * sy, szsy = sz * sy;
+
+    m0[0x00] = (cz * cy)             * scale[0];
+    m0[0x01] = (sz * cx + czsy * sx) * scale[0];
+    m0[0x02] = (sz * sx - czsy * cx) * scale[0];
+    m0[0x03] = 0.00f;
+
+    m0[0x04] = (-sz * cy)            * scale[1];
+    m0[0x05] = (cz * cx - szsy * sx) * scale[1];
+    m0[0x06] = (cz * sx + szsy * cx) * scale[1];
+    m0[0x07] = 0.00f;
+
+    m0[0x08] = sy                    * scale[2];
+    m0[0x09] = (-cy * sx)            * scale[2];
+    m0[0x0A] = (cy * cx)             * scale[2];
+    m0[0x0B] = 0.00f;
+
+    m0[0x0C] = pos[0];
+    m0[0x0D] = pos[1];
+    m0[0x0E] = pos[2];
+    m0[0x0F] = 1.00f;
+}
+
 void vu0_matrix_translate(MATRIX m0, MATRIX m1, VECTOR tv) {
     __asm__ __volatile__(
 	"lqc2    $vf4,0x0(%2)\n"
@@ -417,6 +512,72 @@ void vu0_matrix_inverse(MATRIX m0, MATRIX m1)
 	: : "r" (m0) , "r" (m1):"$8","$9","$10","$11","$12","$13","$14","$15", "memory");
 }
 
+// Builds translate*rotate*scale straight into vf registers: the quaternion's 9
+// products come out of three broadcast multiplies, the scale rides on the row
+// masks and the translation lands in .w. Replaces 3 identities + 2 matrix
+// multiplies + a 64-byte memcpy per bone per frame (see update_bone_transforms).
+void vu0_matrix_from_trs(MATRIX m0, VECTOR pos, VECTOR quat, VECTOR scale) {
+    __asm__ __volatile__(
+	"lqc2    $vf1, 0x0(%2)\n"           // q = (x,y,z,w)
+	"lqc2    $vf2, 0x0(%3)\n"           // scale
+	"lqc2    $vf3, 0x0(%1)\n"           // pos
+
+	"vadd.xyzw $vf4, $vf1, $vf1\n"      // A = 2q
+	"vsub.xyzw $vf5, $vf0, $vf0\n"      // Z = 0
+
+	"vmulx.xyzw $vf6, $vf4, $vf1\n"     // P1 = (xx, xy, xz, wx)
+	"vmuly.xyzw $vf7, $vf4, $vf1\n"     // P2 = (xy, yy, yz, wy)
+	"vmulz.xyzw $vf8, $vf4, $vf1\n"     // P3 = (xz, yz, zz, wz)
+
+	"vmove.x $vf9, $vf6\n"              // T = (xx, yy, zz, -)
+	"vmove.y $vf9, $vf7\n"
+	"vmove.z $vf9, $vf8\n"
+
+	// diag = 1 - (trace - own), i.e. (1-(yy+zz), 1-(xx+zz), 1-(xx+yy))
+	"vaddy.x $vf10, $vf9, $vf9\n"
+	"vaddz.x $vf10, $vf10, $vf9\n"      // vf10.x = xx+yy+zz
+	"vsubx.xyz $vf18, $vf5, $vf10\n"
+	"vadd.xyz $vf10, $vf18, $vf9\n"
+	"vaddw.xyz $vf10, $vf10, $vf0\n"
+
+	"vaddx.x $vf11, $vf5, $vf7\n"       // S = (xy, xz, yz, -)  symmetric part
+	"vaddx.y $vf11, $vf5, $vf8\n"
+	"vaddy.z $vf11, $vf5, $vf8\n"
+
+	"vaddw.x $vf12, $vf5, $vf8\n"       // K = (wz, wy, wx, -)  skew part
+	"vaddw.y $vf12, $vf5, $vf7\n"
+	"vaddw.z $vf12, $vf5, $vf6\n"
+
+	"vadd.xyz $vf13, $vf11, $vf12\n"
+	"vsub.xyz $vf14, $vf11, $vf12\n"
+
+	"vmove.x $vf15, $vf10\n"            // row0 = (diag.x, dif.x, sum.y, -)
+	"vaddx.y $vf15, $vf5, $vf14\n"
+	"vaddy.z $vf15, $vf5, $vf13\n"
+
+	"vaddx.x $vf16, $vf5, $vf13\n"      // row1 = (sum.x, diag.y, dif.z, -)
+	"vmove.y $vf16, $vf10\n"
+	"vaddz.z $vf16, $vf5, $vf14\n"
+
+	"vaddy.x $vf17, $vf5, $vf14\n"      // row2 = (dif.y, sum.z, diag.z, -)
+	"vaddz.y $vf17, $vf5, $vf13\n"
+	"vmove.z $vf17, $vf10\n"
+
+	"vmul.xyz $vf15, $vf15, $vf2\n"     // scale multiplies columns
+	"vmul.xyz $vf16, $vf16, $vf2\n"
+	"vmul.xyz $vf17, $vf17, $vf2\n"
+
+	"vaddx.w $vf15, $vf5, $vf3\n"       // translation into .w
+	"vaddy.w $vf16, $vf5, $vf3\n"
+	"vaddz.w $vf17, $vf5, $vf3\n"
+
+	"sqc2    $vf15, 0x00(%0)\n"
+	"sqc2    $vf16, 0x10(%0)\n"
+	"sqc2    $vf17, 0x20(%0)\n"
+	"sqc2    $vf0,  0x30(%0)\n"
+	: : "r" (m0), "r" (pos), "r" (quat), "r" (scale) : "memory");
+}
+
 void vu0_matrix_apply(VECTOR v0, MATRIX m0, VECTOR v1)
 {
     __asm__ __volatile__(
@@ -431,6 +592,49 @@ void vu0_matrix_apply(VECTOR v0, MATRIX m0, VECTOR v1)
 	"vmaddw.xyzw	$vf9,$vf7,$vf8\n"
 	"sqc2   $vf9,0x0(%0)\n"
 	: : "r" (v0) , "r" (m0) ,"r" (v1): "memory");
+}
+
+// AABB of `box`'s 8 corners transformed by every matrix in `palette`, merged
+// into lo/hi (which the caller seeds). The matrix stays in vf4-vf7 across all 8
+// corners and lo/hi never leave vf8/vf9, so a bone costs 8 loads instead of 8
+// calls that each reload the matrix and round-trip the point through memory.
+void vu0_bounds_from_palette(VECTOR lo, VECTOR hi, MATRIX *palette, uint32_t bone_count, VECTOR *box) {
+    __asm__ __volatile__(
+	".set noreorder             \n"
+	"move    $10, %2            \n"
+	"move    $8,  %3            \n"
+	"lqc2    $vf8, 0x0(%0)      \n"
+	"lqc2    $vf9, 0x0(%1)      \n"
+
+    "2:                         \n"
+	"lqc2    $vf4, 0x00($10)    \n"
+	"lqc2    $vf5, 0x10($10)    \n"
+	"lqc2    $vf6, 0x20($10)    \n"
+	"lqc2    $vf7, 0x30($10)    \n"
+	"move    $11, %4            \n"
+	"li      $9,  8             \n"
+
+    "1:                         \n"
+	"lqc2    $vf10, 0x00($11)   \n"
+	"vmulax.xyzw	$ACC,  $vf4,$vf10\n"
+	"vmadday.xyzw	$ACC,  $vf5,$vf10\n"
+	"vmaddaz.xyzw	$ACC,  $vf6,$vf10\n"
+	"vmaddw.xyzw	$vf11, $vf7,$vf10\n"
+	"vmini.xyz  $vf8, $vf8, $vf11\n"
+	"vmax.xyz   $vf9, $vf9, $vf11\n"
+	"addi    $9, $9, -1         \n"
+	"bne     $0, $9, 1b         \n"
+	"addiu   $11, $11, 0x10     \n"
+
+	"addi    $8, $8, -1         \n"
+	"bne     $0, $8, 2b         \n"
+	"addiu   $10, $10, 0x40     \n"
+
+	"sqc2    $vf8, 0x0(%0)      \n"
+	"sqc2    $vf9, 0x0(%1)      \n"
+	".set reorder               \n"
+	: : "r" (lo), "r" (hi), "r" (palette), "r" (bone_count), "r" (box)
+	: "$8", "$9", "$10", "$11", "memory");
 }
 
 int vu0_matrix_equals(MATRIX m0, MATRIX m1)
@@ -490,6 +694,8 @@ static matrix_ops vu0_functions = {
     .translate=vu0_matrix_translate,
     .rotate=vu0_matrix_rotate,
     .scale=vu0_matrix_scale,
+    .from_trs=vu0_matrix_from_trs,
+    .trs_euler=vu0_matrix_trs_euler,
 
     .equals=vu0_matrix_equals
 };
@@ -593,6 +799,63 @@ void core_matrix_translate(MATRIX output, MATRIX input0, VECTOR input1) {
     core_matrix_multiply(output, input0, work);
 }
 
+// No normalize_angle here, matching core_matrix_rotate, which also feeds the
+// raw angle straight to libm.
+void core_matrix_trs_euler(MATRIX output, VECTOR pos, VECTOR rot, VECTOR scale) {
+    float sx = sinf(rot[0]), cx = cosf(rot[0]);
+    float sy = sinf(rot[1]), cy = cosf(rot[1]);
+    float sz = sinf(rot[2]), cz = cosf(rot[2]);
+    float czsy = cz * sy, szsy = sz * sy;
+
+    output[0x00] = (cz * cy)             * scale[0];
+    output[0x01] = (sz * cx + czsy * sx) * scale[0];
+    output[0x02] = (sz * sx - czsy * cx) * scale[0];
+    output[0x03] = 0.00f;
+
+    output[0x04] = (-sz * cy)            * scale[1];
+    output[0x05] = (cz * cx - szsy * sx) * scale[1];
+    output[0x06] = (cz * sx + szsy * cx) * scale[1];
+    output[0x07] = 0.00f;
+
+    output[0x08] = sy                    * scale[2];
+    output[0x09] = (-cy * sx)            * scale[2];
+    output[0x0A] = (cy * cx)             * scale[2];
+    output[0x0B] = 0.00f;
+
+    output[0x0C] = pos[0];
+    output[0x0D] = pos[1];
+    output[0x0E] = pos[2];
+    output[0x0F] = 1.00f;
+}
+
+void core_matrix_from_trs(MATRIX output, VECTOR pos, VECTOR quat, VECTOR scale) {
+    float x = quat[0], y = quat[1], z = quat[2], w = quat[3];
+    float x2 = x + x, y2 = y + y, z2 = z + z;
+    float xx = x * x2, xy = x * y2, xz = x * z2;
+    float yy = y * y2, yz = y * z2, zz = z * z2;
+    float wx = w * x2, wy = w * y2, wz = w * z2;
+
+    output[0x00] = (1.00f - (yy + zz)) * scale[0];
+    output[0x01] = (xy - wz) * scale[1];
+    output[0x02] = (xz + wy) * scale[2];
+    output[0x03] = pos[0];
+
+    output[0x04] = (xy + wz) * scale[0];
+    output[0x05] = (1.00f - (xx + zz)) * scale[1];
+    output[0x06] = (yz - wx) * scale[2];
+    output[0x07] = pos[1];
+
+    output[0x08] = (xz - wy) * scale[0];
+    output[0x09] = (yz + wx) * scale[1];
+    output[0x0A] = (1.00f - (xx + yy)) * scale[2];
+    output[0x0B] = pos[2];
+
+    output[0x0C] = 0.00f;
+    output[0x0D] = 0.00f;
+    output[0x0E] = 0.00f;
+    output[0x0F] = 1.00f;
+}
+
 int core_matrix_equals(MATRIX m0, MATRIX m1) {
     float sum = 0.0f;
     
@@ -614,6 +877,8 @@ static matrix_ops core_functions = {
     .translate=core_matrix_translate,
     .rotate=core_matrix_rotate,
     .scale=core_matrix_scale,
+    .from_trs=core_matrix_from_trs,
+    .trs_euler=core_matrix_trs_euler,
 
     .equals=core_matrix_equals
 };

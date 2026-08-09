@@ -87,10 +87,7 @@ void render_scene_node_detach(athena_scene_node *node, athena_object_data *obj) 
 
 static void scene_apply_recursive(athena_scene_node *node, const MATRIX parent, int has_parent) {
     MATRIX local, world;
-    matrix_functions->identity(local);
-    matrix_functions->rotate(local, local, node->rotation);
-    matrix_functions->scale(local, local, node->scale);
-    matrix_functions->translate(local, local, node->position);
+    matrix_functions->trs_euler(local, node->position, node->rotation, node->scale);
 
     if (has_parent) matrix_functions->multiply(world, parent, local);
     else            matrix_functions->copy(world, local);
