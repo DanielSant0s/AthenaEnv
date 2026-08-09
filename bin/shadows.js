@@ -51,7 +51,7 @@ sky.height = canvas.height;
 const skin_anims = new AnimCollection("Twerk.gltf");
 const gltf_skin = new RenderData("Twerk.gltf");
 gltf_skin.accurate_clipping = true;
-gltf_skin.face_culling = Render.CULL_FACE_NONE;
+gltf_skin.face_culling = Render.CULL_FACE_BACK;
 gltf_skin.pipeline = Render.PL_DEFAULT;
 // Skinned meshes animate via bone matrices in the VU, not by touching
 // positions/normals/etc, and this mesh isn't used with ODE trimesh
@@ -88,7 +88,8 @@ Screen.setParam(Screen.DEPTH_TEST_ENABLE, false);
 Screen.switchContext();
 
 const scene = new RenderData("scene.gltf");
-scene.face_culling = Render.CULL_FACE_NONE;
+scene.face_culling = Render.CULL_FACE_BACK;
+scene.accurate_clipping = true;
 scene.pipeline = Render.PL_DEFAULT;
 
 scene.getTexture(0).filter = LINEAR;
@@ -103,7 +104,7 @@ const scene_object = new RenderObject(scene);
 const scene_collision = ODE.GeomRenderObject(space, scene_object);
 
 const box = new RenderData("box_bump.gltf");
-box.face_culling = Render.CULL_FACE_NONE;
+box.face_culling = Render.CULL_FACE_BACK;
 
 //box.getTexture(0).filter = LINEAR;
 //box.getTexture(1).filter = LINEAR;
@@ -276,7 +277,7 @@ while(true) {
         Camera.update();
     }
     box.texture_mapping = false;
-    box.shade_model = Render.SHADE_FLAT;
+    box.shade_model = 0;
     box.pipeline = Render.PL_NO_LIGHTS;
     box_object.scale = {x:0.23, y:0.23, z:0.23};
     box_object.render();
@@ -296,7 +297,7 @@ while(true) {
     world.stepWithContacts(space, jgroup, 0.01f);
 
     box.texture_mapping = true;
-    box.shade_model = Render.SHADE_GOURAUD;
+    box.shade_model = 1;
     box.pipeline = Render.PL_DEFAULT;
     box_object.scale = {x:0.2, y:0.2, z:0.2};
     box_object.render();

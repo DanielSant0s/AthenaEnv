@@ -22,14 +22,18 @@ CLIPFAN_OFFSET      .assign 26
 CLIP_WORK_BUF_0     .assign 61
 CLIP_WORK_BUF_1     .assign 101
 
-BONE_MATRICES       .assign 141
+; Moved to the end of VU mem so the double buffer can start at 141 and be one
+; window for both layouts. 128 QW = 32 bones; stack lives above at 1008..1023.
+BONE_MATRICES       .assign 880
 
-BUMP_OFFSET     .assign 269
+; Was 269, which now falls INSIDE the double buffer (141..879). Parked in the
+; gap the pre-summed ambient freed up (16..17).
+BUMP_OFFSET     .assign 16
 
 DUMMY_XGKICK_BUF    .assign 1023
 
 INBUF_SIZE          .assign 194         ; Max NbrVerts (48 * 4) + prim tag + diffuse color
-SKINNED_INBUF_SIZE          .assign 182         ; Max NbrVerts (30 * 6) + prim tag + diffuse color
+SKINNED_INBUF_SIZE          .assign 242         ; Max NbrVerts (40 * 6) + prim tag + diffuse color
 
 GIFTAG_OFFSET      .assign 0
 DIFF_MAT_OFFSET    .assign 1
@@ -40,7 +44,7 @@ COLOR_OFFSET    .assign 98
 TEXCOORD_OFFSET .assign 146
 
 SKINNED_SKELETON_OFFSET  .assign 2
-SKINNED_POSITION_OFFSET .assign 62
-SKINNED_NORMAL_OFFSET  .assign 92
-SKINNED_COLOR_OFFSET    .assign 122
-SKINNED_TEXCOORD_OFFSET .assign 152
+SKINNED_POSITION_OFFSET .assign 82
+SKINNED_NORMAL_OFFSET  .assign 122
+SKINNED_COLOR_OFFSET    .assign 162
+SKINNED_TEXCOORD_OFFSET .assign 202

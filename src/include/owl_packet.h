@@ -80,6 +80,29 @@ owl_packet *owl_query_packet(owl_channel channel, size_t size);
 // flush a requested packet
 void owl_flush_packet();
 
+// Index of the chain currently being filled: anything appended to the packet
+// right now goes into chain owl_flush_generation(), which the DMAC only reads
+// once a later flush has sent it.
+//
+// A caller that hands the DMAC a DMA_REF to its own memory (rather than copying
+// it into the packet) must not overwrite that memory before the chain has been
+// read, or the DMAC ends up reading whatever the CPU wrote afterwards. Record
+// the generation after queueing the draw, and pass it to owl_wait_generation()
+// before touching the buffer again.
+uint32_t owl_flush_generation();
+
+// Non-blocking: has the DMAC finished reading the given chain? Conservative --
+// the answer only turns true at a flush, so a chain that has actually drained
+// still reads as busy until then. Meant for picking a free buffer out of a pool
+// without touching the DMAC.
+int owl_generation_read(uint32_t generation);
+
+// Blocks until the DMAC has read the given chain. Returns immediately when that
+// already happened, which is the common case -- the ring flushes on its own
+// several times a frame. Otherwise it costs a pipeline bubble: the chain gets
+// sent early if it is still being filled, and then waited on.
+void owl_wait_generation(uint32_t generation);
+
 owl_controller *owl_get_controller();
 
 void vu1_set_double_buffer_settings(uint32_t base, uint32_t offset);

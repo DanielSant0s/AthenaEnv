@@ -128,9 +128,10 @@ static inline uint32_t render_calc_triangles(const athena_render_data *data) {
 void render_init() {
 	initCamera(&world_screen, &world_view, &view_screen);
 	
-	// 342 = INBUF_SIZE 194 + 3 tex_giftag + 1 primTag + BATCH_SIZE*3, the exact
-	// unskinned window. Global VIF1 state, so every pipeline shares it.
-	vu1_set_double_buffer_settings(270, 342); // Skinned layout
+	// One window for both layouts, starting where the bone matrices used to be
+	// (they moved to 880). 369 fits the larger of the two footprints: skinned
+	// 2 + 40*6 + 3 + 1 + 40*3 = 366. Global VIF1 state, shared by all pipelines.
+	vu1_set_double_buffer_settings(141, 369);
 
 	vu1_colors   = vu_mpg_load_buffer(embed_vu_code_ptr(VU1Draw3DCS),   embed_vu_code_size(VU1Draw3DCS),   VECTOR_UNIT_1, false); 
 	vu1_lights   = vu_mpg_load_buffer(embed_vu_code_ptr(VU1Draw3DLCS),  embed_vu_code_size(VU1Draw3DLCS),  VECTOR_UNIT_1, false);
@@ -144,9 +145,10 @@ void render_init() {
 }
 
 void render_begin() {
-	// 342 = INBUF_SIZE 194 + 3 tex_giftag + 1 primTag + BATCH_SIZE*3, the exact
-	// unskinned window. Global VIF1 state, so every pipeline shares it.
-	vu1_set_double_buffer_settings(270, 342); // Skinned layout
+	// One window for both layouts, starting where the bone matrices used to be
+	// (they moved to 880). 369 fits the larger of the two footprints: skinned
+	// 2 + 40*6 + 3 + 1 + 40*3 = 366. Global VIF1 state, shared by all pipelines.
+	vu1_set_double_buffer_settings(141, 369);
 
 	render_reset_stats();
 
@@ -677,7 +679,13 @@ static void bake_giftags(owl_packet *packet, athena_render_data *data, bool text
 	owl_add_uint(packet, 0);
 	owl_add_uint(packet, data->attributes.accurate_clipping? (clip_tag.data >> 32) : 0);
 	owl_add_uint(packet, data->tristrip);
-	owl_add_uint(packet, data->attributes.face_culling);
+	// float, not uint: the VU multiplies the triangle edge by this lane
+	// (bfc_multiplier, +1 cull back / -1 cull front) and only then converts it
+	// with ftoi0 to decide whether culling is on at all. Sent as an integer,
+	// CULL_FACE_BACK's 1.0f arrived as the bit pattern 0x00000001 -- a denormal
+	// the VU reads as ~0, which both zeroed the edge vector and made the enable
+	// test see "no culling". Face culling has never actually run.
+	owl_add_float(packet, data->attributes.face_culling);
 	owl_add_unpack_data_cnt(packet, 0, 1, 1);
 	owl_add_ulong(packet, prim_tag.data);
 	owl_add_ulong(packet, DRAW_STQ2_REGLIST);
@@ -835,6 +843,20 @@ static void render_cook_compact_vertices(athena_render_data *data) {
 				data->compact_uvs[dst].v = (int16_t)(render_clampf(data->texcoords[src][1], -127.99f, 127.99f) * 256.0f);
 			}
 		}
+	}
+
+	// These are read by the DMA controller (owl_add_unpack_data_ref_packed's
+	// DMA_REF inside the baked chains), never by the EE core, so the cook above
+	// has to be written back explicitly -- same reason render_build_chain syncs
+	// its own buffer. Only bites geometry re-cooked at runtime (the shadow
+	// projector rewrites its whole grid every draw); a mesh cooked once at load
+	// is evicted by ordinary cache pressure long before it is drawn, which is
+	// why this was never missed.
+	if (padded_total > 0) {
+		if (cook_positions) SyncDCache(data->compact_positions, &data->compact_positions[padded_total - 1]);
+		if (cook_normals)   SyncDCache(data->compact_normals,   &data->compact_normals[padded_total - 1]);
+		if (cook_colors)    SyncDCache(data->compact_colors,    &data->compact_colors[padded_total - 1]);
+		if (cook_uvs)       SyncDCache(data->compact_uvs,       &data->compact_uvs[padded_total - 1]);
 	}
 }
 
@@ -1138,7 +1160,7 @@ void draw_vu1_with_colors(athena_object_data *obj, int pass_state) {
 	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 8 + render_view_qwc());
 
 	if (obj->bone_matrices) {
-		owl_add_unpack_data_ref(packet, 141, (void*)obj->bone_matrices, data->skeleton->bone_count*4, 0);
+		owl_add_unpack_data_ref(packet, 880, (void*)obj->bone_matrices, data->skeleton->bone_count*4, 0);
 	}
 
 	render_upload_view(packet);
@@ -1149,7 +1171,7 @@ void draw_vu1_with_colors(athena_object_data *obj, int pass_state) {
 	owl_add_uquad_ptr(packet, &(obj->transform[8]));
 	owl_add_uquad_ptr(packet, &(obj->transform[12]));
 
-	owl_add_unpack_data_cnt(packet, 269, 1, 0);
+	owl_add_unpack_data_cnt(packet, 16, 1, 0);
 	owl_add_uquad_ptr(packet, obj->bump_offset_buffer);
 
 	//owl_add_end_tag(packet);
@@ -1264,7 +1286,7 @@ void draw_vu1_with_lights(athena_object_data *obj, int pass_state) {
 	owl_add_uquad_ptr(packet, &(obj->transform[12]));
 
 	if (obj->bone_matrices) {
-		owl_add_unpack_data_ref(packet, 141, (void*)obj->bone_matrices, data->skeleton->bone_count*4, 0);
+		owl_add_unpack_data_ref(packet, 880, (void*)obj->bone_matrices, data->skeleton->bone_count*4, 0);
 	}
 
 	// Never chunk against batch_size directly: it drives the VU-mem offset
@@ -1377,7 +1399,7 @@ void draw_vu1_with_spec_lights(athena_object_data *obj, int pass_state) {
 	owl_add_uquad_ptr(packet, &(obj->transform[12]));
 
 	if (obj->bone_matrices) {
-		owl_add_unpack_data_ref(packet, 141, (void*)obj->bone_matrices, data->skeleton->bone_count*4, 0);
+		owl_add_unpack_data_ref(packet, 880, (void*)obj->bone_matrices, data->skeleton->bone_count*4, 0);
 	}
 
 	//owl_add_end_tag(packet);
@@ -1494,7 +1516,7 @@ void draw_vu1_with_lights_ref(athena_object_data *obj, int pass_state) {
 	owl_add_uquad_ptr(packet, &(obj->transform[12]));
 
 	if (obj->bone_matrices) {
-		owl_add_unpack_data_ref(packet, 141, (void*)obj->bone_matrices, data->skeleton->bone_count*4, 0);
+		owl_add_unpack_data_ref(packet, 880, (void*)obj->bone_matrices, data->skeleton->bone_count*4, 0);
 	}
 
 	//owl_add_end_tag(packet);

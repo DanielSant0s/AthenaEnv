@@ -105,10 +105,16 @@ culled_init:
         DecompressUV16 stq, stqPacked
         ;////////////////////////////////////////////
 
-        iaddiu  currentWeight, vi00, 4
-
         lq boneIndices,    SKINNED_SKELETON_OFFSET(skinData)
         lq boneWeights,    SKINNED_SKELETON_OFFSET+1(skinData)
+
+        ; Loop counter comes from the weights themselves. The EE sorts them
+        ; descending at load time, so the first zero ends the influences: 1 or 2
+        ; bones is the common case and the other 2 iterations were pure waste.
+        ; ftoi12 makes the test an integer compare (weight < 1/4096 is nothing);
+        ; sub.x clears the slot just consumed so mr32 shifts a zero into w and
+        ; the loop cannot run past the 4th bone.
+        ftoi12 weightTest, boneWeights
 
         move final_vertex, vf00
 
@@ -126,8 +132,11 @@ culled_init:
             mr32 boneIndices, boneIndices
             mr32 boneWeights, boneWeights
 
-            iaddi   currentWeight,  currentWeight,  -1
-            ibgtz    currentWeight,  skinWeightLoop_cull	
+            sub.x weightTest, weightTest, weightTest
+            mr32  weightTest, weightTest
+
+            mtir  weightBits, weightTest[x]
+            ibne  weightBits, vi00,  skinWeightLoop_cull
 
 
         ;////////////// --- Vertex --- //////////////
@@ -157,7 +166,10 @@ culled_init:
 	    opmsub.xyz	crossproduct, oldvector, vector
 
 	    fmand		z_sign, z_sign_mask
-        iaddiu		z_sign, z_sign, 0xFFE0
+        ; z_sign = 0x20 when the cross product is negative (back-facing): +0x7FE0
+        ; carries that into bit 15 of w, the GS ADC bit. Was 0xFFE0 -- inverted, and
+        ; over 15 bits, so VCL skipped the line outright and culling never ran.
+        iaddiu		z_sign, z_sign, 0x7FE0
         ior        iADC, iADC, z_sign
         
         mfir.w		vertex, iADC
@@ -262,10 +274,16 @@ init:
         DecompressUV16 stq, stqPacked
         ;////////////////////////////////////////////
 
-        iaddiu  currentWeight, vi00, 4
-
         lq boneIndices,    SKINNED_SKELETON_OFFSET(skinData)
         lq boneWeights,    SKINNED_SKELETON_OFFSET+1(skinData)
+
+        ; Loop counter comes from the weights themselves. The EE sorts them
+        ; descending at load time, so the first zero ends the influences: 1 or 2
+        ; bones is the common case and the other 2 iterations were pure waste.
+        ; ftoi12 makes the test an integer compare (weight < 1/4096 is nothing);
+        ; sub.x clears the slot just consumed so mr32 shifts a zero into w and
+        ; the loop cannot run past the 4th bone.
+        ftoi12 weightTest, boneWeights
 
         move final_vertex, vf00
 
@@ -283,8 +301,11 @@ init:
             mr32 boneIndices, boneIndices
             mr32 boneWeights, boneWeights
 
-            iaddi   currentWeight,  currentWeight,  -1
-            ibgtz    currentWeight,  skinWeightLoop	
+            sub.x weightTest, weightTest, weightTest
+            mr32  weightTest, weightTest
+
+            mtir  weightBits, weightTest[x]
+            ibne  weightBits, vi00,  skinWeightLoop
 
 
         ;////////////// --- Vertex --- //////////////

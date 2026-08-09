@@ -408,6 +408,21 @@ void load_gltf_skinning_data(athena_render_data* res_m, float* joints, float* we
             skin->bone_weights[j] /= total_weight;
         }
     }
+
+    // Sort descending so every zero weight trails. VU1 stops the skinning loop at
+    // the first zero instead of always running four influences.
+    for (int j = 1; j < 4; j++) {
+        float w = skin->bone_weights[j];
+        uint32_t b = skin->bone_indices[j];
+        int k = j;
+        while (k > 0 && skin->bone_weights[k-1] < w) {
+            skin->bone_weights[k] = skin->bone_weights[k-1];
+            skin->bone_indices[k] = skin->bone_indices[k-1];
+            k--;
+        }
+        skin->bone_weights[k] = w;
+        skin->bone_indices[k] = b;
+    }
 }
 
 athena_skeleton* load_gltf_skeleton(cgltf_data* data, cgltf_skin* skin) {

@@ -99,7 +99,10 @@ void shadow_projector_init(ath_shadow_projector *p, GSSURFACE *tex) {
     p->triNodeIdx = NULL;
     p->vtxCount = 0;
 
-    memset(&p->data, 0, sizeof(p->data));
+    p->slots = NULL;
+    p->slotCount = 0;
+    p->slotCursor = 0;
+
     memset(&p->obj, 0, sizeof(p->obj));
     
     // Initialize position to origin
@@ -131,10 +134,13 @@ void shadow_projector_set_transform(ath_shadow_projector *p, const MATRIX transf
 void shadow_projector_set_size(ath_shadow_projector *p, float width, float height) {
 	p->width = width;
 	p->height = height;
+	// Changes the local grid itself, which the non-raycast path only writes when
+	// this says so.
+	p->localGridDirty = 1;
 }
 
 void shadow_projector_set_grid(ath_shadow_projector *p, int gx, int gz) {
-	p->gridX = gx < 2? 2 : gx;
+	p->gridX = gx < 2? 2 : (gx > SHADOW_MAX_GRID_X? SHADOW_MAX_GRID_X : gx);
 	p->gridZ = gz < 2? 2 : gz;
     shadow_projector_rebuild_geometry(p);
 }
@@ -218,20 +224,164 @@ static void shadow_ode_ray_cb(void *data, dGeomID o1, dGeomID o2) {
 }
 #endif
 
-void shadow_projector_render(ath_shadow_projector *p) {
+// Builds one draw slot's render data: topology, UVs and colours, which are the
+// same for every slot -- only the positions differ, and those are rewritten per
+// draw. Also (re)writes the shared triNodeIdx, which is identical work on the
+// second and later slot but keeps this to one loop.
+static void shadow_slot_build(ath_shadow_projector *p, shadow_draw_slot *slot);
+
+// Frees everything a slot owns, including what the render pipeline allocated
+// behind it (compact VU wire cache and baked DMA_CALL chains).
+static void shadow_slot_free(shadow_draw_slot *slot) {
+    athena_render_data *data = &slot->data;
+
+    if (data->positions) { free_vectors(data->positions); data->positions = NULL; }
+    if (data->texcoords) { free_vectors(data->texcoords); data->texcoords = NULL; }
+    if (data->colours) { free_vectors(data->colours); data->colours = NULL; }
+    if (data->materials) { free(data->materials); data->materials = NULL; }
+    if (data->material_indices) { free(data->material_indices); data->material_indices = NULL; }
+    if (data->textures) { free(data->textures); data->textures = NULL; }
+
+    // Compact VIF-unpack cache (render_cook_compact_vertices)
+    free(data->compact_positions); data->compact_positions = NULL;
+    free(data->compact_normals); data->compact_normals = NULL;
+    free(data->compact_colors); data->compact_colors = NULL;
+    free(data->compact_uvs); data->compact_uvs = NULL;
+    free(data->compact_group_base); data->compact_group_base = NULL;
+    data->compact_capacity = 0;
+    data->compact_group_count = 0;
+
+    // Baked DMA_CALL chains: 3 pass_state slots per pipeline, plus reflection.
+    athena_chain_cache *chains[10] = {
+        &data->chain[0][0], &data->chain[0][1], &data->chain[0][2],
+        &data->chain[1][0], &data->chain[1][1], &data->chain[1][2],
+        &data->chain[2][0], &data->chain[2][1], &data->chain[2][2],
+        &data->ref_chain
+    };
+    for (int ci = 0; ci < 10; ci++) {
+        free(chains[ci]->buffer); chains[ci]->buffer = NULL;
+        free(chains[ci]->chunk_offset); chains[ci]->chunk_offset = NULL;
+        free(chains[ci]->tex_giftag); chains[ci]->tex_giftag = NULL;
+        chains[ci]->qwc_alloc = 0;
+        chains[ci]->chunk_count = 0;
+    }
+
+    memset(slot, 0, sizeof(*slot));
+}
+
+static void shadow_slots_release(ath_shadow_projector *p) {
+    for (int i = 0; i < p->slotCount; i++)
+        shadow_slot_free(&p->slots[i]);
+
+    free(p->slots);
+    p->slots = NULL;
+    p->slotCount = 0;
+    p->slotCursor = 0;
+}
+
+// Picks a slot whose last draw the DMAC is already done with, so this render can
+// overwrite its grid. Grows the pool when they are all still in flight, which is
+// what keeps a projector shared by several casters from stalling the EE.
+static shadow_draw_slot *shadow_pick_slot(ath_shadow_projector *p) {
+    for (int i = 0; i < p->slotCount; i++) {
+        int idx = (p->slotCursor + i) % p->slotCount;
+        shadow_draw_slot *slot = &p->slots[idx];
+
+        if (!slot->hasQueued || owl_generation_read(slot->queuedGen)) {
+            p->slotCursor = (idx + 1) % p->slotCount;
+            return slot;
+        }
+    }
+
+    if (p->slotCount < SHADOW_MAX_DRAW_SLOTS) {
+        shadow_draw_slot *grown = (shadow_draw_slot*)realloc(p->slots, (p->slotCount + 1) * sizeof(shadow_draw_slot));
+        if (grown) {
+            p->slots = grown;
+
+            shadow_draw_slot *slot = &grown[p->slotCount];
+            memset(slot, 0, sizeof(*slot));
+            shadow_slot_build(p, slot);
+
+            p->slotCount++;
+            p->slotCursor = 0;
+            return slot;
+        }
+    }
+
+    // Out of slots (or out of memory): the oldest draw is the one most likely to
+    // be nearly done, so wait that one out and reuse it.
+    shadow_draw_slot *slot = &p->slots[p->slotCursor];
+    owl_wait_generation(slot->queuedGen);
+    p->slotCursor = (p->slotCursor + 1) % p->slotCount;
+    return slot;
+}
+
+// Does the grid have to be recomputed per draw? Only raycasting makes it depend
+// on where the projector is: it conforms every node to whatever is under it.
+static inline int shadow_is_dynamic(const ath_shadow_projector *p) {
+#ifdef ATHENA_ODE
+    return p->enableRaycast && p->raySpace && p->rayGeom;
+#else
+    (void)p;
+    return 0;
+#endif
+}
+
+// Writes the flat grid, in projector-local space, into a slot. Constant for a
+// given size and tesselation, so this runs on a grid rebuild and when coming
+// back from raycasting -- never per draw.
+static void shadow_fill_local_grid(ath_shadow_projector *p, shadow_draw_slot *slot) {
     const int gx = p->gridX;
     const int gz = p->gridZ;
-    athena_render_data *data = &p->data;
+    const float halfW = p->width * 0.5f;
+    const float halfH = p->height * 0.5f;
 
-    // Update texture pointer (in case it changed)
-    if (data->textures && data->texture_count > 0)
-        data->textures[0] = p->texture;
+    // The slot may still be queued from an earlier draw, and this overwrites the
+    // buffer it points a DMA_REF at.
+    if (slot->hasQueued)
+        owl_wait_generation(slot->queuedGen);
 
-    // Build grid in local projector space (X,Z plane), then transform to world node positions
+    int ni = 0;
+    for (int j = 0; j < gz; j++) {
+        float tz = (float)j / (float)(gz - 1);
+        for (int i = 0; i < gx; i++) {
+            float tx = (float)i / (float)(gx - 1);
+            p->nodes[ni][0] = -halfW + tx * p->width;
+            p->nodes[ni][1] = 0.0f;
+            p->nodes[ni][2] = -halfH + tz * p->height;
+            p->nodes[ni][3] = 1.0f;
+            ni++;
+        }
+    }
+
+    for (int v = 0; v < p->vtxCount; v++)
+        copy_vector(slot->data.positions[v], p->nodes[p->triNodeIdx[v]]);
+
+    render_invalidate_compact_positions(&slot->data);
+    p->localGridDirty = 0;
+}
+
+// Object matrix for a local-space grid: the projector transform, with the light
+// offset folded into its translation. That offset is the same world-space shift
+// for every node, which is exactly what a translation is -- no reason to pay it
+// per vertex.
+static void shadow_place_object(ath_shadow_projector *p) {
+    memcpy(p->obj.transform, p->transform, sizeof(MATRIX));
+
+    p->obj.transform[12] -= p->lightDir[0] * p->lightOffset;
+    p->obj.transform[13] -= p->lightDir[1];
+    p->obj.transform[14] -= p->lightDir[2] * p->lightOffset;
+}
+
+// Raycast path: every node is snapped onto whatever the ray hit, so the whole
+// grid comes out in world space and gets rewritten per draw.
+static void shadow_build_world_grid(ath_shadow_projector *p, athena_render_data *data) {
+    const int gx = p->gridX;
+    const int gz = p->gridZ;
+
 	const float halfW = p->width * 0.5f;
 	const float halfH = p->height * 0.5f;
 
-    const int nodeCount = gx * gz;
     // Persistent buffer (allocated in shadow_projector_rebuild_geometry,
     // sized nodeCount) -- was alloc_vectors()/free_vectors()'d on every
     // single call before, which is wasteful given this function already
@@ -326,21 +476,52 @@ void shadow_projector_render(ath_shadow_projector *p) {
 
     // data->positions was just rewritten directly (not through the JS
     // "vertices" setter, which is the only other place that invalidates
-    // this automatically) -- the projector recomputes its whole grid every
-    // call, e.g. once per shadow-casting object per frame here, each at a
-    // different world position. Without this, the compact VU wire cache
-    // keeps serving whatever was cooked on an earlier call, so every
-    // shadow after the first in a frame renders using a stale, earlier
-    // grid position.
+    // this automatically). Without this, the compact VU wire cache keeps
+    // serving whatever was cooked on an earlier call, so the grid the GS
+    // actually sees would never move.
     //
     // Positions only, not the full cache: colours/texcoords are set once in
-    // shadow_projector_rebuild_geometry() and never touched again here, so
-    // re-cooking them every render() call (every shadow, every frame) would
-    // just be discarding-and-redoing work for data that never changed.
+    // shadow_slot_build() and never touched again, so re-cooking them every
+    // render() call would just be discarding-and-redoing work for data that
+    // never changed.
     render_invalidate_compact_positions(data);
+}
 
-    // Update object transform - keep position as set by JavaScript, update transform matrix
-    //for (int r = 0; r < 16; r++) p->obj.transform[r] = p->transform[r];
+void shadow_projector_render(ath_shadow_projector *p) {
+    shadow_draw_slot *slot;
+    athena_render_data *data;
+
+    if (shadow_is_dynamic(p)) {
+        // World-space geometry, different every draw: it needs a slot the DMAC
+        // is done with, and the object matrix has to stay out of the way.
+        slot = shadow_pick_slot(p);
+        shadow_build_world_grid(p, &slot->data);
+        matrix_functions->identity(p->obj.transform);
+
+        // This may well have been slot 0, so the local grid is no longer there.
+        p->localGridDirty = 1;
+    } else {
+        // Nothing to rewrite: the grid is constant in local space and the whole
+        // placement rides in the object matrix, which draw_vu1_with_colors
+        // copies inline into the packet. One slot serves every draw, and both
+        // the compact cook and the baked chain survive across frames -- a blob
+        // shadow costs no EE geometry work at all.
+        slot = &p->slots[0];
+        if (p->localGridDirty)
+            shadow_fill_local_grid(p, slot);
+
+        shadow_place_object(p);
+    }
+
+    data = &slot->data;
+
+    // The object is bound to whichever slot this draw got. Nothing else on it is
+    // per-slot: the grid is the whole geometry, and it carries no skeleton.
+    p->obj.data = data;
+
+    // Update texture pointer (in case it changed)
+    if (data->textures && data->texture_count > 0)
+        data->textures[0] = p->texture;
 
     uint64_t old_alpha = get_screen_param(ALPHA_BLEND_EQUATION);
 
@@ -358,38 +539,20 @@ void shadow_projector_render(ath_shadow_projector *p) {
 
     draw_vu1_with_colors(&p->obj, 0);
 
+    // Taken AFTER the draw: it may have flushed the ring mid-chunk, so the last
+    // chain referencing this grid is the current one, not the one we started in.
+    slot->queuedGen = owl_flush_generation();
+    slot->hasQueued = 1;
+
 	set_screen_param(ALPHA_BLEND_EQUATION, old_alpha);
 }
 
-void shadow_projector_rebuild_geometry(ath_shadow_projector *p) {
+static void shadow_slot_build(ath_shadow_projector *p, shadow_draw_slot *slot) {
     const int gx = p->gridX;
     const int gz = p->gridZ;
-    const int quadCount = (gx - 1) * (gz - 1);
-    const int triCount = quadCount * 2;
-    const int vtxCount = triCount * 3;
-    const int nodeCount = gx * gz;
+    const int vtxCount = p->vtxCount;
 
-    // Free previous allocations
-    if (p->nodes) { free_vectors(p->nodes); p->nodes = NULL; }
-    if (p->nodeNormals) { free_vectors(p->nodeNormals); p->nodeNormals = NULL; }
-    if (p->triNodeIdx) { free(p->triNodeIdx); p->triNodeIdx = NULL; }
-
-    athena_render_data *data = &p->data;
-    if (data->positions) { free_vectors(data->positions); data->positions = NULL; }
-    if (data->texcoords) { free_vectors(data->texcoords); data->texcoords = NULL; }
-    if (data->colours) { free_vectors(data->colours); data->colours = NULL; }
-    if (data->materials) { free(data->materials); data->materials = NULL; }
-    if (data->material_indices) { free(data->material_indices); data->material_indices = NULL; }
-    if (data->textures) { free(data->textures); data->textures = NULL; }
-
-    // Allocate nodes and mapping. nodeNormals is allocated unconditionally
-    // (not just when enableRaycast is currently on) since raycasting can be
-    // toggled on after this rebuild -- it's cheap (nodeCount VECTORs) and
-    // this only runs when the grid itself changes, not per frame.
-    p->nodes = alloc_vectors(nodeCount);
-    p->nodeNormals = alloc_vectors(nodeCount);
-    p->triNodeIdx = (uint32_t*)malloc(sizeof(uint32_t) * vtxCount);
-    p->vtxCount = vtxCount;
+    athena_render_data *data = &slot->data;
 
     // Allocate render data
     data->index_count = vtxCount;
@@ -412,10 +575,9 @@ void shadow_projector_rebuild_geometry(ath_shadow_projector *p) {
     data->materials[0].diffuse[1] = 0.0f;
     data->materials[0].diffuse[2] = 0.0f;
     data->materials[0].diffuse[3] = 0.0f;
-    data->material_indices = (material_index*)malloc(sizeof(material_index));
-    data->material_index_count = 1;
-    data->material_indices[0].index = 0;
-    data->material_indices[0].end = vtxCount - 1;
+    // One group per grid row -- see the topology loop below.
+    data->material_indices = (material_index*)malloc((gz - 1) * sizeof(material_index));
+    data->material_index_count = gz - 1;
     data->attributes.accurate_clipping = 0;
     data->attributes.face_culling = CULL_FACE_NONE;
     data->attributes.texture_mapping = 1;
@@ -423,68 +585,88 @@ void shadow_projector_rebuild_geometry(ath_shadow_projector *p) {
     data->attributes.has_refmap = 0;
     data->attributes.has_bumpmap = 0;
     data->attributes.has_decal = 0;
-    data->tristrip = 0;
+    data->tristrip = 1;
 
-    // Precompute topology and UVs + per-vertex node mapping
-    int w = gx;
+    // Topology, UVs and per-vertex node mapping.
+    //
+    // A grid row is a tristrip by construction -- zig-zag between row j and row
+    // j+1 -- which is 2*gridX vertices per row against the 6 per quad a triangle
+    // soup needs (264 vs 726 on a 12x12 grid). The catch is that every chunk
+    // carries its own GIFtag and so restarts the primitive, which would tear a
+    // strip split across two chunks. Making each row its OWN material group
+    // solves that with the machinery already there: the draw loop never lets a
+    // chunk span two materials, and SHADOW_MAX_GRID_X keeps a row inside one
+    // chunk. Fewer chunks than the soup, too (one per row, 11 vs 16 here).
+    //
+    // Winding alternates along a strip; harmless because the projector draws
+    // with CULL_FACE_NONE, which is also why the VU never has to know.
     int v = 0;
     for (int j = 0; j < gz - 1; j++) {
-        for (int i = 0; i < gx - 1; i++) {
-            int i0 = j * w + i;
-            int i1 = i0 + 1;
-            int i2 = i0 + w;
-            int i3 = i2 + 1;
+        float V0 = p->v0 + (p->v1 - p->v0) * ((float)j / (float)(gz - 1));
+        float V1 = p->v0 + (p->v1 - p->v0) * ((float)(j + 1) / (float)(gz - 1));
 
-            // tri 1: i0, i2, i1
-            p->triNodeIdx[v+0] = (uint32_t)i0;
-            p->triNodeIdx[v+1] = (uint32_t)i2;
-            p->triNodeIdx[v+2] = (uint32_t)i1;
+        for (int i = 0; i < gx; i++) {
+            float U = p->u0 + (p->u1 - p->u0) * ((float)i / (float)(gx - 1));
 
-            float u0 = (float)i / (float)(gx - 1);
-            float v0 = (float)j / (float)(gz - 1);
-            float u1 = (float)(i+1) / (float)(gx - 1);
-            float v1 = (float)(j+1) / (float)(gz - 1);
+            p->triNodeIdx[v+0] = (uint32_t)(j * gx + i);
+            p->triNodeIdx[v+1] = (uint32_t)((j + 1) * gx + i);
 
-            float U0 = p->u0 + (p->u1 - p->u0) * u0;
-            float V0 = p->v0 + (p->v1 - p->v0) * v0;
-            float U1 = p->u0 + (p->u1 - p->u0) * u1;
-            float V1 = p->v0 + (p->v1 - p->v0) * v1;
-            data->texcoords[v+0][0] = U0; data->texcoords[v+0][1] = V0; data->texcoords[v+0][2] = 1.0f; data->texcoords[v+0][3] = 1.0f;
-            data->texcoords[v+1][0] = U0; data->texcoords[v+1][1] = V1; data->texcoords[v+1][2] = 1.0f; data->texcoords[v+1][3] = 1.0f;
-            data->texcoords[v+2][0] = U1; data->texcoords[v+2][1] = V0; data->texcoords[v+2][2] = 1.0f; data->texcoords[v+2][3] = 1.0f;
+            data->texcoords[v+0][0] = U; data->texcoords[v+0][1] = V0; data->texcoords[v+0][2] = 1.0f; data->texcoords[v+0][3] = 1.0f;
+            data->texcoords[v+1][0] = U; data->texcoords[v+1][1] = V1; data->texcoords[v+1][2] = 1.0f; data->texcoords[v+1][3] = 1.0f;
 
-            for (int k = 0; k < 3; k++) {
-                data->colours[v+k][0] = p->color[0];
-                data->colours[v+k][1] = p->color[1];
-                data->colours[v+k][2] = p->color[2];
-                data->colours[v+k][3] = p->color[3];
-            }
-            v += 3;
-
-            // tri 2: i1, i2, i3
-            p->triNodeIdx[v+0] = (uint32_t)i1;
-            p->triNodeIdx[v+1] = (uint32_t)i2;
-            p->triNodeIdx[v+2] = (uint32_t)i3;
-
-            data->texcoords[v+0][0] = U1; data->texcoords[v+0][1] = V0; data->texcoords[v+0][2] = 1.0f; data->texcoords[v+0][3] = 1.0f;
-            data->texcoords[v+1][0] = U0; data->texcoords[v+1][1] = V1; data->texcoords[v+1][2] = 1.0f; data->texcoords[v+1][3] = 1.0f;
-            data->texcoords[v+2][0] = U1; data->texcoords[v+2][1] = V1; data->texcoords[v+2][2] = 1.0f; data->texcoords[v+2][3] = 1.0f;
-
-            for (int k = 0; k < 3; k++) {
+            for (int k = 0; k < 2; k++) {
                 data->colours[v+k][0] = p->color[0];
                 data->colours[v+k][1] = p->color[1];
                 data->colours[v+k][2] = p->color[2];
                 data->colours[v+k][3] = p->color[3];
             }
 
-            v += 3;
+            v += 2;
         }
-    }
 
-    // Init object and bind render data once
-    new_render_object(&p->obj, data);
-    // Position will be set by JavaScript, just update transform matrix
-    for (int r = 0; r < 16; r++) p->obj.transform[r] = p->transform[r];
+        data->material_indices[j].index = 0;
+        data->material_indices[j].end = v - 1;   // inclusive, like every loader
+    }
+}
+
+void shadow_projector_rebuild_geometry(ath_shadow_projector *p) {
+    const int gx = p->gridX;
+    const int gz = p->gridZ;
+    // One tristrip per row: 2 vertices per column, gz-1 rows.
+    const int vtxCount = (gz - 1) * gx * 2;
+    const int nodeCount = gx * gz;
+
+    // Free previous allocations. The pool drops back to a single slot: the grid
+    // just changed size, and how many casters shared this projector before says
+    // nothing about the new one.
+    if (p->nodes) { free_vectors(p->nodes); p->nodes = NULL; }
+    if (p->nodeNormals) { free_vectors(p->nodeNormals); p->nodeNormals = NULL; }
+    if (p->triNodeIdx) { free(p->triNodeIdx); p->triNodeIdx = NULL; }
+
+    shadow_slots_release(p);
+
+    // Allocate nodes and mapping. nodeNormals is allocated unconditionally
+    // (not just when enableRaycast is currently on) since raycasting can be
+    // toggled on after this rebuild -- it's cheap (nodeCount VECTORs) and
+    // this only runs when the grid itself changes, not per frame.
+    p->nodes = alloc_vectors(nodeCount);
+    p->nodeNormals = alloc_vectors(nodeCount);
+    p->triNodeIdx = (uint32_t*)malloc(sizeof(uint32_t) * vtxCount);
+    p->vtxCount = vtxCount;
+
+    p->slots = (shadow_draw_slot*)malloc(sizeof(shadow_draw_slot));
+    memset(p->slots, 0, sizeof(shadow_draw_slot));
+    p->slotCount = 1;
+    p->slotCursor = 0;
+    shadow_slot_build(p, &p->slots[0]);
+
+    // Positions are the one thing shadow_slot_build leaves empty: the first draw
+    // fills them, in local or world space depending on raycasting.
+    p->localGridDirty = 1;
+
+    // Init object and bind render data once. shadow_projector_render rebinds it
+    // to whichever slot each draw lands on, and sets obj.transform itself.
+    new_render_object(&p->obj, &p->slots[0].data);
 }
 
 void shadow_projector_free(ath_shadow_projector *p) {
@@ -492,35 +674,8 @@ void shadow_projector_free(ath_shadow_projector *p) {
     if (p->nodes) { free_vectors(p->nodes); p->nodes = NULL; }
     if (p->nodeNormals) { free_vectors(p->nodeNormals); p->nodeNormals = NULL; }
     if (p->triNodeIdx) { free(p->triNodeIdx); p->triNodeIdx = NULL; }
-    athena_render_data *data = &p->data;
-    if (data->positions) { free_vectors(data->positions); data->positions = NULL; }
-    if (data->texcoords) { free_vectors(data->texcoords); data->texcoords = NULL; }
-    if (data->colours) { free_vectors(data->colours); data->colours = NULL; }
-    if (data->materials) { free(data->materials); data->materials = NULL; }
-    if (data->material_indices) { free(data->material_indices); data->material_indices = NULL; }
-    if (data->textures) { free(data->textures); data->textures = NULL; }
-    // Compact VIF-unpack cache (render_cook_compact_vertices)
-    free(data->compact_positions); data->compact_positions = NULL;
-    free(data->compact_normals); data->compact_normals = NULL;
-    free(data->compact_colors); data->compact_colors = NULL;
-    free(data->compact_uvs); data->compact_uvs = NULL;
-    free(data->compact_group_base); data->compact_group_base = NULL;
-    data->compact_capacity = 0;
-    data->compact_group_count = 0;
-    // Baked DMA_CALL chains: 3 pass_state slots plus the reflection pass.
-    athena_chain_cache *slots[10] = {
-        &data->chain[0][0], &data->chain[0][1], &data->chain[0][2],
-        &data->chain[1][0], &data->chain[1][1], &data->chain[1][2],
-        &data->chain[2][0], &data->chain[2][1], &data->chain[2][2],
-        &data->ref_chain
-    };
-    for (int ci = 0; ci < 10; ci++) {
-        free(slots[ci]->buffer); slots[ci]->buffer = NULL;
-        free(slots[ci]->chunk_offset); slots[ci]->chunk_offset = NULL;
-        free(slots[ci]->tex_giftag); slots[ci]->tex_giftag = NULL;
-        slots[ci]->qwc_alloc = 0;
-        slots[ci]->chunk_count = 0;
-    }
+
+    shadow_slots_release(p);
 #ifdef ATHENA_ODE
     if (p->rayGeom) { dGeomDestroy(p->rayGeom); p->rayGeom = NULL; }
 #endif

@@ -147,7 +147,10 @@ no_tex_kick_cull:
 	    opmsub.xyz	crossproduct, oldvector, vector
 
 	    fmand		z_sign, z_sign_mask
-        iaddiu		z_sign, z_sign, 0xFFE0
+        ; z_sign = 0x20 when the cross product is negative (back-facing): +0x7FE0
+        ; carries that into bit 15 of w, the GS ADC bit. Was 0xFFE0 -- inverted, and
+        ; over 15 bits, so VCL skipped the line outright and culling never ran.
+        iaddiu		z_sign, z_sign, 0x7FE0
         ior        iADC, iADC, z_sign
         
         mfir.w		vertex, iADC

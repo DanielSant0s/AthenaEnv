@@ -5,6 +5,11 @@
 owl_controller controller = { 0 };
 owl_packet internal_packet = { 0 };
 
+// Index of the chain currently being filled. See owl_flush_generation().
+static uint32_t flush_generation = 0;
+// Chains with a lower index than this are known to have been read in full.
+static uint32_t consumed_generation = 0;
+
 void owl_init(void *ptr, size_t size) {
     controller.channel = CHANNEL_SIZE;
 
@@ -28,12 +33,41 @@ void owl_flush_packet() {
 
     dmaKit_wait(controller.channel, 0);
 
+    // The wait above drained every chain sent so far, i.e. everything below
+    // flush_generation.
+    consumed_generation = flush_generation;
+
 	dmaKit_send_chain_ucab(controller.channel, (void *)((uint32_t)(controller.base + (controller.context? controller.size : 0))));
 
     controller.context = (!controller.context); 
 
     internal_packet.ptr = controller.base + (controller.context? controller.size : 0);
     controller.alloc = 0;
+
+    flush_generation++;
+}
+
+uint32_t owl_flush_generation() {
+    return flush_generation;
+}
+
+int owl_generation_read(uint32_t generation) {
+    return generation < consumed_generation;
+}
+
+void owl_wait_generation(uint32_t generation) {
+    if (owl_generation_read(generation)) {
+        return;
+    }
+
+    // Still filling that chain: it has to be sent before it can be waited on.
+    if (generation == flush_generation) {
+        owl_flush_packet();
+    }
+
+    dmaKit_wait(controller.channel, 0);
+
+    consumed_generation = flush_generation;
 }
 
 owl_packet *owl_query_packet(owl_channel channel, size_t size) {

@@ -344,13 +344,13 @@ void cameraUpdate();
 // Do NOT change this to "fix" the rounding in owl_add_unpack_data_ref_packed;
 // use render_compact_chunk_cap() instead, which floors it to a multiple of 4
 // without touching what the offset formula sees.
-#define BATCH_SIZE_SKINNED 30
+#define BATCH_SIZE_SKINNED 40
 
 // Mirrors mem_layout.i's INBUF_SIZE/SKINNED_INBUF_SIZE (VU1 asm has no
 // C-visible constants). The tex_giftag unpack targets this offset, which is
 // where the .vcl's texGiftagAddr lands. Keep in lockstep with mem_layout.i.
 #define RENDER_INBUF_SIZE 194
-#define RENDER_SKINNED_INBUF_SIZE 182
+#define RENDER_SKINNED_INBUF_SIZE 242
 
 int clip_bounding_box(MATRIX local_clip, VECTOR *bounding_box);
 void calculate_vertices_clipped(VECTOR *output,  int count, VECTOR *vertices, MATRIX local_screen);

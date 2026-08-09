@@ -55,15 +55,25 @@
 
     check:
         ;=====================================================================================
-        ; If all 3 verts are inside (i.e., All clip results = 0), we don't need to perform
-        ; scissoring.
+        ; Clip judgement FIRST. BackfaceCull works on vertex1/2/3, which are already
+        ; through the perspective divide -- and a vertex behind the near plane divides
+        ; by a negative w, so it lands mirrored through the origin and the winding it
+        ; reports is meaningless. Testing before the clip judgement is what dropped
+        ; front-facing triangles right where geometry crosses a frustum plane: holes
+        ; along the near plane whenever the camera got close.
+        ;
+        ; So only a triangle that needs no scissoring -- every vertex inside, every
+        ; screen coordinate meaningful -- gets culled here. One that straddles a plane
+        ; goes to the fan uncalled and is drawn even if it faces away: a thin band at
+        ; the frustum edge, against holes in the middle of the mesh.
         ;=====================================================================================
-        BackfaceCull         vertex1, vertex2, vertex3
-        ibne                 z_sign, vi00, triangle_outside
-        
         iadd                 ClipFlag1, ClipFlag1, ClipFlag2
         iadd                 ClipFlag1, ClipFlag1, ClipFlag3
-        iblez                ClipFlag1, after_scissoring
+        ibgtz                ClipFlag1, cull_vertex
+
+        BackfaceCull         vertex1, vertex2, vertex3
+        ibne                 z_sign, vi00, triangle_outside
+        b                    after_scissoring
 
     cull_vertex:
         ;=====================================================================================
