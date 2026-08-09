@@ -691,10 +691,117 @@ static void bake_giftags(owl_packet *packet, athena_render_data *data, bool text
 	owl_add_ulong(packet, DRAW_STQ2_REGLIST);
 }
 
-static inline float render_clampf(float v, float lo, float hi) {
-	if (v < lo) return lo;
-	if (v > hi) return hi;
-	return v;
+// Cook constants. Clamping AFTER the scale is equivalent to clamping before it
+// (the bounds are just scaled too) and lets VU0 do the whole thing branchless:
+// vmax/vmini for the clamp, vftoi0 to truncate exactly like the C cast did.
+// The upper UV bound is written as the product so it is bit-identical to the
+// old clampf(v, -127.99f, 127.99f) * 256.0f at the boundary.
+static const VECTOR COOK_ZERO  = { 0.0f, 0.0f, 0.0f, 0.0f };
+static const VECTOR COOK_C255  = { 255.0f, 255.0f, 255.0f, 255.0f };
+static const VECTOR COOK_C127  = { 127.0f, 127.0f, 127.0f, 0.0f };     // .w = 0 forces normal.w = 0
+static const VECTOR COOK_CN127 = { -127.0f, -127.0f, -127.0f, 0.0f };
+static const VECTOR COOK_C256  = { 256.0f, 256.0f, 256.0f, 256.0f };
+static const VECTOR COOK_UVHI  = {  127.99f*256.0f,  127.99f*256.0f,  127.99f*256.0f,  127.99f*256.0f };
+static const VECTOR COOK_UVLO  = { -127.99f*256.0f, -127.99f*256.0f, -127.99f*256.0f, -127.99f*256.0f };
+
+// 16B VECTOR -> 12B struct, no conversion. Left scalar on purpose: an MMI
+// repack of 4 vertices needs ~12 shuffles to land 12 words that straddle every
+// doubleword boundary, for 19 instructions against 24. Not worth it -- the win
+// here was hoisting the per-vertex cook_* branches out of the loop.
+static void cook_positions_range(athena_compact_position *dst, const VECTOR *src, uint32_t count) {
+	for (uint32_t i = 0; i < count; i++) {
+		dst[i].x = src[i][0];
+		dst[i].y = src[i][1];
+		dst[i].z = src[i][2];
+	}
+}
+
+// ppach folds the 4 words to 4 halfwords, ppacb folds those to 4 bytes, so one
+// sw writes the whole packed vertex.
+static void cook_colors_range(athena_compact_color *dst, const VECTOR *src, uint32_t count) {
+	if (count == 0)
+		return;
+
+	__asm__ __volatile__(
+	".set noreorder             \n"
+	"lqc2   $vf4, 0x0(%3)       \n"
+	"lqc2   $vf5, 0x0(%4)       \n"
+    "1:                         \n"
+	"lqc2   $vf1, 0x0(%1)       \n"
+	"vmul.xyzw   $vf1, $vf1, $vf4\n"
+	"vmax.xyzw   $vf1, $vf1, $vf5\n"
+	"vmini.xyzw  $vf1, $vf1, $vf4\n"
+	"vftoi0.xyzw $vf1, $vf1     \n"
+	"qmfc2  $8, $vf1            \n"
+	"ppach  $8, $0, $8          \n"
+	"ppacb  $8, $0, $8          \n"
+	"sw     $8, 0x0(%0)         \n"
+	"addiu  %1, %1, 0x10        \n"
+	"addiu  %2, %2, -1          \n"
+	"bne    $0, %2, 1b          \n"
+	"addiu  %0, %0, 0x4         \n"
+	".set reorder               \n"
+	: "+r" (dst), "+r" (src), "+r" (count)
+	: "r" (COOK_C255), "r" (COOK_ZERO)
+	: "$8", "memory");
+}
+
+static void cook_normals_range(athena_compact_normal *dst, const VECTOR *src, uint32_t count) {
+	if (count == 0)
+		return;
+
+	__asm__ __volatile__(
+	".set noreorder             \n"
+	"lqc2   $vf4, 0x0(%3)       \n"
+	"lqc2   $vf5, 0x0(%4)       \n"
+    "1:                         \n"
+	"lqc2   $vf1, 0x0(%1)       \n"
+	"vmul.xyzw   $vf1, $vf1, $vf4\n"
+	"vmax.xyzw   $vf1, $vf1, $vf5\n"
+	"vmini.xyzw  $vf1, $vf1, $vf4\n"
+	"vftoi0.xyzw $vf1, $vf1     \n"
+	"qmfc2  $8, $vf1            \n"
+	"ppach  $8, $0, $8          \n"
+	"ppacb  $8, $0, $8          \n"
+	"sw     $8, 0x0(%0)         \n"
+	"addiu  %1, %1, 0x10        \n"
+	"addiu  %2, %2, -1          \n"
+	"bne    $0, %2, 1b          \n"
+	"addiu  %0, %0, 0x4         \n"
+	".set reorder               \n"
+	: "+r" (dst), "+r" (src), "+r" (count)
+	: "r" (COOK_C127), "r" (COOK_CN127)
+	: "$8", "memory");
+}
+
+// Only .xy survive: ppach leaves u,v in the low two halfwords and sw writes
+// exactly those four bytes.
+static void cook_uvs_range(athena_compact_uv *dst, const VECTOR *src, uint32_t count) {
+	if (count == 0)
+		return;
+
+	__asm__ __volatile__(
+	".set noreorder             \n"
+	"lqc2   $vf4, 0x0(%3)       \n"
+	"lqc2   $vf5, 0x0(%4)       \n"
+	"lqc2   $vf6, 0x0(%5)       \n"
+    "1:                         \n"
+	"lqc2   $vf1, 0x0(%1)       \n"
+	"vmul.xyzw   $vf1, $vf1, $vf4\n"
+	"vmax.xyzw   $vf1, $vf1, $vf5\n"
+	"vmini.xyzw  $vf1, $vf1, $vf6\n"
+	"vftoi0.xyzw $vf1, $vf1     \n"
+	"qmfc2  $8, $vf1            \n"
+	"ppach  $8, $0, $8          \n"
+	"sw     $8, 0x0(%0)         \n"
+	"addiu  %1, %1, 0x10        \n"
+	"addiu  %2, %2, -1          \n"
+	"bne    $0, %2, 1b          \n"
+	"addiu  %0, %0, 0x4         \n"
+	".set reorder               \n"
+	: "+r" (dst), "+r" (src), "+r" (count)
+	: "r" (COOK_C256), "r" (COOK_UVLO), "r" (COOK_UVHI)
+	: "$8", "memory");
 }
 
 void render_invalidate_compact_cache(athena_render_data *data) {
@@ -817,32 +924,20 @@ static void render_cook_compact_vertices(athena_render_data *data) {
 		if (src + count > data->index_count)
 			count = data->index_count - src;
 
-		for (uint32_t j = 0; j < count; j++, src++, dst++) {
-			if (cook_positions) {
-				data->compact_positions[dst].x = data->positions[src][0];
-				data->compact_positions[dst].y = data->positions[src][1];
-				data->compact_positions[dst].z = data->positions[src][2];
-			}
+		// One specialised pass per attribute instead of four per-vertex tests:
+		// the cook_* flags are loop-invariant, but GCC kept the branches (and
+		// their delay slots) inside the vertex loop.
+		if (cook_positions)
+			cook_positions_range(&data->compact_positions[dst], &data->positions[src], count);
 
-			if (cook_colors) {
-				data->compact_colors[dst].r = (uint8_t)(render_clampf(data->colours[src][0], 0.0f, 1.0f) * 255.0f);
-				data->compact_colors[dst].g = (uint8_t)(render_clampf(data->colours[src][1], 0.0f, 1.0f) * 255.0f);
-				data->compact_colors[dst].b = (uint8_t)(render_clampf(data->colours[src][2], 0.0f, 1.0f) * 255.0f);
-				data->compact_colors[dst].a = (uint8_t)(render_clampf(data->colours[src][3], 0.0f, 1.0f) * 255.0f);
-			}
+		if (cook_colors)
+			cook_colors_range(&data->compact_colors[dst], &data->colours[src], count);
 
-			if (cook_normals) {
-				data->compact_normals[dst].x = (int8_t)(render_clampf(data->normals[src][0], -1.0f, 1.0f) * 127.0f);
-				data->compact_normals[dst].y = (int8_t)(render_clampf(data->normals[src][1], -1.0f, 1.0f) * 127.0f);
-				data->compact_normals[dst].z = (int8_t)(render_clampf(data->normals[src][2], -1.0f, 1.0f) * 127.0f);
-				data->compact_normals[dst].w = 0;
-			}
+		if (cook_normals)
+			cook_normals_range(&data->compact_normals[dst], &data->normals[src], count);
 
-			if (cook_uvs) {
-				data->compact_uvs[dst].u = (int16_t)(render_clampf(data->texcoords[src][0], -127.99f, 127.99f) * 256.0f);
-				data->compact_uvs[dst].v = (int16_t)(render_clampf(data->texcoords[src][1], -127.99f, 127.99f) * 256.0f);
-			}
-		}
+		if (cook_uvs)
+			cook_uvs_range(&data->compact_uvs[dst], &data->texcoords[src], count);
 	}
 
 	// These are read by the DMA controller (owl_add_unpack_data_ref_packed's

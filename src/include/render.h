@@ -440,10 +440,23 @@ void update_object_space(athena_object_data *obj);
 
 void create_view(MATRIX view_screen, float fov, float near, float far, float w, float h);
 
-#define alloc_vectors(cnt) (VECTOR*)malloc(cnt * sizeof(VECTOR))
+// memalign, not malloc: VECTOR is declared aligned(16) but malloc only promises
+// 8, and the cook loops (render.c) read these arrays with lqc2, which faults on
+// a misaligned address. free() releases memalign'd blocks fine.
+#define alloc_vectors(cnt) (VECTOR*)memalign(16, cnt * sizeof(VECTOR))
 #define copy_vectors(dst, src, cnt) memcpy(dst, src, cnt*sizeof(VECTOR))
 #define copy_vector(dst, src) memcpy(dst, src, sizeof(VECTOR))
 #define free_vectors(vec) free(vec)
+
+// copy_vector() has to stay a memcpy: mesh_loaders.c feeds it a source with a
+// 12-byte stride on purpose. Use this one only where both sides came from
+// alloc_vectors -- 2 memory ops instead of the 8 an unaligned memcpy expands to.
+static inline void copy_vector_qw(VECTOR dst, VECTOR src) {
+	__asm__ __volatile__(
+		"lq  $8, 0x0(%1)\n"
+		"sq  $8, 0x0(%0)\n"
+		: : "r" (dst), "r" (src) : "$8", "memory");
+}
 
 #define copy_init_w_vector(dst, src) \
 do { \

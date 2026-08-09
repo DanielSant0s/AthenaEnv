@@ -128,7 +128,7 @@ void shadow_projector_init(ath_shadow_projector *p, GSSURFACE *tex) {
 }
 
 void shadow_projector_set_transform(ath_shadow_projector *p, const MATRIX transform) {
-	memcpy(p->transform, transform, sizeof(MATRIX));
+	matrix_functions->copy(p->transform, (float*)transform);
 }
 
 void shadow_projector_set_size(ath_shadow_projector *p, float width, float height) {
@@ -361,7 +361,7 @@ static void shadow_fill_local_grid(ath_shadow_projector *p, shadow_draw_slot *sl
     }
 
     for (int v = 0; v < p->vtxCount; v++)
-        copy_vector(slot->data.positions[v], p->nodes[p->triNodeIdx[v]]);
+        copy_vector_qw(slot->data.positions[v], p->nodes[p->triNodeIdx[v]]);
 
     render_invalidate_compact_positions(&slot->data);
     p->localGridDirty = 0;
@@ -372,7 +372,7 @@ static void shadow_fill_local_grid(ath_shadow_projector *p, shadow_draw_slot *sl
 // for every node, which is exactly what a translation is -- no reason to pay it
 // per vertex.
 static void shadow_place_object(ath_shadow_projector *p) {
-    memcpy(p->obj.transform, p->transform, sizeof(MATRIX));
+    matrix_functions->copy(p->obj.transform, p->transform);
 
     p->obj.transform[12] -= p->lightDir[0] * p->lightOffset;
     p->obj.transform[13] -= p->lightDir[1];
@@ -477,7 +477,7 @@ static void shadow_build_world_grid(ath_shadow_projector *p, athena_render_data 
     // Update positions in prebuilt vertex list using node mapping
     for (int v = 0; v < p->vtxCount; v++) {
         uint32_t n = p->triNodeIdx[v];
-        copy_vector(data->positions[v], p->nodes[n]);
+        copy_vector_qw(data->positions[v], p->nodes[n]);
     }
 
     // data->positions was just rewritten directly (not through the JS

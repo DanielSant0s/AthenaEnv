@@ -3,38 +3,56 @@
 #include <vector.h>
 #include <matrix.h>
 
+// Two corners per iteration. The second corner's transform fills the latency
+// the first one's vclipw needs, and $vi18 is a 3-deep shift register, so one
+// cfc2 brings back both results: bits[5:0] the second corner, bits[11:6] the
+// first. Halves the vnop/cfc2 stalls, which were 8 of the 20 instructions a
+// corner used to cost.
 int clip_bounding_box(MATRIX local_clip, VECTOR *bounding_box)
 {
     int ret;
     __asm__  __volatile__(
-    "lqc2    $vf4, 0x00(%1)			\n"
-    "lqc2    $vf5, 0x10(%1)			\n"
-    "lqc2    $vf6, 0x20(%1)			\n"
-    "lqc2    $vf7, 0x30(%1)			\n"
-    "li      %0, 0x3f				\n"
-    "li      $8, 8					\n"
+    ".set noreorder                 \n"
+    "lqc2    $vf4, 0x00(%1)         \n"
+    "lqc2    $vf5, 0x10(%1)         \n"
+    "lqc2    $vf6, 0x20(%1)         \n"
+    "lqc2    $vf7, 0x30(%1)         \n"
+    "li      %0, 0x3f               \n"
+    "li      $8, 4                  \n"
+    "move    $9, %2                 \n"
 
-	"loop_clip_all:					\n"
-    "lqc2    $vf8, 0x00(%2)			\n"
-	"addi	 %2, 0x10				\n"
-    "vmulax.xyzw     $ACC,$vf4,$vf8	\n"
-    "vmadday.xyzw    $ACC,$vf5,$vf8	\n"
-    "vmaddaz.xyzw    $ACC,$vf6,$vf8	\n"
-    "vmaddw.xyzw     $vf9,$vf7,$vf8	\n"
-	"vclipw.xyz $vf9xyz,$vf9w		\n"
-	"vnop							\n"
-	"vnop							\n"
-	"vnop							\n"
-	"vnop							\n"
-	"vnop							\n"
-	"cfc2    $3,$vi18               \n"	//READ CLIP flag
-	"and	%0,%0,$3				\n"
-    "beqz    %0,end_clip_all		\n"
-    "addi    $8,$8,-1				\n"
-    "bne     $0,$8,loop_clip_all	\n"
-    "addi    %0,$0,1				\n"
-	"end_clip_all:					\n"
-    :"=&r"(ret): "r" (local_clip),"r" (bounding_box)  : "$2","$3","$8");
+    "1:                             \n"
+    "lqc2    $vf8,  0x00($9)        \n"
+    "lqc2    $vf10, 0x10($9)        \n"
+    "vmulax.xyzw     $ACC,  $vf4,$vf8 \n"
+    "vmadday.xyzw    $ACC,  $vf5,$vf8 \n"
+    "vmaddaz.xyzw    $ACC,  $vf6,$vf8 \n"
+    "vmaddw.xyzw     $vf9,  $vf7,$vf8 \n"
+    "vclipw.xyz $vf9xyz,  $vf9w     \n"
+    "vmulax.xyzw     $ACC,  $vf4,$vf10\n"
+    "vmadday.xyzw    $ACC,  $vf5,$vf10\n"
+    "vmaddaz.xyzw    $ACC,  $vf6,$vf10\n"
+    "vmaddw.xyzw     $vf11, $vf7,$vf10\n"
+    "vclipw.xyz $vf11xyz, $vf11w    \n"
+    "vnop                           \n"
+    "vnop                           \n"
+    "vnop                           \n"
+    "vnop                           \n"
+    "vnop                           \n"
+    "cfc2    $3, $vi18              \n"
+    "nop                            \n"
+    "srl     $2, $3, 6              \n"
+    "and     $3, $3, $2             \n"
+    "and     %0, %0, $3             \n"
+    "addiu   $9, $9, 0x20           \n"
+    "beqz    %0, 2f                 \n"
+    "addiu   $8, $8, -1             \n"
+    "bne     $0, $8, 1b             \n"
+    "nop                            \n"
+    "addiu   %0, $0, 1              \n"
+    "2:                             \n"
+    ".set reorder                   \n"
+    :"=&r"(ret): "r" (local_clip),"r" (bounding_box)  : "$2","$3","$8","$9");
 
 	return ret;
 }
