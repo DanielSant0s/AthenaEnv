@@ -217,6 +217,108 @@ static const char* vert_attributes[] = {
 	"colors",
 };
 
+// Defined further down, next to the rest of the JS<->native conversions.
+static void JS_ToMaterial(JSContext *ctx, VECTOR v, JSValue vec);
+
+// The material table indexes vertices, so an entry can never legitimately reach
+// past the geometry: the draw loop slices a group as end - last_index and would
+// read (and draw) whatever follows the mesh. Two ordinary things produce such a
+// table -- a script writing the range exclusively (`Render.materialIndex(0,
+// vertexCount)`, which is what the samples do) and a script replacing .vertices
+// with a shorter array and leaving the old table behind. Clamping is silent on
+// purpose: the alternative is a phantom triangle at best.
+static void render_data_clamp_material_indices(athena_render_data *m) {
+	if (!m->material_indices || m->material_index_count <= 0 || m->index_count == 0)
+		return;
+
+	uint32_t last = m->index_count - 1;
+
+	for (int i = 0; i < m->material_index_count; i++) {
+		if (m->material_indices[i].end > last)
+			m->material_indices[i].end = last;
+	}
+}
+
+// Parses a JS materials array into the render data. Shared by the "materials"
+// setter and by the typed-array constructor, which gets one from
+// Render.vertexList.
+static void render_data_apply_materials(JSContext *ctx, JSRenderData *ro, JSValueConst val) {
+	uint32_t material_count = 0;
+
+	JS_ToUint32(ctx, &material_count, JS_GetPropertyStr(ctx, val, "length"));
+
+	if (material_count == 0)
+		return;
+
+	if (material_count > ro->native.m.material_count) {
+		ro->native.m.materials = realloc(ro->native.m.materials, material_count * sizeof(ath_mat));
+	}
+
+	for (int i = 0; i < material_count; i++) {
+		JSValue obj = JS_GetPropertyUint32(ctx, val, i);
+
+		JS_ToMaterial(ctx, &ro->native.m.materials[i].ambient,             JS_GetPropertyStr(ctx, obj, "ambient"));
+		JS_ToMaterial(ctx, &ro->native.m.materials[i].diffuse,             JS_GetPropertyStr(ctx, obj, "diffuse"));
+		//JS_ToMaterial(ctx, &ro->native.m.materials[i].specular,            JS_GetPropertyStr(ctx, obj, "specular"));
+		JS_ToMaterial(ctx, &ro->native.m.materials[i].emission,            JS_GetPropertyStr(ctx, obj, "emission"));
+		JS_ToMaterial(ctx, &ro->native.m.materials[i].transmittance,       JS_GetPropertyStr(ctx, obj, "transmittance"));
+		JS_ToFloat32(ctx,  &ro->native.m.materials[i].shininess,           JS_GetPropertyStr(ctx, obj, "shininess"));
+		JS_ToFloat32(ctx,  &ro->native.m.materials[i].refraction,          JS_GetPropertyStr(ctx, obj, "refraction"));
+		JS_ToMaterial(ctx, &ro->native.m.materials[i].transmission_filter, JS_GetPropertyStr(ctx, obj, "transmission_filter"));
+		JS_ToFloat32(ctx,  &ro->native.m.materials[i].disolve,             JS_GetPropertyStr(ctx, obj, "disolve"));
+
+		JS_ToInt32(ctx,    &ro->native.m.materials[i].texture_id,          JS_GetPropertyStr(ctx, obj, "texture_id"));
+		JS_ToInt32(ctx,    &ro->native.m.materials[i].ref_texture_id,      JS_GetPropertyStr(ctx, obj, "ref_texture_id"));
+
+		if (ro->native.m.materials[i].ref_texture_id != -1 && !ro->native.m.attributes.has_refmap) {
+			ro->native.m.attributes.has_refmap = true;
+		}
+
+		JS_ToInt32(ctx,    &ro->native.m.materials[i].bump_texture_id,     JS_GetPropertyStr(ctx, obj, "bump_texture_id"));
+
+		if (ro->native.m.materials[i].bump_texture_id != -1 && !ro->native.m.attributes.has_bumpmap) {
+			ro->native.m.attributes.has_bumpmap = true;
+		}
+
+		JS_ToInt32(ctx,    &ro->native.m.materials[i].decal_texture_id,    JS_GetPropertyStr(ctx, obj, "decal_texture_id"));
+
+		if (ro->native.m.materials[i].decal_texture_id != -1 && !ro->native.m.attributes.has_decal) {
+			ro->native.m.attributes.has_decal = true;
+		}
+
+		JS_FreeValue(ctx, obj);
+	}
+
+	ro->native.m.material_count = material_count;
+}
+
+// Same, for the group table. Shared with the "material_indices" setter.
+static void render_data_apply_material_indices(JSContext *ctx, JSRenderData *ro, JSValueConst val) {
+	uint32_t material_index_count = 0;
+
+	JS_ToUint32(ctx, &material_index_count, JS_GetPropertyStr(ctx, val, "length"));
+
+	if (material_index_count == 0)
+		return;
+
+	if (material_index_count > (uint32_t)ro->native.m.material_index_count) {
+		ro->native.m.material_indices = realloc(ro->native.m.material_indices, material_index_count * sizeof(material_index));
+	}
+
+	for (int i = 0; i < material_index_count; i++) {
+		JSValue obj = JS_GetPropertyUint32(ctx, val, i);
+
+		JS_ToUint32(ctx, &ro->native.m.material_indices[i].index, JS_GetPropertyStr(ctx, obj, "index"));
+		JS_ToUint32(ctx, &ro->native.m.material_indices[i].end,   JS_GetPropertyStr(ctx, obj, "end"));
+
+		JS_FreeValue(ctx, obj);
+	}
+
+	ro->native.m.material_index_count = material_index_count;
+
+	render_data_clamp_material_indices(&ro->native.m);
+}
+
 static JSValue athena_render_data_ctor(JSContext *ctx, JSValueConst new_target, int argc, JSValueConst *argv) {
 	AthenaImage *image;
 	JSValue obj = JS_UNDEFINED;
@@ -314,7 +416,19 @@ static JSValue athena_render_data_ctor(JSContext *ctx, JSValueConst new_target, 
 		ro->native.m.material_index_count = 1;
 
 		init_vector(ro->native.m.materials[0].ambient);
-		init_vector(ro->native.m.materials[0].diffuse);
+
+		// Neutral (0), NOT init_vector's 1.0: the VU adds the material diffuse
+		// to the vertex colour and clamps to [0,1] (draw_3D_*.vcl,
+		// VectorNormalizeClamp), so a diffuse of 1 saturates every vertex to
+		// white. The file loaders sit on the other side of that sum -- they
+		// write colours = 0 and let the material carry the colour -- but
+		// geometry built from script brings its own per-vertex colours, which
+		// only show through if the material stays out of the way.
+		ro->native.m.materials[0].diffuse[0] = 0.0f;
+		ro->native.m.materials[0].diffuse[1] = 0.0f;
+		ro->native.m.materials[0].diffuse[2] = 0.0f;
+		ro->native.m.materials[0].diffuse[3] = 0.0f;
+
 		init_vector(ro->native.m.materials[0].specular);
 		init_vector(ro->native.m.materials[0].emission);
 		init_vector(ro->native.m.materials[0].transmittance);
@@ -334,11 +448,38 @@ static JSValue athena_render_data_ctor(JSContext *ctx, JSValueConst new_target, 
     	ro->native.m.materials[0].ref_texture_id = -1; 
 
 		ro->native.m.material_indices[0].index = 0;
-		ro->native.m.material_indices[0].end = ro->native.m.index_count;
+		// Inclusive, like every other producer of this table: .end is the index
+		// of the group's LAST vertex, and the draw loop slices it as
+		// end - last_index. index_count handed every script-built mesh a phantom
+		// vertex past its own geometry -- the same off-by-one already fixed in
+		// the OBJ/glTF loaders.
+		ro->native.m.material_indices[0].end = ro->native.m.index_count - 1;
 
-		if(argc > 1) {
+		// Render.vertexList carries materials/material_indices on the object it
+		// builds, and this used to drop both on the floor: whatever you passed
+		// was overwritten by the single default above. That is why scripts
+		// assign .materials (or call updateMaterial) right after constructing.
+		{
+			JSValue mats = JS_GetPropertyStr(ctx, argv[0], "materials");
+			if (JS_IsArray(ctx, mats))
+				render_data_apply_materials(ctx, ro, mats);
+			JS_FreeValue(ctx, mats);
+
+			JSValue groups = JS_GetPropertyStr(ctx, argv[0], "material_indices");
+			if (JS_IsArray(ctx, groups))
+				render_data_apply_material_indices(ctx, ro, groups);
+			JS_FreeValue(ctx, groups);
+		}
+
+		// The texture is optional, and has to STAY optional even when argv[2]
+		// (tristrip) is passed -- so anything that is not an Image counts as
+		// "no texture" instead of being dereferenced. JS_GetOpaque, not
+		// JS_GetOpaque2: a null/undefined here is a normal call, not a type
+		// error to leave pending on the context.
+		image = (argc > 1) ? JS_GetOpaque(argv[1], get_img_class_id()) : NULL;
+
+		if (image) {
 			JS_DupValue(ctx, argv[1]);
-			image = JS_GetOpaque2(ctx, argv[1], get_img_class_id());
 
 			image->tex->Filter = GS_FILTER_LINEAR;
 
@@ -348,7 +489,12 @@ static JSValue athena_render_data_ctor(JSContext *ctx, JSValueConst new_target, 
 			ro->native.m.textures[0] = image->tex;
 			ro->native.m.texture_count = 1;
 
-			ro->native.m.materials[0].texture_id = image->tex;
+			// Index into textures[], not the surface pointer -- draw_vu1_*
+			// does data->textures[texture_id], so a pointer here indexed wildly
+			// out of bounds. Only when the material did not name one itself: an
+			// explicit texture_id from a script-supplied material wins.
+			if (ro->native.m.materials[0].texture_id == -1)
+				ro->native.m.materials[0].texture_id = 0;
 
 			ro->textures[0] = argv[1];
 		}
@@ -837,6 +983,19 @@ static JSValue js_render_data_set(JSContext *ctx, JSValueConst this_val, JSValue
 				athena_render_data_invalidate_compact_cache(&ro->native);
 				athena_render_data_invalidate_chain_cache(&ro->native);
 
+				// index_count just changed, and the material table indexes
+				// vertices: left alone it would keep describing the old shape
+				// and the draw loop would slice past the new one. A single group
+				// -- what script-built geometry has -- simply follows the new
+				// count; with several, growing is ambiguous (which group gets
+				// the new vertices?), so they are only clamped back inside.
+				if (ro->native.m.index_count > 0 && ro->native.m.material_indices) {
+					if (ro->native.m.material_index_count == 1)
+						ro->native.m.material_indices[0].end = ro->native.m.index_count - 1;
+					else
+						render_data_clamp_material_indices(&ro->native.m);
+				}
+
 				// New positions mean the old bounding box describes geometry
 				// that no longer exists -- frustum culling would happily reject
 				// the mesh against a box from a previous shape.
@@ -847,51 +1006,7 @@ static JSValue js_render_data_set(JSContext *ctx, JSValueConst this_val, JSValue
 			break;
 		case 1:
 			{
-				uint32_t material_count = 0;
-				int has_refmap = 0;
-
-				JS_ToUint32(ctx, &material_count, JS_GetPropertyStr(ctx, val, "length"));
-
-				if (material_count > ro->native.m.material_count) {
-					ro->native.m.materials = realloc(ro->native.m.materials, material_count * sizeof(ath_mat));
-				}
-
-				for (int i = 0; i < material_count; i++) {
-					JSValue obj = JS_GetPropertyUint32(ctx, val, i);
-
-					JS_ToMaterial(ctx, &ro->native.m.materials[i].ambient,             JS_GetPropertyStr(ctx, obj, "ambient"));
-					JS_ToMaterial(ctx, &ro->native.m.materials[i].diffuse,             JS_GetPropertyStr(ctx, obj, "diffuse"));
-					//JS_ToMaterial(ctx, &ro->native.m.materials[i].specular,            JS_GetPropertyStr(ctx, obj, "specular"));
-					JS_ToMaterial(ctx, &ro->native.m.materials[i].emission,            JS_GetPropertyStr(ctx, obj, "emission"));
-					JS_ToMaterial(ctx, &ro->native.m.materials[i].transmittance,       JS_GetPropertyStr(ctx, obj, "transmittance"));
-					JS_ToFloat32(ctx,  &ro->native.m.materials[i].shininess,           JS_GetPropertyStr(ctx, obj, "shininess"));
-					JS_ToFloat32(ctx,  &ro->native.m.materials[i].refraction,          JS_GetPropertyStr(ctx, obj, "refraction"));
-					JS_ToMaterial(ctx, &ro->native.m.materials[i].transmission_filter, JS_GetPropertyStr(ctx, obj, "transmission_filter"));
-					JS_ToFloat32(ctx,  &ro->native.m.materials[i].disolve,             JS_GetPropertyStr(ctx, obj, "disolve"));
-
-					JS_ToInt32(ctx,    &ro->native.m.materials[i].texture_id,          JS_GetPropertyStr(ctx, obj, "texture_id"));
-					JS_ToInt32(ctx,    &ro->native.m.materials[i].ref_texture_id,          JS_GetPropertyStr(ctx, obj, "ref_texture_id"));
-
-					if (ro->native.m.materials[i].ref_texture_id != -1 && !ro->native.m.attributes.has_refmap) {
-						ro->native.m.attributes.has_refmap = true;
-					}
-
-					JS_ToInt32(ctx,    &ro->native.m.materials[i].bump_texture_id,          JS_GetPropertyStr(ctx, obj, "bump_texture_id"));
-
-					if (ro->native.m.materials[i].bump_texture_id != -1 && !ro->native.m.attributes.has_bumpmap) {
-						ro->native.m.attributes.has_bumpmap = true;
-					}
-
-					JS_ToInt32(ctx,    &ro->native.m.materials[i].decal_texture_id,          JS_GetPropertyStr(ctx, obj, "decal_texture_id"));
-
-					if (ro->native.m.materials[i].decal_texture_id != -1 && !ro->native.m.attributes.has_decal) {
-						ro->native.m.attributes.has_decal = true;
-					}
-
-					JS_FreeValue(ctx, obj);
-				}
-
-				ro->native.m.material_count = material_count;
+				render_data_apply_materials(ctx, ro, val);
 
 				athena_render_data_invalidate_chain_cache(&ro->native);
 
@@ -900,24 +1015,7 @@ static JSValue js_render_data_set(JSContext *ctx, JSValueConst this_val, JSValue
 			break;
 		case 2:
 			{
-				uint32_t material_index_count = 0;
-
-				JS_ToUint32(ctx, &material_index_count, JS_GetPropertyStr(ctx, val, "length"));
-
-				if (material_index_count > ro->native.m.material_index_count) {
-					ro->native.m.material_indices = realloc(ro->native.m.material_indices, material_index_count * sizeof(material_index));
-				}
-
-				for (int i = 0; i < material_index_count; i++) {
-					JSValue obj = JS_GetPropertyUint32(ctx, val, i);
-
-					JS_ToUint32(ctx, &ro->native.m.material_indices[i].index, JS_GetPropertyStr(ctx, obj, "index"));
-					JS_ToUint32(ctx, &ro->native.m.material_indices[i].end,   JS_GetPropertyStr(ctx, obj, "end"));
-
-					JS_FreeValue(ctx, obj);
-				}
-
-				ro->native.m.material_index_count = material_index_count;
+				render_data_apply_material_indices(ctx, ro, val);
 
 				// The compact buffers are laid out per material group, with
 				// each group's base padded to a quadword boundary (see

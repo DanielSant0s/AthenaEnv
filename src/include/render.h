@@ -219,6 +219,14 @@ typedef struct {
     // (which carry no texture state) draw with the previous chunk's texture.
     // Header baked once; TEX0/TEX1 refreshed per draw (PrimContext flips).
     owl_qword *tex_giftag;
+
+    // owl_flush_generation() of the last draw call that queued this chain. Both
+    // buffers above reach the DMAC by reference, so they belong to that draw
+    // until it has been read -- rewriting them earlier (a second draw of the
+    // same object with a different texture, or a rebuild triggered mid-frame)
+    // would retroactively change what the first draw renders with.
+    uint32_t queued_gen;
+    int      has_queued;
 } athena_chain_cache;
 
 typedef struct athena_render_data {

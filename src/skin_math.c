@@ -202,6 +202,18 @@ void update_bone_transforms(athena_object_data* obj) {
         
         matrix_functions->transpose(obj->bone_matrices[i], obj->bone_matrices[i]);
     }
+
+    // The palette is handed to the DMAC by reference (draw_vu1_* unpacks it at
+    // VU address 880 with a DMA_REF), never read by the EE core again -- and it
+    // is rewritten here every frame, so unlike geometry cooked once at load it
+    // cannot count on ordinary cache pressure having flushed it in time.
+    //
+    // End address is the last BYTE, not the last element: a MATRIX is 64 bytes
+    // at 16-byte alignment, so it can straddle a cache line and pointing at its
+    // start would leave the tail of the palette dirty.
+    if (skeleton->bone_count > 0)
+        SyncDCache(obj->bone_matrices,
+                   (uint8_t*)obj->bone_matrices + skeleton->bone_count * sizeof(MATRIX) - 1);
 }
 
 void decompose_transform_matrix(const MATRIX matrix, VECTOR position, 

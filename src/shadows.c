@@ -235,6 +235,12 @@ static void shadow_slot_build(ath_shadow_projector *p, shadow_draw_slot *slot);
 static void shadow_slot_free(shadow_draw_slot *slot) {
     athena_render_data *data = &slot->data;
 
+    // Everything below is freed, and the DMAC reaches most of it by reference:
+    // a setGrid/setUVRect between two draws would pull it out from under a draw
+    // call still queued this frame.
+    if (slot->hasQueued)
+        owl_wait_generation(slot->queuedGen);
+
     if (data->positions) { free_vectors(data->positions); data->positions = NULL; }
     if (data->texcoords) { free_vectors(data->texcoords); data->texcoords = NULL; }
     if (data->colours) { free_vectors(data->colours); data->colours = NULL; }

@@ -117,9 +117,18 @@ static inline uint32_t render_calc_triangles(const athena_render_data *data) {
 		return 0;
 
 	if (data->tristrip) {
-		if (data->index_count < 2)
+		// One strip per material group, not one for the whole mesh: a chunk
+		// carries its own GIFtag, so the primitive restarts at every group
+		// boundary (which is exactly why shadow_slot_build gives each grid row
+		// a group of its own). Each strip loses its first two vertices.
+		uint32_t groups = data->material_index_count > 0
+			? (uint32_t)data->material_index_count : 1;
+		uint32_t warmup = groups * 2;
+
+		if (data->index_count <= warmup)
 			return 0;
-		return data->index_count - 2;
+
+		return data->index_count - warmup;
 	}
 
 	return data->index_count / 3;
@@ -432,6 +441,9 @@ void render_object(athena_object_data *obj) {
 	set_screen_param(ALPHA_BLEND_EQUATION, old_alpha);
 }
 
+// Defined further down, next to the tex_giftag refresh that shares it.
+static void render_chain_wait_if_queued(athena_chain_cache *chain);
+
 void new_render_object(athena_object_data *obj, athena_render_data *data) {
 	obj->data = data;
 
@@ -477,6 +489,11 @@ void new_render_object(athena_object_data *obj, athena_render_data *data) {
 		&data->ref_chain
 	};
 	for (int i = 0; i < 10; i++) {
+		// These are freed, not just rewritten, and the DMAC may still be reading
+		// them from a draw call queued earlier this frame (rebinding a
+		// RenderData, or shadows.c rebuilding its projector geometry).
+		render_chain_wait_if_queued(slots[i]);
+
 		free(slots[i]->buffer);
 		free(slots[i]->chunk_offset);
 		free(slots[i]->tex_giftag);
@@ -676,8 +693,13 @@ static void bake_giftags(owl_packet *packet, athena_render_data *data, bool text
 	};
 
 	owl_add_unpack_data_cnt(packet, 26, 1, 0);
-	owl_add_uint(packet, 0);
+	// x: per-vertex winding flip for the backface test. A tristrip alternates
+	// winding vertex by vertex, so a fixed-sign test would cull every other
+	// triangle; the VU multiplies its culling direction by this every vertex.
+	owl_add_float(packet, data->tristrip ? -1.0f : 1.0f);
 	owl_add_uint(packet, data->attributes.accurate_clipping? (clip_tag.data >> 32) : 0);
+	// z stays an integer: setup_clip_trigger.i reads it with mtir (bit pattern,
+	// not value) to pick per-triangle vs per-vertex clip judgement.
 	owl_add_uint(packet, data->tristrip);
 	// float, not uint: the VU multiplies the triangle edge by this lane
 	// (bfc_multiplier, +1 cull back / -1 cull front) and only then converts it
@@ -935,6 +957,12 @@ static void render_build_chain(athena_object_data *obj, athena_chain_cache *chai
                                eChainKind kind) {
 	athena_render_data *data = obj->data;
 
+	// Everything below frees and rewrites buffers the DMAC reaches by reference.
+	// A rebuild triggered mid-frame (geometry or material table mutated between
+	// two draws of the same object) would pull them out from under a draw call
+	// that is still queued -- and the buffer is not just rewritten, it is freed.
+	render_chain_wait_if_queued(chain);
+
 	bool is_ref  = (kind == CHAIN_REF);
 	bool skinned = data->skin_data && !is_ref;
 	bool want_normals = (kind != CHAIN_COLORS);
@@ -1084,18 +1112,37 @@ static void render_build_chain(athena_object_data *obj, athena_chain_cache *chai
 	SyncDCache(chain->tex_giftag, &chain->tex_giftag[data->material_index_count * 3 - 1]);
 }
 
+// Blocks until the DMAC is done with whatever this chain last queued, so its
+// buffers can be rewritten. No-op unless a draw call is genuinely still in
+// flight -- see athena_chain_cache.queued_gen.
+static void render_chain_wait_if_queued(athena_chain_cache *chain) {
+	if (!chain->has_queued || owl_generation_read(chain->queued_gen))
+		return;
+
+	owl_wait_generation(chain->queued_gen);
+}
+
 // Refreshes the TEX0/TEX1 quadwords of a tex_giftag slot (the header, slot[0],
-// is constant -- see render_bake_tex_giftag_header). Called from
-// draw_vu1_with_colors's material loop whenever texture_mapping is true, NOT
-// gated on whether the texture actually changed: gsGlobal->PrimContext flips
-// every frame regardless, and this is a plain memory write (no packet/VIF
-// cost), so there is nothing to gain by trying to skip it.
-static void render_update_tex_giftag(owl_qword *slot, GSSURFACE *tex) {
+// is constant -- see render_bake_tex_giftag_header). Called from the material
+// loop of every draw_vu1_* whenever texture_mapping is true, NOT gated on
+// whether the texture was rebound: gsGlobal->PrimContext flips every frame
+// regardless, so the words really do change from one frame to the next.
+//
+// The slot is DMA_REF'd by the chunks, though, so it belongs to the last draw
+// call until the DMAC has read it. Drawing the SAME render data twice in one
+// frame with a different texture in between (setTexture, or a shared RenderData
+// swapped between two objects) would otherwise rewrite the slot under the first
+// draw and render both with the second texture. Hence: compute first, write only
+// if something actually changed, and wait the earlier draw out before it does.
+static void render_update_tex_giftag(athena_chain_cache *chain, int mat_id, GSSURFACE *tex) {
+	owl_qword *slot = &chain->tex_giftag[mat_id * 3];
 	int tw, th;
 	athena_set_tw_th(tex, &tw, &th);
 
-	slot[1].dword[1] = GS_TEX0_1 + gsGlobal->PrimContext;
-	slot[1].dword[0] = GS_SETREG_TEX0((tex->Vram & ~TRANSFER_REQUEST_MASK) / 256,
+	owl_qword tex0, tex1;
+
+	tex0.dword[1] = GS_TEX0_1 + gsGlobal->PrimContext;
+	tex0.dword[0] = GS_SETREG_TEX0((tex->Vram & ~TRANSFER_REQUEST_MASK) / 256,
 	                                   tex->TBW,
 	                                   tex->PSM,
 	                                   tw, th,
@@ -1106,8 +1153,19 @@ static void render_update_tex_giftag(owl_qword *slot, GSSURFACE *tex) {
 	                                   0, 0,
 	                                   tex->VramClut ? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD);
 
-	slot[2].dword[1] = GS_TEX1_1 + gsGlobal->PrimContext;
-	slot[2].dword[0] = GS_SETREG_TEX1(1, 0, tex->Filter, tex->Filter, 0, 0, 0);
+	tex1.dword[1] = GS_TEX1_1 + gsGlobal->PrimContext;
+	tex1.dword[0] = GS_SETREG_TEX1(1, 0, tex->Filter, tex->Filter, 0, 0, 0);
+
+	// Rewriting the same values is not a hazard, and it is the common case
+	// (same texture, same context, every chunk of every object).
+	if (slot[1].dword[0] == tex0.dword[0] && slot[1].dword[1] == tex0.dword[1] &&
+	    slot[2].dword[0] == tex1.dword[0] && slot[2].dword[1] == tex1.dword[1])
+		return;
+
+	render_chain_wait_if_queued(chain);
+
+	slot[1] = tex0;
+	slot[2] = tex1;
 
 	// Read by the DMA controller (owl_add_unpack_data_ref's DMA_REF), not by
 	// the EE core, so it needs an explicit writeback -- the CPU write above
@@ -1213,7 +1271,7 @@ void draw_vu1_with_colors(athena_object_data *obj, int pass_state) {
 			// Refreshed every draw call that hits this material, not just on
 			// rebind -- see render_update_tex_giftag's doc comment for why
 			// (gsGlobal->PrimContext). Plain memory write, no packet cost.
-			render_update_tex_giftag(&chain->tex_giftag[i * 3], tex);
+			render_update_tex_giftag(chain, i, tex);
 		}
 
 		int idxs_to_draw = (data->material_indices[i].end-last_index);
@@ -1243,6 +1301,11 @@ void draw_vu1_with_colors(athena_object_data *obj, int pass_state) {
 	owl_query_packet(CHANNEL_VIF1, 1);
 
 	owl_add_cnt_tag(packet, 0, owl_vif_code_double(VIF_CODE(0, 0, VIF_FLUSH, 0), VIF_CODE(0, 0, VIF_FLUSH, 0)));
+
+	// Taken after the last chunk: the ring may have flushed mid-draw, so the
+	// chain this draw is riding is the current one.
+	chain->queued_gen = owl_flush_generation();
+	chain->has_queued = 1;
 }
 
 void draw_vu1_with_lights(athena_object_data *obj, int pass_state) {
@@ -1326,7 +1389,7 @@ void draw_vu1_with_lights(athena_object_data *obj, int pass_state) {
 			}
 
 			// Refreshed per draw, not per rebind: PrimContext flips every frame.
-			render_update_tex_giftag(&chain->tex_giftag[i * 3], tex);
+			render_update_tex_giftag(chain, i, tex);
 		}
 
 		int idxs_to_draw = (data->material_indices[i].end-last_index);
@@ -1356,6 +1419,11 @@ void draw_vu1_with_lights(athena_object_data *obj, int pass_state) {
 	owl_query_packet(CHANNEL_VIF1, 1);
 
 	owl_add_cnt_tag(packet, 0, owl_vif_code_double(VIF_CODE(0, 0, VIF_FLUSH, 0), VIF_CODE(0, 0, VIF_FLUSH, 0)));
+
+	// Taken after the last chunk: the ring may have flushed mid-draw, so the
+	// chain this draw is riding is the current one.
+	chain->queued_gen = owl_flush_generation();
+	chain->has_queued = 1;
 }
 
 void draw_vu1_with_spec_lights(athena_object_data *obj, int pass_state) {
@@ -1441,7 +1509,7 @@ void draw_vu1_with_spec_lights(athena_object_data *obj, int pass_state) {
 			}
 
 			// Refreshed per draw, not per rebind: PrimContext flips every frame.
-			render_update_tex_giftag(&chain->tex_giftag[i * 3], tex);
+			render_update_tex_giftag(chain, i, tex);
 		}
 
 		int idxs_to_draw = (data->material_indices[i].end-last_index);
@@ -1471,6 +1539,11 @@ void draw_vu1_with_spec_lights(athena_object_data *obj, int pass_state) {
 	owl_query_packet(CHANNEL_VIF1, 1);
 
 	owl_add_cnt_tag(packet, 0, owl_vif_code_double(VIF_CODE(0, 0, VIF_FLUSH, 0), VIF_CODE(0, 0, VIF_FLUSH, 0)));
+
+	// Taken after the last chunk: the ring may have flushed mid-draw, so the
+	// chain this draw is riding is the current one.
+	chain->queued_gen = owl_flush_generation();
+	chain->has_queued = 1;
 }
 
 void draw_vu1_with_lights_ref(athena_object_data *obj, int pass_state) {
@@ -1555,7 +1628,7 @@ void draw_vu1_with_lights_ref(athena_object_data *obj, int pass_state) {
 		int idxs_to_draw = (data->material_indices[i].end-last_index);
 
 		// Refreshed per draw, not per rebind: PrimContext flips every frame.
-		render_update_tex_giftag(&chain->tex_giftag[i * 3], tex);
+		render_update_tex_giftag(chain, i, tex);
 
 		while (idxs_to_draw > 0) {
 			owl_query_packet(CHANNEL_VIF1, 5);
@@ -1582,4 +1655,9 @@ void draw_vu1_with_lights_ref(athena_object_data *obj, int pass_state) {
 	owl_query_packet(CHANNEL_VIF1, 1);
 
 	owl_add_cnt_tag(packet, 0, owl_vif_code_double(VIF_CODE(0, 0, VIF_FLUSH, 0), VIF_CODE(0, 0, VIF_FLUSH, 0)));
+
+	// Taken after the last chunk: the ring may have flushed mid-draw, so the
+	// chain this draw is riding is the current one.
+	chain->queued_gen = owl_flush_generation();
+	chain->has_queued = 1;
 }

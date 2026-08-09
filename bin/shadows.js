@@ -116,6 +116,64 @@ const box_object = new RenderObject(box);
 box_object.position = {x:2.0, y:0.2, z:2.0};
 box_object.scale = {x:0.2, y:0.2, z:0.2};
 
+// --- Tristrip + face culling test ------------------------------------------
+// A vertical ribbon built as ONE triangle strip: consecutive triangles share
+// two vertices, so their winding alternates. That alternation is what face
+// culling has to keep in step with -- if the parity is wrong, half the quads
+// vanish and the ribbon comes out STRIPED. Right, it is all-or-nothing: solid
+// from the front, gone once you orbit past its edge.
+//
+// SQUARE toggles culling, CIRCLE toggles accurate clipping (the two live in
+// different VU paths, and each has its own copy of the parity flip).
+const RIBBON_QUADS = 8;
+const ribbon_vertices = (RIBBON_QUADS + 1) * 2;
+
+const ribbon_positions = new Float32Array(ribbon_vertices * 4);
+const ribbon_colors = new Float32Array(ribbon_vertices * 4);
+
+for (let i = 0; i <= RIBBON_QUADS; i++) {
+    const x = -4.0f + (8.0f * i) / RIBBON_QUADS;
+
+    // Top vertex before bottom, so the first triangle comes out counter-
+    // clockwise towards +Z, where the camera starts: front-facing.
+    const top = i * 8;
+    const bottom = top + 4;
+
+    ribbon_positions[top]        = x;    ribbon_positions[top + 1]    = 4.0f;
+    ribbon_positions[top + 2]    = -3.0f; ribbon_positions[top + 3]   = 1.0f;
+
+    ribbon_positions[bottom]     = x;    ribbon_positions[bottom + 1] = 1.0f;
+    ribbon_positions[bottom + 2] = -3.0f; ribbon_positions[bottom + 3] = 1.0f;
+
+    // Alternating column colors: makes it obvious which quads survived.
+    const warm = (i % 2) === 0;
+    ribbon_colors[top]        = warm? 0.95f : 0.15f;
+    ribbon_colors[top + 1]    = 0.35f;
+    ribbon_colors[top + 2]    = warm? 0.15f : 0.95f;
+    ribbon_colors[top + 3]    = 1.0f;
+
+    ribbon_colors[bottom]     = warm? 0.95f : 0.15f;
+    ribbon_colors[bottom + 1] = 0.35f;
+    ribbon_colors[bottom + 2] = warm? 0.15f : 0.95f;
+    ribbon_colors[bottom + 3] = 1.0f;
+}
+
+// No normals and no texcoords: PL_NO_LIGHTS reads neither, and leaving them out
+// keeps the strip down to what the culling test actually needs.
+const ribbon_list = Render.vertexList(ribbon_positions, undefined, undefined, ribbon_colors);
+
+// Third argument is what marks it as a strip.
+const ribbon = new RenderData(ribbon_list, null, true);
+ribbon.pipeline = Render.PL_NO_LIGHTS;
+ribbon.texture_mapping = false;
+ribbon.accurate_clipping = false;
+ribbon.face_culling = Render.CULL_FACE_BACK;
+
+const ribbon_object = new RenderObject(ribbon);
+
+let ribbon_culling = true;
+let ribbon_clipping = false;
+
 Camera.position(0.0f, 0.0f, 20.0f);
 
 Camera.target(0.0f, 1.0f, 0.0f);
@@ -197,6 +255,16 @@ while(true) {
         switch_anim ^= 1;
     }
 
+    if (pad.justPressed(Pads.SQUARE)) {
+        ribbon_culling = !ribbon_culling;
+        ribbon.face_culling = ribbon_culling? Render.CULL_FACE_BACK : Render.CULL_FACE_NONE;
+    }
+
+    if (pad.justPressed(Pads.CIRCLE)) {
+        ribbon_clipping = !ribbon_clipping;
+        ribbon.accurate_clipping = ribbon_clipping;
+    }
+
     Screen.setParam(Screen.DEPTH_TEST_ENABLE, false);
 
     sky.draw(0, 0);
@@ -241,6 +309,8 @@ while(true) {
     Screen.setParam(Screen.DEPTH_TEST_METHOD, Screen.DEPTH_GEQUAL);
 
     scene_object.render();
+
+    ribbon_object.render();
 
     // Projector follows the skinned character on XZ, projected on ground (y=0)
     projSkin.position = { x: skin_object.position.x, y: 0.0f, z: skin_object.position.z };
@@ -306,6 +376,9 @@ while(true) {
 
     font.print(10, 10, Screen.getFPS(360) + " FPS | " + free_mem + " | Free VRAM: " + free_vram + "KB");
     font.print(10, 25, gltf_skin.size + " Vertices");
+    font.print(10, 40, "Tristrip ribbon: " + RIBBON_QUADS + " quads | SQUARE cull: " + (ribbon_culling? "BACK" : "NONE")
+                       + " | CIRCLE clip: " + (ribbon_clipping? "ACCURATE" : "FAST"));
+    font.print(10, 55, "solid or gone = ok, striped = wrong parity");
 
     Screen.flip();
 }

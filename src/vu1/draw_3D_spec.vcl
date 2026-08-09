@@ -35,7 +35,9 @@
 
     MatrixMultiply   ObjectToScreen, ObjectMatrix, ScreenMatrix
 
-    lq.w           bfc_multiplier, CLIPFAN_OFFSET(vi00)
+    ; w = culling direction (+1 back, -1 front, 0 off), x = winding flip:
+    ; -1 for a tristrip, whose winding alternates every vertex, else +1.
+    lq.xw           bfc_multiplier, CLIPFAN_OFFSET(vi00)
 
     ftoi0.w        bfc_sign_mask, bfc_multiplier
     mtir           z_sign_mask, bfc_sign_mask[w]
@@ -85,6 +87,7 @@ cull_init:
 culled_init:
     xtop    iBase
     xitop   vertCount
+    lq.w           bfc_multiplier, CLIPFAN_OFFSET(vi00) ; restart strip parity
 
     lq      primTag,        0(iBase) ; GIF tag - tell GS how many data we will send
     lq      matDiffuse,     1(iBase) ; RGBA
@@ -160,9 +163,13 @@ no_tex_kick_cull:
 
 	    sub.xyz		vector, vertex3, vertex2
 
-        mulw.xyz       vector, vector, bfc_multiplier
 	    opmula.xyz	acc, vector, oldvector
 	    opmsub.xyz	crossproduct, oldvector, vector
+
+	    ; The direction factor scales the RESULT, not an edge: oldvector is last
+	    ; iteration edge and would carry last iteration factor, so with a factor
+	    ; that alternates (tristrip) the two would cancel out instead of flipping.
+	    mulw.z	crossproduct, crossproduct, bfc_multiplier
 
 	    fmand		z_sign, z_sign_mask
         ; z_sign = 0x20 when the cross product is negative (back-facing): +0x7FE0
@@ -170,6 +177,10 @@ no_tex_kick_cull:
         ; over 15 bits, so VCL skipped the line outright and culling never ran.
         iaddiu		z_sign, z_sign, 0x7FE0
         ior        iADC, iADC, z_sign
+
+        ; Next vertex of a tristrip is wound the other way round; x is -1 there
+        ; and +1 for a triangle list, where this is a no-op.
+        mulx.w        bfc_multiplier, bfc_multiplier, bfc_multiplier
         
         mfir.w		vertex, iADC
         ftoi4.xy    vertex, vertex
@@ -259,6 +270,7 @@ scissor_init:
 init:
     xtop    iBase
     xitop   vertCount
+    lq.w           bfc_multiplier, CLIPFAN_OFFSET(vi00) ; restart strip parity
 
     lq      primTag,        0(iBase) ; GIF tag - tell GS how many data we will send
     lq      matDiffuse,     1(iBase) ; material diffuse color
