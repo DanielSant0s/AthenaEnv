@@ -1,0 +1,240 @@
+// SPDX-FileCopyrightText: 2023 Erin Catto
+// SPDX-License-Identifier: MIT
+
+#include "core.h"
+
+#include "box2d/math_functions.h"
+
+#if defined( B2_COMPILER_MSVC )
+#define _CRTDBG_MAP_ALLOC
+#include <crtdbg.h>
+#include <stdlib.h>
+#else
+#include <stdlib.h>
+#endif
+
+#include <stdarg.h>
+#include <stdio.h>
+#include <string.h>
+
+#ifdef BOX2D_PROFILE
+
+#include <tracy/TracyC.h>
+#define b2TracyCAlloc( ptr, size ) TracyCAlloc( ptr, size )
+#define b2TracyCFree( ptr ) TracyCFree( ptr )
+
+#else
+
+#define b2TracyCAlloc( ptr, size )
+#define b2TracyCFree( ptr )
+
+#endif
+
+#include "atomic.h"
+
+// This allows the user to change the length units at runtime
+static float b2_lengthUnitsPerMeter = 1.0f;
+
+void b2SetLengthUnitsPerMeter( float lengthUnits )
+{
+	B2_ASSERT( b2IsValidFloat( lengthUnits ) && lengthUnits > 0.0f );
+	b2_lengthUnitsPerMeter = lengthUnits;
+}
+
+float b2GetLengthUnitsPerMeter( void )
+{
+	return b2_lengthUnitsPerMeter;
+}
+
+static int b2DefaultAssertFcn( const char* condition, const char* fileName, int lineNumber )
+{
+	fprintf( stderr, "BOX2D ASSERTION: %s, %s, line %d\n", condition, fileName, lineNumber );
+	fflush( stderr );
+
+	// return non-zero to break to debugger
+	return 1;
+}
+
+static b2AssertFcn* b2AssertHandler = b2DefaultAssertFcn;
+
+void b2SetAssertFcn( b2AssertFcn* assertFcn )
+{
+	B2_ASSERT( assertFcn != NULL );
+	b2AssertHandler = assertFcn;
+}
+
+#if !defined( NDEBUG ) || defined( B2_ENABLE_ASSERT )
+int b2InternalAssert( const char* condition, const char* fileName, int lineNumber )
+{
+	int result = b2AssertHandler( condition, fileName, lineNumber );
+	if ( result )
+	{
+		B2_BREAKPOINT;
+	}
+	return result;
+}
+#endif
+
+static void b2DefaultLogFcn( const char* message )
+{
+	printf( "Box2D: %s\n", message );
+}
+
+static b2LogFcn* b2LogHandler = b2DefaultLogFcn;
+
+void b2SetLogFcn( b2LogFcn* logFcn )
+{
+	B2_ASSERT( logFcn != NULL );
+	b2LogHandler = logFcn;
+}
+
+void b2Log( const char* format, ... )
+{
+	va_list args;
+	va_start( args, format );
+	char buffer[512];
+	vsnprintf( buffer, sizeof( buffer ), format, args );
+	b2LogHandler( buffer );
+	va_end( args );
+}
+
+b2Version b2GetVersion( void )
+{
+	return (b2Version){
+		.major = 3,
+		.minor = 2,
+		.revision = 0,
+	};
+}
+
+bool b2IsDoublePrecision( void )
+{
+#if defined( BOX2D_DOUBLE_PRECISION )
+	return true;
+#else
+	return false;
+#endif
+}
+
+static b2AllocFcn* b2_allocFcn = NULL;
+static b2FreeFcn* b2_freeFcn = NULL;
+
+static b2AtomicI64 b2_byteCount;
+
+void b2SetAllocator( b2AllocFcn* allocFcn, b2FreeFcn* freeFcn )
+{
+	b2_allocFcn = allocFcn;
+	b2_freeFcn = freeFcn;
+}
+
+// Use 32 byte alignment for everything. Works with 256bit SIMD.
+#define B2_ALIGNMENT 32
+
+void* b2Alloc( size_t size )
+{
+	if ( size == 0 )
+	{
+		return NULL;
+	}
+
+	// This could cause some sharing issues, however Box2D rarely calls b2Alloc.
+	b2AtomicFetchAddI64( &b2_byteCount, size );
+
+	// Allocation must be a multiple of 32 or risk a seg fault
+	// https://en.cppreference.com/w/c/memory/aligned_alloc
+	size_t size32 = ( ( size - 1 ) | 0x1F ) + 1;
+
+	if ( b2_allocFcn != NULL )
+	{
+		void* ptr = b2_allocFcn( size32, B2_ALIGNMENT );
+		b2TracyCAlloc( ptr, size );
+
+		B2_ASSERT( ptr != NULL );
+		B2_ASSERT( ( (uintptr_t)ptr & 0x1F ) == 0 );
+
+		return ptr;
+	}
+
+#ifdef B2_PLATFORM_WINDOWS
+	void* ptr = _aligned_malloc( size32, B2_ALIGNMENT );
+#elif defined( B2_PLATFORM_ANDROID )
+	void* ptr = NULL;
+	if ( posix_memalign( &ptr, B2_ALIGNMENT, size32 ) != 0 )
+	{
+		// allocation failed, exit the application
+		exit( EXIT_FAILURE );
+	}
+#else
+	void* ptr = aligned_alloc( B2_ALIGNMENT, size32 );
+#endif
+
+	b2TracyCAlloc( ptr, size );
+
+	B2_ASSERT( ptr != NULL );
+	B2_ASSERT( ( (uintptr_t)ptr & 0x1F ) == 0 );
+
+	return ptr;
+}
+
+void* b2AllocZeroInit( size_t size )
+{
+	void* memory = b2Alloc( size );
+	memset( memory, 0, size );
+	return memory;
+}
+
+void b2Free( void* mem, size_t size )
+{
+	if ( mem == NULL )
+	{
+		return;
+	}
+
+	b2TracyCFree( mem );
+
+	if ( b2_freeFcn != NULL )
+	{
+		b2_freeFcn( mem, size );
+	}
+	else
+	{
+#ifdef B2_PLATFORM_WINDOWS
+		_aligned_free( mem );
+#else
+		free( mem );
+#endif
+	}
+
+	b2AtomicFetchAddI64( &b2_byteCount, -(int64_t)size );
+}
+
+void* b2GrowAlloc( void* oldMem, size_t oldSize, size_t newSize )
+{
+	B2_ASSERT( newSize > oldSize );
+	void* newMem = b2Alloc( newSize );
+	if ( oldSize > 0 )
+	{
+		memcpy( newMem, oldMem, oldSize );
+		b2Free( oldMem, oldSize );
+	}
+	return newMem;
+}
+
+void* b2GrowAllocZeroInit( void* oldMem, size_t oldSize, size_t newSize )
+{
+	B2_ASSERT( newSize > oldSize );
+	void* newMem = b2Alloc( newSize );
+	if ( oldSize > 0 )
+	{
+		memcpy( newMem, oldMem, oldSize );
+		b2Free( oldMem, oldSize );
+	}
+
+	memset( (char*)newMem + oldSize, 0, newSize - oldSize );
+	return newMem;
+}
+
+int64_t b2GetByteCount( void )
+{
+	return b2AtomicLoadI64( &b2_byteCount );
+}

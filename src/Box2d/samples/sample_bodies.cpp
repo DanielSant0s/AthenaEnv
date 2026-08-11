@@ -1,0 +1,1103 @@
+// SPDX-FileCopyrightText: 2022 Erin Catto
+// SPDX-License-Identifier: MIT
+
+#include "draw.h"
+#include "sample.h"
+
+#include "box2d/box2d.h"
+
+#include <imgui.h>
+
+class BodyType : public Sample
+{
+public:
+	explicit BodyType( SampleContext* context )
+		: Sample( context )
+	{
+		if ( m_context->restart == false )
+		{
+			m_context->camera.center = { 0.8f, 6.4f };
+			m_context->camera.zoom = 25.0f * 0.4f;
+		}
+
+		m_type = b2_staticBody;
+		m_isEnabled = true;
+
+		b2BodyId groundId = b2_nullBodyId;
+		{
+			b2BodyDef bodyDef = b2DefaultBodyDef();
+			bodyDef.name = "ground";
+			groundId = b2CreateBody( m_worldId, &bodyDef );
+
+			b2Segment segment = { { -20.0f, 0.0f }, { 20.0f, 0.0f } };
+			b2ShapeDef shapeDef = b2DefaultShapeDef();
+			b2CreateSegmentShape( groundId, &shapeDef, &segment );
+		}
+
+		// Define attachment
+		{
+			b2BodyDef bodyDef = b2DefaultBodyDef();
+			bodyDef.type = b2_dynamicBody;
+			bodyDef.position = { -2.0f, 3.0f };
+			bodyDef.name = "attach1";
+			m_attachmentId = b2CreateBody( m_worldId, &bodyDef );
+
+			b2Polygon box = b2MakeBox( 0.5f, 2.0f );
+			b2ShapeDef shapeDef = b2DefaultShapeDef();
+			shapeDef.density = 1.0f;
+			b2CreatePolygonShape( m_attachmentId, &shapeDef, &box );
+		}
+
+		// Define second attachment
+		{
+			b2BodyDef bodyDef = b2DefaultBodyDef();
+			bodyDef.type = m_type;
+			bodyDef.isEnabled = m_isEnabled;
+			bodyDef.position = { 3.0f, 3.0f };
+			bodyDef.name = "attach2";
+			m_secondAttachmentId = b2CreateBody( m_worldId, &bodyDef );
+
+			b2Polygon box = b2MakeBox( 0.5f, 2.0f );
+			b2ShapeDef shapeDef = b2DefaultShapeDef();
+			shapeDef.density = 1.0f;
+			b2CreatePolygonShape( m_secondAttachmentId, &shapeDef, &box );
+		}
+
+		// Define platform
+		{
+			b2BodyDef bodyDef = b2DefaultBodyDef();
+			bodyDef.type = m_type;
+			bodyDef.isEnabled = m_isEnabled;
+			bodyDef.position = { -4.0f, 5.0f };
+			bodyDef.name = "platform";
+			m_platformId = b2CreateBody( m_worldId, &bodyDef );
+
+			b2Polygon box = b2MakeOffsetBox( 0.5f, 4.0f, { 4.0f, 0.0f }, b2MakeRot( 0.5f * B2_PI ) );
+
+			b2ShapeDef shapeDef = b2DefaultShapeDef();
+			shapeDef.density = 2.0f;
+			b2CreatePolygonShape( m_platformId, &shapeDef, &box );
+
+			b2RevoluteJointDef revoluteDef = b2DefaultRevoluteJointDef();
+			b2Pos pivot = { -2.0f, 5.0f };
+			revoluteDef.base.bodyIdA = m_attachmentId;
+			revoluteDef.base.bodyIdB = m_platformId;
+			revoluteDef.base.localFrameA.p = b2Body_GetLocalPoint( m_attachmentId, pivot );
+			revoluteDef.base.localFrameB.p = b2Body_GetLocalPoint( m_platformId, pivot );
+			revoluteDef.maxMotorTorque = 50.0f;
+			revoluteDef.enableMotor = true;
+			b2CreateRevoluteJoint( m_worldId, &revoluteDef );
+
+			pivot = { 3.0f, 5.0f };
+			revoluteDef.base.bodyIdA = m_secondAttachmentId;
+			revoluteDef.base.bodyIdB = m_platformId;
+			revoluteDef.base.localFrameA.p = b2Body_GetLocalPoint( m_secondAttachmentId, pivot );
+			revoluteDef.base.localFrameB.p = b2Body_GetLocalPoint( m_platformId, pivot );
+			revoluteDef.maxMotorTorque = 50.0f;
+			revoluteDef.enableMotor = true;
+			b2CreateRevoluteJoint( m_worldId, &revoluteDef );
+
+			b2PrismaticJointDef prismaticDef = b2DefaultPrismaticJointDef();
+			b2Pos anchor = { 0.0f, 5.0f };
+			prismaticDef.base.bodyIdA = groundId;
+			prismaticDef.base.bodyIdB = m_platformId;
+			prismaticDef.base.localFrameA.p = b2Body_GetLocalPoint( groundId, anchor );
+			prismaticDef.base.localFrameB.p = b2Body_GetLocalPoint( m_platformId, anchor );
+			prismaticDef.maxMotorForce = 1000.0f;
+			prismaticDef.motorSpeed = 0.0f;
+			prismaticDef.enableMotor = true;
+			prismaticDef.lowerTranslation = -10.0f;
+			prismaticDef.upperTranslation = 10.0f;
+			prismaticDef.enableLimit = true;
+
+			b2CreatePrismaticJoint( m_worldId, &prismaticDef );
+
+			m_speed = 3.0f;
+		}
+
+		// Create a payload
+		{
+			b2BodyDef bodyDef = b2DefaultBodyDef();
+			bodyDef.type = b2_dynamicBody;
+			bodyDef.position = { -3.0f, 8.0f };
+			bodyDef.name = "crate1";
+			b2BodyId bodyId = b2CreateBody( m_worldId, &bodyDef );
+
+			b2Polygon box = b2MakeBox( 0.75f, 0.75f );
+
+			b2ShapeDef shapeDef = b2DefaultShapeDef();
+			shapeDef.density = 2.0f;
+
+			b2CreatePolygonShape( bodyId, &shapeDef, &box );
+		}
+
+		// Create a second payload
+		{
+			b2BodyDef bodyDef = b2DefaultBodyDef();
+			bodyDef.type = m_type;
+			bodyDef.isEnabled = m_isEnabled;
+			bodyDef.position = { 2.0f, 8.0f };
+			bodyDef.name = "crate2";
+			m_secondPayloadId = b2CreateBody( m_worldId, &bodyDef );
+
+			b2Polygon box = b2MakeBox( 0.75f, 0.75f );
+
+			b2ShapeDef shapeDef = b2DefaultShapeDef();
+			shapeDef.density = 2.0f;
+
+			b2CreatePolygonShape( m_secondPayloadId, &shapeDef, &box );
+		}
+
+		// Create a separate body on the ground
+		{
+			b2BodyDef bodyDef = b2DefaultBodyDef();
+			bodyDef.type = m_type;
+			bodyDef.isEnabled = m_isEnabled;
+			bodyDef.position = { 8.0f, 0.2f };
+			bodyDef.name = "debris";
+			m_touchingBodyId = b2CreateBody( m_worldId, &bodyDef );
+
+			b2Capsule capsule = { { 0.0f, 0.0f }, { 1.0f, 0.0f }, 0.25f };
+
+			b2ShapeDef shapeDef = b2DefaultShapeDef();
+			shapeDef.density = 2.0f;
+
+			b2CreateCapsuleShape( m_touchingBodyId, &shapeDef, &capsule );
+		}
+
+		// Create a separate body on the ground
+		{
+			b2BodyDef bodyDef = b2DefaultBodyDef();
+			bodyDef.type = b2_staticBody;
+			bodyDef.isEnabled = m_isEnabled;
+			bodyDef.position = { 8.5f, 0.2f };
+			bodyDef.name = "debris";
+			b2BodyId bodyId = b2CreateBody( m_worldId, &bodyDef );
+
+			b2Capsule capsule = { { 0.0f, 0.0f }, { 1.0f, 0.0f }, 0.5f };
+
+			b2ShapeDef shapeDef = b2DefaultShapeDef();
+			b2CreateCapsuleShape( bodyId, &shapeDef, &capsule );
+		}
+
+		// Create a separate floating body
+		{
+			b2BodyDef bodyDef = b2DefaultBodyDef();
+			bodyDef.type = m_type;
+			bodyDef.isEnabled = m_isEnabled;
+			bodyDef.position = { -8.0f, 12.0f };
+			bodyDef.gravityScale = 0.0f;
+			bodyDef.name = "floater";
+			m_floatingBodyId = b2CreateBody( m_worldId, &bodyDef );
+
+			b2Circle circle = { { 0.0f, 0.5f }, 0.25f };
+
+			b2ShapeDef shapeDef = b2DefaultShapeDef();
+			shapeDef.density = 2.0f;
+
+			b2CreateCircleShape( m_floatingBodyId, &shapeDef, &circle );
+		}
+	}
+
+	bool DrawControls() override
+	{
+		if ( ImGui::RadioButton( "Static", m_type == b2_staticBody ) )
+		{
+			m_type = b2_staticBody;
+			b2Body_SetType( m_platformId, b2_staticBody );
+			b2Body_SetType( m_secondAttachmentId, b2_staticBody );
+			b2Body_SetType( m_secondPayloadId, b2_staticBody );
+			b2Body_SetType( m_touchingBodyId, b2_staticBody );
+			b2Body_SetType( m_floatingBodyId, b2_staticBody );
+		}
+
+		if ( ImGui::RadioButton( "Kinematic", m_type == b2_kinematicBody ) )
+		{
+			m_type = b2_kinematicBody;
+			b2Body_SetType( m_platformId, b2_kinematicBody );
+			b2Body_SetLinearVelocity( m_platformId, { -m_speed, 0.0f } );
+			b2Body_SetAngularVelocity( m_platformId, 0.0f );
+
+			b2Body_SetType( m_secondAttachmentId, b2_kinematicBody );
+			b2Body_SetLinearVelocity( m_secondAttachmentId, b2Vec2_zero );
+			b2Body_SetAngularVelocity( m_secondAttachmentId, 0.0f );
+
+			b2Body_SetType( m_secondPayloadId, b2_kinematicBody );
+			b2Body_SetType( m_touchingBodyId, b2_kinematicBody );
+			b2Body_SetType( m_floatingBodyId, b2_kinematicBody );
+		}
+
+		if ( ImGui::RadioButton( "Dynamic", m_type == b2_dynamicBody ) )
+		{
+			m_type = b2_dynamicBody;
+			b2Body_SetType( m_platformId, b2_dynamicBody );
+			b2Body_SetType( m_secondAttachmentId, b2_dynamicBody );
+			b2Body_SetType( m_secondPayloadId, b2_dynamicBody );
+			b2Body_SetType( m_touchingBodyId, b2_dynamicBody );
+			b2Body_SetType( m_floatingBodyId, b2_dynamicBody );
+		}
+
+		if ( ImGui::Checkbox( "Enable", &m_isEnabled ) )
+		{
+			if ( m_isEnabled )
+			{
+				b2Body_Enable( m_attachmentId );
+				b2Body_Enable( m_secondPayloadId );
+				b2Body_Enable( m_floatingBodyId );
+			}
+			else
+			{
+				b2Body_Disable( m_attachmentId );
+				b2Body_Disable( m_secondPayloadId );
+				b2Body_Disable( m_floatingBodyId );
+			}
+		}
+
+		return true;
+	}
+
+	void Step() override
+	{
+		// Drive the kinematic body.
+		if ( m_type == b2_kinematicBody )
+		{
+			b2Pos p = b2Body_GetPosition( m_platformId );
+			b2Vec2 v = b2Body_GetLinearVelocity( m_platformId );
+
+			if ( ( p.x < -14.0f && v.x < 0.0f ) || ( p.x > 6.0f && v.x > 0.0f ) )
+			{
+				v.x = -v.x;
+				b2Body_SetLinearVelocity( m_platformId, v );
+			}
+		}
+
+		Sample::Step();
+	}
+
+	static Sample* Create( SampleContext* context )
+	{
+		return new BodyType( context );
+	}
+
+	b2BodyId m_attachmentId;
+	b2BodyId m_secondAttachmentId;
+	b2BodyId m_platformId;
+	b2BodyId m_secondPayloadId;
+	b2BodyId m_touchingBodyId;
+	b2BodyId m_floatingBodyId;
+	b2BodyType m_type;
+	float m_speed;
+	bool m_isEnabled;
+};
+
+static int sampleBodyType = RegisterSample( "Bodies", "Body Type", BodyType::Create );
+
+float FrictionCallback( float, uint64_t, float, uint64_t )
+{
+	return 0.1f;
+}
+
+float RestitutionCallback( float, uint64_t, float, uint64_t )
+{
+	return 1.0f;
+}
+
+class Weeble : public Sample
+{
+public:
+	explicit Weeble( SampleContext* context )
+		: Sample( context )
+	{
+		if ( m_context->restart == false )
+		{
+			m_context->camera.center = { 2.3f, 10.0f };
+			m_context->camera.zoom = 25.0f * 0.5f;
+		}
+
+		// Test friction and restitution callbacks
+		b2World_SetFrictionCallback( m_worldId, FrictionCallback );
+		b2World_SetRestitutionCallback( m_worldId, RestitutionCallback );
+
+		b2BodyId groundId = b2_nullBodyId;
+		{
+			b2BodyDef bodyDef = b2DefaultBodyDef();
+			groundId = b2CreateBody( m_worldId, &bodyDef );
+
+			b2Segment segment = { { -20.0f, 0.0f }, { 20.0f, 0.0f } };
+			b2ShapeDef shapeDef = b2DefaultShapeDef();
+			b2CreateSegmentShape( groundId, &shapeDef, &segment );
+		}
+
+		// Build weeble
+		{
+			b2BodyDef bodyDef = b2DefaultBodyDef();
+			bodyDef.type = b2_dynamicBody;
+			bodyDef.position = { 0.0f, 3.0f };
+			bodyDef.rotation = b2MakeRot( 0.25f * B2_PI );
+			m_weebleId = b2CreateBody( m_worldId, &bodyDef );
+
+			b2Capsule capsule = { { 0.0f, -1.0f }, { 0.0f, 1.0f }, 1.0f };
+			b2ShapeDef shapeDef = b2DefaultShapeDef();
+			b2CreateCapsuleShape( m_weebleId, &shapeDef, &capsule );
+
+			float mass = b2Body_GetMass( m_weebleId );
+			float inertiaTensor = b2Body_GetRotationalInertia( m_weebleId );
+
+			float offset = 1.5f;
+
+			// See: https://en.wikipedia.org/wiki/Parallel_axis_theorem
+			inertiaTensor += mass * offset * offset;
+
+			b2MassData massData = { mass, { 0.0f, -offset }, inertiaTensor };
+			b2Body_SetMassData( m_weebleId, massData );
+		}
+
+		m_explosionPosition = { 0.0f, 0.0f };
+		m_explosionRadius = 2.0f;
+		m_explosionMagnitude = 8.0f;
+	}
+
+	bool DrawControls() override
+	{
+		if ( ImGui::Button( "Teleport" ) )
+		{
+			b2Body_SetTransform( m_weebleId, { 0.0f, 5.0f }, b2MakeRot( 0.95 * B2_PI ) );
+		}
+
+		if ( ImGui::Button( "Explode" ) )
+		{
+			b2ExplosionDef def = b2DefaultExplosionDef();
+			def.position = m_explosionPosition;
+			def.radius = m_explosionRadius;
+			def.falloff = 0.1f;
+			def.impulsePerLength = m_explosionMagnitude;
+			b2World_Explode( m_worldId, &def );
+		}
+
+		ImGui::PushItemWidth( 6.0f * ImGui::GetFontSize() );
+		ImGui::SliderFloat( "Magnitude", &m_explosionMagnitude, -100.0f, 100.0f, "%.1f" );
+		ImGui::PopItemWidth();
+
+		return true;
+	}
+
+	void Step() override
+	{
+		Sample::Step();
+
+		DrawCircle( m_context->draw, m_explosionPosition, m_explosionRadius, b2_colorAzure );
+
+		// This shows how to get the velocity of a point on a body
+		b2Vec2 localPoint = { 0.0f, 2.0f };
+		b2Pos worldPoint = b2Body_GetWorldPoint( m_weebleId, localPoint );
+
+		b2Vec2 v1 = b2Body_GetLocalPointVelocity( m_weebleId, localPoint );
+		b2Vec2 v2 = b2Body_GetWorldPointVelocity( m_weebleId, worldPoint );
+
+		b2Vec2 offset = { 0.05f, 0.0f };
+		DrawLine( m_context->draw, worldPoint, worldPoint + v1, b2_colorRed );
+		DrawLine( m_context->draw, worldPoint + offset, worldPoint + v2 + offset, b2_colorGreen );
+	}
+
+	static Sample* Create( SampleContext* context )
+	{
+		return new Weeble( context );
+	}
+
+	b2BodyId m_weebleId;
+	b2Pos m_explosionPosition;
+	float m_explosionRadius;
+	float m_explosionMagnitude;
+};
+
+static int sampleWeeble = RegisterSample( "Bodies", "Weeble", Weeble::Create );
+
+class Sleep : public Sample
+{
+public:
+	explicit Sleep( SampleContext* context )
+		: Sample( context )
+	{
+		if ( m_context->restart == false )
+		{
+			m_context->camera.center = { 3.0f, 50.0f };
+			m_context->camera.zoom = 25.0f * 2.2f;
+		}
+
+		b2BodyId groundId = b2_nullBodyId;
+		{
+			b2BodyDef bodyDef = b2DefaultBodyDef();
+			groundId = b2CreateBody( m_worldId, &bodyDef );
+
+			b2Segment segment = { { -40.0f, 0.0f }, { 40.0f, 0.0f } };
+			b2ShapeDef shapeDef = b2DefaultShapeDef();
+			shapeDef.enableSensorEvents = true;
+			m_groundShapeId = b2CreateSegmentShape( groundId, &shapeDef, &segment );
+		}
+
+		// Sleeping body with sensors
+		for ( int i = 0; i < 2; ++i )
+		{
+			b2BodyDef bodyDef = b2DefaultBodyDef();
+			bodyDef.type = b2_dynamicBody;
+			bodyDef.position = { -4.0f, 3.0f + 2.0f * i };
+			bodyDef.isAwake = false;
+			bodyDef.enableSleep = true;
+			b2BodyId bodyId = b2CreateBody( m_worldId, &bodyDef );
+
+			b2Capsule capsule = { { 0.0f, 1.0f }, { 1.0f, 1.0f }, 0.75f };
+			b2ShapeDef shapeDef = b2DefaultShapeDef();
+			b2CreateCapsuleShape( bodyId, &shapeDef, &capsule );
+
+			shapeDef.isSensor = true;
+			shapeDef.enableSensorEvents = true;
+			capsule.radius = 1.0f;
+			m_sensorIds[i] = b2CreateCapsuleShape( bodyId, &shapeDef, &capsule );
+			m_sensorTouching[i] = false;
+		}
+
+		// Sleeping body but sleep is disabled
+		{
+			b2BodyDef bodyDef = b2DefaultBodyDef();
+			bodyDef.type = b2_dynamicBody;
+			bodyDef.position = { 0.0f, 3.0f };
+			bodyDef.isAwake = false;
+			bodyDef.enableSleep = false;
+			b2BodyId bodyId = b2CreateBody( m_worldId, &bodyDef );
+
+			b2Circle circle = { { 1.0f, 1.0f }, 1.0f };
+			b2ShapeDef shapeDef = b2DefaultShapeDef();
+			b2CreateCircleShape( bodyId, &shapeDef, &circle );
+		}
+
+		// Awake body and sleep is disabled
+		{
+			b2BodyDef bodyDef = b2DefaultBodyDef();
+			bodyDef.type = b2_dynamicBody;
+			bodyDef.position = { 5.0f, 3.0f };
+			bodyDef.isAwake = true;
+			bodyDef.enableSleep = false;
+			b2BodyId bodyId = b2CreateBody( m_worldId, &bodyDef );
+
+			b2Polygon box = b2MakeOffsetBox( 1.0f, 1.0f, { 0.0f, 1.0f }, b2MakeRot( 0.25f * B2_PI ) );
+			b2ShapeDef shapeDef = b2DefaultShapeDef();
+			b2CreatePolygonShape( bodyId, &shapeDef, &box );
+		}
+
+		// A sleeping body to test waking on collision
+		{
+			b2BodyDef bodyDef = b2DefaultBodyDef();
+			bodyDef.type = b2_dynamicBody;
+			bodyDef.position = { 5.0f, 1.0f };
+			bodyDef.isAwake = false;
+			bodyDef.enableSleep = true;
+			b2BodyId bodyId = b2CreateBody( m_worldId, &bodyDef );
+
+			b2Polygon box = b2MakeSquare( 1.0f );
+			b2ShapeDef shapeDef = b2DefaultShapeDef();
+			b2CreatePolygonShape( bodyId, &shapeDef, &box );
+		}
+
+		// A long pendulum
+		{
+			b2BodyDef bodyDef = b2DefaultBodyDef();
+			bodyDef.type = b2_dynamicBody;
+			bodyDef.position = { 0.0f, 100.0f };
+			bodyDef.angularDamping = 0.5f;
+			bodyDef.sleepThreshold = 0.05f;
+			m_pendulumId = b2CreateBody( m_worldId, &bodyDef );
+
+			b2Capsule capsule = { { 0.0f, 0.0f }, { 90.0f, 0.0f }, 0.25f };
+			b2ShapeDef shapeDef = b2DefaultShapeDef();
+			b2CreateCapsuleShape( m_pendulumId, &shapeDef, &capsule );
+
+			b2Pos pivot = bodyDef.position;
+			b2RevoluteJointDef jointDef = b2DefaultRevoluteJointDef();
+			jointDef.base.bodyIdA = groundId;
+			jointDef.base.bodyIdB = m_pendulumId;
+			jointDef.base.localFrameA.p = b2Body_GetLocalPoint( jointDef.base.bodyIdA, pivot );
+			jointDef.base.localFrameB.p = b2Body_GetLocalPoint( jointDef.base.bodyIdB, pivot );
+			b2CreateRevoluteJoint( m_worldId, &jointDef );
+		}
+
+		// A sleeping body to test waking on contact destroyed
+		{
+			b2BodyDef bodyDef = b2DefaultBodyDef();
+			bodyDef.type = b2_dynamicBody;
+			bodyDef.position = { -10.0f, 1.0f };
+			bodyDef.isAwake = false;
+			bodyDef.enableSleep = true;
+			b2BodyId bodyId = b2CreateBody( m_worldId, &bodyDef );
+
+			b2Polygon box = b2MakeSquare( 1.0f );
+			b2ShapeDef shapeDef = b2DefaultShapeDef();
+			b2CreatePolygonShape( bodyId, &shapeDef, &box );
+		}
+
+		m_staticBodyId = b2_nullBodyId;
+	}
+
+	void ToggleInvoker()
+	{
+		if ( B2_IS_NULL( m_staticBodyId ) )
+		{
+			b2BodyDef bodyDef = b2DefaultBodyDef();
+			bodyDef.position = { -10.5f, 3.0f };
+			m_staticBodyId = b2CreateBody( m_worldId, &bodyDef );
+
+			b2Polygon box = b2MakeOffsetBox( 2.0f, 0.1f, { 0.0f, 0.0f }, b2MakeRot( 0.25f * B2_PI ) );
+			b2ShapeDef shapeDef = b2DefaultShapeDef();
+			shapeDef.invokeContactCreation = true;
+			b2CreatePolygonShape( m_staticBodyId, &shapeDef, &box );
+		}
+		else
+		{
+			b2DestroyBody( m_staticBodyId );
+			m_staticBodyId = b2_nullBodyId;
+		}
+	}
+
+	bool DrawControls() override
+	{
+		ImGui::PushItemWidth( 6.0f * ImGui::GetFontSize() );
+
+		ImGui::Text( "Pendulum Tuning" );
+
+		float sleepVelocity = b2Body_GetSleepThreshold( m_pendulumId );
+		if ( ImGui::SliderFloat( "sleep velocity", &sleepVelocity, 0.0f, 1.0f, "%.2f" ) )
+		{
+			b2Body_SetSleepThreshold( m_pendulumId, sleepVelocity );
+			b2Body_SetAwake( m_pendulumId, true );
+		}
+
+		float angularDamping = b2Body_GetAngularDamping( m_pendulumId );
+		if ( ImGui::SliderFloat( "angular damping", &angularDamping, 0.0f, 2.0f, "%.2f" ) )
+		{
+			b2Body_SetAngularDamping( m_pendulumId, angularDamping );
+		}
+
+		ImGui::PopItemWidth();
+
+		ImGui::Separator();
+
+		if ( B2_IS_NULL( m_staticBodyId ) )
+		{
+			if ( ImGui::Button( "Create" ) )
+			{
+				ToggleInvoker();
+			}
+		}
+		else
+		{
+			if ( ImGui::Button( "Destroy" ) )
+			{
+				ToggleInvoker();
+			}
+		}
+
+		return true;
+	}
+
+	void Step() override
+	{
+		Sample::Step();
+
+		// Detect sensors touching the ground
+		b2SensorEvents sensorEvents = b2World_GetSensorEvents( m_worldId );
+
+		for ( int i = 0; i < sensorEvents.beginCount; ++i )
+		{
+			b2SensorBeginTouchEvent* event = sensorEvents.beginEvents + i;
+			if ( B2_ID_EQUALS( event->visitorShapeId, m_groundShapeId ) )
+			{
+				if ( B2_ID_EQUALS( event->sensorShapeId, m_sensorIds[0] ) )
+				{
+					m_sensorTouching[0] = true;
+				}
+				else if ( B2_ID_EQUALS( event->sensorShapeId, m_sensorIds[1] ) )
+				{
+					m_sensorTouching[1] = true;
+				}
+			}
+		}
+
+		for ( int i = 0; i < sensorEvents.endCount; ++i )
+		{
+			b2SensorEndTouchEvent* event = sensorEvents.endEvents + i;
+			if ( B2_ID_EQUALS( event->visitorShapeId, m_groundShapeId ) )
+			{
+				if ( B2_ID_EQUALS( event->sensorShapeId, m_sensorIds[0] ) )
+				{
+					m_sensorTouching[0] = false;
+				}
+				else if ( B2_ID_EQUALS( event->sensorShapeId, m_sensorIds[1] ) )
+				{
+					m_sensorTouching[1] = false;
+				}
+			}
+		}
+
+		for ( int i = 0; i < 2; ++i )
+		{
+			DrawScreenTextLine( "sensor touch %d = %s", i, m_sensorTouching[i] ? "true" : "false" );
+		}
+	}
+
+	static Sample* Create( SampleContext* context )
+	{
+		return new Sleep( context );
+	}
+
+	b2BodyId m_pendulumId;
+	b2BodyId m_staticBodyId;
+	b2ShapeId m_groundShapeId;
+	b2ShapeId m_sensorIds[2];
+	bool m_sensorTouching[2];
+};
+
+static int sampleSleep = RegisterSample( "Bodies", "Sleep", Sleep::Create );
+
+class BadBody : public Sample
+{
+public:
+	explicit BadBody( SampleContext* context )
+		: Sample( context )
+	{
+		if ( m_context->restart == false )
+		{
+			m_context->camera.center = { 2.3f, 10.0f };
+			m_context->camera.zoom = 25.0f * 0.5f;
+		}
+
+		b2BodyId groundId = b2_nullBodyId;
+		{
+			b2BodyDef bodyDef = b2DefaultBodyDef();
+			groundId = b2CreateBody( m_worldId, &bodyDef );
+
+			b2Segment segment = { { -20.0f, 0.0f }, { 20.0f, 0.0f } };
+			b2ShapeDef shapeDef = b2DefaultShapeDef();
+			b2CreateSegmentShape( groundId, &shapeDef, &segment );
+		}
+
+		// Build a bad body
+		{
+			b2BodyDef bodyDef = b2DefaultBodyDef();
+			bodyDef.type = b2_dynamicBody;
+			bodyDef.position = { 0.0f, 3.0f };
+			bodyDef.angularVelocity = 0.5f;
+			bodyDef.rotation = b2MakeRot( 0.25f * B2_PI );
+
+			m_badBodyId = b2CreateBody( m_worldId, &bodyDef );
+
+			b2Capsule capsule = { { 0.0f, -1.0f }, { 0.0f, 1.0f }, 1.0f };
+			b2ShapeDef shapeDef = b2DefaultShapeDef();
+
+			// density set to zero intentionally to create a bad body
+			shapeDef.density = 0.0f;
+			b2CreateCapsuleShape( m_badBodyId, &shapeDef, &capsule );
+		}
+
+		// Build a normal body
+		{
+			b2BodyDef bodyDef = b2DefaultBodyDef();
+			bodyDef.type = b2_dynamicBody;
+			bodyDef.position = { 2.0f, 3.0f };
+			bodyDef.rotation = b2MakeRot( 0.25f * B2_PI );
+
+			b2BodyId bodyId = b2CreateBody( m_worldId, &bodyDef );
+
+			b2Capsule capsule = { { 0.0f, -1.0f }, { 0.0f, 1.0f }, 1.0f };
+			b2ShapeDef shapeDef = b2DefaultShapeDef();
+
+			b2CreateCapsuleShape( bodyId, &shapeDef, &capsule );
+		}
+	}
+
+	void Step() override
+	{
+		Sample::Step();
+
+		DrawScreenTextLine( "A bad body is a dynamic body with no mass and behaves like a kinematic body." );
+		DrawScreenTextLine( "Bad bodies are considered invalid and a user bug. Behavior is not guaranteed." );
+
+		// For science
+		b2Body_ApplyForceToCenter( m_badBodyId, { 0.0f, 10.0f }, true );
+	}
+
+	static Sample* Create( SampleContext* context )
+	{
+		return new BadBody( context );
+	}
+
+	b2BodyId m_badBodyId;
+};
+
+static int sampleBadBody = RegisterSample( "Bodies", "Bad", BadBody::Create );
+
+// This shows how to set the initial angular velocity to get a specific movement.
+class Pivot : public Sample
+{
+public:
+	explicit Pivot( SampleContext* context )
+		: Sample( context )
+	{
+		if ( m_context->restart == false )
+		{
+			m_context->camera.center = { 0.8f, 6.4f };
+			m_context->camera.zoom = 25.0f * 0.4f;
+		}
+
+		b2BodyId groundId = b2_nullBodyId;
+		{
+			b2BodyDef bodyDef = b2DefaultBodyDef();
+			groundId = b2CreateBody( m_worldId, &bodyDef );
+
+			b2Segment segment = { { -20.0f, 0.0f }, { 20.0f, 0.0f } };
+			b2ShapeDef shapeDef = b2DefaultShapeDef();
+			b2CreateSegmentShape( groundId, &shapeDef, &segment );
+		}
+
+		// Create a separate body on the ground
+		{
+			b2Vec2 v = { 5.0f, 0.0f };
+
+			b2BodyDef bodyDef = b2DefaultBodyDef();
+			bodyDef.type = b2_dynamicBody;
+			bodyDef.position = { 0.0f, 3.0f };
+			bodyDef.gravityScale = 1.0f;
+			bodyDef.linearVelocity = v;
+
+			m_bodyId = b2CreateBody( m_worldId, &bodyDef );
+
+			m_lever = 3.0f;
+			b2Vec2 r = { 0.0f, -m_lever };
+
+			float omega = b2Cross( v, r ) / b2Dot( r, r );
+			b2Body_SetAngularVelocity( m_bodyId, omega );
+
+			b2Polygon box = b2MakeBox( 0.1f, m_lever );
+
+			b2ShapeDef shapeDef = b2DefaultShapeDef();
+			b2CreatePolygonShape( m_bodyId, &shapeDef, &box );
+		}
+	}
+
+	void Step() override
+	{
+		Sample::Step();
+
+		b2Vec2 v = b2Body_GetLinearVelocity( m_bodyId );
+		float omega = b2Body_GetAngularVelocity( m_bodyId );
+		b2Vec2 r = b2Body_GetWorldVector( m_bodyId, { 0.0f, -m_lever } );
+
+		b2Vec2 vp = v + b2CrossSV( omega, r );
+		DrawScreenTextLine( "pivot velocity = (%g, %g)", vp.x, vp.y );
+	}
+
+	static Sample* Create( SampleContext* context )
+	{
+		return new Pivot( context );
+	}
+
+	b2BodyId m_bodyId;
+	float m_lever;
+};
+
+static int samplePivot = RegisterSample( "Bodies", "Pivot", Pivot::Create );
+
+// This shows how to drive a kinematic body to reach a target
+class Kinematic : public Sample
+{
+public:
+	explicit Kinematic( SampleContext* context )
+		: Sample( context )
+	{
+		if ( m_context->restart == false )
+		{
+			m_context->camera.center = { 0.0f, 0.0f };
+			m_context->camera.zoom = 4.0f;
+		}
+
+		m_amplitude = 2.0f;
+
+		{
+			b2BodyDef bodyDef = b2DefaultBodyDef();
+			bodyDef.type = b2_kinematicBody;
+			bodyDef.position.x = 2.0f * m_amplitude;
+
+			m_bodyId = b2CreateBody( m_worldId, &bodyDef );
+
+			b2Polygon box = b2MakeBox( 0.1f, 1.0f );
+			b2ShapeDef shapeDef = b2DefaultShapeDef();
+			b2CreatePolygonShape( m_bodyId, &shapeDef, &box );
+		}
+
+		m_time = 0.0f;
+	}
+
+	void Step() override
+	{
+		float timeStep = m_context->hertz > 0.0f ? 1.0f / m_context->hertz : 0.0f;
+		if ( m_context->pause && m_context->singleStep == false )
+		{
+			timeStep = 0.0f;
+		}
+
+		if ( timeStep > 0.0f )
+		{
+			b2Pos point = {
+				.x = 2.0f * m_amplitude * cosf( m_time ),
+				.y = m_amplitude * sinf( 2.0f * m_time ),
+			};
+			b2Rot rotation = b2MakeRot( 2.0f * m_time );
+
+			b2Vec2 axis = b2RotateVector( rotation, { 0.0f, 1.0f } );
+			DrawLine( m_context->draw, point - 0.5f * axis, point + 0.5f * axis, b2_colorPlum );
+			DrawPoint( m_context->draw, point, 10.0f, b2_colorPlum );
+
+			bool wake = true;
+			b2Body_SetTargetTransform( m_bodyId, { point , rotation }, timeStep, wake );
+		}
+
+		Sample::Step();
+
+		m_time += timeStep;
+	}
+
+	static Sample* Create( SampleContext* context )
+	{
+		return new Kinematic( context );
+	}
+
+	b2BodyId m_bodyId;
+	float m_amplitude;
+	float m_time;
+};
+
+static int sampleKinematic = RegisterSample( "Bodies", "Kinematic", Kinematic::Create );
+
+// Motion locking can be a bit squishy
+class MixedLocks : public Sample
+{
+public:
+	explicit MixedLocks( SampleContext* context )
+		: Sample( context )
+	{
+		if ( m_context->restart == false )
+		{
+			m_context->camera.center = { 0.0f, 2.5f };
+			m_context->camera.zoom = 3.5f;
+		}
+
+		{
+			b2BodyDef bodyDef = b2DefaultBodyDef();
+			b2BodyId groundId = b2CreateBody( m_worldId, &bodyDef );
+
+			b2ShapeDef shapeDef = b2DefaultShapeDef();
+			b2Segment segment = { { -40.0, 0.0f }, { 40.0f, 0.0f } };
+			b2CreateSegmentShape( groundId, &shapeDef, &segment );
+		}
+
+		b2Polygon box = b2MakeSquare( 0.5f );
+		b2ShapeDef shapeDef = b2DefaultShapeDef();
+
+		{
+			b2BodyDef bodyDef = b2DefaultBodyDef();
+			bodyDef.position = { 2.0f, 1.0f };
+			bodyDef.name = "static";
+
+			b2BodyId bodyId = b2CreateBody( m_worldId, &bodyDef );
+			b2CreatePolygonShape( bodyId, &shapeDef, &box );
+		}
+
+		{
+			b2BodyDef bodyDef = b2DefaultBodyDef();
+			bodyDef.type = b2_dynamicBody;
+			bodyDef.position = { 1.0f, 1.0f };
+			bodyDef.name = "free";
+
+			b2BodyId bodyId = b2CreateBody( m_worldId, &bodyDef );
+			b2CreatePolygonShape( bodyId, &shapeDef, &box );
+		}
+
+		{
+			b2BodyDef bodyDef = b2DefaultBodyDef();
+			bodyDef.type = b2_dynamicBody;
+			bodyDef.position = { 1.0f, 3.0f };
+			bodyDef.name = "free";
+
+			b2BodyId bodyId = b2CreateBody( m_worldId, &bodyDef );
+			b2CreatePolygonShape( bodyId, &shapeDef, &box );
+		}
+
+		{
+			b2BodyDef bodyDef = b2DefaultBodyDef();
+			bodyDef.type = b2_dynamicBody;
+			bodyDef.position = { -1.0f, 1.0f };
+			bodyDef.motionLocks.angularZ = true;
+			bodyDef.name = "angular z";
+
+			b2BodyId bodyId = b2CreateBody( m_worldId, &bodyDef );
+			b2CreatePolygonShape( bodyId, &shapeDef, &box );
+		}
+
+		{
+			b2BodyDef bodyDef = b2DefaultBodyDef();
+			bodyDef.type = b2_dynamicBody;
+			bodyDef.position = { -2.0f, 2.0f };
+			bodyDef.motionLocks.linearX = true;
+			bodyDef.name = "linear x";
+
+			b2BodyId bodyId = b2CreateBody( m_worldId, &bodyDef );
+			b2CreatePolygonShape( bodyId, &shapeDef, &box );
+		}
+
+		{
+			b2BodyDef bodyDef = b2DefaultBodyDef();
+			bodyDef.type = b2_dynamicBody;
+			bodyDef.position = { -1.0f, 2.5f };
+			bodyDef.motionLocks.linearY = true;
+			bodyDef.motionLocks.angularZ = true;
+			bodyDef.name = "lin y ang z";
+
+			b2BodyId bodyId = b2CreateBody( m_worldId, &bodyDef );
+			b2CreatePolygonShape( bodyId, &shapeDef, &box );
+		}
+
+		{
+			b2BodyDef bodyDef = b2DefaultBodyDef();
+			bodyDef.type = b2_dynamicBody;
+			bodyDef.position = { 0.0f, 1.0f };
+			bodyDef.motionLocks.linearX = true;
+			bodyDef.motionLocks.linearY = true;
+			bodyDef.motionLocks.angularZ = true;
+			bodyDef.name = "full";
+
+			b2BodyId bodyId = b2CreateBody( m_worldId, &bodyDef );
+			b2CreatePolygonShape( bodyId, &shapeDef, &box );
+		}
+	}
+
+	static Sample* Create( SampleContext* context )
+	{
+		return new MixedLocks( context );
+	}
+};
+
+static int sampleMixedLocks = RegisterSample( "Bodies", "Mixed Locks", MixedLocks::Create );
+
+class SetVelocity : public Sample
+{
+public:
+	explicit SetVelocity( SampleContext* context )
+		: Sample( context )
+	{
+		if ( m_context->restart == false )
+		{
+			m_context->camera.center = { 0.0f, 2.5f };
+			m_context->camera.zoom = 3.5f;
+		}
+
+		{
+			b2BodyDef bodyDef = b2DefaultBodyDef();
+			bodyDef.position = { 0.0f, -0.25f };
+			b2BodyId groundId = b2CreateBody( m_worldId, &bodyDef );
+
+			b2ShapeDef shapeDef = b2DefaultShapeDef();
+			b2Polygon box = b2MakeBox( 20.0f, 0.25f );
+			b2CreatePolygonShape( groundId, &shapeDef, &box );
+		}
+
+		{
+			b2BodyDef bodyDef = b2DefaultBodyDef();
+			bodyDef.type = b2_dynamicBody;
+
+			b2ShapeDef shapeDef = b2DefaultShapeDef();
+			b2Polygon box = b2MakeSquare( 0.5f );
+			bodyDef.position = { 0.0f, 0.5f };
+			m_bodyId = b2CreateBody( m_worldId, &bodyDef );
+			b2CreatePolygonShape( m_bodyId, &shapeDef, &box );
+		}
+	}
+
+	void Step() override
+	{
+		Sample::Step();
+
+		b2Body_SetLinearVelocity( m_bodyId, { 0.0f, -20.0f } );
+
+		b2Pos position = b2Body_GetPosition( m_bodyId );
+		DrawScreenTextLine( "(x, y) = (%.2g, %.2g)", position.x, position.y );
+	}
+
+	static Sample* Create( SampleContext* context )
+	{
+		return new SetVelocity( context );
+	}
+
+	b2BodyId m_bodyId;
+};
+
+static int sampleSetVelocity = RegisterSample( "Bodies", "Set Velocity", SetVelocity::Create );
+
+class WakeTouching : public Sample
+{
+public:
+	explicit WakeTouching( SampleContext* context )
+		: Sample( context )
+	{
+		if ( m_context->restart == false )
+		{
+			m_context->camera.center = { 0.0f, 4.0f };
+			m_context->camera.zoom = 8.0f;
+		}
+
+		{
+			b2BodyDef bodyDef = b2DefaultBodyDef();
+			m_groundId = b2CreateBody( m_worldId, &bodyDef );
+
+			b2Segment segment = { { -20.0f, 0.0f }, { 20.0f, 0.0f } };
+			b2ShapeDef shapeDef = b2DefaultShapeDef();
+			b2CreateSegmentShape( m_groundId, &shapeDef, &segment );
+		}
+
+		b2Polygon box = b2MakeBox( 0.5f, 0.5f );
+
+		b2ShapeDef shapeDef = b2DefaultShapeDef();
+		shapeDef.density = 1.0f;
+
+		b2BodyDef bodyDef = b2DefaultBodyDef();
+		bodyDef.type = b2_dynamicBody;
+
+		float x = -1.0f * ( m_count - 1 );
+
+		for ( int i = 0; i < m_count; ++i )
+		{
+			bodyDef.position = { x, 4.0f };
+			b2BodyId bodyId = b2CreateBody( m_worldId, &bodyDef );
+			b2CreatePolygonShape( bodyId, &shapeDef, &box );
+			x += 2.0f;
+		}
+	}
+
+	bool DrawControls() override
+	{
+		if ( ImGui::Button( "Wake Touching" ) )
+		{
+			b2Body_WakeTouching( m_groundId );
+		}
+
+		return true;
+	}
+
+	static Sample* Create( SampleContext* context )
+	{
+		return new WakeTouching( context );
+	}
+
+	static constexpr int m_count = 10;
+
+	b2BodyId m_groundId;
+};
+
+static int sampleWakeTouching = RegisterSample( "Bodies", "Wake Touching", WakeTouching::Create );

@@ -213,6 +213,7 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"import * as Vector3 from 'Vector3';\n"
 				"import * as Vector4 from 'Vector4';\n"
 				"import * as Matrix4 from 'Matrix4';\n"
+				"import * as Box2D from 'Box2D';\n"
 
                 "globalThis.std = std;\n"
                 "globalThis.os = os;\n"
@@ -225,6 +226,7 @@ static int qjs_handle_fh(JSContext *ctx, FILE *f, const char *filename, const ch
 				"globalThis.Vector3 = Vector3.Vector3;\n"
 				"globalThis.Vector4 = Vector4.Vector4;\n"
 				"globalThis.Matrix4 = Matrix4.Matrix4;\n"
+				"globalThis.Box2D = Box2D;\n"
 
 				"import Thread from 'Thread';\n"
 				"globalThis.Thread = Thread;\n"
@@ -291,6 +293,7 @@ static JSContext *JS_NewCustomContext(JSRuntime *rt)
 	athena_vector_init(ctx);
 	athena_vector4_init(ctx);
 	athena_matrix_init(ctx);
+	athena_box2d_init(ctx);
 
 
 	#ifdef ATHENA_AUDIO
