@@ -146,6 +146,90 @@ static JSValue athena_image_draw(JSContext *ctx, JSValue this_val, int argc, JSV
 	return JS_UNDEFINED;
 }
 
+static inline int get_optional_float(JSContext *ctx, JSValue obj, const char *prop, float *out)
+{
+    JSValue v = JS_GetPropertyStr(ctx, obj, prop);
+    if (JS_IsUndefined(v) || JS_IsNull(v)) {
+        JS_FreeValue(ctx, v);
+        return 0;
+    }
+    if (JS_ToFloat32(ctx, out, v)) {
+        JS_FreeValue(ctx, v);
+        return -1;
+    }
+    JS_FreeValue(ctx, v);
+    return 0;
+}
+
+static inline int get_optional_uint32(JSContext *ctx, JSValue obj, const char *prop, uint32_t *out)
+{
+    JSValue v = JS_GetPropertyStr(ctx, obj, prop);
+    if (JS_IsUndefined(v) || JS_IsNull(v)) {
+        JS_FreeValue(ctx, v);
+        return 0;
+    }
+    if (JS_ToUint32(ctx, out, v)) {
+        JS_FreeValue(ctx, v);
+        return -1;
+    }
+    JS_FreeValue(ctx, v);
+    return 0;
+}
+
+static JSValue athena_image_drawEx(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
+{
+    JSImageData *image = JS_GetOpaque2(ctx, this_val, js_image_class_id);
+    if (!image) {
+        return JS_ThrowTypeError(ctx, "invalid Image object");
+    }
+    
+    if (!image->loaded) {
+        return JS_ThrowInternalError(ctx, "image not loaded");
+    }
+    
+    if (argc < 2) {
+        return JS_ThrowTypeError(ctx, "drawEx requires at least (x, y)");
+    }
+    
+    float x, y;
+    if (JS_ToFloat32(ctx, &x, argv[0]) || JS_ToFloat32(ctx, &y, argv[1])) {
+        return JS_EXCEPTION;
+    }
+    
+    float width  = image->width;
+    float height = image->height;
+    float startx = image->startx;
+    float starty = image->starty;
+    float endx   = image->endx;
+    float endy   = image->endy;
+    float angle  = image->angle;
+    uint32_t color = image->color;
+    
+    if (argc > 2 && JS_IsObject(argv[2]) && !JS_IsArray(ctx, argv[2])) {
+        if (get_optional_float(ctx, argv[2], "width",  &width)  < 0 ||
+            get_optional_float(ctx, argv[2], "height", &height) < 0 ||
+            get_optional_float(ctx, argv[2], "startx", &startx) < 0 ||
+            get_optional_float(ctx, argv[2], "starty", &starty) < 0 ||
+            get_optional_float(ctx, argv[2], "endx",   &endx)   < 0 ||
+            get_optional_float(ctx, argv[2], "endy",   &endy)   < 0 ||
+            get_optional_float(ctx, argv[2], "angle",  &angle)  < 0 ||
+            get_optional_uint32(ctx, argv[2], "color", &color)  < 0)
+        {
+            return JS_EXCEPTION;
+        }
+    }
+    
+    if (angle != 0.0f) {
+        draw_image_rotate(image->tex, x, y, width, height,
+                         startx, starty, endx, endy, angle, color);
+    } else {
+        draw_image(image->tex, x, y, width, height,
+                  startx, starty, endx, endy, color);
+    }
+    
+    return JS_UNDEFINED;
+}
+
 static JSValue athena_image_lock(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	JSImageData *image = JS_GetOpaque2(ctx, this_val, js_image_class_id);
 
@@ -400,6 +484,7 @@ static JSClassDef js_image_class = {
 
 static const JSCFunctionListEntry js_image_proto_funcs[] = {
     JS_CFUNC_DEF("draw", 2, athena_image_draw),
+	JS_CFUNC_DEF("drawEx", 3, athena_image_drawEx),
 	JS_CFUNC_DEF("ready", 0, athena_image_isloaded),
 	JS_CFUNC_DEF("optimize", 0, athena_image_optimize),
 	JS_CFUNC_DEF("free", 0, athena_image_free),
