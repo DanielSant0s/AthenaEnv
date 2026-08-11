@@ -129,23 +129,6 @@ static JSValue athena_image_free(JSContext *ctx, JSValue this_val, int argc, JSV
 	return JS_UNDEFINED;
 }
 
-static JSValue athena_image_draw(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
-	float x, y;
-
-	JSImageData *image = JS_GetOpaque2(ctx, this_val, js_image_class_id);
-
-	JS_ToFloat32(ctx, &x, argv[0]);
-	JS_ToFloat32(ctx, &y, argv[1]);
-
-	if(image->angle != 0.0f){
-		draw_image_rotate(image->tex, x, y, image->width, image->height, image->startx, image->starty, image->endx, image->endy, image->angle, image->color);
-	} else {
-		draw_image(image->tex, x, y, image->width, image->height, image->startx, image->starty, image->endx, image->endy, image->color);
-	}
-
-	return JS_UNDEFINED;
-}
-
 static inline int get_optional_float(JSContext *ctx, JSValue obj, const char *prop, float *out)
 {
     JSValue v = JS_GetPropertyStr(ctx, obj, prop);
@@ -176,7 +159,7 @@ static inline int get_optional_uint32(JSContext *ctx, JSValue obj, const char *p
     return 0;
 }
 
-static JSValue athena_image_drawEx(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
+static JSValue athena_image_draw(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
 {
     JSImageData *image = JS_GetOpaque2(ctx, this_val, js_image_class_id);
     if (!image) {
@@ -188,7 +171,7 @@ static JSValue athena_image_drawEx(JSContext *ctx, JSValue this_val, int argc, J
     }
     
     if (argc < 2) {
-        return JS_ThrowTypeError(ctx, "drawEx requires at least (x, y)");
+        return JS_ThrowTypeError(ctx, "draw requires at least (x, y)");
     }
     
     float x, y;
@@ -484,7 +467,6 @@ static JSClassDef js_image_class = {
 
 static const JSCFunctionListEntry js_image_proto_funcs[] = {
     JS_CFUNC_DEF("draw", 2, athena_image_draw),
-	JS_CFUNC_DEF("drawEx", 3, athena_image_drawEx),
 	JS_CFUNC_DEF("ready", 0, athena_image_isloaded),
 	JS_CFUNC_DEF("optimize", 0, athena_image_optimize),
 	JS_CFUNC_DEF("free", 0, athena_image_free),
