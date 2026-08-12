@@ -1562,11 +1562,6 @@ It allows creating and manipulating worlds, rigid bodies, geometries, spaces, an
 
 ---
 
-
-Abaixo está a documentação completa do módulo **Box2D** no formato e padrão do README existente. Você pode inserir esta seção no README.md logo após o módulo ODE (ou na seção de módulos externos).
-
----
-
 ## Box2D Module
 
 The `Box2D` module provides JavaScript bindings for **Box2D v3.0**, a high-performance 2D physics engine. It allows creating and manipulating physics worlds, rigid bodies, collision shapes, joints and chain shapes.
