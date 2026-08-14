@@ -130,6 +130,9 @@ ee_modules/ode/lib/libode.a: ee_modules/ode
 ee_modules/ode/lib/libopcode.a: ee_modules/ode
 	$(MAKE) -C $<
 
+ee_modules/box2d/lib/libbox2d.a: ee_modules/box2d
+	$(MAKE) -C $<
+
 ee_modules/loader/loader.elf: ee_modules/loader
 	$(MAKE) -C $<
 

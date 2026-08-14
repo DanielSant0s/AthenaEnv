@@ -23,6 +23,7 @@ JSModuleDef *athena_system_init(JSContext *ctx);
 JSModuleDef *athena_iop_init(JSContext *ctx);
 JSModuleDef *athena_archive_init(JSContext *ctx);
 JSModuleDef *athena_timer_init(JSContext *ctx);
+JSModuleDef *athena_box2d_init(JSContext* ctx);
 JSModuleDef *athena_task_init(JSContext *ctx);
 JSModuleDef *athena_pads_init(JSContext *ctx);
 JSModuleDef *athena_mutex_init(JSContext *ctx);

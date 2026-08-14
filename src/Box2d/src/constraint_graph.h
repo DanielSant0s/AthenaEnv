@@ -1,0 +1,67 @@
+// SPDX-FileCopyrightText: 2023 Erin Catto
+// SPDX-License-Identifier: MIT
+
+#pragma once
+
+#include "bitset.h"
+#include "contact.h"
+#include "joint.h"
+#include "box2d/constants.h"
+
+#include "box2d/types.h"
+
+typedef struct b2Body b2Body;
+typedef struct b2Contact b2Contact;
+typedef struct b2StepContext b2StepContext;
+typedef struct b2World b2World;
+
+// This holds constraints that cannot fit the graph color limit. This happens when a single dynamic body
+// is touching many other bodies.
+#define B2_OVERFLOW_INDEX ( B2_GRAPH_COLOR_COUNT - 1 )
+
+// This keeps constraints involving two dynamic bodies at a lower solver priority than constraints
+// involving a dynamic and static bodies. This reduces tunneling due to push through.
+#define B2_DYNAMIC_COLOR_COUNT ( B2_GRAPH_COLOR_COUNT - 4 )
+
+typedef struct b2GraphColor
+{
+	// This bitset is indexed by bodyId so this is over-sized to encompass static bodies
+	// however I never traverse these bits or use the bit count for anything
+	// This bitset is unused on the overflow color.
+	//
+	// Dirk suggested having a uint64_t per body that tracks the graph color membership
+	// but I think this would make debugging harder and be less flexible. With the bitset
+	// I can trivially increase the number of graph colors beyond 64. See usage of b2CountSetBits
+	// for validation.
+	b2BitSet bodySet;
+
+	// cache friendly arrays
+	b2Array( b2ContactSim ) contactSims;
+	b2Array( b2JointSim ) jointSims;
+
+	// transient
+	union
+	{
+		struct b2ContactConstraintWide* wideConstraints;
+		struct b2ContactConstraint* overflowConstraints;
+	};
+
+	int wideConstraintCount;
+
+} b2GraphColor;
+
+typedef struct b2ConstraintGraph
+{
+	// including overflow at the end
+	b2GraphColor colors[B2_GRAPH_COLOR_COUNT];
+} b2ConstraintGraph;
+
+void b2CreateGraph( b2ConstraintGraph* graph, const b2Capacity* capacity );
+void b2DestroyGraph( b2ConstraintGraph* graph );
+
+void b2AddContactToGraph( b2World* world, b2ContactSim* contactSim, b2Contact* contact );
+void b2RemoveContactFromGraph( b2World* world, int bodyIdA, int bodyIdB, int colorIndex, int localIndex );
+
+b2JointSim* b2CreateJointInGraph( b2World* world, b2Joint* joint );
+void b2AddJointToGraph( b2World* world, b2JointSim* jointSim, b2Joint* joint );
+void b2RemoveJointFromGraph( b2World* world, int bodyIdA, int bodyIdB, int colorIndex, int localIndex );

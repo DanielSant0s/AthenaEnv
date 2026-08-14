@@ -46,6 +46,7 @@ EE_SIO ?= 0
 PADEMU ?= 1
 GRAPHICS ?= 1
 ODE_PHYSICS_COLLISION ?= 1
+BOX2D_PHYSICS ?= 1
 AUDIO ?= 1
 
 # Module linking control
@@ -88,7 +89,7 @@ APP_CORE = main.o athena_core.o bootlogo.o texture_manager.o owl_packet.o vif.o 
 
 INI_READER = readini/src/readini.o
 
-ATHENA_MODULES = ath_env.o ath_module_registry.o ath_vector.o ath_vector4.o ath_matrix.o ath_pads.o ath_system.o ath_iop.o ath_archive.o ath_timer.o ath_task.o ath_mutex.o
+ATHENA_MODULES = ath_env.o ath_module_registry.o ath_vector.o ath_vector4.o ath_matrix.o ath_pads.o ath_system.o ath_iop.o ath_archive.o ath_timer.o ath_task.o ath_mutex.o ath_box2d.o ath_box2d_body.o ath_box2d_shape.o ath_box2d_joint.o ath_box2d_cast.o ath_box2d_chain.o ath_box2d_common.o ath_box2d_conversion.o ath_box2d_events.o ath_box2d_query.o ath_box2d_userdata.o ath_box2d_world.o
 
 IOP_MODULES = iomanx.o filexio.o sio2man.o mcman.o mcserv.o padman.o  \
 			  usbd.o bdm.o bdmfs_fatfs.o usbmass_bd.o cdfs.o \
@@ -123,6 +124,14 @@ ifeq ($(ODE_PHYSICS_COLLISION),1)
   APP_CORE += athena/ode_facade.o
 
   EXT_LIBS += ee_modules/ode/lib/libice.a ee_modules/ode/lib/libopcode.a ee_modules/ode/lib/libode.a
+endif
+
+ifeq ($(BOX2D_PHYSICS),1)
+  EE_LIBS += -Lee_modules/box2d/lib/ -lbox2d
+  EE_INCS += -Isrc/Box2d/include
+  EE_CFLAGS += -DATHENA_BOX2D -DBOX2D_DISABLE_SIMD
+
+  EXT_LIBS += ee_modules/box2d/lib/libbox2d.a
 endif
 
 ifeq ($(GRAPHICS),1)
@@ -349,6 +358,7 @@ clean:
 	$(MAKE) -C ee_modules/loader clean
 	$(MAKE) -C ee_modules/ode clean
 	$(MAKE) -C ee_modules/bearssl clean
+	$(MAKE) -C ee_modules/box2d clean
 	$(MAKE) -C ee_modules/mpeg clean
 
 	$(MAKE) -f Makefile.dl KEYBOARD=$(DYNAMIC_KEYBOARD) clean
