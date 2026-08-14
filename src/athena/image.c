@@ -106,18 +106,25 @@ bool athena_image_is_loaded(const AthenaImage *image) {
     return image && image->loaded;
 }
 
-void athena_image_draw(AthenaImage *image, float x, float y) {
+void athena_image_draw(
+                        AthenaImage *image, 
+                        float x, float y,
+                        float width, float height,
+                        float startx, float starty,
+                        float endx, float endy,
+                        float angle, uint32_t color
+) {
     if (!image || !image->tex)
         return;
 
-    if (image->angle != 0.0f) {
-        draw_image_rotate(image->tex, x, y, image->width, image->height,
-                          image->startx, image->starty, image->endx, image->endy,
-                          image->angle, image->color);
+    if (angle != 0.0f) {
+        draw_image_rotate(image->tex, x, y, width, height,
+                          startx, starty, endx, endy,
+                          angle, color);
     } else {
-        draw_image(image->tex, x, y, image->width, image->height,
-                   image->startx, image->starty, image->endx, image->endy,
-                   image->color);
+        draw_image(image->tex, x, y, width, height,
+                   startx, starty, endx, endy,
+                   color);
     }
 }
 

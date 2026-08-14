@@ -29,7 +29,14 @@ void athena_image_destroy(AthenaImage *image);
 void athena_image_free(AthenaImage *image);
 
 bool athena_image_is_loaded(const AthenaImage *image);
-void athena_image_draw(AthenaImage *image, float x, float y);
+void athena_image_draw(
+                        AthenaImage *image, 
+                        float x, float y,
+                        float width, float height,
+                        float startx, float starty,
+                        float endx, float endy,
+                        float angle, uint32_t color
+);
 bool athena_image_lock(AthenaImage *image);
 bool athena_image_unlock(AthenaImage *image);
 bool athena_image_locked(const AthenaImage *image);
