@@ -151,6 +151,27 @@ static JSClassDef js_vector4_class = {
     .finalizer = js_vector4_finalizer,
 };
 
+/* Method forms of the arithmetic helpers, matching Vector2/Vector3 (see
+ * ath_vector.c) and Matrix4 (see ath_matrix.c). These used to be reachable
+ * only as overloaded operators (v1 + v2), which required QuickJS's operator
+ * overloading support living behind CONFIG_BIGNUM. As plain methods they
+ * need none of that. The underlying binary helpers take both operands in
+ * argv, so the shims just put `this` in front. */
+#define VEC4_BINARY_METHOD(name, cfunc)                                       \
+    static JSValue js_vector4_##name##_method(JSContext *ctx, JSValueConst this_val, \
+                                              int argc, JSValueConst *argv) {  \
+        JSValueConst a[2];                                                    \
+        a[0] = this_val;                                                      \
+        a[1] = (argc > 0) ? argv[0] : JS_UNDEFINED;                           \
+        return cfunc(ctx, this_val, 2, a);                                    \
+    }
+VEC4_BINARY_METHOD(add, js_vector4_add)
+VEC4_BINARY_METHOD(sub, js_vector4_sub)
+VEC4_BINARY_METHOD(mul, js_vector4_mul)
+VEC4_BINARY_METHOD(div, js_vector4_div)
+VEC4_BINARY_METHOD(equals, js_vector4_eq)
+#undef VEC4_BINARY_METHOD
+
 static const JSCFunctionListEntry js_vector4_proto_funcs[] = {
     JS_CFUNC_DEF("norm", 0, js_vector4_norm),
     JS_CFUNC_DEF("dot", 1, js_vector4_dotproduct),
@@ -158,35 +179,16 @@ static const JSCFunctionListEntry js_vector4_proto_funcs[] = {
     JS_CFUNC_DEF("distance", 1, js_vector4_dist),
     JS_CFUNC_DEF("distance2", 1, js_vector4_distsqr),
     JS_CFUNC_DEF("toString", 0, js_vector4_tostring),
+    JS_CFUNC_DEF("add", 1, js_vector4_add_method),
+    JS_CFUNC_DEF("sub", 1, js_vector4_sub_method),
+    JS_CFUNC_DEF("mul", 1, js_vector4_mul_method),
+    JS_CFUNC_DEF("div", 1, js_vector4_div_method),
+    JS_CFUNC_DEF("equals", 1, js_vector4_equals_method),
     JS_CGETSET_MAGIC_DEF("x", js_vector4_get_xyz, js_vector4_set_xyz, 0),
     JS_CGETSET_MAGIC_DEF("y", js_vector4_get_xyz, js_vector4_set_xyz, 1),
     JS_CGETSET_MAGIC_DEF("z", js_vector4_get_xyz, js_vector4_set_xyz, 2),
     JS_CGETSET_MAGIC_DEF("w", js_vector4_get_xyz, js_vector4_set_xyz, 3)
 };
-
-static void js_vector4_init_operators(JSContext *ctx, JSValue proto) {
-    JSValue operatorSet, obj, global, Operators, Symbol, symbol_operatorSet;
-    global = JS_GetGlobalObject(ctx);
-    Symbol = JS_GetPropertyStr(ctx, global, "Symbol");
-    symbol_operatorSet = JS_GetPropertyStr(ctx, Symbol, "operatorSet");
-    JS_FreeValue(ctx, Symbol);
-    Operators = JS_GetPropertyStr(ctx, global, "Operators");
-    JS_FreeValue(ctx, global);
-    JSValue create_func = JS_GetPropertyStr(ctx, Operators, "create");
-    obj = JS_NewObject(ctx);
-    JS_SetPropertyStr(ctx, obj, "+", JS_NewCFunction(ctx, js_vector4_add, "+", 2));
-    JS_SetPropertyStr(ctx, obj, "-", JS_NewCFunction(ctx, js_vector4_sub, "-", 2));
-    JS_SetPropertyStr(ctx, obj, "*", JS_NewCFunction(ctx, js_vector4_mul, "*", 2));
-    JS_SetPropertyStr(ctx, obj, "/", JS_NewCFunction(ctx, js_vector4_div, "/", 2));
-    JS_SetPropertyStr(ctx, obj, "==", JS_NewCFunction(ctx, js_vector4_eq, "==", 2));
-    JSValueConst args[1] = { obj };
-    operatorSet = JS_Call(ctx, create_func, Operators, 1, args);
-    JS_FreeValue(ctx, create_func);
-    JS_FreeValue(ctx, obj);
-    JS_FreeValue(ctx, Operators);
-    JS_SetProperty(ctx, proto, JS_ValueToAtom(ctx, symbol_operatorSet), operatorSet);
-    JS_FreeValue(ctx, symbol_operatorSet);
-}
 
 static int js_vector4_init(JSContext *ctx, JSModuleDef *m) {
     JSValue vector4_proto, vector4_class;
@@ -197,7 +199,6 @@ static int js_vector4_init(JSContext *ctx, JSModuleDef *m) {
     vector4_class = JS_NewCFunction2(ctx, js_vector4_ctor, "Vector4", 4, JS_CFUNC_constructor_or_func, 0);
     JS_SetConstructor(ctx, vector4_class, vector4_proto);
     JS_SetClassProto(ctx, js_vector4_class_id, vector4_proto);
-    js_vector4_init_operators(ctx, vector4_proto);
     return JS_SetModuleExport(ctx, m, "Vector4", vector4_class);
 }
 

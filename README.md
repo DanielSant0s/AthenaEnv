@@ -377,7 +377,7 @@ Defines custom struct types with native performance and C-compatible memory layo
 
 **Construction:**
 ```js
-const Vec3 = Native.struct('Vec3', {
+const Vec3 = Native.struct({
     x: 'float',
     y: 'float',
     z: 'float'
@@ -432,11 +432,13 @@ console.log(v.x); // 0.6 (normalized)
 ```
 
 **Array fields in structs:**
+
+Array fields use a `type[length]` string, not an object:
 ```js
-const Transform = Native.struct('Transform', {
-    position: {type: 'float', length: 3},  // float[3]
-    rotation: {type: 'float', length: 4},  // float[4] (quaternion)
-    scale: {type: 'float', length: 3}      // float[3]
+const Transform = Native.struct({
+    position: 'float[3]',  // float[3]
+    rotation: 'float[4]',  // float[4] (quaternion)
+    scale: 'float[3]'      // float[3]
 });
 
 const t = new Transform();
@@ -448,8 +450,8 @@ t.scale[0] = t.scale[1] = t.scale[2] = 1.0f;
 
 #### Utility Functions
 
-* `Native.free(func)` - Free compiled function immediately (optional, GC will handle it)
-* `Native.getInfo(func)` - Get metadata: `{codeSize, argCount, returnType}`
+* `Native.free(func._nativeHandle)` - Free compiled function immediately (optional, GC will handle it). Takes the numeric `_nativeHandle` property of the compiled function, not the function itself.
+* `Native.getInfo(func._nativeHandle)` - Get metadata: `{codeSize, argCount, returnType, argTypes}`. Takes `_nativeHandle` like `Native.free()` above.
 * `Native.benchmark(func, iterations)` - Measure execution time in milliseconds
 * `Native.disassemble(func)` - Get MIPS assembly listing (for debugging)
 
@@ -666,15 +668,11 @@ Methods:
 * cross(vec2) - Calculate vector cross product.
 * distance(vec2) - Calculate vector distances.
 * distance2(vec2) - Calculate vector squared distances.
-
-**Operators:** 
-
-* add: +
-* sub: -
-* mul: *
-* div: /
-* eq: ==
-
+* add(vec2) - Returns a new vector, the sum of this vector and vec2.
+* sub(vec2) - Returns a new vector, the difference of this vector and vec2.
+* mul(vec2) - Returns a new vector, the component-wise product of this vector and vec2.
+* div(vec2) - Returns a new vector, the component-wise division of this vector by vec2.
+* equals(vec2) - Returns true if every component matches vec2.
 
 ### Matrix4 Module  
 
@@ -700,11 +698,8 @@ let test = new Matrix4();
 * transpose() - Transpose matrix.
 * invert() - Calculate matrix inverse.
 * identity() - Put matrix identity.
-
-**Operators:** 
-
-* mul: *
-* eq: ==
+* mul(mat) - Returns a new matrix, the product of this matrix and mat.
+* equals(mat) - Returns true if every element matches mat.
 
 P.S.: Matrix4 module components can be accessed as an array, so... mat[n] from 0 to 15.
     
@@ -899,7 +894,7 @@ Screen.setMode(canvas);
 * `Render.begin()` – Starts a render pass and resets batched state. Call once per frame before issuing draw calls.
 * `Render.setView(fov = 60, nearClip = 1.0, farClip = 2000.0, width = 0.0, height = 0.0)` – Configures the default projection matrix. Width/height override the auto-derived aspect ratio when non-zero.
 * `Render.materialColor(r, g, b, alpha = 1.0)` – Convenience helper that returns a `{r,g,b,a}` color object for materials.
-* `Render.material(ambient, diffuse, specular, emission, transmittance, shininess, refraction, transmission_filter, dissolve, texture_id, bump_texture_id, ref_texture_id, decal_texture_id)` – Builds a material descriptor used by RenderData/RenderObject. Texture ids accept `-1` to disable a layer.
+* `Render.material(ambient, diffuse, specular, emission, transmittance, shininess, refraction, transmission_filter, disolve, texture_id, bump_texture_id, ref_texture_id, decal_texture_id)` – Builds a material descriptor used by RenderData/RenderObject. Texture ids accept `-1` to disable a layer.
 * `Render.materialIndex(index, end)` – Tags the vertex/material arrays so the renderer knows which faces should use each material slice.
 * `Render.vertexList(positions, normals, texcoords, colors, materials, material_indices)` – Creates the structure expected by `new RenderData(...)`. Each typed array must use 4-component packing (xyzw, n1n2n3w, stqw, rgba).
 
@@ -926,10 +921,7 @@ just pass the image as a second argument if you want to use it. */
   
 **Properties:**
 
-* positions - Float32Array with x, y, z, adc for each vertex.
-* normals - Float32Array with n1, n2, n3, adc for each vertex.
-* texcoords - Float32Array with s, t, q, w for each vertex.
-* colors - Float32Array with r, g, b, a for each vertex.
+* vertices - Object holding the raw vertex attribute buffers, `{positions, normals, texcoords, colors}`. Each present key is an `ArrayBuffer` (not a Float32Array), packed as x/y/z/adc for positions, n1/n2/n3/adc for normals, s/t/q/w for texcoords and r/g/b/a for colors.
 * pipeline - Rendering pipeline. Avaliable pipelines below:
   • Render.PL_NO_LIGHTS - Lights disabled, colors still working.  
   • Render.PL_SPECULAR - Diffuse and specular lights and colors enabled.  
@@ -983,7 +975,7 @@ and the individual object matrices */
 **Methods:**  
 
 * render() - Draws the object on screen.
-* renderBounds() - Draws object bounding box.
+* renderBounds(color) - Draws object bounding box in the given color.
 * free() - Free asset content immediately. P.S.: This is a way to quick free stuff from memory, but you can also wait for the garbage collector so it's not mandatory.  
   
 **Methods(skinned):**
@@ -1008,7 +1000,6 @@ and the individual object matrices */
   
 **Camera**   
 * Camera.position(x, y, z)  
-* Camera.rotation(x, y, z)  
 * Camera.target(x, y, z)  
 * Camera.orbit(yaw, pitch)  
 * Camera.turn(yaw, pitch)  
@@ -1027,15 +1018,15 @@ You have 4 lights to use in 3D scenes, use set to configure them.
 ### Screen module
 * `Screen.display(loopFn)` – Runs `loopFn` every frame with automatic clear/flip (ideal for quick demos).
 * `Screen.clearColor(color)` – Persists a clear color used by `Screen.display` and as the default for `Screen.clear()` with no args.
-* `Screen.clear(color = Color.new(0,0,0,0))` – Clears the current draw buffer.
+* `Screen.clear(color = Color.new(0,0,0,128))` – Clears the current draw buffer.
 * `Screen.flip()` – Submits all queued draw packets and swaps the display buffers.
 * `Screen.getMemoryStats(statId = Screen.VRAM_USED_TOTAL)` – Returns VRAM usage in bytes. Other counters: `VRAM_SIZE`, `VRAM_USED_STATIC`, `VRAM_USED_DYNAMIC`.
 * `Screen.setVSync(enabled)` – Enables/disables VSync (locks FPS to the mode’s refresh rate).
 * `Screen.setFrameCounter(enabled)` – Enables internal FPS counter required by `Screen.getFPS()`.
 * `Screen.waitVblankStart()` – Blocks until the next vertical blank.
 * `Screen.getFPS(frameIntervalMs = 1000)` – Returns the measured FPS over the given window (requires frame counter enabled).
-* `Screen.getMode()` – Returns the active video mode object: `{ mode, width, height, psm, interlace, field, double_buffering, zbuffering, psmz, pass_count }`.
-* `Screen.setMode(canvas)` – Applies a video mode previously fetched/edited via `Screen.getMode()`.
+* `Screen.getMode()` – Returns the active video mode object: `{ mode, width, height, psm, interlace, field, double_buffering, zbuffering, psmz }`.
+* `Screen.setMode(canvas)` – Applies a video mode previously fetched/edited via `Screen.getMode()`. Also accepts an optional `pass_count` field.
 * `Screen.initBuffers()` – Allocates internal draw/display/depth buffers (required for off-screen rendering APIs).
 * `Screen.resetBuffers()` – Restores the buffers created by `initBuffers()`.
 * `Screen.getBuffer(bufferId)` – Returns the GS surface bound to `DRAW_BUFFER`, `DISPLAY_BUFFER`, or `DEPTH_BUFFER`.
@@ -1182,7 +1173,7 @@ P.S.: outline and drop shadow do not coexist, so one of them must be 0.0f.
 * Pad event kinds:  
   • Pads.PRESSED  
   • Pads.JUST_PRESSED  
-  • Pads.NON_PRESSED  
+  • Pads.NONPRESSED  
 * Pads.deleteEvent(event_id) - Deletes the event created by Pads.newEvent.
 * let type = Pads.getType(*port*) - Gets the gamepad type reported at mode-table slot 0 (usually its baseline digital identity, not necessarily what's active right now).
 * let type = Pads.getActiveType(*port*) - Gets the gamepad type currently active (reflects Pads.setMode() changes and the pad's own Analog/Select-button toggling).
@@ -1262,7 +1253,7 @@ P.S.: outline and drop shadow do not coexist, so one of them must be 0.0f.
 * let listdir = System.listDir(*path*)
   • listdir[index].name - return file name on indicated index(string)  
   • listdir[index].size - return file size on indicated index(integer)  
-  • listdir[index].directory - return if indicated index is a file or a directory(bool)  
+  • listdir[index].dir - return if indicated index is a file or a directory(bool)  
 * System.removeDirectory(path)
 * System.copyFile(source, dest)
 * System.moveFile(source, dest)
@@ -1358,7 +1349,7 @@ const thread = new Thread(() => console.log("Hello from a thread!"), "Thread: He
 
 * const shoot_sfx = Sound.Sfx(path) - Loads a sound effect(ADPCM)  
 **Methods:**  
-  • play(*channel*) - Play sound effect. P.S.: If channel isn't specified, it will automatically use a free channel(and return the channel index, otherwhise it returns undefined).  
+  • play(*channel*) - Play sound effect, returns the channel index used. P.S.: If channel isn't specified, it will automatically use a free channel.  
   • free() - Free sound effect from memory.  
   • playing(channel) - Check if the sound effect is being played on the specified channel.  
 **Properties:**  
@@ -1423,13 +1414,13 @@ Creates a new shadow projector using the specified texture for the shadow appear
 * setColor(r, g, b, a) - Set shadow color and alpha (0.0-1.0 range).
 * setBlend(mode) - Set shadow blend mode (SHADOW_BLEND_* constants).
 * setUVRect(u0, v0, u1, v1) - Set texture UV rectangle for shadow appearance.
-* enableRaycast(space, rayLength, enable) - Enable/disable ODE ray casting for accurate shadow placement.
+* enableRaycast(space, enable, rayLength) - Enable/disable ODE ray casting for accurate shadow placement.
 * render() - Render the shadow projector (call every frame).
 
 **Properties:**
 
 * position - Object with x, y, z keys for shadow projector world position.
-* rotation - Object with x, y, z keys for shadow projector rotation (quaternion).
+* rotation - Object with x, y, z keys for shadow projector rotation.
 * scale - Object with x, y, z keys for shadow projector scale.
 
 **Usage Example:**
@@ -1553,8 +1544,8 @@ let s = new Socket(Socket.AF_INET, Socket.SOCK_STREAM);
 * connect(host, port)
 * bind(host, port)
 * listen()
-* send(data) - Send data with Buffer
-* recv(size) - Receive data to a buffer
+* send(data) - Send string data, returns bytes sent.
+* recv(size) - Receive up to size bytes, returned as a string.
 * close()
 
 
@@ -1618,7 +1609,7 @@ Represents the physical simulation world. It defines global properties such as g
 * `step(dt)` — Advances the simulation by `dt` seconds.
 * `quickStep(dt)` — Advances the simulation using the quick step integrator.
 * `setQuickStepIterations(iter)` — Set the number of iterations for the quick step solver.
-* `stepWithContacts(dt, space, jointGroup)` — Advances the simulation including collision detection.
+* `stepWithContacts(space, jointGroup, dt, *callback*)` — Runs collision detection on `space`, creates contact joints in `jointGroup`, advances the simulation by `dt`, then empties `jointGroup`. Returns the array of contacts found. If given, `callback` is invoked once per contact.
 * `destroyWorld()` — Frees all resources associated with the world.
 
 ---
@@ -1671,7 +1662,7 @@ A space groups geometries for collision detection.
 
 ### Methods
 
-* `collide(callback)` — Runs collision detection between all geometries in the space. Calls `callback(geom1, geom2)` for each pair.
+* `collide(*callback*)` — Runs collision detection between all geometries in the space. Returns the array of contacts found. If given, `callback` is invoked once per contact (not once per colliding pair) with the contact object.
 * `free()`
 
 ---
@@ -1789,7 +1780,7 @@ Represents a constraint between two bodies.
 
 ### Geometry Creation
 
-* `GeomRenderObject(renderObj, space)`
+* `GeomRenderObject(space, renderObj)`
 * `GeomBox(space, lx, ly, lz)`
 * `GeomSphere(space, radius)`
 * `GeomPlane(space, a, b, c, d)` — Defines a plane `Ax + By + Cz = D`.
