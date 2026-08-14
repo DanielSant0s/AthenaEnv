@@ -1,0 +1,22 @@
+{
+    "compilerOptions": {
+        "target": "ES2020",
+        "module": "ES2020",
+        "moduleResolution": "node",
+        "checkJs": false,
+        "allowJs": true,
+        "lib": ["ES2020"],
+        "types": []
+    },
+    "include": [
+        "bin/**/*.js",
+        "examples/**/*.js",
+        "types/**/*.d.ts"
+    ],
+    "exclude": [
+        "node_modules",
+        "obj",
+        "ee_modules",
+        "iop_modules"
+    ]
+}

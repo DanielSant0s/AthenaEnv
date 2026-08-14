@@ -183,18 +183,17 @@ Defines a native struct type with optional methods.
 
 **Signature:**
 ```javascript
-Native.struct(name, fields, methods?) → StructConstructor
+Native.struct(fields, methods?) → StructConstructor
 ```
 
 **Parameters:**
-- `name`: Struct type name (string)
 - `fields`: Object mapping field names to types
-  - For arrays: `{type: 'float', length: N}`
+  - For arrays: a `'type[length]'` string, e.g. `'float[3]'`
 - `methods`: Optional object of compiled methods
 
 **Example:**
 ```javascript
-const Vec3 = Native.struct('Vec3', {
+const Vec3 = Native.struct({
     x: 'float',
     y: 'float', 
     z: 'float'
@@ -234,10 +233,10 @@ console.log(v.x); // 6.0
 Native.isSupported() → boolean
 
 // Free compiled function
-Native.free(nativeFunc) → void
+Native.free(nativeFunc._nativeHandle) → void
 
-// Get function metadata
-Native.getInfo(nativeFunc) → object
+// Get function metadata: {codeSize, argCount, returnType, argTypes}
+Native.getInfo(nativeFunc._nativeHandle) → object
 
 // Benchmark execution
 Native.benchmark(nativeFunc, iterations) → number
@@ -712,9 +711,9 @@ Early versions incorrectly scanned all 64 locals to find the struct base, leadin
 
 Struct fields can be arrays:
 ```javascript
-const Transform = Native.struct('Transform', {
-    position: {type: 'float', length: 3},  // float[3]
-    rotation: {type: 'float', length: 4}   // float[4]
+const Transform = Native.struct({
+    position: 'float[3]',
+    rotation: 'float[4]'
 });
 ```
 
@@ -851,7 +850,7 @@ for (let i = 0; i < n; i++) {
 ### Example 1: Vector Operations
 
 ```javascript
-const Vec3 = Native.struct('Vec3', {
+const Vec3 = Native.struct({
     x: 'float',
     y: 'float',
     z: 'float'
@@ -960,9 +959,9 @@ matrixMultiply(result, a, b);
 ### Example 3: Particle System Update
 
 ```javascript
-const Particle = Native.struct('Particle', {
-    position: {type: 'float', length: 3},
-    velocity: {type: 'float', length: 3},
+const Particle = Native.struct({
+    position: 'float[3]',
+    velocity: 'float[3]',
     life: 'float'
 });
 
