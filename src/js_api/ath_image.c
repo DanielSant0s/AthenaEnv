@@ -89,7 +89,7 @@ static JSValue athena_image_ctor(JSContext *ctx, JSValueConst new_target, int ar
 	}
 
 	if (argc > 1) {
-		append_img(image, JS_GetOpaque2(ctx, argv[2], get_imglist_class_id()));
+		append_img(image, JS_GetOpaque2(ctx, argv[1], get_imglist_class_id()));
 		image->loaded = false;
 		goto register_obj;
 	}
