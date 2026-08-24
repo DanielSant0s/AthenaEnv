@@ -69,74 +69,112 @@ void init_lockman() {
 }
 
 int create_mutex() {
+    int id = -1;
+
+    DIntr();
     for(int i = 0; i < MAX_MUTEXES; i++){
         if (mutexes[i].id == -1){
-            mutexes[i].id = i;
-            mutexes[i].sema.attr = EA_THFIFO;
-            mutexes[i].internal_id = CreateSema(&mutexes[i].sema);
-            if (mutexes[i].internal_id < 0) {
-                mutexes[i].id = -1;
-                return -1;
-            }
-            return i;
-        }
-    }
-
-    return -1;
-}
-
-void delete_mutex(int id) {
-    for(int i = 0; i < MAX_MUTEXES; i++){
-        if (mutexes[i].id == id){
-            mutexes[i].id = -1;
-            DeleteSema(mutexes[i].internal_id);
+            mutexes[i].id = i;   // reserva o slot imediatamente
+            id = i;
             break;
         }
     }
+    EIntr();
+
+    if (id == -1)
+        return -1;
+
+    mutexes[id].sema.attr = EA_THFIFO;
+    mutexes[id].internal_id = CreateSema(&mutexes[id].sema);
+    if (mutexes[id].internal_id < 0) {
+        mutexes[id].id = -1;
+        return -1;
+    }
+
+    return id;
+}
+
+void delete_mutex(int id) {
+    if (id < 0 || id >= MAX_MUTEXES)
+        return;
+
+    DIntr();
+    int internal_id = -1;
+    if (mutexes[id].id == id) {
+        internal_id = mutexes[id].internal_id;
+        mutexes[id].id = -1;
+    }
+    EIntr();
+
+    if (internal_id >= 0)
+        DeleteSema(internal_id);
 }
 
 void lock_mutex(int id) {
+    if (id < 0 || id >= MAX_MUTEXES)
+        return;
     WaitSema(mutexes[id].internal_id);
 }
 
 void unlock_mutex(int id) {
+    if (id < 0 || id >= MAX_MUTEXES)
+        return;
     SignalSema(mutexes[id].internal_id);
-}  
-
-int create_semaphore(int initial_count, int max_count) {
-    for (int i = 0; i < MAX_SEMAPHORES; i++) {
-        if (semaphores[i].id == -1) {
-            semaphores[i].id = i;
-            semaphores[i].sema.option = 0;
-            semaphores[i].sema.max_count = max_count > 0 ? max_count : 1;
-            semaphores[i].sema.init_count = initial_count >= 0 ? initial_count : 0;
-            semaphores[i].sema.attr = EA_THFIFO;
-            semaphores[i].internal_id = CreateSema(&semaphores[i].sema);
-            if (semaphores[i].internal_id < 0) {
-                semaphores[i].id = -1;
-                return -1;
-            }
-            return i;
-        }
-    }
-    return -1;
 }
 
-void delete_semaphore(int id) {
+int create_semaphore(int initial_count, int max_count) {
+    int id = -1;
+
+    DIntr();
     for (int i = 0; i < MAX_SEMAPHORES; i++) {
-        if (semaphores[i].id == id) {
-            DeleteSema(semaphores[i].internal_id);
-            semaphores[i].id = -1;
+        if (semaphores[i].id == -1) {
+            semaphores[i].id = i;   // reserva o slot imediatamente
+            id = i;
             break;
         }
     }
+    EIntr();
+
+    if (id == -1)
+        return -1;
+
+    semaphores[id].sema.option = 0;
+    semaphores[id].sema.max_count = max_count > 0 ? max_count : 1;
+    semaphores[id].sema.init_count = initial_count >= 0 ? initial_count : 0;
+    semaphores[id].sema.attr = EA_THFIFO;
+    semaphores[id].internal_id = CreateSema(&semaphores[id].sema);
+    if (semaphores[id].internal_id < 0) {
+        semaphores[id].id = -1;
+        return -1;
+    }
+
+    return id;
+}
+
+void delete_semaphore(int id) {
+    if (id < 0 || id >= MAX_SEMAPHORES)
+        return;
+
+    DIntr();
+    int internal_id = -1;
+    if (semaphores[id].id == id) {
+        internal_id = semaphores[id].internal_id;
+        semaphores[id].id = -1;
+    }
+    EIntr();
+
+    if (internal_id >= 0)
+        DeleteSema(internal_id);
 }
 
 void wait_semaphore(int id) {
+    if (id < 0 || id >= MAX_SEMAPHORES)
+        return;
     WaitSema(semaphores[id].internal_id);
 }
 
 void signal_semaphore(int id) {
+    if (id < 0 || id >= MAX_SEMAPHORES)
+        return;
     SignalSema(semaphores[id].internal_id);
 }
-
