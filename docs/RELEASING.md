@@ -21,5 +21,6 @@ AthenaEnv uses two kinds of CI-published builds:
 4. CI builds the project and publishes a GitHub Release for that tag with `AthenaEnv.tar.gz`
    attached.
 
-The `VERSION` file value and the tag should match so the version embedded in the runtime
-(`CONFIG_VERSION`) agrees with the release name.
+The tag must be the `VERSION` file's content prefixed with `v` (`VERSION` = `4.0.1` → tag
+`v4.0.1`). CI enforces this: pushing a tag whose numeric part doesn't match `VERSION` fails
+before publishing, so the release name always agrees with the embedded `CONFIG_VERSION`.

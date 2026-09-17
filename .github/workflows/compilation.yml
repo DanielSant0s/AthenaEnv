@@ -24,6 +24,16 @@ jobs:
         git config --global --add safe.directory /__w/AthenaEnv/AthenaEnv
         git fetch --prune --unshallow
 
+    - name: Verify tag matches VERSION
+      if: startsWith(github.ref, 'refs/tags/')
+      run: |
+        tag_version="${GITHUB_REF_NAME#v}"
+        file_version="$(tr -d '[:space:]' < VERSION)"
+        if [ "$tag_version" != "$file_version" ]; then
+          echo "::error::Tag $GITHUB_REF_NAME does not match VERSION file ($file_version)"
+          exit 1
+        fi
+
     - name: Compile project
       run: |
         chmod +x build-exports.sh
