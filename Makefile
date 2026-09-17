@@ -235,6 +235,11 @@ VU0_MPGS := $(VU0_MPGS:%=$(VU0_MPGS_DIR)%) #prepend the microprograms folder
 EE_OBJS = $(APP_CORE) $(INI_READER) $(JS_CORE) $(ATHENA_MODULES) $(NATIVE_COMPILER_OBJS) $(VU1_MPGS) $(VU0_MPGS) $(IOP_MODULES) $(EMBEDDED_ELFS) $(EMBEDDED_ASSETS) # group them all
 EE_OBJS := $(EE_OBJS:%=$(EE_OBJ_DIR)%) #prepend the object folder
 
+# CONFIG_VERSION is baked into every compilation unit via EE_CFLAGS, but pattern
+# rules don't know that, so an incremental build won't recompile after a bump
+# unless VERSION is listed as an explicit prerequisite.
+$(EE_OBJS): VERSION
+
 EE_BIN := $(EE_BIN_DIR)$(EE_BIN_PREF)$(EE_EXT)
 EE_BIN_PKD := $(EE_BIN_DIR)$(EE_BIN_PKD)$(EE_EXT)
 
