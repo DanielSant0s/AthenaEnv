@@ -33,7 +33,7 @@ gltf_skin.face_culling = Render.CULL_FACE_BACK;
 gltf_skin.pipeline = Render.PL_DEFAULT;
 // Skinned meshes animate via bone matrices in the VU, not by touching
 // positions/normals/etc -- safe to reclaim the float source once setup
-// is done. This demo doesn't use ODE trimesh collision on any mesh, so
+// is done. This demo doesn't use Physics trimesh collision on any mesh, so
 // every RenderData below can freeze.
 gltf_skin.freeze();
 

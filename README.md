@@ -40,7 +40,8 @@ AthenaEnv is a complete JavaScript Runtime Environment for the PlayStation 2. It
 | **Font** | MMI accelerated, FreeType and Image fonts, outline/dropshadow, alignment |
 | **Pads** | DS2/3/4 support, type recognition, pressure sensitivity, rumble, connection events |
 | **Sound / Video** | ADPCM effects, WAV/OGG streams, MPEG-1/2 playback |
-| **Shadows** | Grid-based real-time shadow projection with ODE ray casting |
+| **Physics** | VU0/MMI hardware-accelerated rigid-body dynamics, BVH triangle meshes, collision shapes, raycasting, and joints |
+| **Shadows** | Grid-based real-time shadow projection with physics ray casting |
 | **Network / Socket** | HTTP/HTTPS, TLS 1.2, async requests, classic sockets, WebSockets |
 | **IOP / Archive** | I/O module manager, ZIP/GZ/TAR extraction |
 | **Timer / Keyboard / Mouse** | Independent timers, USB keyboard and mouse |
@@ -87,7 +88,7 @@ The full API reference and guides live in [`docs/`](docs/README.md):
 * [Audio API](docs/AUDIO_API.md) — `Sound`
 * [Video](docs/VIDEO.md) — MPEG-1/2 playback
 * [Network API](docs/NETWORK_API.md) — `Network`, `Request`, `Socket`, `WebSocket`
-* [Physics API (ODE)](docs/PHYSICS_API.md)
+* [Physics API](docs/PHYSICS_API.md) — `Physics` (rigid bodies, collision shapes, BVH trimeshes, raycasting, joints)
 * [Native Compiler](docs/NATIVE_COMPILER.md) — AOT JS→MIPS compilation (`Native.compile`/`Native.struct`)
 * [Native Modules](docs/NATIVE_MODULES.md) — writing your own native (`.erl`) modules
 * [Pure-C API](docs/C_API.md) — the `athena/*.h` layer QuickJS bindings wrap

@@ -34,8 +34,8 @@ static const athena_js_module_entry_t athena_js_modules[] = {
     { athena_shadows_init },
     { athena_tilemap_init },
 #endif
-#ifdef ATHENA_ODE
-    { athena_ode_init },
+#ifdef ATHENA_PHYSICS
+    { athena_physics_init },
 #endif
 #ifdef ATHENA_KEYBOARD
     { athena_keyboard_init },
@@ -144,9 +144,9 @@ const char *athena_js_globals_prelude(void) {
         "import * as Video from 'Video';\n"
         "globalThis.Video = Video.Video;\n"
 #endif
-#ifdef ATHENA_ODE
-        "import * as ODE from 'ODE';\n"
-        "globalThis.ODE = ODE;\n"
+#ifdef ATHENA_PHYSICS
+        "import * as Physics from 'Physics';\n"
+        "globalThis.Physics = Physics;\n"
 #endif
         "import * as std from 'std';\n"
         "import * as os from 'os';\n"

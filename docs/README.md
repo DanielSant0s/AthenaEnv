@@ -24,7 +24,7 @@ See the [project README](../README.md) for a quick overview and Hello World.
 * [Audio](AUDIO_API.md) — `Sound`
 * [Video](VIDEO.md) — MPEG-1/2 playback
 * [Network](NETWORK_API.md) — `Network`, `Request`, `Socket`, `WebSocket`
-* [Physics (ODE)](PHYSICS_API.md) — rigid bodies, collision, joints
+* [Physics](PHYSICS_API.md) — `Physics` (rigid bodies, collision, joints)
 
 ## Conventions
 

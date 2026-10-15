@@ -190,6 +190,14 @@ static void js_value_list_remove(JSContext *ctx, JSValueList *list, JSValue valu
 	list->count--;
 }
 
+static inline JSRenderData *alloc_js_render_data(void) {
+	size_t aligned_size = (sizeof(JSRenderData) + 15u) & ~15u;
+	JSRenderData *ro = (JSRenderData *)memalign(16, aligned_size);
+	if (ro)
+		memset(ro, 0, aligned_size);
+	return ro;
+}
+
 static void js_render_data_finalizer(JSRuntime *rt, JSValue val){
 	JSRenderData* ro = JS_GetOpaque(val, js_render_data_class_id);
 
@@ -206,7 +214,7 @@ static void js_render_data_finalizer(JSRuntime *rt, JSValue val){
 	if (ro->textures)
 		free(ro->textures);
 
-	js_free_rt(rt, ro);
+	free(ro);
 	JS_SetOpaque(val, NULL);
 }
 
@@ -251,7 +259,12 @@ static void render_data_apply_materials(JSContext *ctx, JSRenderData *ro, JSValu
 		return;
 
 	if (material_count > ro->native.m.material_count) {
-		ro->native.m.materials = realloc(ro->native.m.materials, material_count * sizeof(ath_mat));
+		ath_mat *new_mats = (ath_mat *)memalign(16, material_count * sizeof(ath_mat));
+		if (ro->native.m.materials) {
+			memcpy(new_mats, ro->native.m.materials, ro->native.m.material_count * sizeof(ath_mat));
+			free(ro->native.m.materials);
+		}
+		ro->native.m.materials = new_mats;
 	}
 
 	for (int i = 0; i < material_count; i++) {
@@ -324,7 +337,7 @@ static JSValue athena_render_data_ctor(JSContext *ctx, JSValueConst new_target, 
 	JSValue obj = JS_UNDEFINED;
     JSValue proto;
 
-    JSRenderData* ro = js_mallocz(ctx, sizeof(JSRenderData));
+    JSRenderData* ro = alloc_js_render_data();
 	
     if (!ro)
         return JS_EXCEPTION;
@@ -389,7 +402,7 @@ static JSValue athena_render_data_ctor(JSContext *ctx, JSValueConst new_target, 
 					ro->native.owns_vertices[i] = false;
 					ro->vertex_buffers[i] = JS_DupValue(ctx, data_ref);
 				} else {
-					*attributes_ptr[i] = malloc(data_size);
+					*attributes_ptr[i] = memalign(16, data_size);
 					memcpy(*attributes_ptr[i], buffer_ptr, data_size);
 					ro->native.owns_vertices[i] = true;
 				}
@@ -409,7 +422,7 @@ static JSValue athena_render_data_ctor(JSContext *ctx, JSValueConst new_target, 
 		// RenderObject.frustumCull = false; this is a snapshot, not a binding.
 		calculate_bbox(&ro->native.m);
 
-		ro->native.m.materials = (ath_mat *)malloc(sizeof(ath_mat));
+		ro->native.m.materials = (ath_mat *)memalign(16, sizeof(ath_mat));
 		ro->native.m.material_count = 1;
 
 		ro->native.m.material_indices = (material_index *)malloc(sizeof(material_index));
@@ -749,7 +762,7 @@ inline JSValue JS_NewVector(JSContext *ctx, VECTOR v) {
 // Create a JS RenderData wrapping an existing athena_render_data*. Ownership of
 // the struct is transferred to the JS object (internal pointers freed by dtor).
 static JSValue js_wrap_render_data(JSContext *ctx, athena_render_data *m) {
-    JSRenderData* ro = js_mallocz(ctx, sizeof(JSRenderData));
+    JSRenderData* ro = alloc_js_render_data();
     if (!ro) {
         free(m);
         return JS_EXCEPTION;
@@ -775,7 +788,7 @@ static JSValue js_wrap_render_data(JSContext *ctx, athena_render_data *m) {
             free(ro->native.m.skeleton);
         }
         if (ro->native.m.textures) free(ro->native.m.textures);
-        js_free(ctx, ro);
+        free(ro);
         return JS_EXCEPTION;
     }
 
@@ -1173,7 +1186,7 @@ static JSValue athena_renderdata_clone(JSContext *ctx, JSValue this_val, int arg
 	// freezing if you need independently editable copies.
 	bool deep = argc > 0 && JS_ToBool(ctx, argv[0]);
 
-	JSRenderData* ro = js_mallocz(ctx, sizeof(JSRenderData));
+	JSRenderData* ro = alloc_js_render_data();
 	if (!ro)
 		return JS_EXCEPTION;
 
@@ -1189,7 +1202,7 @@ static JSValue athena_renderdata_clone(JSContext *ctx, JSValue this_val, int arg
 
 		for (int i = 0; i < 4; i++) {
 			if (*src_attrs[i]) {
-				*dst_attrs[i] = malloc(sizeof(VECTOR) * n);
+				*dst_attrs[i] = memalign(16, sizeof(VECTOR) * n);
 				memcpy(*dst_attrs[i], *src_attrs[i], sizeof(VECTOR) * n);
 			}
 			ro->native.owns_vertices[i] = true;
@@ -1202,7 +1215,7 @@ static JSValue athena_renderdata_clone(JSContext *ctx, JSValue this_val, int arg
 		}
 
 		if (src->native.m.skin_data) {
-			ro->native.m.skin_data = malloc(sizeof(vertex_skin_data) * n);
+			ro->native.m.skin_data = memalign(16, sizeof(vertex_skin_data) * n);
 			memcpy(ro->native.m.skin_data, src->native.m.skin_data, sizeof(vertex_skin_data) * n);
 		}
 	} else {
@@ -1224,7 +1237,7 @@ static JSValue athena_renderdata_clone(JSContext *ctx, JSValue this_val, int arg
 	// Clone materials (independent copy)
 	if (src->native.m.material_count > 0) {
 		ro->native.m.material_count = src->native.m.material_count;
-		ro->native.m.materials = malloc(sizeof(ath_mat) * ro->native.m.material_count);
+		ro->native.m.materials = memalign(16, sizeof(ath_mat) * ro->native.m.material_count);
 		memcpy(ro->native.m.materials, src->native.m.materials, sizeof(ath_mat) * ro->native.m.material_count);
 	}
 
@@ -1265,7 +1278,7 @@ static JSValue athena_renderdata_clone(JSContext *ctx, JSValue this_val, int arg
 				JS_FreeValue(ctx, ro->textures[i]);
 			free(ro->textures);
 		}
-		js_free(ctx, ro);
+		free(ro);
 		return JS_EXCEPTION;
 	}
 
@@ -1444,13 +1457,13 @@ static JSValue js_drawobject(JSContext *ctx, JSValue this_val, int argc, JSValue
 	return JS_UNDEFINED;
 }
 
-#ifdef ATHENA_ODE
+#ifdef ATHENA_PHYSICS
 static JSValue athena_ro_collision(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	JSRenderObject* ro = JS_GetOpaque2(ctx, this_val, js_render_object_class_id);
 
 	if (!JS_IsUndefined(argv[0]) && !JS_IsNull(argv[0])) {
 		JSGeom *geom = JS_GetOpaque(argv[0], js_geom_class_id);
-		js_ro_data(ro)->collision = geom->geom;
+		js_ro_data(ro)->collision = geom ? geom->geom : NULL;
 		js_ro_data(ro)->update_collision = updateGeomPosRot;
 
 		update_object_space(js_ro_data(ro));
@@ -1468,7 +1481,7 @@ static JSValue athena_ro_physics(JSContext *ctx, JSValue this_val, int argc, JSV
 
 	if (!JS_IsUndefined(argv[0]) && !JS_IsNull(argv[0])) {
 		JSBody *body = JS_GetOpaque(argv[0], js_body_class_id);
-		js_ro_data(ro)->physics = body->native->body;
+		js_ro_data(ro)->physics = body ? body->body : NULL;
 		js_ro_data(ro)->update_physics = updateBodyPosRot;
 
 		update_object_space(js_ro_data(ro));
@@ -1644,7 +1657,7 @@ static const JSCFunctionListEntry js_render_object_proto_funcs[] = {
 
 	JS_CFUNC_DEF("getBoneTransform",  1,  athena_ro_get_bone_transform),
 
-	#ifdef ATHENA_ODE
+	#ifdef ATHENA_PHYSICS
 	JS_CFUNC_DEF("setCollision",        1,  athena_ro_collision),
 	JS_CFUNC_DEF("setPhysics",        1,  athena_ro_physics),
 	#endif

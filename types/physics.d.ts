@@ -1,211 +1,164 @@
 /**
- * AthenaEnv — ODE physics bindings (`ODE` global namespace).
+ * AthenaEnv — Physics and collision engine (`Physics`).
  *
- * Wraps the Open Dynamics Engine. `ODE` is a plain namespace object;
- * `World`, `Space`, `Body` and `JointGroup` are factory functions on it
- * (not `new`-able classes at the JS call-site, even though they return
- * class instances). Verified against `src/js_api/ath_ode.c`.
+ * Verified against src/js_api/ath_physics.c.
  */
 
-/** `[x, y, z]` */
-type Vec3Tuple = [number, number, number];
-/** Row-major 3x3 rotation matrix as a flat 9-element array. */
-type ODEMatrix3 = number[];
+/** 3×3 rotation matrix represented as a 12-element float array (3 rows × 4 floats, last column padded). */
+type PhysicsMatrix3 = [
+  number, number, number, number,
+  number, number, number, number,
+  number, number, number, number,
+];
 
-interface ODEContact {
-    position: Vec3Tuple;
-    normal: Vec3Tuple;
-    depth: number;
-    /** Present on {@link ODESpace.collide} / {@link ODEWorld.stepWithContacts} results; absent from {@link ODENamespace.geomCollide}. */
-    geom1?: ODEGeom;
-    geom2?: ODEGeom;
+/** Contact point generated during collision detection. */
+interface PhysicsContact {
+  position: XYZ;
+  normal: XYZ;
+  depth: number;
 }
 
-declare class ODEWorld {
-    setGravity(x: number, y: number, z: number): void;
-    getGravity(): Vec3Tuple;
-    /** Constraint Force Mixing parameter. */
-    setCFM(value: number): void;
-    /** Error Reduction Parameter. */
-    setERP(value: number): void;
-    /** Advances the simulation by `dt` seconds using the standard (accurate, slower) integrator. */
-    step(dt: number): void;
-    /** Advances the simulation by `dt` seconds using the quick (iterative, faster) integrator. */
-    quickStep(dt: number): void;
-    setQuickStepIterations(iterations: number): void;
-    /**
-     * Runs collision detection on `space`, creates contact joints in
-     * `jointGroup`, steps the world by `dt`, then empties `jointGroup`.
-     * @param callback Optional; invoked once per contact with the contact object.
-     * @returns every contact found this step.
-     * @remarks Parameter order is `(space, jointGroup, dt, callback?)`.
-     */
-    stepWithContacts(space: ODESpace, jointGroup: ODEJointGroup, dt: number, callback?: (contact: ODEContact) => void): ODEContact[];
-    /** Frees all resources associated with the world. */
-    destroyWorld(): void;
+/** Physics dynamics world. */
+interface PhysicsWorld {
+  setGravity(x: number, y: number, z: number): void;
+  getGravity(): XYZ;
+  setCFM(cfm: number): void;
+  getCFM(): number;
+  setERP(erp: number): void;
+  getERP(): number;
+  step(stepSize: number): void;
+  quickStep(stepSize: number): void;
+  setQuickStepNumIterations(num: number): void;
+  getQuickStepNumIterations(): number;
+  stepWithContacts(space: PhysicsSpace, jointGroup: PhysicsJointGroup, stepSize: number): void;
+  destroyWorld(): void;
 }
 
-declare class ODEBody {
-    setPosition(x: number, y: number, z: number): void;
-    getPosition(): Vec3Tuple;
-    /** Accepts a flat 9-element row-major rotation matrix. */
-    setRotation(matrix: ODEMatrix3): void;
-    getRotation(): ODEMatrix3;
-    setLinearVel(x: number, y: number, z: number): void;
-    getLinearVel(): Vec3Tuple;
-    setAngularVel(x: number, y: number, z: number): void;
-    getAngularVel(): Vec3Tuple;
-    /** @remarks Internally treats the body as a unit sphere for inertia purposes — only the total mass value is guaranteed accurate; prefer {@link setMassBox}/{@link setMassSphere} when inertia shape matters. */
-    setMass(mass: number): void;
-    setMassBox(density: number, lx: number, ly: number, lz: number): void;
-    setMassSphere(density: number, radius: number): void;
-    addForce(x: number, y: number, z: number): void;
-    addTorque(x: number, y: number, z: number): void;
-    enable(): void;
-    disable(): void;
-    enabled(): boolean;
-    free(): void;
+/** Rigid body in a physics world. */
+interface PhysicsBody {
+  setPosition(x: number, y: number, z: number): void;
+  getPosition(): XYZ;
+  setRotation(matrix: PhysicsMatrix3): void;
+  getRotation(): PhysicsMatrix3;
+  setLinearVel(vx: number, vy: number, vz: number): void;
+  getLinearVel(): XYZ;
+  setAngularVel(wx: number, wy: number, wz: number): void;
+  getAngularVel(): XYZ;
+  setMass(mass: number): void;
+  setMassBox(density: number, lx: number, ly: number, lz: number): void;
+  setMassSphere(density: number, radius: number): void;
+  getMass(): number;
+  addForce(fx: number, fy: number, fz: number): void;
+  addTorque(tx: number, ty: number, tz: number): void;
+  enable(): void;
+  disable(): void;
+  enabled(): boolean;
+  free(): void;
 }
 
-declare class ODEGeom {
-    setPosition(x: number, y: number, z: number): void;
-    setRotation(matrix: ODEMatrix3): void;
-    getPosition(): Vec3Tuple;
-    getRotation(): ODEMatrix3;
-    setBody(body: ODEBody): void;
-    /** @returns the attached body, or `null` if this geom has none. */
-    getBody(): ODEBody | null;
-    free(): void;
+/** Collision geometry. */
+interface PhysicsGeom {
+  setPosition(x: number, y: number, z: number): void;
+  getPosition(): XYZ;
+  setRotation(matrix: PhysicsMatrix3): void;
+  getRotation(): PhysicsMatrix3;
+  setBody(body: PhysicsBody): void;
+  getBody(): PhysicsBody | null;
+  enable(): void;
+  disable(): void;
+  enabled(): boolean;
+  free(): void;
 }
 
-/** A Geom created via {@link ODENamespace.GeomRay}; adds ray-specific methods not present on plain {@link ODEGeom} instances. */
-declare class ODERayGeom extends ODEGeom {
-    raySetLength(length: number): void;
-    rayGetLength(): number;
-    raySet(px: number, py: number, pz: number, dx: number, dy: number, dz: number): void;
-    rayGet(): { start: Vec3Tuple; direction: Vec3Tuple };
-    /**
-     * @param firstContact If true, stop at the first contact found.
-     * @param backfaceCull If true, ignore back-facing surfaces.
-     */
-    raySetParams(firstContact: boolean, backfaceCull: boolean): void;
-    rayGetParams(): { firstContact: boolean; backfaceCull: boolean };
-    raySetClosestHit(closestHit: boolean): void;
-    rayGetClosestHit(): boolean;
+/** Ray geometry with ray-specific methods (extends PhysicsGeom). */
+interface PhysicsRayGeom extends PhysicsGeom {
+  raySetLength(length: number): void;
+  rayGetLength(): number;
+  raySet(px: number, py: number, pz: number, dx: number, dy: number, dz: number): void;
+  rayGet(): { start: XYZ; direction: XYZ };
+  raySetParams(firstContact: number | boolean, backfaceCull: number | boolean): void;
+  rayGetParams(): { firstContact: boolean; backfaceCull: boolean };
+  raySetClosestHit(closestHit: number | boolean): void;
+  rayGetClosestHit(): boolean;
 }
 
-declare class ODESpace {
-    /**
-     * Runs collision detection between all geometries in the space.
-     * @param callback Optional; invoked once per contact found (not once per pair) with the contact object.
-     * @returns every contact found.
-     */
-    collide(callback?: (contact: ODEContact) => void): ODEContact[];
-    free(): void;
+/** Collision space containing geometries. */
+interface PhysicsSpace {
+  /**
+   * Detect collisions within this space.
+   * @param callback Optional function called for each contact point.
+   * @returns Total number of contacts detected.
+   */
+  collide(callback?: (contact: PhysicsContact) => void): number;
+  free(): void;
 }
 
-declare class ODEJointGroup {
-    /** Removes all joints from the group. */
-    empty(): void;
-    free(): void;
+/** Constraint joint connecting two bodies. */
+interface PhysicsJoint {
+  attach(body1: PhysicsBody | null, body2: PhysicsBody | null): void;
+  setBallAnchor(x: number, y: number, z: number): void;
+  setHingeAnchor(x: number, y: number, z: number): void;
+  setHingeAxis(x: number, y: number, z: number): void;
+  setSliderAxis(x: number, y: number, z: number): void;
+  getBallAnchor(): XYZ;
+  getHingeAnchor(): XYZ;
+  getHingeAxis(): XYZ;
+  getHingeAngle(): number;
+  getHingeAngleRate(): number;
+  getSliderPosition(): number;
+  getSliderPositionRate(): number;
+  free(): void;
 }
 
-declare class ODEJoint {
-    free(): void;
-    attach(body1: ODEBody, body2: ODEBody): void;
-
-    // Ball
-    setBallAnchor(x: number, y: number, z: number): void;
-    getBallAnchor(): Vec3Tuple;
-
-    // Hinge
-    setHingeAnchor(x: number, y: number, z: number): void;
-    setHingeAxis(x: number, y: number, z: number): void;
-    addHingeTorque(t: number): void;
-    getHingeAnchor(): Vec3Tuple;
-    getHingeAxis(): Vec3Tuple;
-    getHingeAngle(): number;
-    getHingeAngleRate(): number;
-
-    // Slider
-    setSliderAxis(x: number, y: number, z: number): void;
-    addSliderForce(f: number): void;
-    getSliderAxis(): Vec3Tuple;
-    getSliderPosition(): number;
-    getSliderPositionRate(): number;
-
-    // Hinge2
-    setHinge2Anchor(x: number, y: number, z: number): void;
-    setHinge2Axis1(x: number, y: number, z: number): void;
-    setHinge2Axis2(x: number, y: number, z: number): void;
-    AddHinge2Torques(t1: number, t2: number): void;
-    getHinge2Anchor(): Vec3Tuple;
-    getHinge2Axis1(): Vec3Tuple;
-    getHinge2Axis2(): Vec3Tuple;
-    getHinge2Angle1(): number;
-    getHinge2Angle1Rate(): number;
-    getHinge2Angle2Rate(): number;
-
-    // Universal
-    setUniversalAnchor(x: number, y: number, z: number): void;
-    setUniversalAxis1(x: number, y: number, z: number): void;
-    setUniversalAxis2(x: number, y: number, z: number): void;
-    setUniversalTorques(t1: number, t2: number): void;
-    getUniversalAnchor(): Vec3Tuple;
-    getUniversalAxis1(): Vec3Tuple;
-    getUniversalAxis2(): Vec3Tuple;
-    getUniversalAngle1(): number;
-    getUniversalAngle2(): number;
-    getUniversalAngle1Rate1(): number;
-    getUniversalAngle2Rate2(): number;
-
-    // Fixed
-    /** Locks the joint at the two bodies' current relative pose. */
-    setFixed(): void;
-
-    // AMotor
-    setAMotorNumAxes(n: number): void;
-    setAMotorAxis(index: number, rel: number, x: number, y: number, z: number): void;
-    setAMotorAngle(axis: number, angle: number): void;
-    setAMotorMode(mode: number): void;
-    setAMotorTorques(x: number, y: number, z: number): void;
-    getAMotorNumAxes(): number;
-    getAMotorAxis(index: number): Vec3Tuple;
-    getAMotorAxisRel(index: number): number;
-    getAMotorAngle(index: number): number;
-    getAMotorAngleRate(index: number): number;
-    getAMotorMode(): number;
+/** Group of joints (typically used for contact joints). */
+interface PhysicsJointGroup {
+  empty(): void;
+  free(): void;
 }
 
-interface ODENamespace {
-    /** Finalizes ODE and releases global resources. */
-    cleanup(): void;
-    /** @remarks Parameter order is `(space, renderObject)`. */
-    GeomRenderObject(space: ODESpace, renderObject: RenderObject): ODEGeom;
-    GeomBox(space: ODESpace, width: number, height: number, depth: number): ODEGeom;
-    GeomSphere(space: ODESpace, radius: number): ODEGeom;
-    /** Defines a plane `Ax + By + Cz = D`. */
-    GeomPlane(space: ODESpace, a: number, b: number, c: number, d: number): ODEGeom;
-    GeomTransform(space: ODESpace, geom: ODEGeom): ODEGeom;
-    /** Creates a ray geometry for raycasting. */
-    GeomRay(space: ODESpace | null, length: number): ODERayGeom;
-    /** Checks for collision between two geometries (or spaces). @returns every contact found (without `geom1`/`geom2` fields). */
-    geomCollide(geom1: ODEGeom, geom2: ODEGeom): ODEContact[];
+/** Physics and collision detection module. */
+declare namespace Physics {
+  /** Create a new dynamics world. */
+  function World(): PhysicsWorld;
+  /** Create a rigid body in a world. */
+  function Body(world: PhysicsWorld): PhysicsBody;
+  /** Create a collision space, optionally inside a parent space. */
+  function Space(parent?: PhysicsSpace): PhysicsSpace;
+  /** Create a joint group. */
+  function JointGroup(): PhysicsJointGroup;
 
-    JointBall(world: ODEWorld, group: ODEJointGroup): ODEJoint;
-    JointHinge(world: ODEWorld, group: ODEJointGroup): ODEJoint;
-    JointSlider(world: ODEWorld, group: ODEJointGroup): ODEJoint;
-    JointHinge2(world: ODEWorld, group: ODEJointGroup): ODEJoint;
-    JointUniversal(world: ODEWorld, group: ODEJointGroup): ODEJoint;
-    JointFixed(world: ODEWorld, group: ODEJointGroup): ODEJoint;
-    JointNull(world: ODEWorld, group: ODEJointGroup): ODEJoint;
-    JointAMotor(world: ODEWorld, group: ODEJointGroup): ODEJoint;
+  // Geometry constructors
+  /** Create a box collision geometry. */
+  function GeomBox(space: PhysicsSpace | null | undefined, lx: number, ly: number, lz: number): PhysicsGeom;
+  /** Create a sphere collision geometry. */
+  function GeomSphere(space: PhysicsSpace | null | undefined, radius: number): PhysicsGeom;
+  /** Create a plane collision geometry (`ax + by + cz = d`). */
+  function GeomPlane(space: PhysicsSpace | null | undefined, a: number, b: number, c: number, d: number): PhysicsGeom;
+  /** Create a capsule (capped cylinder) collision geometry. */
+  function GeomCapsule(space: PhysicsSpace | null | undefined, radius: number, length: number): PhysicsGeom;
+  /** Create a cylinder collision geometry. */
+  function GeomCylinder(space: PhysicsSpace | null | undefined, radius: number, length: number): PhysicsGeom;
+  /** Create a ray collision geometry. */
+  function GeomRay(space: PhysicsSpace | null | undefined, length: number): PhysicsRayGeom;
+  /** Create a triangle mesh collision geometry from a `RenderData` resource. */
+  function GeomTriangleMesh(space: PhysicsSpace | null | undefined, model: RenderData): PhysicsGeom;
+  /** Create a triangle mesh collision geometry from a `RenderObject` instance. */
+  function GeomRenderObject(space: PhysicsSpace | null | undefined, obj: RenderObject): PhysicsGeom;
+  /** Create a geometry transform wrapper. */
+  function GeomTransform(space: PhysicsSpace | null | undefined, childGeom: PhysicsGeom): PhysicsGeom;
 
-    World(): ODEWorld;
-    /** @param parent Optional parent space, for creating a subspace. */
-    Space(parent?: ODESpace): ODESpace;
-    Body(world: ODEWorld): ODEBody;
-    JointGroup(): ODEJointGroup;
+  // Joint constructors
+  /** Create a ball-and-socket joint. */
+  function JointBall(world: PhysicsWorld, group?: PhysicsJointGroup): PhysicsJoint;
+  /** Create a hinge joint. */
+  function JointHinge(world: PhysicsWorld, group?: PhysicsJointGroup): PhysicsJoint;
+  /** Create a slider (prismatic) joint. */
+  function JointSlider(world: PhysicsWorld, group?: PhysicsJointGroup): PhysicsJoint;
+  /** Create a fixed joint. */
+  function JointFixed(world: PhysicsWorld, group?: PhysicsJointGroup): PhysicsJoint;
+
+  /** Test collision between two individual geometries. */
+  function collide(geom1: PhysicsGeom, geom2: PhysicsGeom): PhysicsContact[];
+  /** Clean up global physics resources. */
+  function cleanup(): void;
 }
-
-declare const ODE: ODENamespace;

@@ -74,8 +74,9 @@
 #include <athena/video.h>
 #endif
 
-#ifdef ATHENA_ODE
-#include <athena/ode_facade.h>
+#ifdef ATHENA_PHYSICS
+#include <physics.h>
+#include <athena/physics_facade.h>
 #endif
 
 #ifdef ATHENA_KEYBOARD

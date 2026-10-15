@@ -22,7 +22,7 @@
  *                        AsyncLoader, AnimCollection, Camera, Lights, Shadows
  * - audio.d.ts         — Sound, Video
  * - network.d.ts        — Network, Request, Socket, WebSocket
- * - physics.d.ts        — ODE
+ * - physics.d.ts        — Physics
  * - native.d.ts         — Native (AOT compiler)
  *
  * Every declaration here was cross-checked against the native C bindings in

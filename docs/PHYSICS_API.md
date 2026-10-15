@@ -1,6 +1,6 @@
-# Physics API (ODE)
+# Physics API
 
-The `ODE` module provides JavaScript bindings for the **Open Dynamics Engine (ODE)**. It allows creating and manipulating worlds, rigid bodies, geometries, spaces, and physical joints.
+The `Physics` module provides a PlayStation 2 hardware-accelerated (VU0 Macro Mode, R5900 MMI, and single-precision FPU) physics and collision engine. It allows creating and manipulating dynamics worlds, rigid bodies, collision geometries (including SAH BVH triangle meshes), spaces, raycasts, and physical constraint joints.
 
 ## Table of Contents
 
@@ -17,7 +17,7 @@ The `ODE` module provides JavaScript bindings for the **Open Dynamics Engine (OD
    * [Universal Joint](#universal-joint)
    * [Fixed Joint](#fixed-joint)
    * [AMotor Joint](#amotor-joint)
-7. [Global Functions (`ODE` namespace)](#global-functions-ode-namespace)
+7. [Global Functions (`Physics` namespace)](#global-functions-physics-namespace)
    * [Geometry Creation](#geometry-creation)
    * [Ray Methods](#ray-methods)
    * [Joint Creation](#joint-creation)
@@ -27,7 +27,7 @@ The `ODE` module provides JavaScript bindings for the **Open Dynamics Engine (OD
 
 ## World
 
-Represents the physical simulation world. It defines global properties such as gravity and integration parameters.
+Represents the physical simulation world. It defines global properties such as gravity, solver iterations, and constraint parameters (ERP/CFM).
 
 ### Methods
 
@@ -36,8 +36,8 @@ Represents the physical simulation world. It defines global properties such as g
 * `setCFM(value)` — Set the Constraint Force Mixing parameter.
 * `setERP(value)` — Set the Error Reduction Parameter.
 * `step(dt)` — Advances the simulation by `dt` seconds.
-* `quickStep(dt)` — Advances the simulation using the quick step integrator.
-* `setQuickStepIterations(iter)` — Set the number of iterations for the quick step solver.
+* `quickStep(dt)` — Advances the simulation using the projected Gauss-Seidel (PGS) sequential impulse solver.
+* `setQuickStepIterations(iter)` — Set the number of iterations for the solver.
 * `stepWithContacts(space, jointGroup, dt, *callback*)` — Runs collision detection on `space`, creates contact joints in `jointGroup`, advances the simulation by `dt`, then empties `jointGroup`. Returns the array of contacts found. If given, `callback` is invoked once per contact.
 * `destroyWorld()` — Frees all resources associated with the world.
 
@@ -45,21 +45,21 @@ Represents the physical simulation world. It defines global properties such as g
 
 ## Body
 
-Represents a rigid body that can move, receive forces, and participate in collisions.
+Represents a rigid body that can move, receive forces, and participate in collisions. Can be linked to a `RenderObject` via `renderObj.setPhysics(body)` to automatically synchronize transforms.
 
 ### Methods
 
 * `setPosition(x, y, z)`
 * `getPosition()` — Returns `[x, y, z]`.
-* `setRotation(matrix)` — Set the rotation using a 3x3 matrix or quaternion.
+* `setRotation(matrix)` — Set the rotation using a 3×3 matrix (12-float array) or 4-element quaternion `[w, x, y, z]`.
 * `getRotation()` — Returns the current rotation matrix.
 * `setLinearVel(x, y, z)` — Set linear velocity.
 * `getLinearVel()` — Returns `[vx, vy, vz]`.
 * `setAngularVel(x, y, z)` — Set angular velocity.
 * `getAngularVel()` — Returns `[wx, wy, wz]`.
 * `setMass(mass)`
-* `setMassBox(density, lx, ly, lz)` — Set mass from a box shape.
-* `setMassSphere(density, radius)` — Set mass from a sphere shape.
+* `setMassBox(density, lx, ly, lz)` — Set mass and inertia tensor from a box shape.
+* `setMassSphere(density, radius)` — Set mass and inertia tensor from a sphere shape.
 * `addForce(x, y, z)` — Apply a linear force.
 * `addTorque(x, y, z)` — Apply a torque.
 * `enable()` — Enable simulation for the body.
@@ -71,7 +71,7 @@ Represents a rigid body that can move, receive forces, and participate in collis
 
 ## Geom
 
-Represents a collision geometry. A geometry can optionally be attached to a `Body`.
+Represents a collision geometry. A geometry can optionally be attached to a `Body` and/or linked to a `RenderObject` via `renderObj.setCollision(geom)`.
 
 ### Methods
 
@@ -87,11 +87,11 @@ Represents a collision geometry. A geometry can optionally be attached to a `Bod
 
 ## Space
 
-A space groups geometries for collision detection.
+A space groups geometries for broadphase and narrowphase collision detection.
 
 ### Methods
 
-* `collide(*callback*)` — Runs collision detection between all geometries in the space. Returns the array of contacts found. If given, `callback` is invoked once per contact (not once per colliding pair) with the contact object.
+* `collide(*callback*)` — Runs collision detection between all geometries in the space. Returns the array of contacts found. If given, `callback` is invoked once per contact with the contact object `{ position, normal, depth, g1, g2 }`.
 * `free()`
 
 ---
@@ -186,19 +186,22 @@ Represents a constraint between two bodies.
 
 ---
 
-## Global Functions (`ODE` namespace)
+## Global Functions (`Physics` namespace)
 
-* `cleanup()` — Finalize ODE and release global resources.
-* `geomCollide(geom1, geom2)` — Check for collision between two geometries.
+* `Physics.cleanup()` — Finalize the physics engine and release global resources.
+* `Physics.geomCollide(geom1, geom2)` — Check for collision between two geometries and return an array of contacts.
 
 ### Geometry Creation
 
-* `GeomRenderObject(space, renderObj)`
-* `GeomBox(space, lx, ly, lz)`
-* `GeomSphere(space, radius)`
-* `GeomPlane(space, a, b, c, d)` — Defines a plane `Ax + By + Cz = D`.
-* `GeomTransform(space, geom)`
-* `GeomRay(space, length)` — Creates a ray geometry for raycasting. See [Ray Methods](#ray-methods) below.
+* `Physics.GeomRenderObject(space, renderObj)` — Builds a BVH-accelerated triangle mesh geometry from a `RenderObject`.
+* `Physics.GeomTriangleMesh(space, renderData)` — Builds a BVH-accelerated triangle mesh geometry from a `RenderData`.
+* `Physics.GeomBox(space, lx, ly, lz)` — Creates a box collision geometry.
+* `Physics.GeomSphere(space, radius)` — Creates a sphere collision geometry.
+* `Physics.GeomCapsule(space, radius, length)` — Creates a capsule collision geometry.
+* `Physics.GeomCylinder(space, radius, length)` — Creates a cylinder collision geometry.
+* `Physics.GeomPlane(space, a, b, c, d)` — Defines a plane `Ax + By + Cz = D`.
+* `Physics.GeomTransform(space, geom)` — Creates a transform wrapper around a child geometry.
+* `Physics.GeomRay(space, length)` — Creates a ray geometry for raycasting. See [Ray Methods](#ray-methods) below.
 
 ### Ray Methods
 
@@ -225,18 +228,18 @@ When a ray collides with another geometry, contact data follows special conventi
 
 ### Joint Creation
 
-* `JointBall(world, group)`
-* `JointHinge(world, group)`
-* `JointSlider(world, group)`
-* `JointHinge2(world, group)`
-* `JointUniversal(world, group)`
-* `JointFixed(world, group)`
-* `JointNull(world, group)`
-* `JointAMotor(world, group)`
+* `Physics.JointBall(world, *group*)`
+* `Physics.JointHinge(world, *group*)`
+* `Physics.JointSlider(world, *group*)`
+* `Physics.JointHinge2(world, *group*)`
+* `Physics.JointUniversal(world, *group*)`
+* `Physics.JointFixed(world, *group*)`
+* `Physics.JointNull(world, *group*)`
+* `Physics.JointAMotor(world, *group*)`
 
 ### Structure Creation
 
-* `World()`
-* `Space()`
-* `Body(world)`
-* `JointGroup()`
+* `Physics.World()`
+* `Physics.Space(*parentSpace*)`
+* `Physics.Body(world)`
+* `Physics.JointGroup()`

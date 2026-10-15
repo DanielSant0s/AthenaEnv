@@ -4,8 +4,9 @@
 #include "../quickjs/quickjs-libc.h"
 #include <render.h>
 
-#ifdef ATHENA_ODE
-#include <ode/ode.h>
+#ifdef ATHENA_PHYSICS
+#include <physics.h>
+#include <athena/physics_facade.h>
 #endif
 
 #define ATHENA_PROP_INT32(item) JS_PROP_INT32_DEF(stringify(item), item, JS_PROP_CONFIGURABLE)
@@ -41,33 +42,34 @@ JSClassID get_imglist_class_id(void);
 extern JSClassID js_render_object_class_id;
 #endif
 
-#ifdef ATHENA_ODE
-#include <athena/ode_facade.h>
-
+#ifdef ATHENA_PHYSICS
 typedef struct {
-    AthenaOdeWorld *native;
+    AthenaPhysicsWorld *world;
 } JSWorld;
 
 typedef struct {
-    AthenaOdeSpace *native;
+    AthenaPhysicsSpace *space;
+    AthenaPhysicsSpace *parent;
 } JSSpace;
 
 typedef struct {
-    dGeomID geom;
-    dSpaceID parent_space;
+    AthenaPhysicsGeom  *geom;
+    AthenaPhysicsSpace *parent_space;
+    JSValue             js_obj;
 } JSGeom;
 
 typedef struct {
-    AthenaOdeBody *native;
+    AthenaPhysicsBody  *body;
+    AthenaPhysicsWorld *parent_world;
 } JSBody;
 
 typedef struct {
-    dJointID joint;
-    dWorldID parent_world;
+    AthenaPhysicsJoint *joint;
+    AthenaPhysicsWorld *parent_world;
 } JSJoint;
 
 typedef struct {
-    dJointGroupID group;
+    AthenaPhysicsJointGroup *group;
 } JSJointGroup;
 
 extern JSClassID js_geom_class_id;

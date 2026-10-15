@@ -174,14 +174,14 @@ static JSValue js_shadow_set(JSContext *ctx, JSValueConst this_val, JSValue val,
     return JS_UNDEFINED;
 }
 
-#ifdef ATHENA_ODE
+#ifdef ATHENA_PHYSICS
 static JSValue js_shadow_enable_raycast(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
 	JSShadowProjector *s = JS_GetOpaque2(ctx, this_val, js_shadow_projector_class_id);
 	if (!s) return JS_EXCEPTION;
 	JSSpace *space = JS_GetOpaque2(ctx, argv[0], js_space_class_id);
 	int enable; JS_ToInt32(ctx, &enable, argv[1]);
 	float length; JS_ToFloat32(ctx, &length, argv[2]);
-	athena_shadow_projector_enable_raycast(s->proj, space ? space->native->space : NULL, length, enable);
+	athena_shadow_projector_enable_raycast(s->proj, space ? space->space : NULL, length, enable);
 	return JS_UNDEFINED;
 }
 #endif
@@ -204,7 +204,7 @@ static const JSCFunctionListEntry js_shadow_projector_proto_funcs[] = {
     JS_CFUNC_DEF("setColor", 4, js_shadow_set_color),
     JS_CFUNC_DEF("setBlend", 1, js_shadow_set_blend),
     JS_CFUNC_DEF("setUVRect", 4, js_shadow_set_uv_rect),
-#ifdef ATHENA_ODE
+#ifdef ATHENA_PHYSICS
 	JS_CFUNC_DEF("enableRaycast", 3, js_shadow_enable_raycast),
 #endif
     JS_CGETSET_MAGIC_DEF("position",  js_shadow_get, js_shadow_set, 0),

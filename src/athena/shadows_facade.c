@@ -87,13 +87,11 @@ void athena_shadow_projector_set_uv_rect(AthenaShadowProjector *p, float u0, flo
         shadow_projector_set_uv_rect(&p->proj, u0, v0, u1, v1);
 }
 
-#ifdef ATHENA_ODE
-void athena_shadow_projector_enable_raycast(AthenaShadowProjector *p, dSpaceID space, float ray_length, int enable)
+void athena_shadow_projector_enable_raycast(AthenaShadowProjector *p, AthenaPhysicsSpace *space, float ray_length, int enable)
 {
     if (p)
         shadow_projector_enable_raycast(&p->proj, space, ray_length, enable);
 }
-#endif
 
 void athena_shadow_projector_render(AthenaShadowProjector *p)
 {

@@ -262,10 +262,10 @@ declare class RenderObject {
     dispose(): void;
     /** Looks up a bone by name. */
     getBoneTransform(name: string): BoneTransform | undefined;
-    /** Attaches an ODE collision geometry to this object. Pass `null` to detach. @remarks Requires the ODE build. */
-    setCollision(geom: ODEGeom | null): void;
-    /** Attaches an ODE physics body to this object. Pass `null` to detach. @remarks Requires the ODE build. */
-    setPhysics(body: ODEBody | null): void;
+    /** Attaches a physics collision geometry to this object. Pass `null` to detach. @remarks Requires the Physics build. */
+    setCollision(geom: PhysicsGeom | null): void;
+    /** Attaches a physics rigid body to this object. Pass `null` to detach. @remarks Requires the Physics build. */
+    setPhysics(body: PhysicsBody | null): void;
 
     /** Play an animation on a skinned RenderObject. @remarks Only present on instances built from skinned RenderData — calling it on a non-skinned RenderObject throws (`not a function`). */
     playAnim(anim: number, loop: boolean): void;
@@ -474,10 +474,10 @@ declare namespace Shadows {
         /** Texture UV rectangle for the shadow's appearance. */
         setUVRect(u0: number, v0: number, u1: number, v1: number): void;
         /**
-         * Enables/disables ODE ray casting for accurate shadow placement.
-         * @remarks Argument order is `(space, enable, length)`. Requires the ODE build.
+         * Enables/disables physics ray casting for accurate shadow placement.
+         * @remarks Argument order is `(space, enable, length)`. Requires the Physics build.
          */
-        enableRaycast(space: ODESpace, enable: boolean, rayLength: number): void;
+        enableRaycast(space: PhysicsSpace, enable: boolean, rayLength: number): void;
         /** Renders the shadow projector. Call every frame. */
         render(): void;
 

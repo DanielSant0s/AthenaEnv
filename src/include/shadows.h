@@ -4,10 +4,7 @@
 #include <graphics.h>
 #include <matrix.h>
 #include <render.h>
-
-#ifdef ATHENA_ODE
-#include <ode/ode.h>
-#endif
+#include <physics.h>
 
 #define SHADOW_BLEND_DARKEN 0
 #define SHADOW_BLEND_ALPHA  1
@@ -44,7 +41,7 @@ typedef struct ath_shadow_projector {
 	float        height;         // Extents in local Z
 	int          gridX;          // Grid tesselation X
 	int          gridZ;          // Grid tesselation Z
-	int          enableRaycast;  // Deform to world via ODE raycasts
+	int          enableRaycast;  // Deform to world via physics raycasts
 	float        rayLength;      // Ray length along -lightDir
 	float        bias;           // Small offset along -N/light to avoid z-fighting
     float        lightOffset;    // Offset along -lightDir to shift decal center
@@ -56,10 +53,7 @@ typedef struct ath_shadow_projector {
     // Texture sub-rectangle (normalized 0..1)
     float        u0, v0, u1, v1;
 
-#ifdef ATHENA_ODE
-	dSpaceID     raySpace;       // Space to collide rays against
-	dGeomID      rayGeom;        // Reusable ODE ray geom
-#endif
+    AthenaPhysicsSpace *raySpace; // Space to collide rays against
 
     // Prebuilt render data, one per draw that can be in flight (see
     // shadow_draw_slot). Rebuilt from scratch when the grid changes.
@@ -87,12 +81,7 @@ void shadow_projector_set_slope_limit(ath_shadow_projector *p, float maxSlopeCos
 void shadow_projector_set_color(ath_shadow_projector *p, float r, float g, float b, float a);
 void shadow_projector_set_blend(ath_shadow_projector *p, int mode);
 void shadow_projector_set_uv_rect(ath_shadow_projector *p, float u0, float v0, float u1, float v1);
-
-#ifdef ATHENA_ODE
-void shadow_projector_enable_raycast(ath_shadow_projector *p, dSpaceID space, float rayLength, int enable);
-#else
-static inline void shadow_projector_enable_raycast(ath_shadow_projector *p, void *space, float rayLength, int enable) { (void)p; (void)space; (void)rayLength; (void)enable; }
-#endif
+void shadow_projector_enable_raycast(ath_shadow_projector *p, AthenaPhysicsSpace *space, float rayLength, int enable);
 
 // Draw using the VU1 colors pipeline, with darkening blend equation
 void shadow_projector_render(ath_shadow_projector *p);

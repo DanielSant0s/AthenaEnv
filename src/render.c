@@ -508,8 +508,8 @@ void new_render_object(athena_object_data *obj, athena_render_data *data) {
 	if (data->skin_data) {
 		obj->anim_controller.current = NULL;
 
-		obj->bones = (athena_bone_transform*)malloc(data->skeleton->bone_count * sizeof(athena_bone_transform));
-		obj->bone_matrices = (MATRIX*)malloc(data->skeleton->bone_count * sizeof(MATRIX));
+		obj->bones = (athena_bone_transform*)memalign(16, data->skeleton->bone_count * sizeof(athena_bone_transform));
+		obj->bone_matrices = (MATRIX*)memalign(16, data->skeleton->bone_count * sizeof(MATRIX));
 
 		// Per-object, not per-render_data: two RenderObjects sharing one
 		// skinned RenderData play different animations, so they cannot share

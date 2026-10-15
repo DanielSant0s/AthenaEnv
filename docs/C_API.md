@@ -54,7 +54,7 @@ int main(void) {
 | Socket | `athena/socket.h` | `AthenaSocket` | `athena_socket_create`, `athena_socket_connect` |
 | WebSocket | `athena/websocket.h` | `AthenaWebSocket` | `athena_websocket_connect`, `athena_websocket_send` |
 | Native | `athena/native_facade.h` | — | native compiler AOT APIs |
-| ODE | `athena/ode_facade.h` | `AthenaOdeWorld` etc. | physics world/space/body helpers |
+| Physics | `physics.h`, `athena/physics_facade.h` | `AthenaPhysicsWorld`, `AthenaPhysicsSpace`, `AthenaPhysicsBody`, `AthenaPhysicsGeom`, `AthenaPhysicsJoint` | VU0/MMI rigid-body dynamics, BVH collision, raycasting, and joints |
 
 ## Build modes
 

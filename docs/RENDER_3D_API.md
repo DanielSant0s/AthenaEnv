@@ -91,6 +91,8 @@ and the individual object matrices */
 
 * `render()` - Draws the object on screen.
 * `renderBounds(color)` - Draws object bounding box in the given color.
+* `setCollision(geom)` - Attaches a `Physics` collision geometry (`Geom`) to this object (pass `null` to detach).
+* `setPhysics(body)` - Attaches a `Physics` rigid body (`Body`) to this object (pass `null` to detach).
 * `free()` - Free asset content immediately. This is a way to quickly free stuff from memory, but you can also wait for the garbage collector, so it's not mandatory.
 
 **Methods (skinned):**
@@ -228,7 +230,7 @@ You have 4 lights to use in 3D scenes, use `set` to configure them.
 
 ## Shadows module
 
-The Shadows module provides real-time shadow projection capabilities using a grid-based approach with optional ODE ray casting for accurate shadow placement on 3D geometry.
+The Shadows module provides real-time shadow projection capabilities using a grid-based approach with optional `Physics` ray casting for accurate shadow placement on 3D geometry.
 
 **Constants:**
 
@@ -254,7 +256,7 @@ Creates a new shadow projector using the specified texture for the shadow appear
 * `setColor(r, g, b, a)` - Set shadow color and alpha (0.0-1.0 range).
 * `setBlend(mode)` - Set shadow blend mode (`SHADOW_BLEND_*` constants).
 * `setUVRect(u0, v0, u1, v1)` - Set texture UV rectangle for shadow appearance.
-* `enableRaycast(space, enable, rayLength)` - Enable/disable ODE ray casting for accurate shadow placement. See [Physics](PHYSICS_API.md) for `space`.
+* `enableRaycast(space, enable, rayLength)` - Enable/disable `Physics` ray casting for accurate shadow placement. See [Physics](PHYSICS_API.md) for `space`.
 * `render()` - Render the shadow projector (call every frame).
 
 **Properties:**

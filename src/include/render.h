@@ -264,7 +264,7 @@ typedef struct athena_render_data {
     uint8_t compact_dirty;
     // render_freeze_compact_vertices() freed the float source (~64 B/vertex),
     // leaving only the compact buffers. Reassigning positions un-freezes.
-    // A frozen mesh cannot be used with ODE trimesh or shadows.c's grid.
+    // A frozen mesh cannot be used to build a Physics trimesh or with shadows.c's grid.
     bool frozen;
 
     // [pipeline][pass_state]. A dedicated slot per combination, never shared:

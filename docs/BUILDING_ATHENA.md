@@ -31,6 +31,7 @@ AthenaEnv has some flags and variables that can be change when compiling as comm
 * EE_SIO - Redirect all print calls to EE Serial. Default: 0
 * PADEMU - Enable support for DualShock 3 and 4 and include its resources. Default: 1
 * GRAPHICS - Enable graphics and include its resources. Default: 1
+* PHYSICS - Enable VU0/MMI hardware-accelerated physics and collision engine. Default: 1
 * AUDIO - Enable audio and include its resources. Default: 1
 * STATIC_KEYBOARD - Enable keyboard and include its resources inside the binary file, also disables DYNAMIC_KEYBOARD. Default: 1
 * STATIC_MOUSE - Enable mouse and include its resources inside the binary file, also disables DYNAMIC_MOUSE. Default: 1

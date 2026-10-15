@@ -21,11 +21,7 @@ void athena_shadow_projector_set_slope_limit(AthenaShadowProjector *p, float max
 void athena_shadow_projector_set_color(AthenaShadowProjector *p, float r, float g, float b, float a);
 void athena_shadow_projector_set_blend(AthenaShadowProjector *p, int mode);
 void athena_shadow_projector_set_uv_rect(AthenaShadowProjector *p, float u0, float v0, float u1, float v1);
-
-#ifdef ATHENA_ODE
-#include <ode/ode.h>
-void athena_shadow_projector_enable_raycast(AthenaShadowProjector *p, dSpaceID space, float ray_length, int enable);
-#endif
+void athena_shadow_projector_enable_raycast(AthenaShadowProjector *p, AthenaPhysicsSpace *space, float ray_length, int enable);
 
 void athena_shadow_projector_render(AthenaShadowProjector *p);
 void athena_shadow_projector_sync_transform(AthenaShadowProjector *p);

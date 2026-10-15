@@ -72,7 +72,7 @@ void loadOBJ(athena_render_data* res_m, const char* path, GSSURFACE* text) {
     res_m->attributes.has_decal = false;
 
 	if (m->material_count && !m->strip_count) {
-		res_m->materials = (ath_mat *)malloc(m->material_count*sizeof(ath_mat));
+		res_m->materials = (ath_mat *)memalign(16, m->material_count*sizeof(ath_mat));
 		res_m->material_count = m->material_count;
 
 		// Allocate a initial size so we can grow this buffer using realloc if necessary
@@ -111,7 +111,7 @@ void loadOBJ(athena_render_data* res_m, const char* path, GSSURFACE* text) {
 
 		}
 	} else {
-		res_m->materials = (ath_mat *)malloc(sizeof(ath_mat));
+		res_m->materials = (ath_mat *)memalign(16, sizeof(ath_mat));
 		res_m->material_count = 1;
 
 		res_m->material_indices = (material_index *)malloc(sizeof(material_index)); 
@@ -432,7 +432,7 @@ athena_skeleton* load_gltf_skeleton(cgltf_data* data, cgltf_skin* skin) {
     
     athena_skeleton* skeleton = (athena_skeleton*)malloc(sizeof(athena_skeleton));
     skeleton->bone_count = skin->joints_count;
-    skeleton->bones = (athena_bone_data*)malloc(skeleton->bone_count * sizeof(athena_bone_data));
+    skeleton->bones = (athena_bone_data*)memalign(16, skeleton->bone_count * sizeof(athena_bone_data));
 
     float* inverse_bind_matrices = NULL;
     if (skin->inverse_bind_matrices) {
@@ -540,14 +540,14 @@ void loadGLTF(athena_render_data* res_m, const char* path, GSSURFACE* text) {
     res_m->attributes.has_decal = false;
 
     if (data->materials_count > 0) {
-        res_m->materials = (ath_mat*)malloc(data->materials_count * sizeof(ath_mat));
+        res_m->materials = (ath_mat*)memalign(16, data->materials_count * sizeof(ath_mat));
         res_m->material_count = data->materials_count;
         
         for (size_t i = 0; i < data->materials_count; i++) {
             load_gltf_material(&res_m->materials[i], &data->materials[i], res_m, data);
         }
     } else {
-        res_m->materials = (ath_mat*)malloc(sizeof(ath_mat));
+        res_m->materials = (ath_mat*)memalign(16, sizeof(ath_mat));
         res_m->material_count = 1;
         
         load_gltf_material(&res_m->materials[0], NULL, res_m, data);
@@ -581,7 +581,7 @@ void loadGLTF(athena_render_data* res_m, const char* path, GSSURFACE* text) {
     res_m->indices = (uint32_t*)malloc(res_m->index_count * sizeof(uint32_t));
 
     if (data->skins_count > 0) {
-        res_m->skin_data = (vertex_skin_data*)malloc(res_m->index_count * sizeof(vertex_skin_data));
+        res_m->skin_data = (vertex_skin_data*)memalign(16, res_m->index_count * sizeof(vertex_skin_data));
     }
 
     res_m->material_indices = (material_index*)malloc(data->meshes_count * sizeof(material_index));
@@ -780,7 +780,7 @@ void load_gltf_animations(char * path, athena_animation_collection* collection) 
             
             if (channel->target_path == cgltf_animation_path_type_translation) {
                 bone_anim->position_key_count = (uint32_t)input_count;
-                bone_anim->position_keys = (athena_keyframe*)malloc(bone_anim->position_key_count * sizeof(athena_keyframe));
+                bone_anim->position_keys = (athena_keyframe*)memalign(16, bone_anim->position_key_count * sizeof(athena_keyframe));
                 
                 for (uint32_t i = 0; i < bone_anim->position_key_count; i++) {
                     bone_anim->position_keys[i].time = input_times[i];
@@ -792,7 +792,7 @@ void load_gltf_animations(char * path, athena_animation_collection* collection) 
             }
             else if (channel->target_path == cgltf_animation_path_type_rotation) {
                 bone_anim->rotation_key_count = (uint32_t)input_count;
-                bone_anim->rotation_keys = (athena_keyframe*)malloc(bone_anim->rotation_key_count * sizeof(athena_keyframe));
+                bone_anim->rotation_keys = (athena_keyframe*)memalign(16, bone_anim->rotation_key_count * sizeof(athena_keyframe));
                 
                 for (uint32_t i = 0; i < bone_anim->rotation_key_count; i++) {
                     bone_anim->rotation_keys[i].time = input_times[i];
@@ -804,7 +804,7 @@ void load_gltf_animations(char * path, athena_animation_collection* collection) 
             }
             else if (channel->target_path == cgltf_animation_path_type_scale) {
                 bone_anim->scale_key_count = (uint32_t)input_count;
-                bone_anim->scale_keys = (athena_keyframe*)malloc(bone_anim->scale_key_count * sizeof(athena_keyframe));
+                bone_anim->scale_keys = (athena_keyframe*)memalign(16, bone_anim->scale_key_count * sizeof(athena_keyframe));
                 
                 for (uint32_t i = 0; i < bone_anim->scale_key_count; i++) {
                     bone_anim->scale_keys[i].time = input_times[i];

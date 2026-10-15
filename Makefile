@@ -45,7 +45,7 @@ EE_SIO ?= 0
 
 PADEMU ?= 1
 GRAPHICS ?= 1
-ODE_PHYSICS_COLLISION ?= 1
+PHYSICS ?= 1
 AUDIO ?= 1
 
 # Module linking control
@@ -114,15 +114,11 @@ ifeq ($(MX4SIO),1)
   IOP_MODULES += mx4sio_bd.o
 endif
 
-ifeq ($(ODE_PHYSICS_COLLISION),1)
-  EE_LIBS += -Lee_modules/ode/lib/ -lopcode -lice -lode
-  EE_INCS += -Iee_modules/ode/include
-  EE_CFLAGS += -DATHENA_ODE
+ifeq ($(PHYSICS),1)
+  EE_CFLAGS += -DATHENA_PHYSICS
 
-  ATHENA_MODULES += ath_ode.o
-  APP_CORE += athena/ode_facade.o
-
-  EXT_LIBS += ee_modules/ode/lib/libice.a ee_modules/ode/lib/libopcode.a ee_modules/ode/lib/libode.a
+  ATHENA_MODULES += ath_physics.o
+  APP_CORE += physics.o athena/physics_facade.o
 endif
 
 ifeq ($(GRAPHICS),1)
@@ -347,7 +343,6 @@ clean:
 	$(MAKE) -C iop_modules/ds34usb clean
 	$(MAKE) -C iop_modules/ds34bt clean
 	$(MAKE) -C ee_modules/loader clean
-	$(MAKE) -C ee_modules/ode clean
 	$(MAKE) -C ee_modules/bearssl clean
 	$(MAKE) -C ee_modules/mpeg clean
 

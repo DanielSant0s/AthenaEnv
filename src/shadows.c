@@ -89,10 +89,7 @@ void shadow_projector_init(ath_shadow_projector *p, GSSURFACE *tex) {
 	p->u0 = 0.0f; p->v0 = 0.0f; p->u1 = 1.0f; p->v1 = 1.0f;
 	matrix_functions->identity(p->transform);
 
-#ifdef ATHENA_ODE
 	p->raySpace = NULL;
-	p->rayGeom = NULL;
-#endif
 
     p->nodes = NULL;
     p->nodeNormals = NULL;
@@ -178,51 +175,11 @@ void shadow_projector_set_uv_rect(ath_shadow_projector *p, float u0, float v0, f
     shadow_projector_rebuild_geometry(p);
 }
 
-#ifdef ATHENA_ODE
-void shadow_projector_enable_raycast(ath_shadow_projector *p, dSpaceID space, float rayLength, int enable) {
+void shadow_projector_enable_raycast(ath_shadow_projector *p, AthenaPhysicsSpace *space, float rayLength, int enable) {
 	p->raySpace = space;
 	p->rayLength = rayLength;
 	p->enableRaycast = enable;
-	if (enable) {
-		if (!p->rayGeom) {
-			p->rayGeom = dCreateRay(space, rayLength);
-			dGeomRaySetClosestHit(p->rayGeom, 1);
-		}
-		else {
-			dGeomRaySetLength(p->rayGeom, rayLength);
-		}
-	}
 }
-
-typedef struct ClosestHitData {
-	int hasHit;
-	float bestDepth;
-	VECTOR position;
-	VECTOR normal;
-} ClosestHitData;
-
-static void shadow_ode_ray_cb(void *data, dGeomID o1, dGeomID o2) {
-	ClosestHitData *ch = (ClosestHitData*)data;
-	const int maxC = 8;
-	static dContact contact[8];
-	int n = dCollide(o1, o2, maxC, &contact[0].geom, sizeof(dContact));
-	for (int i = 0; i < n; i++) {
-		float depth = contact[i].geom.depth;
-		if (!ch->hasHit || depth < ch->bestDepth) {
-			ch->hasHit = 1;
-			ch->bestDepth = depth;
-			ch->position[0] = contact[i].geom.pos[0];
-			ch->position[1] = contact[i].geom.pos[1];
-			ch->position[2] = contact[i].geom.pos[2];
-			ch->position[3] = 1.0f;
-			ch->normal[0] = contact[i].geom.normal[0];
-			ch->normal[1] = contact[i].geom.normal[1];
-			ch->normal[2] = contact[i].geom.normal[2];
-			ch->normal[3] = 0.0f;
-		}
-	}
-}
-#endif
 
 // Builds one draw slot's render data: topology, UVs and colours, which are the
 // same for every slot -- only the positions differ, and those are rewritten per
@@ -325,12 +282,7 @@ static shadow_draw_slot *shadow_pick_slot(ath_shadow_projector *p) {
 // Does the grid have to be recomputed per draw? Only raycasting makes it depend
 // on where the projector is: it conforms every node to whatever is under it.
 static inline int shadow_is_dynamic(const ath_shadow_projector *p) {
-#ifdef ATHENA_ODE
-    return p->enableRaycast && p->raySpace && p->rayGeom;
-#else
-    (void)p;
-    return 0;
-#endif
+    return p->enableRaycast && p->raySpace;
 }
 
 // Writes the flat grid, in projector-local space, into a slot. Constant for a
@@ -409,8 +361,7 @@ static void shadow_build_world_grid(ath_shadow_projector *p, athena_render_data 
             world[1] -= p->lightDir[1];
             world[2] -= p->lightDir[2] * p->lightOffset;
 
-#ifdef ATHENA_ODE
-			if (p->enableRaycast && p->raySpace && p->rayGeom) {
+			if (p->enableRaycast && p->raySpace) {
 				VECTOR start, dir;
 				// Start above the surface along +lightDir, cast towards -lightDir
 				start[0] = world[0] + p->lightDir[0] * (p->rayLength * 0.5f);
@@ -422,18 +373,12 @@ static void shadow_build_world_grid(ath_shadow_projector *p, athena_render_data 
 				dir[2] = -p->lightDir[2];
 				dir[3] = 0.0f;
 
-				dGeomRaySetLength(p->rayGeom, p->rayLength);
-				dGeomRaySet(p->rayGeom, start[0], start[1], start[2], dir[0], dir[1], dir[2]);
-				dGeomRaySetClosestHit(p->rayGeom, 1);
-				dGeomRaySetParams(p->rayGeom, 1, 0);
-
-				ClosestHitData ch = { 0 };
-				dSpaceCollide2((dGeomID)p->rayGeom, (dGeomID)p->raySpace, &ch, shadow_ode_ray_cb);
-				if (ch.hasHit) {
+				AthenaRaycastHit hit __attribute__((aligned(16)));
+				if (athena_physics_space_raycast(p->raySpace, start, dir, p->rayLength, 0, &hit)) {
 					// Slope filter
                     if (p->maxSlopeCos > -0.5f) {
 						VECTOR up = { 0.0f, 1.0f, 0.0f, 0.0f };
-                    float dp = vector_functions->dot(up, ch.normal);
+                        float dp = vector_functions->dot(up, hit.normal);
 						if (dp < p->maxSlopeCos) {
 							// reject: keep original
                             p->nodes[ni][0] = world[0];
@@ -445,14 +390,14 @@ static void shadow_build_world_grid(ath_shadow_projector *p, athena_render_data 
 							continue;
 						}
 					}
-                    p->nodes[ni][0] = ch.position[0] - p->lightDir[0] * p->bias;
-                    p->nodes[ni][1] = ch.position[1] - p->lightDir[1] * p->bias;
-                    p->nodes[ni][2] = ch.position[2] - p->lightDir[2] * p->bias;
+                    p->nodes[ni][0] = hit.pos[0] - p->lightDir[0] * p->bias;
+                    p->nodes[ni][1] = hit.pos[1] - p->lightDir[1] * p->bias;
+                    p->nodes[ni][2] = hit.pos[2] - p->lightDir[2] * p->bias;
                     p->nodes[ni][3] = 1.0f;
 					if (nodeNormals) {
-						nodeNormals[ni][0] = ch.normal[0];
-						nodeNormals[ni][1] = ch.normal[1];
-						nodeNormals[ni][2] = ch.normal[2];
+						nodeNormals[ni][0] = hit.normal[0];
+						nodeNormals[ni][1] = hit.normal[1];
+						nodeNormals[ni][2] = hit.normal[2];
 						nodeNormals[ni][3] = 0.0f;
 					}
 				} else {
@@ -463,7 +408,6 @@ static void shadow_build_world_grid(ath_shadow_projector *p, athena_render_data 
 					if (nodeNormals) { nodeNormals[ni][0] = 0; nodeNormals[ni][1] = 1; nodeNormals[ni][2] = 0; nodeNormals[ni][3] = 0; }
 				}
 			} else
-#endif
 			{
                 p->nodes[ni][0] = world[0];
                 p->nodes[ni][1] = world[1];
@@ -682,9 +626,6 @@ void shadow_projector_free(ath_shadow_projector *p) {
     if (p->triNodeIdx) { free(p->triNodeIdx); p->triNodeIdx = NULL; }
 
     shadow_slots_release(p);
-#ifdef ATHENA_ODE
-    if (p->rayGeom) { dGeomDestroy(p->rayGeom); p->rayGeom = NULL; }
-#endif
 }
 
 

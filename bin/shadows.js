@@ -54,7 +54,7 @@ gltf_skin.accurate_clipping = true;
 gltf_skin.face_culling = Render.CULL_FACE_BACK;
 gltf_skin.pipeline = Render.PL_DEFAULT;
 // Skinned meshes animate via bone matrices in the VU, not by touching
-// positions/normals/etc, and this mesh isn't used with ODE trimesh
+// positions/normals/etc, and this mesh isn't used with Physics trimesh
 // collision -- safe to reclaim its float source now that setup is done.
 gltf_skin.freeze();
 
@@ -63,9 +63,9 @@ skin_object.rotation = {x:Math.PI/2, y:0.0, z:0.0};
 
 skin_object.playAnim(skin_anims[4], false);
 
-const world = ODE.World();
-const space = ODE.Space();
-const jgroup = ODE.JointGroup();
+const world = Physics.World();
+const space = Physics.Space();
+const jgroup = Physics.JointGroup();
 
 // Shadow projector for skinned character
 const projSkin = new Shadows.Projector(shadowRT);
@@ -95,13 +95,11 @@ scene.pipeline = Render.PL_DEFAULT;
 scene.getTexture(0).filter = LINEAR;
 
 const scene_object = new RenderObject(scene);
-// ODE space for projector raycasts against the scene
+// Physics space for projector raycasts against the scene
 
-// NOT calling scene.freeze() here: ODE.GeomRenderObject builds its trimesh
-// collision straight off scene's positions and keeps reading that pointer
-// on every query, not just at setup -- freezing (which frees it) would
-// leave the collision geometry dangling.
-const scene_collision = ODE.GeomRenderObject(space, scene_object);
+// NOT calling scene.freeze() here: Physics.GeomRenderObject builds its trimesh
+// collision from scene's positions.
+const scene_collision = Physics.GeomRenderObject(space, scene_object);
 
 const box = new RenderData("box_bump.gltf");
 box.face_culling = Render.CULL_FACE_BACK;
@@ -109,7 +107,7 @@ box.face_culling = Render.CULL_FACE_BACK;
 //box.getTexture(0).filter = LINEAR;
 //box.getTexture(1).filter = LINEAR;
 
-// Not used with ODE trimesh collision in this demo -- safe to freeze.
+// Not used with Physics trimesh collision in this demo -- safe to freeze.
 box.freeze();
 
 const box_object = new RenderObject(box);
@@ -316,7 +314,7 @@ while(true) {
     projSkin.position = { x: skin_object.position.x, y: 0.0f, z: skin_object.position.z };
     projSkin.setLightOffset(1.0);
     projSkin.render();
-    // step ODE (harmless if no dynamics)
+    // step physics (harmless if no dynamics)
     world.stepWithContacts(space, jgroup, 0.01f);
 
     gltf_skin.texture_mapping = true;
@@ -363,7 +361,7 @@ while(true) {
     projSkin.position = { x: box_object.position.x, y: 0.0f, z: box_object.position.z };
     projSkin.setLightOffset(1.2);
     projSkin.render();
-    // step ODE (harmless if no dynamics)
+    // step physics (harmless if no dynamics)
     world.stepWithContacts(space, jgroup, 0.01f);
 
     box.texture_mapping = true;

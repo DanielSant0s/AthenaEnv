@@ -1,9 +1,19 @@
 #include <stdlib.h>
+#include <malloc.h>
 #include <string.h>
 
 #include <kernel.h>
 
 #include <athena/render_facade.h>
+
+static inline void *render_calloc_aligned(size_t size)
+{
+    size_t aligned_size = (size + 15u) & ~15u;
+    void *ptr = memalign(16, aligned_size);
+    if (ptr)
+        memset(ptr, 0, aligned_size);
+    return ptr;
+}
 
 void athena_render_module_init(void)
 {
@@ -32,7 +42,7 @@ void athena_render_module_reset_stats(void)
 
 AthenaRenderData *athena_render_data_create(void)
 {
-    AthenaRenderData *rd = calloc(1, sizeof(*rd));
+    AthenaRenderData *rd = render_calloc_aligned(sizeof(*rd));
     if (!rd)
         return NULL;
 
@@ -136,7 +146,7 @@ AthenaRenderData *athena_render_data_clone(const AthenaRenderData *src)
     if (!src)
         return NULL;
 
-    rd = calloc(1, sizeof(*rd));
+    rd = render_calloc_aligned(sizeof(*rd));
     if (!rd)
         return NULL;
 
@@ -156,7 +166,7 @@ AthenaRenderData *athena_render_data_clone(const AthenaRenderData *src)
 
     if (src->m.material_count > 0) {
         rd->m.material_count = src->m.material_count;
-        rd->m.materials = malloc(sizeof(ath_mat) * rd->m.material_count);
+        rd->m.materials = memalign(16, sizeof(ath_mat) * rd->m.material_count);
         memcpy(rd->m.materials, src->m.materials, sizeof(ath_mat) * rd->m.material_count);
     }
 
@@ -230,7 +240,7 @@ void athena_render_data_invalidate_chain_cache(AthenaRenderData *rd)
 // Frees positions/normals/texcoords/colours (~64 bytes/vertex) once a mesh
 // is done being edited, keeping only the ~24 bytes/vertex compact VU wire
 // cache. Reassigning "vertices" afterward un-freezes automatically. Not for
-// meshes still needed by ODE trimesh collision or similar float-source
+// meshes still needed by trimesh collision or similar float-source
 // consumers.
 void athena_render_data_freeze(AthenaRenderData *rd)
 {
@@ -290,7 +300,7 @@ AthenaRenderObject *athena_render_object_create(AthenaRenderData *data)
     if (!data)
         return NULL;
 
-    ro = calloc(1, sizeof(*ro));
+    ro = render_calloc_aligned(sizeof(*ro));
     if (!ro)
         return NULL;
 

@@ -126,7 +126,7 @@ listtest.updateMaterial(0, { shininess: 64.0f, diffuse: { r: 0.7f, g: 0.2f, b: 0
 
 const gltf_box = new RenderData("box_bump.gltf");
 //gltf_box.texture_mapping = false;
-gltf_box.freeze(); // static prop, no ODE trimesh on it -- reclaim the float source
+gltf_box.freeze(); // static prop, no Physics trimesh on it -- reclaim the float source
 
 const dragontex = new Image("dragon.png");
 const dragonmesh = new RenderData("dragon.obj", dragontex);
