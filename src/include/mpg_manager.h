@@ -10,8 +10,8 @@ typedef enum {
 
 #define MPG_CACHE_SIZE 16
 
-#define VU0_QWC 256
-#define VU1_QWC 1024
+#define VU0_QWC 512
+#define VU1_QWC 2048
 
 #define VU0_SIZE 4096
 #define VU1_SIZE 16384

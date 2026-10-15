@@ -81,50 +81,61 @@ void find_keyframe_indices(athena_keyframe* keys, uint32_t key_count, float time
         return;
     }
 
-    for (uint32_t i = 0; i < key_count - 1; i++) {
-        if (time >= keys[i].time && time <= keys[i + 1].time) {
-            *prev_idx = i;
-            *next_idx = i + 1;
-            
-            float duration = keys[i + 1].time - keys[i].time;
-            *t = (duration > 0.0f) ? (time - keys[i].time) / duration : 0.0f;
-            return;
-        }
+    uint32_t lo = 0;
+    uint32_t hi = key_count - 1;
+    while (lo + 1 < hi) {
+        uint32_t mid = (lo + hi) >> 1;
+        if (keys[mid].time <= time)
+            lo = mid;
+        else
+            hi = mid;
     }
 
-    *prev_idx = *next_idx = key_count - 1;
-    *t = 0.0f;
+    *prev_idx = lo;
+    *next_idx = hi;
+    float duration = keys[hi].time - keys[lo].time;
+    *t = (duration > 0.0f) ? (time - keys[lo].time) / duration : 0.0f;
 }
 
-void apply_animation(athena_object_data* obj, float time) {
-    athena_animation* anim = obj->anim_controller.current;
-    athena_skeleton* skeleton = obj->data->skeleton;
+static void sample_animation_clip(athena_object_data* obj, athena_animation* anim,
+                                  float time, bool loop, float blend_alpha) {
+    if (!anim || !obj || !obj->data || !obj->data->skeleton)
+        return;
 
-    float normalized_time = fmodf(time, anim->duration);
+    athena_skeleton* skeleton = obj->data->skeleton;
+    float normalized_time = (anim->duration > 0.0f)
+        ? (loop ? fmodf(time, anim->duration) : fminf(time, anim->duration))
+        : 0.0f;
 
     for (uint32_t bone_anim_idx = 0; bone_anim_idx < anim->bone_animation_count; bone_anim_idx++) {
         athena_bone_animation* bone_anim = &anim->bone_animations[bone_anim_idx];
-        
+
         if (bone_anim->bone_id >= skeleton->bone_count) {
-            continue; 
+            continue;
         }
-        
+
         athena_bone_transform* bone = &obj->bones[bone_anim->bone_id];
 
         if (bone_anim->position_keys && bone_anim->position_key_count > 0) {
             uint32_t prev_idx, next_idx;
             float t;
-            find_keyframe_indices(bone_anim->position_keys, bone_anim->position_key_count, 
-                                normalized_time, &prev_idx, &next_idx, &t);
-            
+            find_keyframe_indices(bone_anim->position_keys, bone_anim->position_key_count,
+                                  normalized_time, &prev_idx, &next_idx, &t);
+
+            VECTOR pos;
             if (prev_idx == next_idx) {
-                bone->position[0] = bone_anim->position_keys[prev_idx].position[0];
-                bone->position[1] = bone_anim->position_keys[prev_idx].position[1];
-                bone->position[2] = bone_anim->position_keys[prev_idx].position[2];
+                pos[0] = bone_anim->position_keys[prev_idx].position[0];
+                pos[1] = bone_anim->position_keys[prev_idx].position[1];
+                pos[2] = bone_anim->position_keys[prev_idx].position[2];
+                pos[3] = 1.0f;
             } else {
-                VECTOR pos;
                 lerp_vector(pos, bone_anim->position_keys[prev_idx].position,
-                                       bone_anim->position_keys[next_idx].position, t);
+                            bone_anim->position_keys[next_idx].position, t);
+            }
+
+            if (blend_alpha < 1.0f) {
+                lerp_vector(bone->position, bone->position, pos, blend_alpha);
+            } else {
                 bone->position[0] = pos[0];
                 bone->position[1] = pos[1];
                 bone->position[2] = pos[2];
@@ -134,20 +145,23 @@ void apply_animation(athena_object_data* obj, float time) {
         if (bone_anim->rotation_keys && bone_anim->rotation_key_count > 0) {
             uint32_t prev_idx, next_idx;
             float t;
-            find_keyframe_indices(bone_anim->rotation_keys, bone_anim->rotation_key_count, 
-                                normalized_time, &prev_idx, &next_idx, &t);
-            
-            if (prev_idx == next_idx) {
-                bone->rotation[0] = bone_anim->rotation_keys[prev_idx].rotation[0];
-                bone->rotation[1] = bone_anim->rotation_keys[prev_idx].rotation[1];
-                bone->rotation[2] = bone_anim->rotation_keys[prev_idx].rotation[2];
-                bone->rotation[3] = bone_anim->rotation_keys[prev_idx].rotation[3];
-            } else {
-                VECTOR rot;
-                slerp_quaternion(rot, bone_anim->rotation_keys[prev_idx].rotation,
-                                            bone_anim->rotation_keys[next_idx].rotation, t);
+            find_keyframe_indices(bone_anim->rotation_keys, bone_anim->rotation_key_count,
+                                  normalized_time, &prev_idx, &next_idx, &t);
 
-                
+            VECTOR rot;
+            if (prev_idx == next_idx) {
+                rot[0] = bone_anim->rotation_keys[prev_idx].rotation[0];
+                rot[1] = bone_anim->rotation_keys[prev_idx].rotation[1];
+                rot[2] = bone_anim->rotation_keys[prev_idx].rotation[2];
+                rot[3] = bone_anim->rotation_keys[prev_idx].rotation[3];
+            } else {
+                slerp_quaternion(rot, bone_anim->rotation_keys[prev_idx].rotation,
+                                 bone_anim->rotation_keys[next_idx].rotation, t);
+            }
+
+            if (blend_alpha < 1.0f) {
+                slerp_quaternion(bone->rotation, bone->rotation, rot, blend_alpha);
+            } else {
                 bone->rotation[0] = rot[0];
                 bone->rotation[1] = rot[1];
                 bone->rotation[2] = rot[2];
@@ -158,22 +172,42 @@ void apply_animation(athena_object_data* obj, float time) {
         if (bone_anim->scale_keys && bone_anim->scale_key_count > 0) {
             uint32_t prev_idx, next_idx;
             float t;
-            find_keyframe_indices(bone_anim->scale_keys, bone_anim->scale_key_count, 
-                                normalized_time, &prev_idx, &next_idx, &t);
-            
+            find_keyframe_indices(bone_anim->scale_keys, bone_anim->scale_key_count,
+                                  normalized_time, &prev_idx, &next_idx, &t);
+
+            VECTOR scale;
             if (prev_idx == next_idx) {
-                bone->scale[0] = bone_anim->scale_keys[prev_idx].scale[0];
-                bone->scale[1] = bone_anim->scale_keys[prev_idx].scale[1];
-                bone->scale[2] = bone_anim->scale_keys[prev_idx].scale[2];
+                scale[0] = bone_anim->scale_keys[prev_idx].scale[0];
+                scale[1] = bone_anim->scale_keys[prev_idx].scale[1];
+                scale[2] = bone_anim->scale_keys[prev_idx].scale[2];
+                scale[3] = 1.0f;
             } else {
-                VECTOR scale;
                 lerp_vector(scale, bone_anim->scale_keys[prev_idx].scale,
-                                         bone_anim->scale_keys[next_idx].scale, t);
+                            bone_anim->scale_keys[next_idx].scale, t);
+            }
+
+            if (blend_alpha < 1.0f) {
+                lerp_vector(bone->scale, bone->scale, scale, blend_alpha);
+            } else {
                 bone->scale[0] = scale[0];
                 bone->scale[1] = scale[1];
                 bone->scale[2] = scale[2];
             }
         }
+    }
+}
+
+void apply_animation(athena_object_data* obj, float time) {
+    athena_animation_controller* ctrl = &obj->anim_controller;
+    if (ctrl->prev && ctrl->blend_duration > 0.0f && ctrl->blend_elapsed < ctrl->blend_duration) {
+        float alpha = ctrl->blend_elapsed / ctrl->blend_duration;
+        if (alpha < 0.0f) alpha = 0.0f;
+        if (alpha > 1.0f) alpha = 1.0f;
+        sample_animation_clip(obj, ctrl->prev, ctrl->prev_time, ctrl->prev_loop, 1.0f);
+        sample_animation_clip(obj, ctrl->current, time, ctrl->loop, alpha);
+    } else {
+        ctrl->prev = NULL;
+        sample_animation_clip(obj, ctrl->current, time, ctrl->loop, 1.0f);
     }
 }
 

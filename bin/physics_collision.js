@@ -152,6 +152,8 @@ for (let i = 0; i < ballSpawns.length; i++) {
     balls.push({ obj, geom, body, spawn: sp });
 }
 
+const allProps = crates.concat(balls);
+
 function resetSandbox() {
     const identityRot = [
         1.0f, 0.0f, 0.0f,
@@ -278,7 +280,6 @@ while (true) {
 
     // Check if the character is standing / balancing on top of a crate or ball
     let onProp = false;
-    const allProps = crates.concat(balls);
     if (!onFloor && Math.abs(vy) < 2.2f && jumpCooldown < 30) {
         for (let i = 0; i < allProps.length; i++) {
             const bp = allProps[i].body.getPosition();
@@ -296,7 +297,7 @@ while (true) {
     const isBalancing = onProp || (onFloor && Math.abs(vy) > 0.30f && jumpWindup === 0 && jumpCooldown === 0);
 
     const isSprinting = pad.pressed(Pads.R1);
-    const moveSpeed = isSprinting ? 10.5f : 6.0f;
+    const moveSpeed = isSprinting ? 5.2f : 2.2f;
 
     // Camera-relative horizontal basis vectors
     const fwdX = -Math.sin(camYaw);

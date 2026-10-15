@@ -1333,9 +1333,13 @@ static void js_render_object_finalizer(JSRuntime *rt, JSValue val){
 static JSValue js_play_anim(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv){
 	JSRenderObject* ro = JS_GetOpaque2(ctx, this_val, js_render_object_class_id);
 	athena_animation *anim = NULL;
+	float blend_time = 0.15f;
 
-	JS_ToUint32(ctx, &anim, argv[0]);
-	athena_render_object_play_anim(ro->native, anim, JS_ToBool(ctx, argv[1]));
+	JS_ToUint32(ctx, (uint32_t *)&anim, argv[0]);
+	if (argc >= 3 && !JS_IsUndefined(argv[2])) {
+		JS_ToFloat32(ctx, &blend_time, argv[2]);
+	}
+	athena_render_object_play_anim_blend(ro->native, anim, JS_ToBool(ctx, argv[1]), blend_time);
 	return JS_UNDEFINED;
 }
 
@@ -1381,7 +1385,7 @@ static JSValue athena_render_object_ctor(JSContext *ctx, JSValueConst new_target
 
 	JS_DefinePropertyValueStr(ctx, obj, "transform", transform_matrix, JS_PROP_C_W_E);
 
-	if (js_ro_data(ro)->data->skin_data) {
+	if (js_ro_data(ro)->data->skeleton) {
 		JSValue bone_transforms = JS_NewArray(ctx);
 		JSValue bone_matrices = JS_NewArray(ctx);
 

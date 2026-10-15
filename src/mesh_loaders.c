@@ -397,7 +397,10 @@ void load_gltf_skinning_data(athena_render_data* res_m, float* joints, float* we
 
     vertex_skin_data* skin = &res_m->skin_data[dst_idx];
     for (int j = 0; j < 4; j++) {
-        skin->bone_indices[j] = (uint32_t)joints[src_idx * 4 + j] * 4; // we are multiplying by 4 because it is actually a matrix index acessor, so we can save some for VU1
+        uint32_t joint_idx = (uint32_t)joints[src_idx * 4 + j];
+        if (joint_idx >= MAX_VU1_BONES)
+            joint_idx = MAX_VU1_BONES - 1;
+        skin->bone_indices[j] = joint_idx * 4; // matrix quadword offset for VU1
         skin->bone_weights[j] = weights[src_idx * 4 + j];
     }
 
@@ -716,9 +719,10 @@ void load_gltf_animations(char * path, athena_animation_collection* collection) 
         return;
     }
 
-    if (!data->animations_count) {
+    if (!data->animations_count || !data->skins_count) {
         collection->animations = NULL;
         collection->count = 0;
+        cgltf_free(data);
         return;
     }
     
@@ -738,30 +742,36 @@ void load_gltf_animations(char * path, athena_animation_collection* collection) 
 
         anim->duration = 0.0f;
         anim->ticks_per_second = 1.0f;
-        anim->bone_animation_count = gltf_anim->channels_count;
-        anim->bone_animations = (athena_bone_animation*)malloc(anim->bone_animation_count * sizeof(athena_bone_animation));
+        anim->bone_animation_count = 0;
+        anim->bone_animations = (athena_bone_animation*)calloc(gltf_anim->channels_count, sizeof(athena_bone_animation));
 
         for (cgltf_size channel_idx = 0; channel_idx < gltf_anim->channels_count; channel_idx++) {
             cgltf_animation_channel* channel = &gltf_anim->channels[channel_idx];
             cgltf_animation_sampler* sampler = channel->sampler;
-            athena_bone_animation* bone_anim = &anim->bone_animations[channel_idx];
 
-            bone_anim->bone_id = UINT32_MAX;
+            uint32_t target_bone_id = UINT32_MAX;
             for (uint32_t bone_idx = 0; bone_idx < data->skins[0].joints_count; bone_idx++) {
                 if (channel->target_node == data->skins[0].joints[bone_idx]) {
-                    bone_anim->bone_id = bone_idx;
+                    target_bone_id = bone_idx;
                     break;
                 }
             }
             
-            if (bone_anim->bone_id == UINT32_MAX) {
-                bone_anim->position_keys = NULL;
-                bone_anim->rotation_keys = NULL;
-                bone_anim->scale_keys = NULL;
-                bone_anim->position_key_count = 0;
-                bone_anim->rotation_key_count = 0;
-                bone_anim->scale_key_count = 0;
+            if (target_bone_id == UINT32_MAX) {
                 continue;
+            }
+
+            // Merge translation/rotation/scale channels that target the same bone_id
+            athena_bone_animation* bone_anim = NULL;
+            for (uint32_t existing = 0; existing < anim->bone_animation_count; existing++) {
+                if (anim->bone_animations[existing].bone_id == target_bone_id) {
+                    bone_anim = &anim->bone_animations[existing];
+                    break;
+                }
+            }
+            if (!bone_anim) {
+                bone_anim = &anim->bone_animations[anim->bone_animation_count++];
+                bone_anim->bone_id = target_bone_id;
             }
 
             cgltf_size input_count = cgltf_accessor_unpack_floats(sampler->input, NULL, 0);
@@ -779,6 +789,7 @@ void load_gltf_animations(char * path, athena_animation_collection* collection) 
             }
             
             if (channel->target_path == cgltf_animation_path_type_translation) {
+                free(bone_anim->position_keys);
                 bone_anim->position_key_count = (uint32_t)input_count;
                 bone_anim->position_keys = (athena_keyframe*)memalign(16, bone_anim->position_key_count * sizeof(athena_keyframe));
                 
@@ -791,6 +802,7 @@ void load_gltf_animations(char * path, athena_animation_collection* collection) 
                 }
             }
             else if (channel->target_path == cgltf_animation_path_type_rotation) {
+                free(bone_anim->rotation_keys);
                 bone_anim->rotation_key_count = (uint32_t)input_count;
                 bone_anim->rotation_keys = (athena_keyframe*)memalign(16, bone_anim->rotation_key_count * sizeof(athena_keyframe));
                 
@@ -803,6 +815,7 @@ void load_gltf_animations(char * path, athena_animation_collection* collection) 
                 }
             }
             else if (channel->target_path == cgltf_animation_path_type_scale) {
+                free(bone_anim->scale_keys);
                 bone_anim->scale_key_count = (uint32_t)input_count;
                 bone_anim->scale_keys = (athena_keyframe*)memalign(16, bone_anim->scale_key_count * sizeof(athena_keyframe));
                 
@@ -813,19 +826,6 @@ void load_gltf_animations(char * path, athena_animation_collection* collection) 
                     bone_anim->scale_keys[i].scale[2] = output_values[i * 3 + 2];
                     bone_anim->scale_keys[i].scale[3] = 1.0f;
                 }
-            }
-            
-            if (channel->target_path != cgltf_animation_path_type_translation) {
-                bone_anim->position_keys = NULL;
-                bone_anim->position_key_count = 0;
-            }
-            if (channel->target_path != cgltf_animation_path_type_rotation) {
-                bone_anim->rotation_keys = NULL;
-                bone_anim->rotation_key_count = 0;
-            }
-            if (channel->target_path != cgltf_animation_path_type_scale) {
-                bone_anim->scale_keys = NULL;
-                bone_anim->scale_key_count = 0;
             }
             
             free(input_times);

@@ -25,8 +25,20 @@ void athena_anim3d_free(AthenaAnim3dCollection *col)
     if (!col)
         return;
 
-    if (col->collection.animations)
+    if (col->collection.animations) {
+        for (uint32_t i = 0; i < col->collection.count; i++) {
+            athena_animation *anim = &col->collection.animations[i];
+            if (anim->bone_animations) {
+                for (uint32_t b = 0; b < anim->bone_animation_count; b++) {
+                    free(anim->bone_animations[b].position_keys);
+                    free(anim->bone_animations[b].rotation_keys);
+                    free(anim->bone_animations[b].scale_keys);
+                }
+                free(anim->bone_animations);
+            }
+        }
         free(col->collection.animations);
+    }
 
     free(col);
 }

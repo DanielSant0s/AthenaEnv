@@ -29,6 +29,7 @@ register_vu_program(VU1Draw3DLCS_Skin);
 register_vu_program(VU1Draw3DLCSS_Skin);
 
 register_vu_program(VU1Draw3DLCS_Ref);
+register_vu_program(VU1Draw3DLCS_Ref_Skin);
 
 vu_mpg *vu1_colors = NULL;
 vu_mpg *vu1_lights = NULL;
@@ -39,6 +40,7 @@ vu_mpg *vu1_lights_skinned = NULL;
 vu_mpg *vu1_specular_skinned = NULL;
 
 vu_mpg *vu1_lights_reflection = NULL;
+vu_mpg *vu1_lights_reflection_skinned = NULL;
 
 MATRIX view_screen;
 MATRIX world_view;
@@ -46,32 +48,32 @@ MATRIX world_screen;
 
 FIVECTOR screen_scale;
 
-static int active_aaa_lights = 0;
-static int active_bbb_lights = 0;
-static int active_pnt_lights = 0;
-static int active_dir_lights = 0;
+static int active_lights = 0;
 
-static LightData dir_lights = { };
+static LightData scene_lights = { };
 
 // Ambients pre-summed for the VU, which used to add one per light inside its
 // per-vertex loop. w = 1.0 so a single lq initialises the light accumulator
-// including the alpha lane. The light count cannot share that w -- see
-// mem_layout.i -- so it lives in its own quadword.
+// including the alpha lane.
 static VECTOR   light_ambient_sum qw_aligned = { 0.0f, 0.0f, 0.0f, 1.0f };
-static FIVECTOR light_count qw_aligned = { 0.0f, 0.0f, 0.0f, 0 };
+static FIVECTOR dir_light_count   qw_aligned = { 0.0f, 0.0f, 0.0f, 0 };
+static FIVECTOR pnt_light_count   qw_aligned = { 0.0f, 0.0f, 0.0f, 0 };
+static VECTOR   dir_lights_packed_dir[4]   qw_aligned = { 0 };
+static VECTOR   point_lights_packed_pos[4] qw_aligned = { 0 };
+static VECTOR   point_lights_packed_dif[4] qw_aligned = { 0 };
 
 static void render_sum_ambient(void) {
 	light_ambient_sum[0] = light_ambient_sum[1] = light_ambient_sum[2] = 0.0f;
 
-	for (int i = 0; i < active_dir_lights; i++) {
-		light_ambient_sum[0] += dir_lights.ambient[i].x;
-		light_ambient_sum[1] += dir_lights.ambient[i].y;
-		light_ambient_sum[2] += dir_lights.ambient[i].z;
+	for (int i = 0; i < active_lights; i++) {
+		light_ambient_sum[0] += scene_lights.ambient[i].x;
+		light_ambient_sum[1] += scene_lights.ambient[i].y;
+		light_ambient_sum[2] += scene_lights.ambient[i].z;
 	}
 }
 static render_stats_t g_render_stats = { 0 };
 
-// View block: screen_scale (0), world_screen (1..4), camera position (9). Lives
+// View block: screen_scale (0), world_screen (1..4). Lives
 // outside the double-buffered window (use_top=0), so VU1 keeps it across draws
 // and frames -- upload only when it changes, not once per object per pass.
 // Invalidated by render_set_view, cameraUpdate, tile_render (overwrites 0..1),
@@ -82,14 +84,9 @@ static uint32_t g_view_resident = 0;
 // Quadwords render_upload_view() is about to emit -- callers need this before
 // they can size their owl_query_packet() reservation.
 static inline int render_view_qwc(void) {
-	return (g_view_resident != g_view_version) ? 9 : 0;
+	return (g_view_resident != g_view_version) ? 7 : 0;
 }
 
-// Emits the view block if VU1 no longer holds the current one. Address 9
-// (camera position) goes out even for pipelines whose microprogram never reads
-// it: uploading all three together keeps ONE version counter honest. Tracking
-// them separately would let a colors draw mark the block resident and make the
-// next lights draw skip a camera position it never actually sent.
 static void render_upload_view(owl_packet *packet) {
 	if (g_view_resident == g_view_version)
 		return;
@@ -102,9 +99,6 @@ static void render_upload_view(owl_packet *packet) {
 	owl_add_uquad_ptr(packet, &(world_screen[4]));
 	owl_add_uquad_ptr(packet, &(world_screen[8]));
 	owl_add_uquad_ptr(packet, &(world_screen[12]));
-
-	owl_add_unpack_data_cnt(packet, 9, 1, 0);
-	owl_add_uquad_ptr(packet, getCameraPosition());
 
 	g_view_resident = g_view_version;
 }
@@ -138,10 +132,10 @@ static inline uint32_t render_calc_triangles(const athena_render_data *data) {
 void render_init() {
 	initCamera(&world_screen, &world_view, &view_screen);
 	
-	// One window for both layouts, starting where the bone matrices used to be
-	// (they moved to 880). 369 fits the larger of the two footprints: skinned
-	// 2 + 40*6 + 3 + 1 + 40*3 = 366. Global VIF1 state, shared by all pipelines.
-	vu1_set_double_buffer_settings(141, 369);
+	// One window for both layouts: 342 QW fits unskinned (194 + 3 + 1 + 48*3 = 342)
+	// and skinned (218 + 3 + 1 + 36*3 = 330), allowing BONE_MATRICES to start at
+	// 825 (184 QW = 46 bones).
+	vu1_set_double_buffer_settings(141, 342);
 
 	vu1_colors   = vu_mpg_load_buffer(embed_vu_code_ptr(VU1Draw3DCS),   embed_vu_code_size(VU1Draw3DCS),   VECTOR_UNIT_1, false); 
 	vu1_lights   = vu_mpg_load_buffer(embed_vu_code_ptr(VU1Draw3DLCS),  embed_vu_code_size(VU1Draw3DLCS),  VECTOR_UNIT_1, false);
@@ -152,45 +146,67 @@ void render_init() {
 	vu1_specular_skinned = vu_mpg_load_buffer(embed_vu_code_ptr(VU1Draw3DLCSS_Skin), embed_vu_code_size(VU1Draw3DLCSS_Skin), VECTOR_UNIT_1, false);
 
 	vu1_lights_reflection = vu_mpg_load_buffer(embed_vu_code_ptr(VU1Draw3DLCS_Ref), embed_vu_code_size(VU1Draw3DLCS_Ref), VECTOR_UNIT_1, false);
+	vu1_lights_reflection_skinned = vu_mpg_load_buffer(embed_vu_code_ptr(VU1Draw3DLCS_Ref_Skin), embed_vu_code_size(VU1Draw3DLCS_Ref_Skin), VECTOR_UNIT_1, false);
+}
+
+static void render_sync_static_lights(void) {
+	render_sum_ambient();
+
+	int d_cnt = 0;
+	int p_cnt = 0;
+	VECTOR d_diff[4] qw_aligned = { 0 };
+	VECTOR d_spec[4] qw_aligned = { 0 };
+	VECTOR p_spec[4] qw_aligned = { 0 };
+
+	memset(dir_lights_packed_dir, 0, sizeof(dir_lights_packed_dir));
+	memset(point_lights_packed_pos, 0, sizeof(point_lights_packed_pos));
+	memset(point_lights_packed_dif, 0, sizeof(point_lights_packed_dif));
+
+	for (int i = 0; i < active_lights; i++) {
+		if (scene_lights.is_point[i]) {
+			copy_vector(point_lights_packed_pos[p_cnt], scene_lights.direction[i]);
+			point_lights_packed_dif[p_cnt][0] = scene_lights.diffuse[i][0];
+			point_lights_packed_dif[p_cnt][1] = scene_lights.diffuse[i][1];
+			point_lights_packed_dif[p_cnt][2] = scene_lights.diffuse[i][2];
+			point_lights_packed_dif[p_cnt][3] = scene_lights.direction[i][3];
+			copy_vector(p_spec[p_cnt], scene_lights.specular[i]);
+			p_cnt++;
+		} else {
+			copy_vector(dir_lights_packed_dir[d_cnt], scene_lights.direction[i]);
+			copy_vector(d_diff[d_cnt], scene_lights.diffuse[i]);
+			copy_vector(d_spec[d_cnt], scene_lights.specular[i]);
+			d_cnt++;
+		}
+	}
+
+	dir_light_count.w = (uint32_t)d_cnt;
+	pnt_light_count.w = (uint32_t)p_cnt;
+
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 18);
+
+	owl_add_unpack_data_cnt(packet, 14, 4, 0);
+	owl_add_uquad_ptr(packet, &light_ambient_sum);
+	owl_add_uquad_ptr(packet, &dir_light_count);
+	owl_add_uquad_ptr(packet, &pnt_light_count); // 16 = BUMP_OFFSET (overwritten when needed)
+	owl_add_uquad_ptr(packet, &pnt_light_count); // 17 = NUM_POINT_LIGHTS
+
+	owl_add_unpack_data_cnt(packet, 18, 8, 0);
+	for (int i = 0; i < 4; i++)
+		owl_add_uquad_ptr(packet, d_diff[i]);
+	for (int i = 0; i < 4; i++)
+		owl_add_uquad_ptr(packet, d_spec[i]);
+
+	owl_add_unpack_data_cnt(packet, 132, 4, 0);
+	for (int i = 0; i < 4; i++)
+		owl_add_uquad_ptr(packet, p_spec[i]);
 }
 
 void render_begin() {
-	// One window for both layouts, starting where the bone matrices used to be
-	// (they moved to 880). 369 fits the larger of the two footprints: skinned
-	// 2 + 40*6 + 3 + 1 + 40*3 = 366. Global VIF1 state, shared by all pipelines.
-	vu1_set_double_buffer_settings(141, 369);
+	vu1_set_double_buffer_settings(141, 342);
 
 	render_reset_stats();
-
-	render_sum_ambient();
-
-	// Cheap insurance, not a correctness requirement: VU1 static memory does
-	// survive a frame boundary, so in principle the view block resident from
-	// last frame is still good. Re-uploading once a frame costs 9 quadwords and
-	// bounds the damage from any future code path that writes VU1 static memory
-	// without calling render_invalidate_vu_view() -- a class of bug that would
-	// otherwise show up as subtly wrong geometry with no obvious cause.
 	render_invalidate_vu_view();
-
-	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 17);
-
-	owl_add_unpack_data_cnt(packet, 10, 16, 0);
-	owl_add_uquad_ptr(packet, (dir_lights.direction[0]));
-	owl_add_uquad_ptr(packet, (dir_lights.direction[1]));
-	owl_add_uquad_ptr(packet, (dir_lights.direction[2]));
-	owl_add_uquad_ptr(packet, (dir_lights.direction[3]));
-	owl_add_uquad_ptr(packet, &light_ambient_sum);
-	owl_add_uquad_ptr(packet, &light_count);
-	owl_add_uquad_ptr(packet, &light_count);   // 16..17 unused, see mem_layout.i
-	owl_add_uquad_ptr(packet, &light_count);
-	owl_add_uquad_ptr(packet, (dir_lights.diffuse[0]));
-	owl_add_uquad_ptr(packet, (dir_lights.diffuse[1]));
-	owl_add_uquad_ptr(packet, (dir_lights.diffuse[2]));
-	owl_add_uquad_ptr(packet, (dir_lights.diffuse[3]));
-	owl_add_uquad_ptr(packet, (dir_lights.specular[0]));
-	owl_add_uquad_ptr(packet, (dir_lights.specular[1]));
-	owl_add_uquad_ptr(packet, (dir_lights.specular[2]));
-	owl_add_uquad_ptr(packet, (dir_lights.specular[3]));
+	render_sync_static_lights();
 }
 
 void render_set_view(float fov, float near, float far, float width, float height) {
@@ -212,52 +228,66 @@ void render_set_view(float fov, float near, float far, float width, float height
 }
 
 int NewLight() {
-	if (active_dir_lights < 4) {
-		light_count.w = active_dir_lights+1;
-		owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 2);
-		owl_add_unpack_data_cnt(packet, 15, 1, 0);
-		owl_add_uquad_ptr(packet, &light_count);
-		return active_dir_lights++;
+	if (active_lights < 4) {
+		int id = active_lights++;
+		scene_lights.is_point[id] = 0;
+		scene_lights.direction[id][0] = 0.0f;
+		scene_lights.direction[id][1] = 1.0f;
+		scene_lights.direction[id][2] = 0.0f;
+		scene_lights.direction[id][3] = 0.02f;
+		render_sync_static_lights();
+		return id;
 	}
 		
 	return -1;
 }
  
 void SetLightAttribute(int id, float x, float y, float z, int attr) {
-	if (id < 0)
+	if (id < 0 || id >= 4)
 		return;
-
-	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 2);
 
 	switch (attr) {
 		case ATHENA_LIGHT_DIRECTION:
-			dir_lights.direction[id][0] = x;
-			dir_lights.direction[id][1] = y;
-			dir_lights.direction[id][2] = z;
-			owl_add_unpack_data_cnt(packet, 10+id, 1, 0);
-			owl_add_uquad_ptr(packet, (dir_lights.direction[id]));
+			scene_lights.direction[id][0] = x;
+			scene_lights.direction[id][1] = y;
+			scene_lights.direction[id][2] = z;
+			scene_lights.is_point[id] = 0;
+			render_sync_static_lights();
 			break;
+		case ATHENA_LIGHT_POSITION:
+			scene_lights.direction[id][0] = x;
+			scene_lights.direction[id][1] = y;
+			scene_lights.direction[id][2] = z;
+			if (scene_lights.direction[id][3] <= 0.0f)
+				scene_lights.direction[id][3] = 0.02f;
+			scene_lights.is_point[id] = 1;
+			render_sync_static_lights();
+			break;
+		case ATHENA_LIGHT_ATTENUATION: {
+			float k = (z > 0.0f) ? z : ((y > 0.0f) ? y : x);
+			if (k < 0.0f) k = 0.0f;
+			scene_lights.direction[id][3] = k;
+			scene_lights.is_point[id] = 1;
+			render_sync_static_lights();
+			break;
+		}
 		case ATHENA_LIGHT_AMBIENT:
-			dir_lights.ambient[id].x = x;
-			dir_lights.ambient[id].y = y;
-			dir_lights.ambient[id].z = z;
-			render_sum_ambient();
-			owl_add_unpack_data_cnt(packet, 14, 1, 0);
-			owl_add_uquad_ptr(packet, &light_ambient_sum);
+			scene_lights.ambient[id].x = x;
+			scene_lights.ambient[id].y = y;
+			scene_lights.ambient[id].z = z;
+			render_sync_static_lights();
 			break;
 		case ATHENA_LIGHT_DIFFUSE:
-			dir_lights.diffuse[id][0] = x;
-			dir_lights.diffuse[id][1] = y;
-			dir_lights.diffuse[id][2] = z;
-			owl_add_unpack_data_cnt(packet, 18+id, 1, 0);
-			owl_add_uquad_ptr(packet, (dir_lights.diffuse[id]));
+			scene_lights.diffuse[id][0] = x;
+			scene_lights.diffuse[id][1] = y;
+			scene_lights.diffuse[id][2] = z;
+			render_sync_static_lights();
 			break;
 		case ATHENA_LIGHT_SPECULAR:
-			dir_lights.specular[id][0] = x;
-			dir_lights.specular[id][1] = y;
-			dir_lights.specular[id][2] = z;
-			owl_add_unpack_data_cnt(packet, 22+id, 1, 0);
-			owl_add_uquad_ptr(packet, (dir_lights.specular[id]));
+			scene_lights.specular[id][0] = x;
+			scene_lights.specular[id][1] = y;
+			scene_lights.specular[id][2] = z;
+			render_sync_static_lights();
 			break;
 	}
 }
@@ -401,7 +431,7 @@ void render_object(athena_object_data *obj) {
 	if (obj->data->attributes.has_bumpmap) {
     	VECTOR light_dir;
 
-		matrix_functions->apply(light_dir, obj->transform, dir_lights.direction[0]);
+		matrix_functions->apply(light_dir, obj->transform, scene_lights.direction[0]);
 
 		vector_functions->normalize(light_dir, light_dir);
 		
@@ -421,6 +451,9 @@ void render_object(athena_object_data *obj) {
 
 	set_screen_param(COLOR_CLAMP_MODE, old_colclamp);
 	set_screen_param(ALPHA_BLEND_EQUATION, old_alpha);
+
+	owl_packet *flush_pkt = owl_query_packet(CHANNEL_VIF1, 1);
+	owl_add_cnt_tag(flush_pkt, 0, owl_vif_code_double(VIF_CODE(0, 0, VIF_FLUSH, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
 }
 
 // Defined further down, next to the tex_giftag refresh that shares it.
@@ -447,10 +480,14 @@ void new_render_object(athena_object_data *obj, athena_render_data *data) {
 		free(data->compact_normals);
 		free(data->compact_colors);
 		free(data->compact_uvs);
+		free(data->compact_skin_indices);
+		free(data->compact_skin_weights);
 		data->compact_positions = NULL;
 		data->compact_normals = NULL;
 		data->compact_colors = NULL;
 		data->compact_uvs = NULL;
+		data->compact_skin_indices = NULL;
+		data->compact_skin_weights = NULL;
 		data->compact_capacity = 0;
 		data->compact_dirty = RENDER_DIRTY_ALL;
 
@@ -505,8 +542,8 @@ void new_render_object(athena_object_data *obj, athena_render_data *data) {
 	free(obj->skinned_bounds);
 	obj->skinned_bounds = NULL;
 
-	if (data->skin_data) {
-		obj->anim_controller.current = NULL;
+	if (data->skeleton) {
+		memset(&obj->anim_controller, 0, sizeof(obj->anim_controller));
 
 		obj->bones = (athena_bone_transform*)memalign(16, data->skeleton->bone_count * sizeof(athena_bone_transform));
 		obj->bone_matrices = (MATRIX*)memalign(16, data->skeleton->bone_count * sizeof(MATRIX));
@@ -524,6 +561,7 @@ void new_render_object(athena_object_data *obj, athena_render_data *data) {
 		}
 
 		update_bone_transforms(obj);
+		render_update_skinned_bounds(obj);
 	}
 
 	obj->position[0] = 0.0f;
@@ -551,36 +589,105 @@ void new_render_object(athena_object_data *obj, athena_render_data *data) {
 }
 
 void draw_bbox(athena_object_data* obj, Color color) {
-	
+	if (!obj || !obj->data)
+		return;
 
-	/*VECTOR object_position = { pos_x, pos_y, pos_z, 1.00f };
-	VECTOR object_rotation = { rot_x, rot_y, rot_z, 1.00f };
+	VECTOR *bounds = (obj->data->skeleton && obj->skinned_bounds)
+		? obj->skinned_bounds
+		: obj->data->bounding_box;
 
-	// Matrices to setup the 3D environment and camera
-	MATRIX local_world;
 	MATRIX local_screen;
+	matrix_functions->multiply(local_screen, obj->transform, world_screen);
 
-	create_local_world(local_world, obj->position ,obj->rotation);
-	create_local_screen(local_screen, local_world, world_view, view_screen);
-	if(clip_bounding_box(local_screen, m->bounding_box)) return;
+	if (clip_bounding_box(local_screen, bounds))
+		return;
 
-	vertex_f_t *xyz = (vertex_f_t *)memalign(128, sizeof(vertex_f_t)*8);
-	calculate_vertices_clipped((VECTOR *)xyz,  8, m->bounding_box, local_screen);
+	VECTOR clip_corners[8] qw_aligned;
+	for (int i = 0; i < 8; i++) {
+		matrix_functions->apply(clip_corners[i], local_screen, bounds[i]);
+	}
 
-	athena_line_goraud_3d(gsGlobal, xyz[0].x, xyz[0].y, xyz[0].z, xyz[1].x, xyz[1].y, xyz[1].z, color, color);
-	athena_line_goraud_3d(gsGlobal, xyz[1].x, xyz[1].y, xyz[1].z, xyz[3].x, xyz[3].y, xyz[3].z, color, color);
-	athena_line_goraud_3d(gsGlobal, xyz[2].x, xyz[2].y, xyz[2].z, xyz[3].x, xyz[3].y, xyz[3].z, color, color);
-	athena_line_goraud_3d(gsGlobal, xyz[0].x, xyz[0].y, xyz[0].z, xyz[2].x, xyz[2].y, xyz[2].z, color, color);
-	athena_line_goraud_3d(gsGlobal, xyz[4].x, xyz[4].y, xyz[4].z, xyz[5].x, xyz[5].y, xyz[5].z, color, color);
-	athena_line_goraud_3d(gsGlobal, xyz[5].x, xyz[5].y, xyz[5].z, xyz[7].x, xyz[7].y, xyz[7].z, color, color);
-	athena_line_goraud_3d(gsGlobal, xyz[6].x, xyz[6].y, xyz[6].z, xyz[7].x, xyz[7].y, xyz[7].z, color, color);
-	athena_line_goraud_3d(gsGlobal, xyz[4].x, xyz[4].y, xyz[4].z, xyz[6].x, xyz[6].y, xyz[6].z, color, color);
-	athena_line_goraud_3d(gsGlobal, xyz[0].x, xyz[0].y, xyz[0].z, xyz[4].x, xyz[4].y, xyz[4].z, color, color);
-	athena_line_goraud_3d(gsGlobal, xyz[1].x, xyz[1].y, xyz[1].z, xyz[5].x, xyz[5].y, xyz[5].z, color, color);
-	athena_line_goraud_3d(gsGlobal, xyz[2].x, xyz[2].y, xyz[2].z, xyz[6].x, xyz[6].y, xyz[6].z, color, color);
-	athena_line_goraud_3d(gsGlobal, xyz[3].x, xyz[3].y, xyz[3].z, xyz[7].x, xyz[7].y, xyz[7].z, color, color);
+	static const uint8_t edges[12][2] = {
+		{0, 1}, {1, 3}, {3, 2}, {2, 0},
+		{4, 5}, {5, 7}, {7, 6}, {6, 4},
+		{0, 4}, {1, 5}, {2, 6}, {3, 7}
+	};
 
-	free(xyz);*/
+	const float near_w = 0.05f;
+	float sx = screen_scale.x;
+	float sy = screen_scale.y;
+	float sz = screen_scale.z;
+
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 50);
+
+	prim_reg_t line_prim = {
+		.PRIM = GS_PRIM_PRIM_LINE,
+		.IIP = 0,
+		.TME = 0,
+		.FGE = 0,
+		.ABE = gsGlobal->PrimAlphaEnable,
+		.AA1 = gsGlobal->PrimAAEnable,
+		.FST = 0,
+		.CTXT = gsGlobal->PrimContext,
+		.FIX = 0
+	};
+
+	uint64_t rgbaq = (uint64_t)(color & 0xFFFFFFFFULL) | (0x3F800000ULL << 32);
+
+	for (int e = 0; e < 12; e++) {
+		VECTOR a, b;
+		copy_vector(a, clip_corners[edges[e][0]]);
+		copy_vector(b, clip_corners[edges[e][1]]);
+
+		if (a[3] < near_w && b[3] < near_w)
+			continue;
+
+		if (a[3] < near_w) {
+			float t = (near_w - a[3]) / (b[3] - a[3]);
+			a[0] = a[0] + (b[0] - a[0]) * t;
+			a[1] = a[1] + (b[1] - a[1]) * t;
+			a[2] = a[2] + (b[2] - a[2]) * t;
+			a[3] = near_w;
+		} else if (b[3] < near_w) {
+			float t = (near_w - b[3]) / (a[3] - b[3]);
+			b[0] = b[0] + (a[0] - b[0]) * t;
+			b[1] = b[1] + (a[1] - b[1]) * t;
+			b[2] = b[2] + (a[2] - b[2]) * t;
+			b[3] = near_w;
+		}
+
+		float inv_wa = 1.0f / a[3];
+		float inv_wb = 1.0f / b[3];
+
+		float ax = a[0] * inv_wa * sx + 2048.0f;
+		float ay = a[1] * inv_wa * sy + 2048.0f;
+		float az = a[2] * inv_wa * sz + sz;
+
+		float bx = b[0] * inv_wb * sx + 2048.0f;
+		float by = b[1] * inv_wb * sy + 2048.0f;
+		float bz = b[2] * inv_wb * sz + sz;
+
+		if (ax < 0.0f) ax = 0.0f; else if (ax > 4095.0f) ax = 4095.0f;
+		if (ay < 0.0f) ay = 0.0f; else if (ay > 4095.0f) ay = 4095.0f;
+		if (bx < 0.0f) bx = 0.0f; else if (bx > 4095.0f) bx = 4095.0f;
+		if (by < 0.0f) by = 0.0f; else if (by > 4095.0f) by = 4095.0f;
+		if (az < 0.0f) az = 0.0f;
+		if (bz < 0.0f) bz = 0.0f;
+
+		int ix1 = (int)(ax * 16.0f);
+		int iy1 = (int)(ay * 16.0f);
+		unsigned int iz1 = (unsigned int)az;
+
+		int ix2 = (int)(bx * 16.0f);
+		int iy2 = (int)(by * 16.0f);
+		unsigned int iz2 = (unsigned int)bz;
+
+		owl_add_cnt_tag(packet, 4, owl_vif_code_double(VIF_CODE(0, 0, VIF_FLUSH, 0), VIF_CODE(4, 0, VIF_DIRECT, 0)));
+		owl_add_tag(packet, GIF_AD, GIFTAG(3, 1, 1, line_prim.data, 0, 1));
+		owl_add_tag(packet, GS_RGBAQ, rgbaq);
+		owl_add_tag(packet, GS_XYZ2, GS_SETREG_XYZ2(ix1, iy1, iz1));
+		owl_add_tag(packet, GS_XYZ2, GS_SETREG_XYZ2(ix2, iy2, iz2));
+	}
 }
 
 void append_texture_tags(owl_packet* packet, GSSURFACE *texture, int texture_id, eColorFunctions func) {
@@ -603,23 +710,45 @@ void append_texture_tags(owl_packet* packet, GSSURFACE *texture, int texture_id,
 }
 
 void process_animation(athena_object_data *obj) {
-	if (obj->anim_controller.current) {
-		if (!obj->anim_controller.is_playing) {
-			obj->anim_controller.initial_time = (clock()  / (float)CLOCKS_PER_SEC);
+	athena_animation_controller *ctrl = &obj->anim_controller;
+	if (ctrl->current) {
+		clock_t now_clk = clock();
+		float dt = 0.0f;
+		if (ctrl->last_clock != 0) {
+			dt = (float)(now_clk - ctrl->last_clock) / (float)CLOCKS_PER_SEC;
+			if (dt < 0.0f || dt > 0.25f)
+				dt = 0.0f;
+		}
+		ctrl->last_clock = now_clk;
 
-			obj->anim_controller.is_playing = true;
+		if (!ctrl->is_playing) {
+			ctrl->current_time = 0.0f;
+			ctrl->is_playing = true;
+		} else {
+			ctrl->current_time += dt;
 		}
 
-		obj->anim_controller.current_time = (clock() / (float)CLOCKS_PER_SEC) - obj->anim_controller.initial_time;
+		if (ctrl->prev && ctrl->blend_duration > 0.0f) {
+			ctrl->blend_elapsed += dt;
+			ctrl->prev_time += dt;
+			if (ctrl->blend_elapsed >= ctrl->blend_duration) {
+				ctrl->prev = NULL;
+				ctrl->blend_duration = 0.0f;
+				ctrl->blend_elapsed = 0.0f;
+			}
+		}
 
-		apply_animation(obj, obj->anim_controller.current_time); 
+		apply_animation(obj, ctrl->current_time);
 
-		if (obj->anim_controller.current_time > obj->anim_controller.current->duration) {
-			if (obj->anim_controller.loop) {
-				obj->anim_controller.initial_time = (clock()  / (float)CLOCKS_PER_SEC);
+		if (ctrl->current_time > ctrl->current->duration) {
+			if (ctrl->loop) {
+				if (ctrl->current->duration > 0.0f)
+					ctrl->current_time = fmodf(ctrl->current_time, ctrl->current->duration);
+				else
+					ctrl->current_time = 0.0f;
 			} else {
-				obj->anim_controller.is_playing = false;
-				obj->anim_controller.current = NULL;
+				ctrl->is_playing = false;
+				ctrl->current = NULL;
 			}
 		}
 	}
@@ -819,9 +948,51 @@ void render_invalidate_chain_cache(athena_render_data *data) {
 		data->chain_version++;
 }
 
+static void cook_skin_range(athena_compact_skin_indices * restrict dst_idx,
+                            athena_compact_skin_weights * restrict dst_w,
+                            const vertex_skin_data * restrict src,
+                            uint32_t count) {
+	const uint32_t max_bone_ofs = (MAX_VU1_BONES - 1) * 4;
+	for (uint32_t v = 0; v < count; v++) {
+		float w0 = src[v].bone_weights[0] > 0.0f ? src[v].bone_weights[0] : 0.0f;
+		float w1 = src[v].bone_weights[1] > 0.0f ? src[v].bone_weights[1] : 0.0f;
+		float w2 = src[v].bone_weights[2] > 0.0f ? src[v].bone_weights[2] : 0.0f;
+		float w3 = src[v].bone_weights[3] > 0.0f ? src[v].bone_weights[3] : 0.0f;
+		float wsum = w0 + w1 + w2 + w3;
+		if (wsum > 0.0001f) {
+			float inv = 4096.0f / wsum;
+			int iw0 = (int)(w0 * inv + 0.5f);
+			int iw1 = (int)(w1 * inv + 0.5f);
+			int iw2 = (int)(w2 * inv + 0.5f);
+			int iw3 = 4096 - iw0 - iw1 - iw2;
+			if (iw3 < 0) iw3 = 0;
+			if (iw0 > 65535) iw0 = 65535;
+			if (iw1 > 65535) iw1 = 65535;
+			if (iw2 > 65535) iw2 = 65535;
+			if (iw3 > 65535) iw3 = 65535;
+			dst_w[v].w[0] = (uint16_t)iw0;
+			dst_w[v].w[1] = (uint16_t)iw1;
+			dst_w[v].w[2] = (uint16_t)iw2;
+			dst_w[v].w[3] = (uint16_t)iw3;
+		} else {
+			dst_w[v].w[0] = 4096;
+			dst_w[v].w[1] = 0;
+			dst_w[v].w[2] = 0;
+			dst_w[v].w[3] = 0;
+		}
+
+		for (int j = 0; j < 4; j++) {
+			uint32_t idx = src[v].bone_indices[j];
+			if (idx > max_bone_ofs)
+				idx = max_bone_ofs;
+			dst_idx[v].idx[j] = (uint8_t)idx;
+		}
+	}
+}
+
 // Cooks the compact VIF wire formats from positions/normals/colours/texcoords,
 // only for the attributes marked dirty. positions/colours are assumed non-NULL
-// (file-wide invariant); normals/texcoords are optional.
+// (file-wide invariant); normals/texcoords/skin_data are optional.
 static void render_cook_compact_vertices(athena_render_data *data) {
 	if (!data || data->index_count == 0 || data->frozen)
 		return;
@@ -868,6 +1039,8 @@ static void render_cook_compact_vertices(athena_render_data *data) {
 		free(data->compact_normals);
 		free(data->compact_colors);
 		free(data->compact_uvs);
+		free(data->compact_skin_indices);
+		free(data->compact_skin_weights);
 
 		data->compact_positions = (athena_compact_position*)memalign(16, new_capacity * sizeof(athena_compact_position));
 		data->compact_normals   = (athena_compact_normal*)memalign(16, new_capacity * sizeof(athena_compact_normal));
@@ -882,6 +1055,16 @@ static void render_cook_compact_vertices(athena_render_data *data) {
 		memset(data->compact_normals,   0, new_capacity * sizeof(athena_compact_normal));
 		memset(data->compact_colors,    0, new_capacity * sizeof(athena_compact_color));
 		memset(data->compact_uvs,       0, new_capacity * sizeof(athena_compact_uv));
+
+		if (data->skin_data) {
+			data->compact_skin_indices = (athena_compact_skin_indices*)memalign(16, new_capacity * sizeof(athena_compact_skin_indices));
+			data->compact_skin_weights = (athena_compact_skin_weights*)memalign(16, new_capacity * sizeof(athena_compact_skin_weights));
+			memset(data->compact_skin_indices, 0, new_capacity * sizeof(athena_compact_skin_indices));
+			memset(data->compact_skin_weights, 0, new_capacity * sizeof(athena_compact_skin_weights));
+		} else {
+			data->compact_skin_indices = NULL;
+			data->compact_skin_weights = NULL;
+		}
 
 		data->compact_capacity = new_capacity;
 		data->compact_dirty |= RENDER_DIRTY_ALL;
@@ -899,10 +1082,11 @@ static void render_cook_compact_vertices(athena_render_data *data) {
 	bool cook_colors     = data->compact_dirty & RENDER_DIRTY_COLORS;
 	bool cook_normals    = (data->compact_dirty & RENDER_DIRTY_NORMALS) && data->normals;
 	bool cook_uvs        = (data->compact_dirty & RENDER_DIRTY_UVS) && data->texcoords;
+	bool cook_skin       = (data->compact_dirty & RENDER_DIRTY_SKIN) && data->skin_data && data->compact_skin_indices && data->compact_skin_weights;
 
 	data->compact_dirty = 0;
 
-	if (!cook_positions && !cook_colors && !cook_normals && !cook_uvs)
+	if (!cook_positions && !cook_colors && !cook_normals && !cook_uvs && !cook_skin)
 		return;
 
 	// src walks the source arrays straight through; dst follows the padded
@@ -938,6 +1122,9 @@ static void render_cook_compact_vertices(athena_render_data *data) {
 
 		if (cook_uvs)
 			cook_uvs_range(&data->compact_uvs[dst], &data->texcoords[src], count);
+
+		if (cook_skin)
+			cook_skin_range(&data->compact_skin_indices[dst], &data->compact_skin_weights[dst], &data->skin_data[src], count);
 	}
 
 	// These are read by the DMA controller (owl_add_unpack_data_ref_packed's
@@ -952,6 +1139,10 @@ static void render_cook_compact_vertices(athena_render_data *data) {
 		if (cook_normals)   SyncDCache(data->compact_normals,   &data->compact_normals[padded_total - 1]);
 		if (cook_colors)    SyncDCache(data->compact_colors,    &data->compact_colors[padded_total - 1]);
 		if (cook_uvs)       SyncDCache(data->compact_uvs,       &data->compact_uvs[padded_total - 1]);
+		if (cook_skin) {
+			SyncDCache(data->compact_skin_indices, &data->compact_skin_indices[padded_total - 1]);
+			SyncDCache(data->compact_skin_weights, &data->compact_skin_weights[padded_total - 1]);
+		}
 	}
 }
 
@@ -983,11 +1174,13 @@ void render_freeze_compact_vertices(athena_render_data *data) {
 	free(data->normals);
 	free(data->texcoords);
 	free(data->colours);
+	free(data->skin_data);
 
 	data->positions = NULL;
 	data->normals = NULL;
 	data->texcoords = NULL;
 	data->colours = NULL;
+	data->skin_data = NULL;
 
 	data->frozen = true;
 }
@@ -1012,14 +1205,13 @@ static inline void render_bake_tex_giftag_header(owl_qword *slot) {
 	slot[2] = nop_pair;
 }
 
-// Which attribute set a chain slot was baked for. colors/lights/spec share the
-// same VU-mem slot numbering (colors just leaves the normals slot unwritten);
-// the reflection program uses a flat layout with no skin and no UVs.
+// Which attribute set a chain slot was baked for. colors/lights/spec/ref share
+// the same VU-mem slot numbering (colors leaves the normals slot unwritten;
+// ref leaves the uvs slot unwritten).
 typedef enum {
 	CHAIN_COLORS,   // positions, colours, uvs
 	CHAIN_LIT,      // + normals  (lights and spec are identical here)
-	CHAIN_REF,      // positions, normals, colours; flat offsets, skips
-	                // materials without a ref texture
+	CHAIN_REF,      // positions, normals, colours; skips materials without a ref texture
 } eChainKind;
 
 // Bakes one DMA_CALL sub-chain per material chunk: the unpacks (all DMA_REF)
@@ -1037,7 +1229,7 @@ static void render_build_chain(athena_object_data *obj, athena_chain_cache *chai
 	render_chain_wait_if_queued(chain);
 
 	bool is_ref  = (kind == CHAIN_REF);
-	bool skinned = data->skin_data && !is_ref;
+	bool skinned = (data->skeleton != NULL) && (data->compact_skin_indices != NULL);
 	bool want_normals = (kind != CHAIN_COLORS);
 
 	// Lands at texGiftagAddr: the chunk's OUTPUT window, XGKICKed standalone
@@ -1046,9 +1238,9 @@ static void render_build_chain(athena_object_data *obj, athena_chain_cache *chai
 
 	// Slot numbering: skinned meshes spend slots 0..1 on the bone data.
 	int slot0 = skinned ? 2 : 0;
-	int dst_positions = is_ref ? 2 : 2 + batch_size * slot0;
-	int dst_normals   = is_ref ? 2 + batch_size     : 2 + batch_size * (slot0 + 1);
-	int dst_colours   = is_ref ? 2 + batch_size * 2 : 2 + batch_size * (slot0 + 2);
+	int dst_positions = 2 + batch_size * slot0;
+	int dst_normals   = 2 + batch_size * (slot0 + 1);
+	int dst_colours   = 2 + batch_size * (slot0 + 2);
 	int dst_uvs       = 2 + batch_size * (slot0 + 3);
 
 	int chunk_cap = batch_size - (batch_size % 12);
@@ -1087,9 +1279,9 @@ static void render_build_chain(athena_object_data *obj, athena_chain_cache *chai
 		return;
 	}
 
-	// Worst case per chunk: tex_giftag + diffuse + skin + positions + normals +
-	// colours + uvs + trailer (2) + DMA_RET = 10. Built once, so slack is free.
-	uint32_t qwc_budget = chunk_count * 10;
+	// Worst case per chunk: tex_giftag + diffuse + skin_idx + skin_w + positions +
+	// normals + colours + uvs + trailer (2) + DMA_RET = 11. Reserve 12 for slack.
+	uint32_t qwc_budget = chunk_count * 12;
 
 	if (chain->qwc_alloc < qwc_budget) {
 		free(chain->buffer);
@@ -1128,11 +1320,12 @@ static void render_build_chain(athena_object_data *obj, athena_chain_cache *chai
 			: (((mat->texture_id != -1) && data->attributes.texture_mapping) || pass_state);
 
 		uint32_t base = render_compact_base(data, i, last_index);
-		athena_compact_position* positions = &data->compact_positions[base];
-		athena_compact_normal*   normals   = &data->compact_normals[base];
-		athena_compact_color*    colours   = &data->compact_colors[base];
-		athena_compact_uv*       texcoords = (texture_mapping && !is_ref) ? &data->compact_uvs[base] : NULL;
-		vertex_skin_data*        skin_data = skinned ? &data->skin_data[last_index+1] : NULL;
+		athena_compact_position*     positions    = &data->compact_positions[base];
+		athena_compact_normal*       normals      = &data->compact_normals[base];
+		athena_compact_color*        colours      = &data->compact_colors[base];
+		athena_compact_uv*           texcoords    = (texture_mapping && !is_ref) ? &data->compact_uvs[base] : NULL;
+		athena_compact_skin_indices* skin_indices = skinned ? &data->compact_skin_indices[base] : NULL;
+		athena_compact_skin_weights* skin_weights = skinned ? &data->compact_skin_weights[base] : NULL;
 
 		int idxs_to_draw = (data->material_indices[i].end - last_index);
 		int idxs_drawn = 0;
@@ -1145,8 +1338,10 @@ static void render_build_chain(athena_object_data *obj, athena_chain_cache *chai
 			owl_add_unpack_data_ref(&chain_pkt, tex_giftag_dest, &chain->tex_giftag[i * 3], 3, 1);
 			owl_add_unpack_data_ref(&chain_pkt, 1, (void*)&mat->diffuse, 1, 1);
 
-			if (skinned)
-				owl_add_unpack_data_ref(&chain_pkt, 2, &skin_data[idxs_drawn], count*2, 1);
+			if (skinned) {
+				owl_add_unpack_data_ref_packed(&chain_pkt, 2, &skin_indices[idxs_drawn], count, UNPACK_V4_8, sizeof(athena_compact_skin_indices), 1, 1);
+				owl_add_unpack_data_ref_packed(&chain_pkt, 2 + batch_size, &skin_weights[idxs_drawn], count, UNPACK_V4_16, sizeof(athena_compact_skin_weights), 1, 1);
+			}
 
 			owl_add_unpack_data_ref_packed(&chain_pkt, dst_positions, &positions[idxs_drawn], count, UNPACK_V3_32, sizeof(athena_compact_position), 1, 1);
 
@@ -1255,7 +1450,116 @@ static inline void render_trigger_texture_upload(owl_packet *packet, int texture
 		VIF_CODE(texture_id, 0, VIF_MARK, 0)));
 }
 
-void draw_vu1_with_colors(athena_object_data *obj, int pass_state) {
+static inline int render_object_lighting_qwc(void) {
+	return (pnt_light_count.w > 0) ? (1 + 5 + 1 + 8) : (1 + 5);
+}
+
+static void render_upload_object_lighting(owl_packet *packet, athena_object_data *obj) {
+	const float *m = obj->transform;
+
+	float sx2 = m[0]*m[0] + m[1]*m[1] + m[2]*m[2];
+	float sy2 = m[4]*m[4] + m[5]*m[5] + m[6]*m[6];
+	float sz2 = m[8]*m[8] + m[9]*m[9] + m[10]*m[10];
+
+	float inv_sx2 = (sx2 > 1e-8f) ? (1.0f / sx2) : 1.0f;
+	float inv_sy2 = (sy2 > 1e-8f) ? (1.0f / sy2) : 1.0f;
+	float inv_sz2 = (sz2 > 1e-8f) ? (1.0f / sz2) : 1.0f;
+	float avg_scale_sq = (sx2 + sy2 + sz2) * (1.0f / 3.0f);
+
+	VECTOR obj_dir[4] qw_aligned;
+	for (int i = 0; i < 4; i++) {
+		if (i < (int)dir_light_count.w) {
+			float dx = dir_lights_packed_dir[i][0];
+			float dy = dir_lights_packed_dir[i][1];
+			float dz = dir_lights_packed_dir[i][2];
+			float orig_len = sqrtf(dx*dx + dy*dy + dz*dz);
+
+			float ox = (m[0]*dx + m[1]*dy + m[2]*dz) * inv_sx2;
+			float oy = (m[4]*dx + m[5]*dy + m[6]*dz) * inv_sy2;
+			float oz = (m[8]*dx + m[9]*dy + m[10]*dz) * inv_sz2;
+			float len2 = ox*ox + oy*oy + oz*oz;
+			if (len2 > 1e-8f) {
+				float s = orig_len / sqrtf(len2);
+				obj_dir[i][0] = ox * s;
+				obj_dir[i][1] = oy * s;
+				obj_dir[i][2] = oz * s;
+			} else {
+				obj_dir[i][0] = dx;
+				obj_dir[i][1] = dy;
+				obj_dir[i][2] = dz;
+			}
+			obj_dir[i][3] = 1.0f;
+		} else {
+			obj_dir[i][0] = 0.0f;
+			obj_dir[i][1] = 0.0f;
+			obj_dir[i][2] = 0.0f;
+			obj_dir[i][3] = 1.0f;
+		}
+	}
+
+	float *cam_w = getCameraPosition();
+	float cx = cam_w[0] - m[12];
+	float cy = cam_w[1] - m[13];
+	float cz = cam_w[2] - m[14];
+	VECTOR obj_cam qw_aligned = {
+		(m[0]*cx + m[1]*cy + m[2]*cz) * inv_sx2,
+		(m[4]*cx + m[5]*cy + m[6]*cz) * inv_sy2,
+		(m[8]*cx + m[9]*cy + m[10]*cz) * inv_sz2,
+		1.0f
+	};
+
+	owl_add_unpack_data_cnt(packet, 9, 5, 0);
+	owl_add_uquad_ptr(packet, obj_cam);
+	owl_add_uquad_ptr(packet, obj_dir[0]);
+	owl_add_uquad_ptr(packet, obj_dir[1]);
+	owl_add_uquad_ptr(packet, obj_dir[2]);
+	owl_add_uquad_ptr(packet, obj_dir[3]);
+
+	if (pnt_light_count.w > 0) {
+		VECTOR obj_ppos[4] qw_aligned;
+		VECTOR obj_pdiff[4] qw_aligned;
+		for (int i = 0; i < 4; i++) {
+			if (i < (int)pnt_light_count.w) {
+				float px = point_lights_packed_pos[i][0] - m[12];
+				float py = point_lights_packed_pos[i][1] - m[13];
+				float pz = point_lights_packed_pos[i][2] - m[14];
+				obj_ppos[i][0] = (m[0]*px + m[1]*py + m[2]*pz) * inv_sx2;
+				obj_ppos[i][1] = (m[4]*px + m[5]*py + m[6]*pz) * inv_sy2;
+				obj_ppos[i][2] = (m[8]*px + m[9]*py + m[10]*pz) * inv_sz2;
+				obj_ppos[i][3] = 1.0f;
+
+				obj_pdiff[i][0] = point_lights_packed_dif[i][0];
+				obj_pdiff[i][1] = point_lights_packed_dif[i][1];
+				obj_pdiff[i][2] = point_lights_packed_dif[i][2];
+				obj_pdiff[i][3] = point_lights_packed_dif[i][3] * avg_scale_sq;
+			} else {
+				obj_ppos[i][0] = 0.0f;
+				obj_ppos[i][1] = 0.0f;
+				obj_ppos[i][2] = 0.0f;
+				obj_ppos[i][3] = 1.0f;
+
+				obj_pdiff[i][0] = 0.0f;
+				obj_pdiff[i][1] = 0.0f;
+				obj_pdiff[i][2] = 0.0f;
+				obj_pdiff[i][3] = 0.0f;
+			}
+		}
+
+		owl_add_unpack_data_cnt(packet, 124, 8, 0);
+		owl_add_uquad_ptr(packet, obj_ppos[0]);
+		owl_add_uquad_ptr(packet, obj_ppos[1]);
+		owl_add_uquad_ptr(packet, obj_ppos[2]);
+		owl_add_uquad_ptr(packet, obj_ppos[3]);
+		owl_add_uquad_ptr(packet, obj_pdiff[0]);
+		owl_add_uquad_ptr(packet, obj_pdiff[1]);
+		owl_add_uquad_ptr(packet, obj_pdiff[2]);
+		owl_add_uquad_ptr(packet, obj_pdiff[3]);
+	}
+}
+
+static void draw_vu1_pass(athena_object_data *obj, int pass_state,
+                          eRenderPipelines pipeline, eChainKind kind,
+                          vu_mpg *mpg_static, vu_mpg *mpg_skinned) {
 	athena_render_data *data = obj->data;
 
 	render_cook_compact_vertices(data);
@@ -1264,35 +1568,23 @@ void draw_vu1_with_colors(athena_object_data *obj, int pass_state) {
 
 	if (data->skeleton) {
 		batch_size = BATCH_SIZE_SKINNED;
-
-		// The skeleton was advanced once already, by render_object() -- see the
-		// comment there. Objects drawn through several passes must not re-run it
-		// per pass, and the cull test upstream depends on it already being done.
-
-		mpg_addr = vu_mpg_preload(vu1_colors_skinned, true);
+		mpg_addr = vu_mpg_preload(mpg_skinned, true);
 	} else {
-		mpg_addr = vu_mpg_preload(vu1_colors, true);
+		mpg_addr = vu_mpg_preload(mpg_static, true);
 	}
 
-	// One slot per pass_state: render_object() issues base/decal/bump
-	// back-to-back into the same unflushed ring. A stale mpg_addr (VU code
-	// cache eviction) also forces a rebuild -- rare enough that patching just
-	// the cached MSCALF/MSCNT immediates is not worth the bookkeeping.
-	athena_chain_cache *chain = &data->chain[PL_NO_LIGHTS][pass_state];
+	bool is_ref = (kind == CHAIN_REF);
+	athena_chain_cache *chain = is_ref ? &data->ref_chain : &data->chain[pipeline][pass_state];
 	if (!chain->buffer || chain->built_version != data->chain_version
 	    || chain->mpg_addr != mpg_addr) {
-		render_build_chain(obj, chain, pass_state, batch_size, mpg_addr, CHAIN_COLORS);
+		render_build_chain(obj, chain, pass_state, batch_size, mpg_addr, kind);
 	}
 
-	// 8 unconditional quadwords (1 bone-matrix ref + 4+1 transform + 1+1
-	// bump offset) plus the view block only when it is actually stale.
-	// render_view_qwc() has to be read BEFORE render_upload_view() below,
-	// which is what marks the block resident.
-	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 8 + render_view_qwc());
+	bool want_lights = (kind != CHAIN_COLORS);
+	int header_qwc = 9 + render_view_qwc() + (want_lights ? render_object_lighting_qwc() : 0);
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, header_qwc);
 
-	if (obj->bone_matrices) {
-		owl_add_unpack_data_ref(packet, 880, (void*)obj->bone_matrices, data->skeleton->bone_count*4, 0);
-	}
+	owl_add_cnt_tag(packet, 0, owl_vif_code_double(VIF_CODE(0, 0, VIF_FLUSHE, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
 
 	render_upload_view(packet);
 
@@ -1302,35 +1594,57 @@ void draw_vu1_with_colors(athena_object_data *obj, int pass_state) {
 	owl_add_uquad_ptr(packet, &(obj->transform[8]));
 	owl_add_uquad_ptr(packet, &(obj->transform[12]));
 
-	owl_add_unpack_data_cnt(packet, 16, 1, 0);
-	owl_add_uquad_ptr(packet, obj->bump_offset_buffer);
+	if (kind == CHAIN_COLORS) {
+		owl_add_unpack_data_cnt(packet, 16, 1, 0);
+		owl_add_uquad_ptr(packet, obj->bump_offset_buffer);
+	}
 
-	//owl_add_end_tag(packet);
+	if (want_lights) {
+		render_upload_object_lighting(packet, obj);
+	}
 
-	// Never chunk against batch_size directly: it drives the VU-mem offset
-	// formulas (2+batch_size*N) and must match mem_layout.i's strides.
-	// chunk_cap floors to a multiple of 12 -- 4 for the unpack rounding, and
-	// 3 so a chunk boundary never splits a triangle across two XGKICKs.
+	if (obj->bone_matrices && data->skeleton) {
+		uint32_t bone_cnt = data->skeleton->bone_count;
+		if (bone_cnt > MAX_VU1_BONES)
+			bone_cnt = MAX_VU1_BONES;
+		owl_add_unpack_data_ref(packet, VU1_BONE_MATRICES_ADDR, (void*)obj->bone_matrices, bone_cnt * 4, 0);
+	}
+
 	int chunk_cap = batch_size - (batch_size % 12);
 
 	int last_index = -1;
 	GSSURFACE* tex = NULL;
 	int texture_id;
 	uint32_t chunk_idx = 0;
-	for(int i = 0; i < data->material_index_count; i++) {
-		bool texture_mapping = ((((data->materials[data->material_indices[i].index].texture_id != -1)) && data->attributes.texture_mapping) || pass_state);
+	for (int i = 0; i < data->material_index_count; i++) {
+		const ath_mat *mat = &data->materials[data->material_indices[i].index];
+		bool texture_mapping;
+
+		if (is_ref) {
+			texture_mapping = (mat->ref_texture_id != -1);
+			if (!texture_mapping) {
+				last_index = data->material_indices[i].end;
+				continue;
+			}
+		} else {
+			texture_mapping = (((mat->texture_id != -1) && data->attributes.texture_mapping) || pass_state);
+		}
 
 		if (texture_mapping) {
 			GSSURFACE *cur_tex = NULL;
-			switch (pass_state) {
-				case 1: // bump map
-					cur_tex = data->textures[data->materials[data->material_indices[i].index].bump_texture_id];
-					break;
-				case 2: // decal
-					cur_tex = data->textures[data->materials[data->material_indices[i].index].decal_texture_id];
-					break;
-				default:
-					cur_tex = data->textures[data->materials[data->material_indices[i].index].texture_id];
+			if (is_ref) {
+				cur_tex = data->textures[mat->ref_texture_id];
+			} else {
+				switch (pass_state) {
+					case 1: // bump map
+						cur_tex = data->textures[mat->bump_texture_id];
+						break;
+					case 2: // decal
+						cur_tex = data->textures[mat->decal_texture_id];
+						break;
+					default:
+						cur_tex = data->textures[mat->texture_id];
+				}
 			}
 
 			if (cur_tex != tex) {
@@ -1341,25 +1655,16 @@ void draw_vu1_with_colors(athena_object_data *obj, int pass_state) {
 				render_trigger_texture_upload(packet, texture_id);
 			}
 
-			// Refreshed every draw call that hits this material, not just on
-			// rebind -- see render_update_tex_giftag's doc comment for why
-			// (gsGlobal->PrimContext). Plain memory write, no packet cost.
 			render_update_tex_giftag(chain, i, tex);
 		}
 
-		int idxs_to_draw = (data->material_indices[i].end-last_index);
+		int idxs_to_draw = (data->material_indices[i].end - last_index);
 
 		while (idxs_to_draw > 0) {
 			owl_query_packet(CHANNEL_VIF1, 5);
 
-			int count = chunk_cap;
-			if (idxs_to_draw < chunk_cap)
-			{
-				count = idxs_to_draw;
-			}
+			int count = idxs_to_draw < chunk_cap ? idxs_to_draw : chunk_cap;
 
-			// bake_giftags stays dynamic: it embeds PrimContext. Everything else
-			// for this chunk lives in the pre-baked chain.
 			bake_giftags(packet, data, texture_mapping, i);
 
 			owl_add_dma_call(packet, &chain->buffer[chain->chunk_offset[chunk_idx]]);
@@ -1371,366 +1676,22 @@ void draw_vu1_with_colors(athena_object_data *obj, int pass_state) {
 		last_index = data->material_indices[i].end;
 	}
 
-	owl_query_packet(CHANNEL_VIF1, 1);
-
-	owl_add_cnt_tag(packet, 0, owl_vif_code_double(VIF_CODE(0, 0, VIF_FLUSH, 0), VIF_CODE(0, 0, VIF_FLUSH, 0)));
-
-	// Taken after the last chunk: the ring may have flushed mid-draw, so the
-	// chain this draw is riding is the current one.
 	chain->queued_gen = owl_flush_generation();
 	chain->has_queued = 1;
+}
+
+void draw_vu1_with_colors(athena_object_data *obj, int pass_state) {
+	draw_vu1_pass(obj, pass_state, PL_NO_LIGHTS, CHAIN_COLORS, vu1_colors, vu1_colors_skinned);
 }
 
 void draw_vu1_with_lights(athena_object_data *obj, int pass_state) {
-	athena_render_data *data = obj->data;
-
-	render_cook_compact_vertices(data);
-
-	int batch_size = BATCH_SIZE, mpg_addr = 0;
-
-	if (data->skeleton) {
-		batch_size = BATCH_SIZE_SKINNED;
-
-		// The skeleton was advanced once already, by render_object() -- see the
-		// comment there. Objects drawn through several passes must not re-run it
-		// per pass, and the cull test upstream depends on it already being done.
-
-		mpg_addr = vu_mpg_preload(vu1_lights_skinned, true);
-	} else {
-		mpg_addr = vu_mpg_preload(vu1_lights, true);
-	}
-
-	athena_chain_cache *chain = &data->chain[PL_DEFAULT][pass_state];
-	if (!chain->buffer || chain->built_version != data->chain_version
-	    || chain->mpg_addr != mpg_addr) {
-		render_build_chain(obj, chain, pass_state, batch_size, mpg_addr, CHAIN_LIT);
-	}
-
-	// 7 unconditional quadwords (FLUSHE tag + 4+1 transform + 1 bone-matrix
-	// ref) plus the view block only when stale. render_view_qwc() must be
-	// read before render_upload_view(), which marks the block resident.
-	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 7 + render_view_qwc());
-
-	owl_add_cnt_tag(packet, 0, owl_vif_code_double(VIF_CODE(0, 0, VIF_FLUSHE, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
-
-	render_upload_view(packet);
-
-	owl_add_unpack_data_cnt(packet, 5, 4, 0);
-	owl_add_uquad_ptr(packet, &(obj->transform[0]));
-	owl_add_uquad_ptr(packet, &(obj->transform[4]));
-	owl_add_uquad_ptr(packet, &(obj->transform[8]));
-	owl_add_uquad_ptr(packet, &(obj->transform[12]));
-
-	if (obj->bone_matrices) {
-		owl_add_unpack_data_ref(packet, 880, (void*)obj->bone_matrices, data->skeleton->bone_count*4, 0);
-	}
-
-	// Never chunk against batch_size directly: it drives the VU-mem offset
-	// formulas (2+batch_size*N) and must match mem_layout.i's strides.
-	// chunk_cap floors to a multiple of 12 -- 4 for the unpack rounding, and
-	// 3 so a chunk boundary never splits a triangle across two XGKICKs.
-	int chunk_cap = batch_size - (batch_size % 12);
-
-	int last_index = -1;
-	GSSURFACE* tex = NULL;
-	int texture_id;
-	uint32_t chunk_idx = 0;
-	for(int i = 0; i < data->material_index_count; i++) {
-		bool texture_mapping = (((data->materials[data->material_indices[i].index].texture_id != -1) && data->attributes.texture_mapping) || pass_state);
-
-		if (texture_mapping) {
-			GSSURFACE *cur_tex = NULL;
-			switch (pass_state) {
-				case 1: // bump map 
-					cur_tex = data->textures[data->materials[data->material_indices[i].index].bump_texture_id];
-					break;
-				case 2: // decal
-					cur_tex = data->textures[data->materials[data->material_indices[i].index].decal_texture_id];
-					break;
-				default: 
-					cur_tex = data->textures[data->materials[data->material_indices[i].index].texture_id];
-			}
-
-			if (cur_tex != tex) {
-				texture_id = texture_manager_bind(gsGlobal, cur_tex, true);
-				tex = cur_tex;
-
-				// Hoisted out of the chunk loop: one MARK+IRQ per texture change
-				// instead of one per chunk.
-				owl_query_packet(CHANNEL_VIF1, 1);
-				render_trigger_texture_upload(packet, texture_id);
-			}
-
-			// Refreshed per draw, not per rebind: PrimContext flips every frame.
-			render_update_tex_giftag(chain, i, tex);
-		}
-
-		int idxs_to_draw = (data->material_indices[i].end-last_index);
-
-		while (idxs_to_draw > 0) {
-			owl_query_packet(CHANNEL_VIF1, 5);
-
-			int count = chunk_cap;
-			if (idxs_to_draw < chunk_cap)
-			{
-				count = idxs_to_draw;
-			}
-
-			// bake_giftags stays dynamic: it embeds PrimContext. Everything else
-			// for this chunk lives in the pre-baked chain.
-			bake_giftags(packet, data, texture_mapping, i);
-
-			owl_add_dma_call(packet, &chain->buffer[chain->chunk_offset[chunk_idx]]);
-
-			idxs_to_draw -= count;
-			chunk_idx++;
-		}
-
-		last_index = data->material_indices[i].end;
-	}
-
-	owl_query_packet(CHANNEL_VIF1, 1);
-
-	owl_add_cnt_tag(packet, 0, owl_vif_code_double(VIF_CODE(0, 0, VIF_FLUSH, 0), VIF_CODE(0, 0, VIF_FLUSH, 0)));
-
-	// Taken after the last chunk: the ring may have flushed mid-draw, so the
-	// chain this draw is riding is the current one.
-	chain->queued_gen = owl_flush_generation();
-	chain->has_queued = 1;
+	draw_vu1_pass(obj, pass_state, PL_DEFAULT, CHAIN_LIT, vu1_lights, vu1_lights_skinned);
 }
 
 void draw_vu1_with_spec_lights(athena_object_data *obj, int pass_state) {
-	athena_render_data *data = obj->data;
-
-	render_cook_compact_vertices(data);
-
-	int batch_size = BATCH_SIZE, mpg_addr = 0;
-
-	if (data->skeleton) {
-		batch_size = BATCH_SIZE_SKINNED;
-
-		// The skeleton was advanced once already, by render_object() -- see the
-		// comment there. Objects drawn through several passes must not re-run it
-		// per pass, and the cull test upstream depends on it already being done.
-
-		mpg_addr = vu_mpg_preload(vu1_specular_skinned, true);
-	} else {
-		mpg_addr = vu_mpg_preload(vu1_specular, true);
-	}
-
-	athena_chain_cache *chain = &data->chain[PL_SPECULAR][pass_state];
-	if (!chain->buffer || chain->built_version != data->chain_version
-	    || chain->mpg_addr != mpg_addr) {
-		render_build_chain(obj, chain, pass_state, batch_size, mpg_addr, CHAIN_LIT);
-	}
-
-	// 7 unconditional quadwords (FLUSHE tag + 4+1 transform + 1 bone-matrix
-	// ref) plus the view block only when stale. render_view_qwc() must be
-	// read before render_upload_view(), which marks the block resident.
-	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 7 + render_view_qwc());
-
-	owl_add_cnt_tag(packet, 0, owl_vif_code_double(VIF_CODE(0, 0, VIF_FLUSHE, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
-
-	render_upload_view(packet);
-
-	owl_add_unpack_data_cnt(packet, 5, 4, 0);
-	owl_add_uquad_ptr(packet, &(obj->transform[0]));
-	owl_add_uquad_ptr(packet, &(obj->transform[4]));
-	owl_add_uquad_ptr(packet, &(obj->transform[8]));
-	owl_add_uquad_ptr(packet, &(obj->transform[12]));
-
-	if (obj->bone_matrices) {
-		owl_add_unpack_data_ref(packet, 880, (void*)obj->bone_matrices, data->skeleton->bone_count*4, 0);
-	}
-
-	//owl_add_end_tag(packet);
-
-	// Never chunk against batch_size directly: it drives the VU-mem offset
-	// formulas (2+batch_size*N) and must match mem_layout.i's strides.
-	// chunk_cap floors to a multiple of 12 -- 4 for the unpack rounding, and
-	// 3 so a chunk boundary never splits a triangle across two XGKICKs.
-	int chunk_cap = batch_size - (batch_size % 12);
-
-	int last_index = -1;
-	GSSURFACE* tex = NULL;
-	int texture_id;
-	uint32_t chunk_idx = 0;
-	for(int i = 0; i < data->material_index_count; i++) {
-		bool texture_mapping = (((data->materials[data->material_indices[i].index].texture_id != -1) && data->attributes.texture_mapping) || pass_state);
-
-		if (texture_mapping) {
-			GSSURFACE *cur_tex = NULL;
-			switch (pass_state) {
-				case 1: // bump map 
-					cur_tex = data->textures[data->materials[data->material_indices[i].index].bump_texture_id];
-					break;
-				case 2: // decal
-					cur_tex = data->textures[data->materials[data->material_indices[i].index].decal_texture_id];
-					break;
-				default: 
-					cur_tex = data->textures[data->materials[data->material_indices[i].index].texture_id];
-			}
-
-			if (cur_tex != tex) {
-				texture_id = texture_manager_bind(gsGlobal, cur_tex, true);
-				tex = cur_tex;
-
-				// Hoisted out of the chunk loop: one MARK+IRQ per texture change
-				// instead of one per chunk.
-				owl_query_packet(CHANNEL_VIF1, 1);
-				render_trigger_texture_upload(packet, texture_id);
-			}
-
-			// Refreshed per draw, not per rebind: PrimContext flips every frame.
-			render_update_tex_giftag(chain, i, tex);
-		}
-
-		int idxs_to_draw = (data->material_indices[i].end-last_index);
-
-		while (idxs_to_draw > 0) {
-			owl_query_packet(CHANNEL_VIF1, 5);
-
-			int count = chunk_cap;
-			if (idxs_to_draw < chunk_cap)
-			{
-				count = idxs_to_draw;
-			}
-
-			// bake_giftags stays dynamic: it embeds PrimContext. Everything else
-			// for this chunk lives in the pre-baked chain.
-			bake_giftags(packet, data, texture_mapping, i);
-
-			owl_add_dma_call(packet, &chain->buffer[chain->chunk_offset[chunk_idx]]);
-
-			idxs_to_draw -= count;
-			chunk_idx++;
-		}
-
-		last_index = data->material_indices[i].end;
-	}
-
-	owl_query_packet(CHANNEL_VIF1, 1);
-
-	owl_add_cnt_tag(packet, 0, owl_vif_code_double(VIF_CODE(0, 0, VIF_FLUSH, 0), VIF_CODE(0, 0, VIF_FLUSH, 0)));
-
-	// Taken after the last chunk: the ring may have flushed mid-draw, so the
-	// chain this draw is riding is the current one.
-	chain->queued_gen = owl_flush_generation();
-	chain->has_queued = 1;
+	draw_vu1_pass(obj, pass_state, PL_SPECULAR, CHAIN_LIT, vu1_specular, vu1_specular_skinned);
 }
 
 void draw_vu1_with_lights_ref(athena_object_data *obj, int pass_state) {
-	athena_render_data *data = obj->data;
-
-	render_cook_compact_vertices(data);
-
-	int batch_size = BATCH_SIZE, mpg_addr = 0;
-
-	if (data->skeleton) {
-		batch_size = BATCH_SIZE_SKINNED;
-
-		// The skeleton was advanced once already, by render_object() -- see the
-		// comment there. Objects drawn through several passes must not re-run it
-		// per pass, and the cull test upstream depends on it already being done.
-
-		mpg_addr = vu_mpg_preload(vu1_lights_reflection, true);
-	} else {
-		mpg_addr = vu_mpg_preload(vu1_lights_reflection, true);
-	}
-
-	athena_chain_cache *chain = &data->ref_chain;
-	if (!chain->buffer || chain->built_version != data->chain_version
-	    || chain->mpg_addr != mpg_addr) {
-		render_build_chain(obj, chain, pass_state, batch_size, mpg_addr, CHAIN_REF);
-	}
-		
-	
-
-	// 7 unconditional quadwords (FLUSHE tag + 4+1 transform + 1 bone-matrix
-	// ref) plus the view block only when stale. render_view_qwc() must be
-	// read before render_upload_view(), which marks the block resident.
-	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 7 + render_view_qwc());
-
-	owl_add_cnt_tag(packet, 0, owl_vif_code_double(VIF_CODE(0, 0, VIF_FLUSHE, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
-
-	render_upload_view(packet);
-
-	owl_add_unpack_data_cnt(packet, 5, 4, 0);
-	owl_add_uquad_ptr(packet, &(obj->transform[0]));
-	owl_add_uquad_ptr(packet, &(obj->transform[4]));
-	owl_add_uquad_ptr(packet, &(obj->transform[8]));
-	owl_add_uquad_ptr(packet, &(obj->transform[12]));
-
-	if (obj->bone_matrices) {
-		owl_add_unpack_data_ref(packet, 880, (void*)obj->bone_matrices, data->skeleton->bone_count*4, 0);
-	}
-
-	//owl_add_end_tag(packet);
-
-	// Never chunk against batch_size directly: it drives the VU-mem offset
-	// formulas (2+batch_size*N) and must match mem_layout.i's strides.
-	// chunk_cap floors to a multiple of 12 -- 4 for the unpack rounding, and
-	// 3 so a chunk boundary never splits a triangle across two XGKICKs.
-	int chunk_cap = batch_size - (batch_size % 12);
-
-	int last_index = -1;
-	GSSURFACE* tex = NULL;
-	int texture_id;
-	uint32_t chunk_idx = 0;
-	for(int i = 0; i < data->material_index_count; i++) {
-		bool texture_mapping = ((data->materials[data->material_indices[i].index].ref_texture_id != -1));
-
-		if (texture_mapping) {
-			GSSURFACE *cur_tex = data->textures[data->materials[data->material_indices[i].index].ref_texture_id];
-			if (cur_tex != tex) {
-				texture_id = texture_manager_bind(gsGlobal, cur_tex, true);
-				tex = cur_tex;
-
-				// Hoisted out of the chunk loop: one MARK+IRQ per texture change
-				// instead of one per chunk.
-				owl_query_packet(CHANNEL_VIF1, 1);
-				render_trigger_texture_upload(packet, texture_id);
-			}
-		} else {
-			// last_index must still advance past this material: it is the running
-			// cursor into the vertex arrays, not a "last drawn" marker.
-			last_index = data->material_indices[i].end;
-			continue;
-		}
-
-		int idxs_to_draw = (data->material_indices[i].end-last_index);
-
-		// Refreshed per draw, not per rebind: PrimContext flips every frame.
-		render_update_tex_giftag(chain, i, tex);
-
-		while (idxs_to_draw > 0) {
-			owl_query_packet(CHANNEL_VIF1, 5);
-
-			int count = chunk_cap;
-			if (idxs_to_draw < chunk_cap)
-			{
-				count = idxs_to_draw;
-			}
-
-			// bake_giftags stays dynamic: it embeds PrimContext. Everything else
-			// for this chunk lives in the pre-baked chain.
-			bake_giftags(packet, data, texture_mapping, i);
-
-			owl_add_dma_call(packet, &chain->buffer[chain->chunk_offset[chunk_idx]]);
-
-			idxs_to_draw -= count;
-			chunk_idx++;
-		}
-
-		last_index = data->material_indices[i].end;
-	}
-
-	owl_query_packet(CHANNEL_VIF1, 1);
-
-	owl_add_cnt_tag(packet, 0, owl_vif_code_double(VIF_CODE(0, 0, VIF_FLUSH, 0), VIF_CODE(0, 0, VIF_FLUSH, 0)));
-
-	// Taken after the last chunk: the ring may have flushed mid-draw, so the
-	// chain this draw is riding is the current one.
-	chain->queued_gen = owl_flush_generation();
-	chain->has_queued = 1;
+	draw_vu1_pass(obj, pass_state, PL_DEFAULT, CHAIN_REF, vu1_lights_reflection, vu1_lights_reflection_skinned);
 }

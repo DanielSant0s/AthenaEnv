@@ -80,6 +80,7 @@ VU1_MPGS = draw_3D_colors.o \
            draw_3D_lights_skin.o \
            draw_3D_spec_skin.o \
            draw_3D_lights_ref.o \
+           draw_3D_lights_ref_skin.o \
            draw_2D_tile_list.o
 
 # VU0_MPGS = matrix_multiply.o

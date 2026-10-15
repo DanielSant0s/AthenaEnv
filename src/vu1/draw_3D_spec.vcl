@@ -12,16 +12,14 @@
 .include "vu1/include/athena_macros.i"
 .include "vu1/include/vcl_sml.i"
 
-.macro SpecularPowerScale 
+.macro SpecularPowerScale normReg
     add specAngle, vf00, vf00
-    VectorDotProduct specAngle, normal, halfDir
+    VectorDotProduct specAngle, \normReg, halfDir
     maxx		specAngle, specAngle, vf00			; Clamp to > 0
     mul  		specAngle, specAngle, specAngle	; Square it
     mul  		specAngle, specAngle, specAngle	; 4th power
     mul  		specAngle, specAngle, specAngle	; 8th power
     mul  		specAngle, specAngle, specAngle	; 16th power
-    ;mul 		specAngle, specAngle, specAngle	; 32nd power
-    ;mul 		specAngle, specAngle, specAngle	; 64nd power
     mul         specAngle, LightSpecular, specAngle[x]
     add.xyz         light, light, specAngle 
 .endm
@@ -76,10 +74,8 @@ cull_init:
     ;//////////// --- Load data 1 --- /////////////
     ; Updated once per mesh
     ilw.w       dirLightQnt,    NUM_DIR_LIGHTS(vi00)  ; load active directional lights
-    lq.xyz      CamPos,         CAMERA_POSITION(vi00) ; load program params
-    iaddiu      lightDirs,      vi00,    LIGHT_DIRECTION_PTR       
-    iaddiu      lightDiffs,     vi00,    LIGHT_DIFFUSE_PTR    
-    iaddiu      lightSpecs,     vi00,    LIGHT_SPECULAR_PTR 
+    ilw.w       pntLightQnt,    NUM_POINT_LIGHTS(vi00) ; load active point lights
+    lq.xyz      CamPos,         CAMERA_POSITION(vi00) ; Object-space camera position 
 
     ;//////////// --- Load data 2 --- /////////////
     ; Updated dynamically
@@ -193,11 +189,12 @@ no_tex_kick_cull:
         ;////////////////////////////////////////////
 
         ;//////////////// - NORMALS - /////////////////
-        MatrixMultiplyVector	normal,    ObjectMatrix, inNorm ; transform each normal by the matrix
-        ; Renormalise: ObjectMatrix carries the object scale, so without this the
-        ; diffuse term scales with it -- an object at scale 2 renders twice as bright.
-        VectorNormalize normal, normal
-        
+        ; CamPos, directional light directions, and point light positions are in
+        ; Object Space. Compute unit view direction once per vertex for true
+        ; Blinn-Phong half-angle calculation.
+        sub.xyz viewDir, CamPos, inVert
+        VectorNormalizeXYZ viewDir, viewDir
+
         lq light, LIGHT_AMBIENT_SUM(vi00)  ; xyz = summed ambient, w = 1.0
         move intensity, vf00
 
@@ -208,7 +205,7 @@ no_tex_kick_cull:
             lq LightDirection, LIGHT_DIRECTION_PTR(currDirLight)
             
             ; Diffuse lighting
-            VectorDotProduct intensity, normal, LightDirection
+            VectorDotProduct intensity, inNorm, LightDirection
 
             maxx.xyzw  intensity, intensity, vf00
 
@@ -217,15 +214,49 @@ no_tex_kick_cull:
             mul diffuse, LightDiffuse, intensity[x]
             add.xyz light, light, diffuse
 
-            HalfAngle halfDir, LightDirection, CamPos
+            HalfAngle halfDir, LightDirection, viewDir
 
             lq LightSpecular, LIGHT_SPECULAR_PTR(currDirLight)
 
-            SpecularPowerScale
+            SpecularPowerScale inNorm
 
             iaddiu   currDirLight,  currDirLight,  1; increment the loop counter 
             ibne    dirLightQnt,  currDirLight,  culled_directionaLightsLoop	; and repeat if needed
         skip_culled_directionaLightsLoop:
+
+        iadd  currPntLight, vi00, vi00
+        ibeq  pntLightQnt, vi00, skip_culled_pointLightsLoop
+        culled_pointLightsLoop:
+            lq PointPos, POINT_LIGHT_POS_PTR(currPntLight)
+            sub.xyz toLight, PointPos, inVert
+            mul.xyz distSq, toLight, toLight
+            add.x distSq, distSq, distSq[y]
+            add.x distSq, distSq, distSq[z]
+            loi 0.0001
+            max.x distSq, distSq, i
+            rsqrt q, vf00[w], distSq[x]
+            mul.xyz toLight, toLight, q
+
+            VectorDotProduct intensity, inNorm, toLight
+            maxx.xyzw intensity, intensity, vf00
+
+            lq PointDiffuse, POINT_LIGHT_DIFF_PTR(currPntLight)
+            mul.w attenDenom, PointDiffuse, distSq[x]
+            add.w attenDenom, vf00, attenDenom
+            div q, vf00[w], attenDenom[w]
+            mul.x intensity, intensity, q
+
+            mul diffuse, PointDiffuse, intensity[x]
+            add.xyz light, light, diffuse
+
+            lq LightSpecular, POINT_LIGHT_SPEC_PTR(currPntLight)
+            mul.xyz LightSpecular, LightSpecular, q
+            HalfAngle halfDir, toLight, viewDir
+            SpecularPowerScale inNorm
+
+            iaddiu currPntLight, currPntLight, 1
+            ibne   pntLightQnt, currPntLight, culled_pointLightsLoop
+        skip_culled_pointLightsLoop:
 
         add.xyzw   color, matDiffuse, inColor
         mul    color, color,      light       ; color = color * light
@@ -340,11 +371,10 @@ no_tex_kick_clip:
         ;////////////////////////////////////////////
 
         ;//////////////// - NORMALS - /////////////////
-        MatrixMultiplyVector	normal,    ObjectMatrix, inNorm ; transform each normal by the matrix
-        ; Renormalise: ObjectMatrix carries the object scale, so without this the
-        ; diffuse term scales with it -- an object at scale 2 renders twice as bright.
-        VectorNormalize normal, normal
-        
+        lq.xyz      CamPos,         CAMERA_POSITION(vi00)
+        sub.xyz     viewDir,        CamPos, inVert
+        VectorNormalizeXYZ viewDir, viewDir
+
         lq light, LIGHT_AMBIENT_SUM(vi00)  ; xyz = summed ambient, w = 1.0
         move intensity, vf00
 
@@ -352,47 +382,62 @@ no_tex_kick_clip:
         ilw.w       dirLightQnt,    NUM_DIR_LIGHTS(vi00) ; load active directional lights 
         ibeq  dirLightQnt, vi00, skip_directionaLightsLoop   ; do-while: 0 lights would never terminate
         directionaLightsLoop:
-            
-            lq.xyz      CamPos,         CAMERA_POSITION(vi00) ; load program params
-            iaddiu      lightDirs,      vi00,    LIGHT_DIRECTION_PTR      
-            iaddiu      lightDiffs,     vi00,    LIGHT_DIFFUSE_PTR     
-            iaddiu      lightSpecs,     vi00,    LIGHT_SPECULAR_PTR  
-
-
-            iadd  currLightPtr, lightDirs, currDirLight
-            lq LightDirection, 0(currLightPtr)
+            lq LightDirection, LIGHT_DIRECTION_PTR(currDirLight)
             
             ; Diffuse lighting
-            VectorDotProduct intensity, normal, LightDirection
+            VectorDotProduct intensity, inNorm, LightDirection
 
             maxx.xyzw  intensity, intensity, vf00
 
-            iadd  currLightPtr, lightDiffs, currDirLight
-            lq LightDiffuse, 0(currLightPtr)
+            lq LightDiffuse, LIGHT_DIFFUSE_PTR(currDirLight)
 
             mul diffuse, LightDiffuse, intensity[x]
             add.xyz light, light, diffuse
 
+            HalfAngle halfDir, LightDirection, viewDir
 
-            ; Blinn-Phong Lighting Calculation
-            ;VectorNormalize CamPos, CamPos
+            lq LightSpecular, LIGHT_SPECULAR_PTR(currDirLight)
 
-            ;sub lightDir, lightvert, CamPos ; Compute light direction vector
-            ;VectorNormalize lightDir, lightDir
-
-            ; Compute halfway vector
-            ;add halfDir, LightDirection, CamPos
-            ;VectorNormalize halfDir, halfDir
-            HalfAngle halfDir, LightDirection, CamPos
-
-            iadd  currLightPtr, lightSpecs, currDirLight
-            lq LightSpecular, 0(currLightPtr)
-
-            SpecularPowerScale
+            SpecularPowerScale inNorm
 
             iaddiu   currDirLight,  currDirLight,  1; increment the loop counter 
             ibne    dirLightQnt,  currDirLight,  directionaLightsLoop	; and repeat if needed
         skip_directionaLightsLoop:
+
+        iadd  currPntLight, vi00, vi00
+        ilw.w pntLightQnt, NUM_POINT_LIGHTS(vi00)
+        ibeq  pntLightQnt, vi00, skip_pointLightsLoop
+        pointLightsLoop:
+            lq PointPos, POINT_LIGHT_POS_PTR(currPntLight)
+            sub.xyz toLight, PointPos, inVert
+            mul.xyz distSq, toLight, toLight
+            add.x distSq, distSq, distSq[y]
+            add.x distSq, distSq, distSq[z]
+            loi 0.0001
+            max.x distSq, distSq, i
+            rsqrt q, vf00[w], distSq[x]
+            mul.xyz toLight, toLight, q
+
+            VectorDotProduct intensity, inNorm, toLight
+            maxx.xyzw intensity, intensity, vf00
+
+            lq PointDiffuse, POINT_LIGHT_DIFF_PTR(currPntLight)
+            mul.w attenDenom, PointDiffuse, distSq[x]
+            add.w attenDenom, vf00, attenDenom
+            div q, vf00[w], attenDenom[w]
+            mul.x intensity, intensity, q
+
+            mul diffuse, PointDiffuse, intensity[x]
+            add.xyz light, light, diffuse
+
+            lq LightSpecular, POINT_LIGHT_SPEC_PTR(currPntLight)
+            mul.xyz LightSpecular, LightSpecular, q
+            HalfAngle halfDir, toLight, viewDir
+            SpecularPowerScale inNorm
+
+            iaddiu currPntLight, currPntLight, 1
+            ibne   pntLightQnt, currPntLight, pointLightsLoop
+        skip_pointLightsLoop:
 
         add.xyzw   color, matDiffuse, inColor
         mul    color, color,      light       ; color = color * light

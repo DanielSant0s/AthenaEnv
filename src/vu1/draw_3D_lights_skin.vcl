@@ -62,6 +62,7 @@ cull_init:
     ;//////////// --- Load data 1 --- /////////////
     ; Updated once per mesh
     ilw.w       dirLightQnt,    NUM_DIR_LIGHTS(vi00) ; load active directional lights
+    ilw.w       pntLightQnt,    NUM_POINT_LIGHTS(vi00) ; load active point lights
 
     ;//////////// --- Load data 2 --- /////////////
     ; Updated dynamically
@@ -73,7 +74,6 @@ culled_init:
     lq      primTag,        0(iBase) ; GIF tag - tell GS how many data we will send 
     lq      matDiffuse,     1(iBase) ; RGBA 
                                      ; u32 : R, G, B, A (0-128)
-    iaddiu  skinData,        iBase,      0           ; pointer to vertex data
     
     ; texGiftagAddr: 3 QW of AD giftag (header + TEX0 + TEX1) written by the EE
     ; via render_emit_tex_giftag, EOP=1, a complete standalone packet. Sent on
@@ -122,16 +122,9 @@ no_tex_kick_cull:
         DecompressUV16 stq, stqPacked
         ;////////////////////////////////////////////
 
-        lq boneIndices,    SKINNED_SKELETON_OFFSET(skinData)
-        lq boneWeights,    SKINNED_SKELETON_OFFSET+1(skinData)
-
-        ; Loop counter comes from the weights themselves. The EE sorts them
-        ; descending at load time, so the first zero ends the influences: 1 or 2
-        ; bones is the common case and the other 2 iterations were pure waste.
-        ; ftoi12 makes the test an integer compare (weight < 1/4096 is nothing);
-        ; sub.x clears the slot just consumed so mr32 shifts a zero into w and
-        ; the loop cannot run past the 4th bone.
-        ftoi12 weightTest, boneWeights
+        lq boneIndices,    SKINNED_INDICES_OFFSET(iBase)
+        lq weightTest,     SKINNED_WEIGHTS_OFFSET(iBase)
+        itof12 boneWeights, weightTest
 
         move final_vertex, vf00
         move final_normal, vf00
@@ -211,10 +204,9 @@ no_tex_kick_cull:
         ;////////////////////////////////////////////
 
         ;//////////////// - NORMALS - /////////////////
-        MatrixMultiplyVector	normal,    ObjectMatrix, final_normal ; transform each normal by the matrix
-        ; Renormalise: ObjectMatrix carries the object scale, so without this the
-        ; diffuse term scales with it -- an object at scale 2 renders twice as bright.
-        VectorNormalize normal, normal
+        ; final_normal is already in Object Space; normalize after linear blend
+        ; skinning and evaluate against Object-Space directional & point lights.
+        VectorNormalize normal, final_normal
         
         lq light, LIGHT_AMBIENT_SUM(vi00)  ; xyz = summed ambient, w = 1.0
         move intensity, vf00
@@ -239,6 +231,35 @@ no_tex_kick_cull:
             ibne    dirLightQnt,  currDirLight,  culled_directionaLightsLoop	; and repeat if needed
         skip_culled_directionaLightsLoop:
 
+        iadd  currPntLight, vi00, vi00
+        ibeq  pntLightQnt, vi00, skip_culled_pointLightsLoop
+        culled_pointLightsLoop:
+            lq PointPos, POINT_LIGHT_POS_PTR(currPntLight)
+            sub.xyz toLight, PointPos, final_vertex
+            mul.xyz distSq, toLight, toLight
+            add.x distSq, distSq, distSq[y]
+            add.x distSq, distSq, distSq[z]
+            loi 0.0001
+            max.x distSq, distSq, i
+            rsqrt q, vf00[w], distSq[x]
+            mul.xyz toLight, toLight, q
+
+            VectorDotProduct intensity, normal, toLight
+            maxx.xyzw intensity, intensity, vf00
+
+            lq PointDiffuse, POINT_LIGHT_DIFF_PTR(currPntLight)
+            mul.w attenDenom, PointDiffuse, distSq[x]
+            add.w attenDenom, vf00, attenDenom
+            div q, vf00[w], attenDenom[w]
+            mul.x intensity, intensity, q
+
+            mul diffuse, PointDiffuse, intensity[x]
+            add.xyz light, light, diffuse
+
+            iaddiu currPntLight, currPntLight, 1
+            ibne   pntLightQnt, currPntLight, culled_pointLightsLoop
+        skip_culled_pointLightsLoop:
+
         add.xyzw   color, matDiffuse, inColor
         mul    color, color,      light       ; color = color * light
 
@@ -259,7 +280,6 @@ no_tex_kick_cull:
 
     skip_rendering:
         iaddiu         iBase,     iBase,     1                         
-        iaddiu         skinData,  skinData,  2   
 
         iaddi   vertexCounter,  vertexCounter,  -1	; decrement the loop counter 
         ibgtz    vertexCounter,  vertexLoop	; and repeat if needed
@@ -288,8 +308,6 @@ init:
     lq      primTag,        0(iBase) ; GIF tag - tell GS how many data we will send
     lq      matDiffuse,     1(iBase) ; material diffuse color
  
-    iaddiu  skinData,        iBase,      0           ; pointer to vertex data
-
     ; See the comment in culled_init. Matters more here: this is the
     ; accurate-clipping path, whose scissored triangles fire their own mid-loop
     ; XGKICKs with no texture state attached.
@@ -336,16 +354,9 @@ no_tex_kick_clip:
         DecompressUV16 stq, stqPacked
         ;////////////////////////////////////////////
 
-        lq boneIndices,    SKINNED_SKELETON_OFFSET(skinData)
-        lq boneWeights,    SKINNED_SKELETON_OFFSET+1(skinData)
-
-        ; Loop counter comes from the weights themselves. The EE sorts them
-        ; descending at load time, so the first zero ends the influences: 1 or 2
-        ; bones is the common case and the other 2 iterations were pure waste.
-        ; ftoi12 makes the test an integer compare (weight < 1/4096 is nothing);
-        ; sub.x clears the slot just consumed so mr32 shifts a zero into w and
-        ; the loop cannot run past the 4th bone.
-        ftoi12 weightTest, boneWeights
+        lq boneIndices,    SKINNED_INDICES_OFFSET(iBase)
+        lq weightTest,     SKINNED_WEIGHTS_OFFSET(iBase)
+        itof12 boneWeights, weightTest
 
         move final_vertex, vf00
         move final_normal, vf00
@@ -391,10 +402,7 @@ no_tex_kick_clip:
         ;//////////////////////////////////////////// 
 
         ;//////////////// - NORMALS - /////////////////
-        MatrixMultiplyVector	normal,    ObjectMatrix, final_normal ; transform each normal by the matrix
-        ; Renormalise: ObjectMatrix carries the object scale, so without this the
-        ; diffuse term scales with it -- an object at scale 2 renders twice as bright.
-        VectorNormalize normal, normal
+        VectorNormalize normal, final_normal
     
         lq light, LIGHT_AMBIENT_SUM(vi00)  ; xyz = summed ambient, w = 1.0
         move intensity, vf00
@@ -402,6 +410,7 @@ no_tex_kick_clip:
         iadd  currDirLight, vi00, vi00
 
         ilw.w       dirLightQnt,    NUM_DIR_LIGHTS(vi00) ; load active directional lights
+        ibeq  dirLightQnt, vi00, skip_directionaLightsLoop
 
         directionaLightsLoop: 
 
@@ -419,6 +428,37 @@ no_tex_kick_clip:
 
             iaddiu   currDirLight,  currDirLight,  1; increment the loop counter 
             ibne    dirLightQnt,  currDirLight,  directionaLightsLoop	; and repeat if needed
+        skip_directionaLightsLoop:
+
+        iadd  currPntLight, vi00, vi00
+        ilw.w pntLightQnt, NUM_POINT_LIGHTS(vi00)
+        ibeq  pntLightQnt, vi00, skip_pointLightsLoop
+        pointLightsLoop:
+            lq PointPos, POINT_LIGHT_POS_PTR(currPntLight)
+            sub.xyz toLight, PointPos, final_vertex
+            mul.xyz distSq, toLight, toLight
+            add.x distSq, distSq, distSq[y]
+            add.x distSq, distSq, distSq[z]
+            loi 0.0001
+            max.x distSq, distSq, i
+            rsqrt q, vf00[w], distSq[x]
+            mul.xyz toLight, toLight, q
+
+            VectorDotProduct intensity, normal, toLight
+            maxx.xyzw intensity, intensity, vf00
+
+            lq PointDiffuse, POINT_LIGHT_DIFF_PTR(currPntLight)
+            mul.w attenDenom, PointDiffuse, distSq[x]
+            add.w attenDenom, vf00, attenDenom
+            div q, vf00[w], attenDenom[w]
+            mul.x intensity, intensity, q
+
+            mul diffuse, PointDiffuse, intensity[x]
+            add.xyz light, light, diffuse
+
+            iaddiu currPntLight, currPntLight, 1
+            ibne   pntLightQnt, currPntLight, pointLightsLoop
+        skip_pointLightsLoop:
 
         add.xyzw   color, matDiffuse, inColor
         mul    color, color,      light       ; color = color * light
@@ -438,7 +478,6 @@ no_tex_kick_clip:
         .include "vu1/proc/process_scissor_clip_skin.i"
 
         iaddiu         iBase,     iBase,     1                         
-        iaddiu         skinData,  skinData,  2   
 
         iaddiu          outputAddress,  outputAddress,  3
  

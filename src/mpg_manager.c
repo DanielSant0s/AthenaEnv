@@ -43,11 +43,14 @@ void vu_mpg_upload(void* src, uint32_t dst, uint32_t size, uint32_t qwc, int vu)
 
     uint32_t *l_start = (uint32_t *)src;
 
+    bool first_chunk = true;
     while (count > 0)
     {
         uint16_t curr_count = count > 256 ? 256 : count;
+        uint32_t first_vif = first_chunk ? VIF_CODE(0, 0, VIF_FLUSHE, 0) : VIF_CODE(0, 0, VIF_NOP, 0);
+        first_chunk = false;
 
-        owl_add_tag(internal_packet, (VIF_CODE(0, 0, VIF_NOP, 0) | (uint64_t)VIF_CODE(dest, curr_count & 0xFF, VIF_MPG, 0) << 32),
+        owl_add_tag(internal_packet, (first_vif | (uint64_t)VIF_CODE(dest, curr_count & 0xFF, VIF_MPG, 0) << 32),
                             DMA_TAG(curr_count / 2, 0, DMA_REF, 0, (const u128 *)l_start, 0)
                     );
 
@@ -122,43 +125,41 @@ void vu_mpg_cycle_cache(int idx, int dst) {
 }
 
 int vu_mpg_preload(vu_mpg *mpg, bool dma_transfer) {
-    int mpg_addr = 0;
-
+    int dst = mpg->dst;
     int i = 0;
+
     for (; i < MPG_CACHE_SIZE; i++) {
-        if (mpg == mpg_cache[mpg->dst].entries[i]) {
-            mpg_addr = mpg_cache[mpg->dst].dests[i];
-            vu_mpg_cycle_cache(i, mpg->dst);
-            return mpg_addr;
+        if (mpg == mpg_cache[dst].entries[i]) {
+            return mpg_cache[dst].dests[i];
         }
-        
-        if (!mpg_cache[mpg->dst].entries[i]) {
+        if (!mpg_cache[dst].entries[i]) {
             break;
         }
     }
 
-    i -= (i < MPG_CACHE_SIZE? 0 : 1);
-
-    vu_mpg *tmp = mpg_cache[mpg->dst].entries[i];
-    for (; (i >= 0 && (vu_code_qwc_used[mpg->dst] + mpg->qwc) > vu_code_qwc[mpg->dst]); i--, tmp = mpg_cache[mpg->dst].entries[i]) {
-        if (tmp) {
-            vu_code_qwc_used[mpg->dst] -= tmp->qwc;
-            mpg_cache[mpg->dst].entries[i] = NULL;
+    if (i >= MPG_CACHE_SIZE || (vu_code_qwc_used[dst] + mpg->qwc) > vu_code_qwc[dst]) {
+        int evict = (i < MPG_CACHE_SIZE) ? (i - 1) : (MPG_CACHE_SIZE - 1);
+        while (evict >= 0 && (evict >= MPG_CACHE_SIZE - 1 || (vu_code_qwc_used[dst] + mpg->qwc) > vu_code_qwc[dst])) {
+            vu_mpg *tmp = mpg_cache[dst].entries[evict];
+            if (tmp) {
+                vu_code_qwc_used[dst] -= tmp->qwc;
+                mpg_cache[dst].entries[evict] = NULL;
+                mpg_cache[dst].dests[evict] = 0;
+            }
+            evict--;
         }
+        i = evict + 1;
     }
 
-    if (i < 0) 
-        i++;
-
-    mpg_cache[mpg->dst].entries[i] = mpg;
-    mpg_addr = mpg_cache[mpg->dst].dests[i] = vu_code_qwc_used[mpg->dst];
-
-    vu_code_qwc_used[mpg->dst] += mpg->qwc;
+    int mpg_addr = vu_code_qwc_used[dst];
+    mpg_cache[dst].entries[i] = mpg;
+    mpg_cache[dst].dests[i] = mpg_addr;
+    vu_code_qwc_used[dst] += mpg->qwc;
 
     if (dma_transfer) {
-        vu_mpg_upload(mpg->code, mpg_cache[mpg->dst].dests[i], mpg->size, mpg->qwc, mpg->dst);
+        vu_mpg_upload(mpg->code, mpg_addr, mpg->size, mpg->qwc, dst);
     } else {
-        memcpy((void *)(vu_code_mem_map[mpg->dst]+(mpg_addr << 4)), mpg->code, mpg->qwc << 3);
+        memcpy((void *)(vu_code_mem_map[dst]+(mpg_addr << 4)), mpg->code, mpg->qwc << 3);
         asm __volatile__ ( // I should check if dst is VU0, but memcpy is almost never used for VU1
             "ctc2.i       %0,	  $vi27	    \n" // preload it inside VU0 CMSAR0 register, interlock enabled because it is safer, right?
             : 

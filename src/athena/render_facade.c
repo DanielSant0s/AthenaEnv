@@ -95,6 +95,8 @@ void athena_render_data_destroy(AthenaRenderData *rd)
     free(rd->m.compact_normals);
     free(rd->m.compact_colors);
     free(rd->m.compact_uvs);
+    free(rd->m.compact_skin_indices);
+    free(rd->m.compact_skin_weights);
     free(rd->m.compact_group_base);
 
     // Baked DMA_CALL chains (render_build_chain): 3 pass_state slots plus the
@@ -340,14 +342,32 @@ athena_object_data *athena_render_object_native(AthenaRenderObject *ro)
     return ro ? &ro->obj : NULL;
 }
 
-void athena_render_object_play_anim(AthenaRenderObject *ro, athena_animation *anim, bool loop)
+void athena_render_object_play_anim_blend(AthenaRenderObject *ro, athena_animation *anim, bool loop, float blend_time)
 {
     if (!ro)
         return;
 
-    ro->obj.anim_controller.current = anim;
-    ro->obj.anim_controller.is_playing = false;
-    ro->obj.anim_controller.loop = loop;
+    athena_animation_controller *ctrl = &ro->obj.anim_controller;
+    if (ctrl->current && ctrl->current != anim && blend_time > 0.0f) {
+        ctrl->prev = ctrl->current;
+        ctrl->prev_time = ctrl->current_time;
+        ctrl->prev_loop = ctrl->loop;
+        ctrl->blend_duration = blend_time;
+        ctrl->blend_elapsed = 0.0f;
+    } else if (ctrl->current != anim || blend_time <= 0.0f) {
+        ctrl->prev = NULL;
+        ctrl->blend_duration = 0.0f;
+        ctrl->blend_elapsed = 0.0f;
+    }
+
+    ctrl->current = anim;
+    ctrl->is_playing = false;
+    ctrl->loop = loop;
+}
+
+void athena_render_object_play_anim(AthenaRenderObject *ro, athena_animation *anim, bool loop)
+{
+    athena_render_object_play_anim_blend(ro, anim, loop, 0.15f);
 }
 
 bool athena_render_object_is_playing_anim(const AthenaRenderObject *ro, const athena_animation *anim)

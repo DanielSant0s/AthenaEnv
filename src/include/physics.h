@@ -177,6 +177,7 @@ struct AthenaPhysicsJoint {
     int    amotor_mode;
 
     AthenaContact       contact; /* used when type == ATH_JOINT_CONTACT */
+    bool                from_pool;
 
     AthenaPhysicsJoint *next;
     AthenaPhysicsJoint *prev;
@@ -186,6 +187,9 @@ struct AthenaPhysicsJoint {
 struct AthenaPhysicsJointGroup {
     AthenaPhysicsJoint *joints;
     uint32_t            count;
+    AthenaPhysicsJoint *pool;
+    uint32_t            pool_cap;
+    uint32_t            pool_used;
 };
 
 struct AthenaPhysicsWorld {
@@ -197,6 +201,8 @@ struct AthenaPhysicsWorld {
     AthenaPhysicsJoint *joints;
     uint32_t            body_count;
     uint32_t            joint_count;
+    void               *solver_rows;
+    int                 solver_rows_cap;
 } __attribute__((aligned(16)));
 
 /* Fast raycast result for shadow projectors and direct ray queries */

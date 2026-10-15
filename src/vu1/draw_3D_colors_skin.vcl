@@ -66,8 +66,6 @@ culled_init:
     lq      primTag,        0(iBase) ; GIF tag - tell GS how many data we will send
     lq      matDiffuse,     1(iBase) ; RGBA
                                      ; u32 : R, G, B, A (0-128)
-    iaddiu  skinData,        iBase,      0
-
     ; texGiftagAddr: 3 QW written directly by the EE (an AD giftag header +
     ; TEX0 + TEX1, see render_build_chain tex_giftag unpack -- EOP=1,
     ; a complete standalone packet). Sent on its own, right now, BEFORE the
@@ -108,16 +106,9 @@ culled_init:
         DecompressUV16 stq, stqPacked
         ;////////////////////////////////////////////
 
-        lq boneIndices,    SKINNED_SKELETON_OFFSET(skinData)
-        lq boneWeights,    SKINNED_SKELETON_OFFSET+1(skinData)
-
-        ; Loop counter comes from the weights themselves. The EE sorts them
-        ; descending at load time, so the first zero ends the influences: 1 or 2
-        ; bones is the common case and the other 2 iterations were pure waste.
-        ; ftoi12 makes the test an integer compare (weight < 1/4096 is nothing);
-        ; sub.x clears the slot just consumed so mr32 shifts a zero into w and
-        ; the loop cannot run past the 4th bone.
-        ftoi12 weightTest, boneWeights
+        lq boneIndices,    SKINNED_INDICES_OFFSET(iBase)
+        lq weightTest,     SKINNED_WEIGHTS_OFFSET(iBase)
+        itof12 boneWeights, weightTest
 
         move final_vertex, vf00
 
@@ -210,7 +201,6 @@ culled_init:
         ;////////////////////////////////////////////
 
         iaddiu      iBase,     iBase,     1    
-        iaddiu      skinData,  skinData,  2   
 
         iaddiu          destAddress,    destAddress,    3
 
@@ -241,8 +231,6 @@ init:
 
     lq      primTag,        0(iBase) ; GIF tag - tell GS how many data we will send
     lq      matDiffuse,     1(iBase) ; material diffuse color
-
-    iaddiu  skinData,        iBase,      0           ; pointer to vertex data
 
     ; See the comment in culled_init: texGiftagAddr holds the EE-written AD
     ; giftag (TEX0/TEX1) and gets XGKICKed standalone, right now, before this
@@ -286,16 +274,9 @@ init:
         DecompressUV16 stq, stqPacked
         ;////////////////////////////////////////////
 
-        lq boneIndices,    SKINNED_SKELETON_OFFSET(skinData)
-        lq boneWeights,    SKINNED_SKELETON_OFFSET+1(skinData)
-
-        ; Loop counter comes from the weights themselves. The EE sorts them
-        ; descending at load time, so the first zero ends the influences: 1 or 2
-        ; bones is the common case and the other 2 iterations were pure waste.
-        ; ftoi12 makes the test an integer compare (weight < 1/4096 is nothing);
-        ; sub.x clears the slot just consumed so mr32 shifts a zero into w and
-        ; the loop cannot run past the 4th bone.
-        ftoi12 weightTest, boneWeights
+        lq boneIndices,    SKINNED_INDICES_OFFSET(iBase)
+        lq weightTest,     SKINNED_WEIGHTS_OFFSET(iBase)
+        itof12 boneWeights, weightTest
 
         move final_vertex, vf00
 
@@ -356,7 +337,6 @@ init:
         .include "vu1/proc/process_scissor_clip_offset_skin.i"
 
         iaddiu         iBase,     iBase,        1      
-        iaddiu         skinData,  skinData,     2   
 
         iaddiu          outputAddress,  outputAddress,  3
 

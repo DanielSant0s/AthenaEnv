@@ -1294,11 +1294,29 @@ static void world_aabb_to_trimesh_local(const VECTOR wmin, const VECTOR wmax,
     }
 }
 
+/* Check if TriMesh is at identity world transform (pos = 0, rot = I, scale = 1) */
+static inline int trimesh_is_identity_pose(const VECTOR pos, const MATRIX rot, const VECTOR scale) {
+    if (fabsf(pos[0]) > 1e-6f || fabsf(pos[1]) > 1e-6f || fabsf(pos[2]) > 1e-6f)
+        return 0;
+    if (fabsf(scale[0] - 1.0f) > 1e-6f || fabsf(scale[1] - 1.0f) > 1e-6f || fabsf(scale[2] - 1.0f) > 1e-6f)
+        return 0;
+    if (fabsf(rot[0] - 1.0f) > 1e-6f || fabsf(rot[5] - 1.0f) > 1e-6f || fabsf(rot[10] - 1.0f) > 1e-6f)
+        return 0;
+    if (fabsf(rot[1]) > 1e-6f || fabsf(rot[2]) > 1e-6f ||
+        fabsf(rot[4]) > 1e-6f || fabsf(rot[6]) > 1e-6f ||
+        fabsf(rot[8]) > 1e-6f || fabsf(rot[9]) > 1e-6f)
+        return 0;
+    return 1;
+}
+
 /* 6. Sphere (g1) vs TriMesh (g2) — VU0 BVH Traversal + Closest Point on Triangle */
 static int collide_sphere_trimesh(AthenaPhysicsGeom *g1, AthenaPhysicsGeom *g2,
                                   AthenaContact *contacts, int max_contacts) {
     if (max_contacts <= 0 || !g2->trimesh || !g2->trimesh->nodes)
         return 0;
+
+    if (max_contacts > 4)
+        max_contacts = 4;
 
     AthenaPhysicsTriMesh *tm = g2->trimesh;
     VECTOR sp_pos, tm_pos;
@@ -1312,7 +1330,13 @@ static int collide_sphere_trimesh(AthenaPhysicsGeom *g1, AthenaPhysicsGeom *g2,
     VECTOR wmin = { sp_pos[0] - rad, sp_pos[1] - rad, sp_pos[2] - rad, 0.0f };
     VECTOR wmax = { sp_pos[0] + rad, sp_pos[1] + rad, sp_pos[2] + rad, 0.0f };
     VECTOR qmin, qmax;
-    world_aabb_to_trimesh_local(wmin, wmax, tm_pos, tm_rot, g2->scale, qmin, qmax);
+    int is_id = trimesh_is_identity_pose(tm_pos, tm_rot, g2->scale);
+    if (is_id) {
+        vu0_vec_copy(qmin, wmin);
+        vu0_vec_copy(qmax, wmax);
+    } else {
+        world_aabb_to_trimesh_local(wmin, wmax, tm_pos, tm_rot, g2->scale, qmin, qmax);
+    }
 
     uint32_t stack[64];
     int sp = 0;
@@ -1332,11 +1356,15 @@ static int collide_sphere_trimesh(AthenaPhysicsGeom *g1, AthenaPhysicsGeom *g2,
         if (tri_cnt > 0) {
             for (uint32_t t = 0; t < tri_cnt; t++) {
                 uint32_t tidx = first + t;
-                AthenaTri wtri;
-                trimesh_tri_to_world(&tm->tris[tidx], tm_pos, tm_rot, g2->scale, &wtri);
+                AthenaTri wtri_buf;
+                const AthenaTri *wtri = &tm->tris[tidx];
+                if (!is_id) {
+                    trimesh_tri_to_world(wtri, tm_pos, tm_rot, g2->scale, &wtri_buf);
+                    wtri = &wtri_buf;
+                }
 
                 VECTOR closest, diff;
-                closest_point_on_triangle(closest, sp_pos, &wtri);
+                closest_point_on_triangle(closest, sp_pos, wtri);
                 vu0_vec_sub(diff, sp_pos, closest);
                 float dist_sq = vu0_vec_dot(diff, diff);
                 if (dist_sq > rad_sq)
@@ -1348,7 +1376,7 @@ static int collide_sphere_trimesh(AthenaPhysicsGeom *g1, AthenaPhysicsGeom *g2,
                 if (dist > 1e-6f) {
                     vu0_vec_scale(n, diff, 1.0f / dist);
                 } else {
-                    vu0_vec_copy(n, wtri.normal);
+                    vu0_vec_copy(n, wtri->normal);
                 }
 
                 /* Merge with existing contact if very close in position/normal */
@@ -1406,6 +1434,9 @@ static int collide_box_trimesh(AthenaPhysicsGeom *g1, AthenaPhysicsGeom *g2,
     if (max_contacts <= 0 || !g2->trimesh || !g2->trimesh->nodes)
         return 0;
 
+    if (max_contacts > 4)
+        max_contacts = 4;
+
     AthenaPhysicsTriMesh *tm = g2->trimesh;
     VECTOR box_pos, tm_pos;
     MATRIX box_rot, tm_rot;
@@ -1424,7 +1455,13 @@ static int collide_box_trimesh(AthenaPhysicsGeom *g1, AthenaPhysicsGeom *g2,
     /* Compute Box world AABB, then transform into TriMesh local AABB */
     geom_compute_aabb(g1);
     VECTOR qmin, qmax;
-    world_aabb_to_trimesh_local(g1->aabb_min, g1->aabb_max, tm_pos, tm_rot, g2->scale, qmin, qmax);
+    int is_id = trimesh_is_identity_pose(tm_pos, tm_rot, g2->scale);
+    if (is_id) {
+        vu0_vec_copy(qmin, g1->aabb_min);
+        vu0_vec_copy(qmax, g1->aabb_max);
+    } else {
+        world_aabb_to_trimesh_local(g1->aabb_min, g1->aabb_max, tm_pos, tm_rot, g2->scale, qmin, qmax);
+    }
 
     uint32_t stack[64];
     int sp = 0;
@@ -1444,20 +1481,24 @@ static int collide_box_trimesh(AthenaPhysicsGeom *g1, AthenaPhysicsGeom *g2,
         if (tri_cnt > 0) {
             for (uint32_t t = 0; t < tri_cnt; t++) {
                 uint32_t tidx = first + t;
-                AthenaTri wtri;
-                trimesh_tri_to_world(&tm->tris[tidx], tm_pos, tm_rot, g2->scale, &wtri);
+                AthenaTri wtri_buf;
+                const AthenaTri *wtri = &tm->tris[tidx];
+                if (!is_id) {
+                    trimesh_tri_to_world(wtri, tm_pos, tm_rot, g2->scale, &wtri_buf);
+                    wtri = &wtri_buf;
+                }
 
                 VECTOR tv[3];
-                vu0_vec_copy(tv[0], wtri.v0);
-                vu0_vec_add(tv[1], wtri.v0, wtri.e1);
-                vu0_vec_add(tv[2], wtri.v0, wtri.e2);
+                vu0_vec_copy(tv[0], wtri->v0);
+                vu0_vec_add(tv[1], wtri->v0, wtri->e1);
+                vu0_vec_add(tv[2], wtri->v0, wtri->e2);
 
                 /* SAT check 1: Triangle normal axis */
-                float tri_proj = wtri.normal[3];
-                float box_c = vu0_vec_dot(box_pos, wtri.normal);
-                float box_r = he[0] * fabsf(vu0_vec_dot(box_axes[0], wtri.normal)) +
-                              he[1] * fabsf(vu0_vec_dot(box_axes[1], wtri.normal)) +
-                              he[2] * fabsf(vu0_vec_dot(box_axes[2], wtri.normal));
+                float tri_proj = wtri->normal[3];
+                float box_c = vu0_vec_dot(box_pos, wtri->normal);
+                float box_r = he[0] * fabsf(vu0_vec_dot(box_axes[0], wtri->normal)) +
+                              he[1] * fabsf(vu0_vec_dot(box_axes[1], wtri->normal)) +
+                              he[2] * fabsf(vu0_vec_dot(box_axes[2], wtri->normal));
                 float dist_n = box_c - tri_proj;
                 float pen_n = box_r - fabsf(dist_n);
                 if (pen_n < 0.0f)
@@ -1465,14 +1506,15 @@ static int collide_box_trimesh(AthenaPhysicsGeom *g1, AthenaPhysicsGeom *g2,
 
                 float min_pen = pen_n;
                 VECTOR best_n;
-                vu0_vec_scale(best_n, wtri.normal, (dist_n >= 0.0f) ? 1.0f : -1.0f);
+                vu0_vec_scale(best_n, wtri->normal, (dist_n >= 0.0f) ? 1.0f : -1.0f);
 
                 /* SAT check 2: 3 Box face axes */
                 int separated = 0;
                 for (int a = 0; a < 3; a++) {
-                    float p0 = vu0_vec_dot(tv[0], box_axes[a]) - vu0_vec_dot(box_pos, box_axes[a]);
-                    float p1 = vu0_vec_dot(tv[1], box_axes[a]) - vu0_vec_dot(box_pos, box_axes[a]);
-                    float p2 = vu0_vec_dot(tv[2], box_axes[a]) - vu0_vec_dot(box_pos, box_axes[a]);
+                    float box_proj = vu0_vec_dot(box_pos, box_axes[a]);
+                    float p0 = vu0_vec_dot(tv[0], box_axes[a]) - box_proj;
+                    float p1 = vu0_vec_dot(tv[1], box_axes[a]) - box_proj;
+                    float p2 = vu0_vec_dot(tv[2], box_axes[a]) - box_proj;
                     float tmin = fminf(p0, fminf(p1, p2));
                     float tmax = fmaxf(p0, fmaxf(p1, p2));
                     if (tmin > he[a] || tmax < -he[a]) {
@@ -1506,7 +1548,25 @@ static int collide_box_trimesh(AthenaPhysicsGeom *g1, AthenaPhysicsGeom *g2,
                 local_tc[3] = 0.0f;
                 vu0_mat3_mul_vec(world_box_pt, box_rot, local_tc);
                 vu0_vec_add(world_box_pt, box_pos, world_box_pt);
-                closest_point_on_triangle(contact_pt, world_box_pt, &wtri);
+                closest_point_on_triangle(contact_pt, world_box_pt, wtri);
+
+                /* Merge with existing contact if very close in position and normal */
+                int merged = 0;
+                for (int k = 0; k < count; k++) {
+                    VECTOR pd;
+                    vu0_vec_sub(pd, contacts[k].pos, contact_pt);
+                    if (vu0_vec_dot(pd, pd) < 0.02f && vu0_vec_dot(contacts[k].normal, best_n) > 0.9f) {
+                        if (min_pen > contacts[k].depth) {
+                            contacts[k].depth = min_pen;
+                            vu0_vec_copy(contacts[k].normal, best_n);
+                            vu0_vec_copy(contacts[k].pos, contact_pt);
+                            contacts[k].tri_index = (int)tidx;
+                        }
+                        merged = 1;
+                        break;
+                    }
+                }
+                if (merged) continue;
 
                 int slot = count;
                 if (count < max_contacts) {
@@ -2847,41 +2907,69 @@ int athena_physics_bodies_connected_excluding(const AthenaPhysicsBody *b1, const
  * Joints & JointGroups Implementation
  * ============================================================================ */
 
+#define JOINT_GROUP_POOL_CAP 256
+
 AthenaPhysicsJointGroup *athena_physics_joint_group_create(void) {
-    return (AthenaPhysicsJointGroup *)phys_calloc_aligned(sizeof(AthenaPhysicsJointGroup));
+    AthenaPhysicsJointGroup *g = (AthenaPhysicsJointGroup *)phys_calloc_aligned(sizeof(AthenaPhysicsJointGroup));
+    if (!g) return NULL;
+    g->pool = (AthenaPhysicsJoint *)phys_calloc_aligned(sizeof(AthenaPhysicsJoint) * JOINT_GROUP_POOL_CAP);
+    if (g->pool) {
+        g->pool_cap = JOINT_GROUP_POOL_CAP;
+    }
+    return g;
 }
 
 void athena_physics_joint_group_empty(AthenaPhysicsJointGroup *group) {
-    if (!group) return;
-    AthenaPhysicsJoint *j = group->joints;
-    while (j) {
-        AthenaPhysicsJoint *next = j->group_next;
-        if (j->world) {
-            AthenaPhysicsJoint **pp = &j->world->joints;
-            while (*pp) {
-                if (*pp == j) {
-                    *pp = j->next;
-                    break;
-                }
+    if (!group || !group->joints) {
+        if (group) group->pool_used = 0;
+        return;
+    }
+
+    AthenaPhysicsWorld *w = group->joints->world;
+    if (w) {
+        AthenaPhysicsJoint **pp = &w->joints;
+        while (*pp) {
+            if ((*pp)->group == group) {
+                *pp = (*pp)->next;
+            } else {
                 pp = &((*pp)->next);
             }
         }
-        free(j);
+    }
+
+    AthenaPhysicsJoint *j = group->joints;
+    while (j) {
+        AthenaPhysicsJoint *next = j->group_next;
+        if (!j->from_pool) {
+            free(j);
+        }
         j = next;
     }
     group->joints = NULL;
+    group->count = 0;
+    group->pool_used = 0;
 }
 
 void athena_physics_joint_group_destroy(AthenaPhysicsJointGroup *group) {
     if (!group) return;
     athena_physics_joint_group_empty(group);
+    free(group->pool);
     free(group);
 }
 
 static AthenaPhysicsJoint *alloc_joint(AthenaPhysicsWorld *world, AthenaPhysicsJointGroup *group, AthenaJointType type) {
-    AthenaPhysicsJoint *j = (AthenaPhysicsJoint *)phys_calloc_aligned(sizeof(AthenaPhysicsJoint));
-    if (!j) return NULL;
+    AthenaPhysicsJoint *j = NULL;
+    bool from_pool = false;
+    if (group && group->pool && group->pool_used < group->pool_cap) {
+        j = &group->pool[group->pool_used++];
+        memset(j, 0, sizeof(AthenaPhysicsJoint));
+        from_pool = true;
+    } else {
+        j = (AthenaPhysicsJoint *)phys_calloc_aligned(sizeof(AthenaPhysicsJoint));
+        if (!j) return NULL;
+    }
     j->type = type;
+    j->from_pool = from_pool;
     j->world = world;
     j->group = group;
     j->axis1_local[0] = 1.0f;
@@ -2896,6 +2984,7 @@ static AthenaPhysicsJoint *alloc_joint(AthenaPhysicsWorld *world, AthenaPhysicsJ
     if (group) {
         j->group_next = group->joints;
         group->joints = j;
+        group->count++;
     }
     return j;
 }
@@ -2934,7 +3023,9 @@ void athena_physics_joint_destroy(AthenaPhysicsJoint *joint) {
             pp = &((*pp)->group_next);
         }
     }
-    free(joint);
+    if (!joint->from_pool) {
+        free(joint);
+    }
 }
 
 void athena_physics_joint_attach(AthenaPhysicsJoint *joint, AthenaPhysicsBody *b1, AthenaPhysicsBody *b2) {
@@ -3328,7 +3419,7 @@ AthenaPhysicsWorld *athena_physics_world_create(void) {
     w->gravity[3] = 0.0f;
     w->cfm = 1e-5f;
     w->erp = 0.2f;
-    w->solver_iterations = 20;
+    w->solver_iterations = 10;
     return w;
 }
 
@@ -3337,6 +3428,7 @@ void athena_physics_world_destroy(AthenaPhysicsWorld *world) {
     while (world->bodies) {
         athena_physics_body_destroy(world->bodies);
     }
+    free(world->solver_rows);
     free(world);
 }
 
@@ -3522,7 +3614,16 @@ void athena_physics_world_step(AthenaPhysicsWorld *world, float step_size) {
 
     if (joint_count > 0) {
         int max_rows = joint_count * 6;
-        AthenaSolverRow *rows = (AthenaSolverRow *)memalign(16, max_rows * sizeof(AthenaSolverRow));
+        if (max_rows > world->solver_rows_cap) {
+            int new_cap = (max_rows < 256) ? 256 : (max_rows + 64);
+            void *new_buf = memalign(16, new_cap * sizeof(AthenaSolverRow));
+            if (new_buf) {
+                free(world->solver_rows);
+                world->solver_rows = new_buf;
+                world->solver_rows_cap = new_cap;
+            }
+        }
+        AthenaSolverRow *rows = (AthenaSolverRow *)world->solver_rows;
         int row_count = 0;
 
         if (rows) {
@@ -3723,8 +3824,6 @@ void athena_physics_world_step(AthenaPhysicsWorld *world, float step_size) {
                     }
                 }
             }
-
-            free(rows);
         }
     }
 

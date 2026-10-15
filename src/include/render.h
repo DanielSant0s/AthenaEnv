@@ -1,6 +1,7 @@
 #ifndef ATHENA_RENDER_H
 #define ATHENA_RENDER_H
 
+#include <time.h>
 #include <graphics.h>
 #include <owl_packet.h>
 
@@ -44,6 +45,7 @@ typedef struct {
 	FIVECTOR ambient[4];
 	VECTOR diffuse[4];
 	VECTOR specular[4];
+	int    is_point[4];
 } LightData;
 
 #define CULL_FACE_NONE 0.0f
@@ -55,6 +57,8 @@ typedef enum {
 	ATHENA_LIGHT_AMBIENT,
 	ATHENA_LIGHT_DIFFUSE,
 	ATHENA_LIGHT_SPECULAR,
+	ATHENA_LIGHT_POSITION,
+	ATHENA_LIGHT_ATTENUATION,
 } eLightAttributes;
 
 typedef enum {
@@ -112,11 +116,17 @@ typedef struct athena_animation_collection {
 
 typedef struct athena_animation_controller {
     athena_animation* current;
+    athena_animation* prev;
 
 	float initial_time;
     float current_time;
+    float prev_time;
+    float blend_duration;
+    float blend_elapsed;
+    clock_t last_clock;
     bool is_playing;
     bool loop;
+    bool prev_loop;
 } athena_animation_controller;
 
 typedef struct athena_bone_data {
@@ -192,13 +202,22 @@ typedef struct {
 	int16_t u, v;
 } athena_compact_uv; // V2_16 signed, 4 bytes
 
+typedef struct {
+	uint8_t idx[4];
+} athena_compact_skin_indices; // V4_8 unsigned, 4 bytes
+
+typedef struct {
+	uint16_t w[4];
+} athena_compact_skin_weights; // V4_16 unsigned Q4.12, 8 bytes
+
 // Per-attribute bits for athena_render_data.compact_dirty -- see its doc
 // comment and render_invalidate_compact_cache()/_positions().
 #define RENDER_DIRTY_POSITIONS (1 << 0)
 #define RENDER_DIRTY_NORMALS   (1 << 1)
 #define RENDER_DIRTY_COLORS    (1 << 2)
 #define RENDER_DIRTY_UVS       (1 << 3)
-#define RENDER_DIRTY_ALL       (RENDER_DIRTY_POSITIONS | RENDER_DIRTY_NORMALS | RENDER_DIRTY_COLORS | RENDER_DIRTY_UVS)
+#define RENDER_DIRTY_SKIN      (1 << 4)
+#define RENDER_DIRTY_ALL       (RENDER_DIRTY_POSITIONS | RENDER_DIRTY_NORMALS | RENDER_DIRTY_COLORS | RENDER_DIRTY_UVS | RENDER_DIRTY_SKIN)
 
 // Pre-baked DMA_CALL sub-chain for draw_vu1_with_colors: the per-chunk parts
 // that are static across frames. All DMA_REF, so live JS mutation still works.
@@ -243,10 +262,12 @@ typedef struct athena_render_data {
     // new_render_object(). Sized padded_total+4 to keep DMA_REF QWC rounding
     // (owl_add_unpack_data_ref_packed) from ever reading past the allocation.
     // Indexed via compact_group_base, NOT by source vertex number.
-    athena_compact_position* compact_positions;
-    athena_compact_normal*   compact_normals;
-    athena_compact_color*    compact_colors;
-    athena_compact_uv*       compact_uvs;
+    athena_compact_position*     compact_positions;
+    athena_compact_normal*       compact_normals;
+    athena_compact_color*        compact_colors;
+    athena_compact_uv*           compact_uvs;
+    athena_compact_skin_indices* compact_skin_indices;
+    athena_compact_skin_weights* compact_skin_weights;
     uint32_t compact_capacity;
 
     // Start of each material_indices[] group inside compact_*, in elements,
@@ -347,18 +368,16 @@ void cameraUpdate();
 
 #define BATCH_SIZE 48
 // Must match the VU mem stride baked into mem_layout.i's SKINNED_*_OFFSET
-// constants (62, 92, 122, 152 -- each exactly 30 apart) -- render.c's
+// constants (38, 74, 110, 146, 182 -- each 36 apart) -- render.c's
 // destination-offset expressions (2+batch_size*N) depend on this equality.
-// Do NOT change this to "fix" the rounding in owl_add_unpack_data_ref_packed;
-// use render_compact_chunk_cap() instead, which floors it to a multiple of 4
-// without touching what the offset formula sees.
-#define BATCH_SIZE_SKINNED 40
+#define BATCH_SIZE_SKINNED 36
 
-// Mirrors mem_layout.i's INBUF_SIZE/SKINNED_INBUF_SIZE (VU1 asm has no
-// C-visible constants). The tex_giftag unpack targets this offset, which is
-// where the .vcl's texGiftagAddr lands. Keep in lockstep with mem_layout.i.
+// Mirrors mem_layout.i's INBUF_SIZE/SKINNED_INBUF_SIZE and BONE_MATRICES.
+// Keep in lockstep with mem_layout.i.
 #define RENDER_INBUF_SIZE 194
-#define RENDER_SKINNED_INBUF_SIZE 242
+#define RENDER_SKINNED_INBUF_SIZE 218
+#define VU1_BONE_MATRICES_ADDR 825
+#define MAX_VU1_BONES 46
 
 int clip_bounding_box(MATRIX local_clip, VECTOR *bounding_box);
 void calculate_vertices_clipped(VECTOR *output,  int count, VECTOR *vertices, MATRIX local_screen);

@@ -60,6 +60,7 @@ void athena_render_object_draw(AthenaRenderObject *ro);
 void athena_render_object_draw_bbox(AthenaRenderObject *ro, Color color);
 athena_object_data *athena_render_object_native(AthenaRenderObject *ro);
 void athena_render_object_play_anim(AthenaRenderObject *ro, athena_animation *anim, bool loop);
+void athena_render_object_play_anim_blend(AthenaRenderObject *ro, athena_animation *anim, bool loop, float blend_time);
 bool athena_render_object_is_playing_anim(const AthenaRenderObject *ro, const athena_animation *anim);
 
 AthenaRenderBatch *athena_render_batch_create(int auto_sort);

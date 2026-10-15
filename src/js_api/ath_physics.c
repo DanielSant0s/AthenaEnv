@@ -726,15 +726,16 @@ static void contact_callback(void *data, AthenaPhysicsGeom *o1, AthenaPhysicsGeo
             contacts[i].bounce = 0.1f;
             contacts[i].soft_cfm = 0.01f;
 
-            JSValue contact_obj = build_contact_js_object(cdata->ctx, &contacts[i]);
-            JS_SetPropertyUint32(cdata->ctx, cdata->contacts_array, cdata->contact_index++, JS_DupValue(cdata->ctx, contact_obj));
-
             if (!JS_IsUndefined(cdata->callback)) {
+                JSValue contact_obj = build_contact_js_object(cdata->ctx, &contacts[i]);
+                JS_SetPropertyUint32(cdata->ctx, cdata->contacts_array, cdata->contact_index++, JS_DupValue(cdata->ctx, contact_obj));
                 JSValue args[1] = { contact_obj };
                 JSValue ret = JS_Call(cdata->ctx, cdata->callback, JS_UNDEFINED, 1, args);
                 JS_FreeValue(cdata->ctx, ret);
+                JS_FreeValue(cdata->ctx, contact_obj);
+            } else {
+                cdata->contact_index++;
             }
-            JS_FreeValue(cdata->ctx, contact_obj);
 
             AthenaPhysicsJoint *c = athena_physics_joint_create_contact(cdata->world, cdata->joint_group, &contacts[i]);
             athena_physics_joint_attach(c, b1, b2);
@@ -764,6 +765,10 @@ static JSValue js_world_step_with_contacts(JSContext *ctx, JSValueConst this_val
     athena_physics_space_collide(space->space, &cdata, contact_callback);
     athena_physics_world_step(world->world, step_size);
     athena_physics_joint_group_empty(contact_group->group);
+
+    if (JS_IsUndefined(cdata.callback)) {
+        JS_SetPropertyStr(ctx, cdata.contacts_array, "length", JS_NewUint32(ctx, cdata.contact_index));
+    }
 
     return cdata.contacts_array;
 }
