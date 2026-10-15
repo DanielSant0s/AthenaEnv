@@ -6,6 +6,7 @@
 
 #include <athena/image_list.h>
 #include <graphics.h>
+#include <lockman.h>
 #include <taskman.h>
 
 static int athena_image_list_thread(void *data) {
@@ -13,18 +14,25 @@ static int athena_image_list_thread(void *data) {
 
     while (true) {
         WaitSema(list->sema_id);
-        for (int i = 0; i < list->size; i++) {
-            AthenaImage *img = list->list[i];
-            load_image(img->tex, img->path, img->delayed);
-            img->width = (float)img->tex->Width;
-            img->height = (float)img->tex->Height;
-            img->endx = (float)img->tex->Width;
-            img->endy = (float)img->tex->Height;
-            img->loaded = true;
-        }
-        free(list->list);
+
+        lock_mutex(list->mutex_id);
+        int count = list->size;
+        AthenaImage** batch = list->list;
         list->list = NULL;
         list->size = 0;
+        unlock_mutex(list->mutex_id);
+
+        for (int i = 0; i < count; i++) {
+            AthenaImage *img = batch[i];
+            load_image(img->tex, img->path, img->delayed);
+            img->width  = (float)img->tex->Width;
+            img->height = (float)img->tex->Height;
+            img->endx   = (float)img->tex->Width;
+            img->endy   = (float)img->tex->Height;
+            img->loaded = true;
+        }
+
+        free(batch);
     }
 
     return 0;
@@ -40,6 +48,7 @@ AthenaImageList *athena_image_list_create(void) {
     sema.max_count = 1;
     sema.option = 0;
     list->sema_id = CreateSema(&sema);
+    list->mutex_id = create_mutex();
 
     int task = create_task("AsyncImage: Loading Thread", (void *)athena_image_list_thread, 4096, 16);
     init_task(task, list);
@@ -54,6 +63,8 @@ void athena_image_list_destroy(AthenaImageList *list) {
 
     kill_task(list->thread_id);
     DeleteSema(list->sema_id);
+    delete_mutex(list->mutex_id);
+    
     if (list->size > 0)
         free(list->list);
     free(list);
@@ -63,9 +74,13 @@ int athena_image_list_append(AthenaImageList *list, AthenaImage *image) {
     if (!list || !image)
         return -1;
 
+    lock_mutex(list->mutex_id);
+
     AthenaImage **aux = malloc((list->size + 1) * sizeof(AthenaImage *));
-    if (!aux)
+    if (!aux) {
+        unlock_mutex(list->mutex_id);
         return -1;
+    }
 
     if (list->size > 0) {
         memcpy(aux, list->list, list->size * sizeof(AthenaImage *));
@@ -76,6 +91,8 @@ int athena_image_list_append(AthenaImageList *list, AthenaImage *image) {
     list->list[list->size] = image;
     list->size++;
     image->loaded = false;
+
+    unlock_mutex(list->mutex_id);
     return 0;
 }
 
