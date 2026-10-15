@@ -20,21 +20,22 @@ void lerp_vector(VECTOR result, VECTOR a, VECTOR b, float t) {
 }
 
 void slerp_quaternion(VECTOR result, VECTOR q1, VECTOR q2, float t) {
-    float dot = q1[0] * q2[0] + q1[1] * q2[1] + q1[2] * q2[2] + q1[3] * q2[3];
+    float q2_x = q2[0], q2_y = q2[1], q2_z = q2[2], q2_w = q2[3];
+    float dot = q1[0] * q2_x + q1[1] * q2_y + q1[2] * q2_z + q1[3] * q2_w;
 
     if (dot < 0.0f) {
-        q2[0] = -q2[0];
-        q2[1] = -q2[1];
-        q2[2] = -q2[2];
-        q2[3] = -q2[3];
+        q2_x = -q2_x;
+        q2_y = -q2_y;
+        q2_z = -q2_z;
+        q2_w = -q2_w;
         dot = -dot;
     }
 
     if (dot > 0.9995f) {
-        result[0] = q1[0] + (q2[0] - q1[0]) * t;
-        result[1] = q1[1] + (q2[1] - q1[1]) * t;
-        result[2] = q1[2] + (q2[2] - q1[2]) * t;
-        result[3] = q1[3] + (q2[3] - q1[3]) * t;
+        result[0] = q1[0] + (q2_x - q1[0]) * t;
+        result[1] = q1[1] + (q2_y - q1[1]) * t;
+        result[2] = q1[2] + (q2_z - q1[2]) * t;
+        result[3] = q1[3] + (q2_w - q1[3]) * t;
     } else {
         float theta_0 = acosf(dot);
         float theta = theta_0 * t;
@@ -44,10 +45,10 @@ void slerp_quaternion(VECTOR result, VECTOR q1, VECTOR q2, float t) {
         float s0 = cosf(theta) - dot * sin_theta / sin_theta_0;
         float s1 = sin_theta / sin_theta_0;
         
-        result[0] = s0 * q1[0] + s1 * q2[0];
-        result[1] = s0 * q1[1] + s1 * q2[1];
-        result[2] = s0 * q1[2] + s1 * q2[2];
-        result[3] = s0 * q1[3] + s1 * q2[3];
+        result[0] = s0 * q1[0] + s1 * q2_x;
+        result[1] = s0 * q1[1] + s1 * q2_y;
+        result[2] = s0 * q1[2] + s1 * q2_z;
+        result[3] = s0 * q1[3] + s1 * q2_w;
     }
 
     float length = sqrtf(result[0] * result[0] + result[1] * result[1] + 

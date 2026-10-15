@@ -3822,13 +3822,34 @@ void athena_physics_update_body_pos_rot(athena_object_data *obj) {
         return;
 
     AthenaPhysicsBody *body = (AthenaPhysicsBody *)obj->physics;
+    const float *R = body->rotation;
+    float sx = obj->scale[0], sy = obj->scale[1], sz = obj->scale[2];
+
     obj->position[0] = body->position[0];
     obj->position[1] = body->position[1];
     obj->position[2] = body->position[2];
 
-    rot_matrix_to_euler(body->rotation, obj->rotation);
+    rot_matrix_to_euler(R, obj->rotation);
 
-    matrix_functions->trs_euler(obj->transform, obj->position, obj->rotation, obj->scale);
+    obj->transform[0]  = R[0] * sx;
+    obj->transform[1]  = R[4] * sx;
+    obj->transform[2]  = R[8] * sx;
+    obj->transform[3]  = 0.0f;
+
+    obj->transform[4]  = R[1] * sy;
+    obj->transform[5]  = R[5] * sy;
+    obj->transform[6]  = R[9] * sy;
+    obj->transform[7]  = 0.0f;
+
+    obj->transform[8]  = R[2] * sz;
+    obj->transform[9]  = R[6] * sz;
+    obj->transform[10] = R[10] * sz;
+    obj->transform[11] = 0.0f;
+
+    obj->transform[12] = body->position[0];
+    obj->transform[13] = body->position[1];
+    obj->transform[14] = body->position[2];
+    obj->transform[15] = 1.0f;
 }
 
 void updateGeomPosRot(athena_object_data *obj) {
