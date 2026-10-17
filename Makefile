@@ -322,7 +322,7 @@ all: $(DIR_GUARD) $(EXT_LIBS) $(EE_OBJS) libs
 	
 	$(PS2_PACKER) $(EE_BIN) $(EE_BIN_PKD) > /dev/null
 
- vu1_mpgs: src/vu1/draw_2D_tile_list.vsm src/vu1/draw_3D_colors.vsm src/vu1/draw_3D_lights.vsm src/vu1/draw_3D_spec.vsm src/vu1/draw_3D_colors_skin.vsm src/vu1/draw_3D_lights_skin.vsm src/vu1/draw_3D_spec_skin.vsm src/vu1/draw_3D_lights_ref.vsm 
+ vu1_mpgs: src/vu1/draw_2D_tile_list.vsm src/vu1/draw_3D_colors.vsm src/vu1/draw_3D_lights.vsm src/vu1/draw_3D_spec.vsm src/vu1/draw_3D_colors_skin.vsm src/vu1/draw_3D_lights_skin.vsm src/vu1/draw_3D_spec_skin.vsm src/vu1/draw_3D_lights_ref.vsm src/vu1/draw_3D_lights_ref_skin.vsm 
  # vu0_mpgs: src/vu0/matrix_multiply.vsm
 
 debug: $(DIR_GUARD) $(EXT_LIBS) $(EE_OBJS) 
@@ -400,10 +400,15 @@ $(EE_SRC_DIR)%.vcl: $(EE_SRC_DIR)%.vclpp | $(EE_SRC_DIR)
 	$(DIR_GUARD)
 	$(EE_VCLPP) $< $@.vcl
 
+# The .vsm files are committed: VCL (closed source, Linux x86 only) is not
+# available everywhere, the CI included. Precious so make never deletes one as
+# an intermediate of .vcl -> .vsm -> .o, and without VCL the committed .vsm is
+# used as is -- a fresh checkout can easily leave a .vcl looking newer.
+.PRECIOUS: $(EE_SRC_DIR)%.vsm
+
 $(EE_SRC_DIR)%.vsm: $(EE_SRC_DIR)%.vcl | $(EE_SRC_DIR)
-	@echo VCL - $<
 	$(DIR_GUARD)
-	$(EE_VCL) -Isrc -g -t1 -o$@ $<
+	@if command -v $(EE_VCL) >/dev/null 2>&1; then 		echo VCL - $<; 		$(EE_VCL) -Isrc -g -t1 -o$@ $<; 	elif [ -f $@ ]; then 		echo "VCL - $< (no $(EE_VCL), using the committed $@)"; 		touch $@; 	else 		echo "error: $@ is missing and $(EE_VCL) is not installed to build it from $<"; 		exit 1; 	fi
 
 $(EE_OBJ_DIR)%.o: $(EE_EMBED_DIR)%.c | $(EE_OBJ_DIR)
 	@echo BIN2C - $<
