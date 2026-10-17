@@ -123,7 +123,10 @@ const skin_anims = new AnimCollection("Twerk.gltf");
 const gltf_skin = new RenderData("Twerk.gltf");
 gltf_skin.accurate_clipping = true;
 gltf_skin.face_culling = Render.CULL_FACE_BACK;
-gltf_skin.pipeline = Render.PL_DEFAULT;
+// Specular (Blinn-Phong per vertex) on the dynamic props and the player: smooth,
+// dense meshes where the highlights read well. The Sponza stays diffuse -- its
+// huge low-poly triangles only turn per-vertex highlights into stray bright faces.
+gltf_skin.pipeline = Render.PL_SPECULAR;
 gltf_skin.freeze();
 
 const skin_object = new RenderObject(gltf_skin);
@@ -163,6 +166,7 @@ skin_object.playAnim(skin_anims["idle"] || skin_anims["twerk"], true);
 // --- Dynamic Physics Crates (Courtyard Pyramid + North Terrace Balcony Crates) ---
 const box = new RenderData("box_bump.gltf");
 box.face_culling = Render.CULL_FACE_BACK;
+box.pipeline = Render.PL_SPECULAR;
 box.freeze();
 
 const CRATE_HALF = 0.38f;
@@ -207,6 +211,7 @@ for (let i = 0; i < crateSpawns.length; i++) {
 const monkeyTex = new Image("monkey.png");
 const monkeyData = new RenderData("monkey_strip.gltf", monkeyTex);
 monkeyData.face_culling = Render.CULL_FACE_BACK;
+monkeyData.pipeline = Render.PL_SPECULAR;
 monkeyData.freeze();
 
 const BALL_RADIUS = 0.45f;
@@ -285,12 +290,13 @@ const light = Lights.new();
 Lights.set(light, Lights.DIRECTION, 0.35f, 0.90f, 0.45f);
 Lights.set(light, Lights.AMBIENT,   0.26f, 0.27f, 0.30f);
 Lights.set(light, Lights.DIFFUSE,   0.78f, 0.74f, 0.66f);
-Lights.set(light, Lights.SPECULAR,  1.00f, 0.95f, 0.85f);
+Lights.set(light, Lights.SPECULAR,  1.00f, 1.00f, 1.00f); // white sun highlight
 
 const fillLight = Lights.new();
 Lights.set(fillLight, Lights.DIRECTION, -0.45f, 0.55f, -0.70f);
 Lights.set(fillLight, Lights.AMBIENT,    0.05f, 0.04f, 0.03f);
 Lights.set(fillLight, Lights.DIFFUSE,    0.34f, 0.27f, 0.20f);
+Lights.set(fillLight, Lights.SPECULAR,   0.70f, 0.50f, 0.30f); // warm second highlight
 
 const pad = Pads.get();
 const gray = Color.new(180, 180, 220, 128);

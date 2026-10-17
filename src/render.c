@@ -1511,11 +1511,82 @@ static inline void render_trigger_texture_upload(owl_packet *packet, int texture
 		VIF_CODE(texture_id, 0, VIF_MARK, 0)));
 }
 
-static inline int render_object_lighting_qwc(void) {
-	return (pnt_light_count.w > 0) ? (1 + 5 + 1 + 3 + 1 + 8 + 1 + 4) : (1 + 5 + 1 + 3);
+static inline int render_object_lighting_qwc(bool specular) {
+	return ((pnt_light_count.w > 0) ? (1 + 5 + 1 + 3 + 1 + 8 + 1 + 4) : (1 + 5 + 1 + 3))
+	     + (specular ? (1 + 4) : 0);
 }
 
-static void render_upload_object_lighting(owl_packet *packet, athena_object_data *obj) {
+// Angular radius below which the specular pass treats the viewer as being at
+// infinity for the whole object: sin(15 deg). At that size the direction to
+// the camera varies by at most 15 deg across the object, so the half vector
+// (halfway between light and view) by at most ~7.5 -- a highlight that slides
+// a little less as the camera moves, not one that looks wrong.
+#define SPEC_INFINITE_MAX_SIN 0.2588f
+
+// Per-object specular setup for the PL_SPECULAR microprograms (SPEC_HALF_T /
+// SPEC_MODE in mem_layout.i). Small objects for their distance get the viewer
+// at infinity: one view vector, from the object's centre to the camera, so the
+// half vector of each light is a constant worked out here and VU1 needs no
+// per-vertex view vector, square root or divide for the specular. Anything
+// large or close keeps the exact per-vertex Blinn-Phong.
+static void render_upload_specular_mode(owl_packet *packet, athena_object_data *obj,
+                                        const VECTOR obj_dir[4], const VECTOR obj_cam,
+                                        float max_scale_sq) {
+	VECTOR *bounds = obj->skinned_bounds ? obj->skinned_bounds : obj->data->bounding_box;
+	const float *m = obj->transform;
+
+	float cx = (bounds[0][0] + bounds[7][0]) * 0.5f;
+	float cy = (bounds[0][1] + bounds[7][1]) * 0.5f;
+	float cz = (bounds[0][2] + bounds[7][2]) * 0.5f;
+	float ex = bounds[7][0] - bounds[0][0];
+	float ey = bounds[7][1] - bounds[0][1];
+	float ez = bounds[7][2] - bounds[0][2];
+	float radius_sq = (ex*ex + ey*ey + ez*ez) * 0.25f * max_scale_sq;
+
+	// World-space centre against the camera.
+	float *cam = getCameraPosition();
+	float wx = cx*m[0] + cy*m[4] + cz*m[8]  + m[12] - cam[0];
+	float wy = cx*m[1] + cy*m[5] + cz*m[9]  + m[13] - cam[1];
+	float wz = cx*m[2] + cy*m[6] + cz*m[10] + m[14] - cam[2];
+	float dist_sq = wx*wx + wy*wy + wz*wz;
+
+	// A never-computed (all zero) box has no extent: keep it exact.
+	bool infinite = radius_sq > 0.0f &&
+	                radius_sq < dist_sq * (SPEC_INFINITE_MAX_SIN * SPEC_INFINITE_MAX_SIN);
+
+	VECTOR half_t[3] qw_aligned;
+	memset(half_t, 0, sizeof(half_t));
+	if (infinite) {
+		// Object-space view direction, centre -> camera.
+		float vx = obj_cam[0] - cx, vy = obj_cam[1] - cy, vz = obj_cam[2] - cz;
+		float vlen = sqrtf(vx*vx + vy*vy + vz*vz);
+		if (vlen > 1e-6f) {
+			vx /= vlen; vy /= vlen; vz /= vlen;
+		}
+		for (int i = 0; i < 4; i++) {
+			// Same L as the exact path (the light direction as given, not
+			// renormalised) plus the unit view vector, then normalised.
+			float hx = obj_dir[i][0] + vx, hy = obj_dir[i][1] + vy, hz = obj_dir[i][2] + vz;
+			float hlen = sqrtf(hx*hx + hy*hy + hz*hz);
+			float inv = hlen > 1e-6f ? 1.0f / hlen : 0.0f;
+			half_t[0][i] = hx * inv;
+			half_t[1][i] = hy * inv;
+			half_t[2][i] = hz * inv;
+		}
+	}
+
+	owl_qword mode qw_aligned;
+	memset(&mode, 0, sizeof(mode));
+	mode.sword[0] = infinite ? 1 : 0;
+
+	owl_add_unpack_data_cnt(packet, 1013, 4, 0);
+	owl_add_uquad_ptr(packet, half_t[0]);
+	owl_add_uquad_ptr(packet, half_t[1]);
+	owl_add_uquad_ptr(packet, half_t[2]);
+	owl_add_uquad_ptr(packet, (__uint128_t *)&mode);
+}
+
+static void render_upload_object_lighting(owl_packet *packet, athena_object_data *obj, bool specular) {
 	const float *m = obj->transform;
 
 	float sx2 = m[0]*m[0] + m[1]*m[1] + m[2]*m[2];
@@ -1589,6 +1660,12 @@ static void render_upload_object_lighting(owl_packet *packet, athena_object_data
 	owl_add_uquad_ptr(packet, dir_t[0]);
 	owl_add_uquad_ptr(packet, dir_t[1]);
 	owl_add_uquad_ptr(packet, dir_t[2]);
+
+	if (specular) {
+		float max_scale_sq = sx2 > sy2 ? sx2 : sy2;
+		if (sz2 > max_scale_sq) max_scale_sq = sz2;
+		render_upload_specular_mode(packet, obj, obj_dir, obj_cam, max_scale_sq);
+	}
 
 	if (pnt_light_count.w > 0) {
 		VECTOR obj_ppos[4] qw_aligned;
@@ -1671,7 +1748,8 @@ static void draw_vu1_pass(athena_object_data *obj, int pass_state,
 	}
 
 	bool want_lights = (kind != CHAIN_COLORS);
-	int header_qwc = 9 + render_view_qwc() + (want_lights ? render_object_lighting_qwc() : 0);
+	bool want_specular = (pipeline == PL_SPECULAR);
+	int header_qwc = 9 + render_view_qwc() + (want_lights ? render_object_lighting_qwc(want_specular) : 0);
 	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, header_qwc);
 
 	owl_add_cnt_tag(packet, 0, owl_vif_code_double(VIF_CODE(0, 0, VIF_FLUSHE, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
@@ -1690,7 +1768,7 @@ static void draw_vu1_pass(athena_object_data *obj, int pass_state,
 	}
 
 	if (want_lights) {
-		render_upload_object_lighting(packet, obj);
+		render_upload_object_lighting(packet, obj, want_specular);
 	}
 
 	if (obj->bone_matrices && data->skeleton) {

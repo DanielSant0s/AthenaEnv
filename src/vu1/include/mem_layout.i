@@ -41,7 +41,8 @@ CLIPQ_SAVE           .assign 139 ; x/y: clip queue cursor parked during a fan
 CLIPQ_STATE          .assign 140 ; x,y,z: kick pattern, w: listPtr (memory-resident queue)
 
 ; Double buffer occupies 141..482 (342 QW) and 483..824 (342 QW).
-; 825..1008 = 184 QW = 46 bones; stack lives above at 1009..1022.
+; 825..1008 = 184 QW = 46 bones. 1009..1022 was the clipping stack, unused
+; since the clip queue replaced the per-vertex scissoring.
 BONE_MATRICES       .assign 825
 
 ; Point lights again, transposed for PointLightsSoA: 1009 = the 4 x positions,
@@ -49,6 +50,13 @@ BONE_MATRICES       .assign 825
 ; the stack area, which the per-vertex clipping path never pushes that deep
 ; (5 QW from 1022 down).
 POINT_LIGHT_SOA     .assign 1009 ; 1009..1012
+
+; Specular, viewer at infinity (render_upload_object_lighting picks it per
+; object when the object is small for its distance): the 4 per-object half
+; vectors, transposed (1013 = x, 1014 = y, 1015 = z), and the mode (1016.x,
+; non-zero = use them).
+SPEC_HALF_T         .assign 1013 ; 1013..1015
+SPEC_MODE           .assign 1016
 
 DUMMY_XGKICK_BUF    .assign 1023
 

@@ -123,6 +123,152 @@
    madd.xyz       \light,    PntDiff3, pndl[w]
    .endm
 
+;//--------------------------------------------------------------------
+;// DirSpecularSoA - Blinn-Phong specular of all 4 directional lights at
+;// once, no loop. Same result as the per-light HalfAngle/SpecularPowerScale
+;// loop it replaces:
+;//
+;//   spec_i = max(N . normalize(L_i + V), 0)^16 * LightSpecular_i
+;//
+;// With LDirX/Y/Z (from DirLightsLoad) lane i of hx/hy/hz is L_i + V, so
+;// N.H and |H|^2 come out for the 4 lights in 3 FMACs each. The 4 1/|H|
+;// are split 2 on the FDIV unit and 2 on the EFU, which run in parallel,
+;// and every light shares their latency instead of paying it in turn.
+;// Unused lights have zero specular colour. \light accumulates (xyz).
+;//--------------------------------------------------------------------
+   .macro   DirSpecularSoA light, normal, view
+   add            shx,       LDirX,  \view[x]
+   add            shy,       LDirY,  \view[y]
+   add            shz,       LDirZ,  \view[z]
+   mul            acc,       shx,    \normal[x]
+   madd           acc,       shy,    \normal[y]
+   madd           sndh,      shz,    \normal[z]
+   mul            acc,       shx,    shx
+   madd           acc,       shy,    shy
+   madd           shh,       shz,    shz
+   loi            0.000001
+   maxi           shh,       shh,    i              ; L = -V exactly: no 1/0
+   rsqrt          q,         vf00[w], shh[x]
+   addq.x         shinv,     vf00,   q
+   rsqrt          q,         vf00[w], shh[y]
+   addq.y         shinv,     vf00,   q
+   ersqrt         p,         shh[z]
+   mfp.z          shinv,     p
+   ersqrt         p,         shh[w]
+   mfp.w          shinv,     p
+   mul            sndh,      sndh,   shinv
+   maxx.xyzw      sndh,      sndh,   vf00
+   mul            sndh,      sndh,   sndh           ; ^2
+   mul            sndh,      sndh,   sndh           ; ^4
+   mul            sndh,      sndh,   sndh           ; ^8
+   mul            sndh,      sndh,   sndh           ; ^16
+   lq.xyz         LSpec0,    LIGHT_SPECULAR_PTR+0(vi00)
+   lq.xyz         LSpec1,    LIGHT_SPECULAR_PTR+1(vi00)
+   lq.xyz         LSpec2,    LIGHT_SPECULAR_PTR+2(vi00)
+   lq.xyz         LSpec3,    LIGHT_SPECULAR_PTR+3(vi00)
+   mul.xyz        acc,       \light, vf00[w]
+   madd.xyz       acc,       LSpec0, sndh[x]
+   madd.xyz       acc,       LSpec1, sndh[y]
+   madd.xyz       acc,       LSpec2, sndh[z]
+   madd.xyz       \light,    LSpec3, sndh[w]
+   .endm
+
+;//--------------------------------------------------------------------
+;// SpecPerspective / SpecAccumulate - DirSpecularSoA rewritten to use a
+;// single FDIV op per vertex, shared with the perspective divide, so a
+;// vertex loop built on it can be software-pipelined (VCL finds no loop
+;// schedule with the 4 Q ops of DirSpecularSoA). Same Blinn-Phong result:
+;//
+;// * The specular cosine does not change when H is scaled, so
+;//   H = L * |V| + V (|V| from esqrt, on the EFU) instead of L + V/|V|.
+;// * spec = cos^16 = (cos^2)^8, cos^2 = (N.H)^2 / |H|^2. With lanes
+;//   a,b,c,d = |H_i|^2, three lane rotations give the product of the
+;//   OTHER three per lane (bcd, acd, abd, abc), and 1/a = bcd / abcd: one
+;//   reciprocal of T = abcd serves all four lights.
+;// * That reciprocal is merged with the perspective one: q = 1/(w T),
+;//   then 1/w = q T and 1/T = q w.
+;//
+;// SpecPerspective leaves 1/w in sinvw.x (use it instead of q for the
+;// perspective divide and the STQ) and cos^2 per light in sspec;
+;// SpecPower16 raises that to cos^16 and SpecAccumulate adds the specular
+;// colours into \light. Needs LDirX/Y/Z
+;// (DirLightsLoad) and CamPos.
+;//--------------------------------------------------------------------
+   .macro   SpecPerspective vtx, vert, normal
+   sub.xyz        sview,     CamPos, \vert
+   mul.xyz        stmp,      sview,  sview
+   add.x          stmp,      stmp,   stmp[y]
+   add.x          stmp,      stmp,   stmp[z]
+   esqrt          p,         stmp[x]
+   mfp.x          svlen,     p
+   mul            shx,       LDirX,  svlen[x]
+   mul            shy,       LDirY,  svlen[x]
+   mul            shz,       LDirZ,  svlen[x]
+   add            shx,       shx,    sview[x]
+   add            shy,       shy,    sview[y]
+   add            shz,       shz,    sview[z]
+   mul            acc,       shx,    \normal[x]
+   madd           acc,       shy,    \normal[y]
+   madd           sndh,      shz,    \normal[z]
+   maxx.xyzw      sndh,      sndh,   vf00
+   mul            sndh,      sndh,   sndh           ; (N.H)^2
+   mul            acc,       shx,    shx
+   madd           acc,       shy,    shy
+   madd           shh,       shz,    shz            ; |H|^2
+   loi            0.000001
+   maxi           shh,       shh,    i              ; L = -V exactly: no 1/0
+   mr32           sr1,       shh
+   mr32           sr2,       sr1
+   mr32           sr3,       sr2
+   mul            sother,    sr1,    sr2
+   mul            sother,    sother, sr3            ; product of the other 3 lanes
+   mul            stot,      shh,    sother         ; T = abcd, in every lane
+   mul.x          swt,       stot,   \vtx[w]
+   div            q,         vf00[w], swt[x]        ; 1 / (w T)
+   mulq.x         sinvw,     stot,   q              ; 1/w
+   mulq.w         sinvt,     \vtx,   q              ; 1/T
+   mul            sspec,     sother, sinvt[w]       ; 1/|H_i|^2
+   mul            sspec,     sspec,  sndh           ; cos^2
+   .endm
+
+;//--------------------------------------------------------------------
+;// SpecInfinite - specular with the viewer at infinity: one view vector for
+;// the whole object, so each light's half vector is a per-object constant
+;// the EE works out (SPEC_HALF_T, transposed, normalised) and N.H for the
+;// 4 lights is one matrix multiply, like the diffuse term -- no esqrt, no
+;// divide. Leaves cos^2 per light in \spec, like SpecPerspective, for
+;// SpecPower16 / SpecAccumulate.
+;//--------------------------------------------------------------------
+   .macro   SpecInfinite spec, normal
+   lq             SHalfX,    SPEC_HALF_T+0(vi00)
+   lq             SHalfY,    SPEC_HALF_T+1(vi00)
+   lq             SHalfZ,    SPEC_HALF_T+2(vi00)
+   mul            acc,       SHalfX, \normal[x]
+   madd           acc,       SHalfY, \normal[y]
+   madd           \spec,     SHalfZ, \normal[z]
+   maxx.xyzw      \spec,     \spec,  vf00
+   mul            \spec,     \spec,  \spec          ; cos^2
+   .endm
+
+   ; cos^2 -> cos^16 (three squarings), in place.
+   .macro   SpecPower16 spec
+   mul            \spec,     \spec,  \spec          ; ^4
+   mul            \spec,     \spec,  \spec          ; ^8
+   mul            \spec,     \spec,  \spec          ; ^16
+   .endm
+
+   .macro   SpecAccumulate light, spec
+   lq.xyz         LSpec0,    LIGHT_SPECULAR_PTR+0(vi00)
+   lq.xyz         LSpec1,    LIGHT_SPECULAR_PTR+1(vi00)
+   lq.xyz         LSpec2,    LIGHT_SPECULAR_PTR+2(vi00)
+   lq.xyz         LSpec3,    LIGHT_SPECULAR_PTR+3(vi00)
+   mul.xyz        acc,       \light, vf00[w]
+   madd.xyz       acc,       LSpec0, \spec[x]
+   madd.xyz       acc,       LSpec1, \spec[y]
+   madd.xyz       acc,       LSpec2, \spec[z]
+   madd.xyz       \light,    LSpec3, \spec[w]
+   .endm
+
 ;// Loads the 7 constant rows DirLightsMatrix reads. Hoisted out of the
 ;// vertex loop where registers allow it.
    .macro   DirLightsLoad

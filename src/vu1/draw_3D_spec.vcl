@@ -137,7 +137,6 @@ clipq_setup_off:
     isw.z     notStrip, CLIPQ_SAVE(vi00)
     isw.w     stripOr,  CLIPQ_SAVE(vi00)
     ilw.w       pntLightQnt,    NUM_POINT_LIGHTS(vi00) ; load active point lights
-    ilw.w       dirLightQnt,    NUM_DIR_LIGHTS(vi00)  ; load active directional lights
     lq.w           bfc_multiplier, CLIPFAN_OFFSET(vi00) ; restart strip parity
 
     lq      primTag,        0(iBase) ; GIF tag - tell GS how many data we will send
@@ -175,6 +174,700 @@ no_tex_kick_cull:
 
     ;/////////////// --- Loop --- ///////////////
     iadd vertexCounter, vi00, vertCount ; loop vertCount times
+    ; No point lights: branch-free loops, directional specular via
+    ; SpecPerspective/SpecAccumulate (one FDIV op per vertex) -- without the
+    ; clip queue when this chunk needs no clipping, with it (in registers)
+    ; when it does. Point lights take the original loop below, queue state in
+    ; memory.
+    ibne pntLightQnt, vi00, vertexLoop
+    ; Viewer at infinity for this object (chosen per object on the EE, see
+    ; render_upload_object_lighting): same loops, specular from SpecInfinite.
+    ilw.x     specInf, SPEC_MODE(vi00)
+    ibne specInf, vi00, spec_infinite
+    ibne clipOn, vi00, vertexLoopQ_entry
+    ; Software-pipelined by hand, two stages per iteration: stage 1 of
+    ; vertex i and stage 2 of vertex i-1. VCL loop mode gives up on a loop
+    ; this size (76 upper instructions) and cannot overlap two whole vertices
+    ; in its linear mode either, but this block holds two independent chains
+    ; of about half a vertex each, which its linear optimizer does overlap.
+    ; Four vectors (clip-space vertex, 1/w, specular cos^2, normal) and two
+    ; integers cross from one stage to the other.
+    ; Every load in the block comes before every store (VCL will not move a
+    ; load past a store through another base register).
+    vertexLoopNQ_entry:
+        ; ---- stage 1: vertex at iBase -- transform, clip test, specular cos^2 ----
+        lq inVert, POSITION_OFFSET(iBase)
+        DecompressPositionW inVert
+        lq inNormPacked, NORMAL_OFFSET(iBase)
+        DecompressNormal8 inNorm, inNormPacked
+        MatrixMultiplyVertex    vertexC, ObjectToScreen, inVert
+        mul clip_vertex, vertexC, clip_scale
+        clipw.xyz   clip_vertex, clip_vertex
+        fcand       VI01,   0x3FFFF
+        iaddiu      iADCc,  VI01,   0x7FFF
+        ; strip restart: negative packed normal w = no kick (ATHENA_STRIP_NO_KICK)
+        mtir        noKick, inNormPacked[w]
+        ior         iADCc,  iADCc,  noKick
+        ; perspective divide and directional specular share one FDIV op
+        DirLightsLoad
+        SpecPerspective vertexC, inVert, inNorm
+        iaddiu      iBase, iBase, 1
+        iaddi       vertexCounter, vertexCounter, -1
+        ibeq        vertexCounter, vi00, vertexLoopNQ_epilogue
+    vertexLoopNQ:
+        ; stage 1 results of the previous iteration move on to stage 2
+        move        vertexP, vertexC
+        move.x      sinvwP,  sinvw
+        move        sspecP,  sspec
+        move.xyz    inNormP, inNorm
+        iadd        iADCp,   iADCc,  vi00
+        ; ---- stage 1: vertex at iBase -- transform, clip test, specular cos^2 ----
+        lq inVert, POSITION_OFFSET(iBase)
+        DecompressPositionW inVert
+        lq inNormPacked, NORMAL_OFFSET(iBase)
+        DecompressNormal8 inNorm, inNormPacked
+        MatrixMultiplyVertex    vertexC, ObjectToScreen, inVert
+        mul clip_vertex, vertexC, clip_scale
+        clipw.xyz   clip_vertex, clip_vertex
+        fcand       VI01,   0x3FFFF
+        iaddiu      iADCc,  VI01,   0x7FFF
+        ; strip restart: negative packed normal w = no kick (ATHENA_STRIP_NO_KICK)
+        mtir        noKick, inNormPacked[w]
+        ior         iADCc,  iADCc,  noKick
+        ; perspective divide and directional specular share one FDIV op
+        DirLightsLoad
+        SpecPerspective vertexC, inVert, inNorm
+        ; ---- stage 2: previous vertex (iBase - 1) -- screen space, face
+        ; culling, lighting, colour, stores. Its loads still come before any
+        ; store. ----
+        lq stqPacked, TEXCOORD_OFFSET-1(iBase)
+        DecompressUV16 stq, stqPacked
+        lq inColorPacked, COLOR_OFFSET-1(iBase)
+        DecompressColor8 inColor, inColorPacked
+        move        vertex, vertexP
+        mul.xyz     vertex, vertex,     sinvwP[x]
+        mul.xyz     vertex, vertex,     scale
+        add.xyz     vertex, vertex,     offset
+        move        vertex2, vertex3
+        move        vertex3, vertex
+        move.xyz    oldvector, vector
+        sub.xyz     vector, vertex3, vertex2
+        opmula.xyz  acc, vector, oldvector
+        opmsub.xyz  crossproduct, oldvector, vector
+        mulw.z      crossproduct, crossproduct, bfc_multiplier
+        fmand       z_sign, z_sign_mask
+        iaddiu      z_sign, z_sign, 0x7FE0
+        ior         iADC,   iADCp,  z_sign
+        mulx.w      bfc_multiplier, bfc_multiplier, bfc_multiplier
+        mfir.w      vertex, iADC
+        ftoi4.xy    vertex, vertex
+        ftoi0.z     vertex, vertex
+        mul         modStq, stq, sinvwP[x]
+        ; lighting: ambient + diffuse (matrix) + specular (cos^2 from stage 1)
+        SpecPower16 sspecP
+        lq          light, LIGHT_AMBIENT_SUM(vi00)  ; xyz = summed ambient, w = 1.0
+        DirLightsLoad
+        DirLightsMatrix light, inNormP
+        SpecAccumulate light, sspecP
+        add.xyzw    color, matDiffuse, inColor
+        mul         color, color, light
+        VectorNormalizeClamp color, color
+        loi 128.0
+        mul         color, color, i
+        ColorFPtoGsRGBAQ intColor, color
+        sq.xyz      modStq,   STQ(destAddress)
+        sq          intColor, RGBA(destAddress)
+        sq          vertex,   XYZ2(destAddress)
+        iaddiu      destAddress, destAddress, 3
+        iaddiu      iBase, iBase, 1
+        iaddi       vertexCounter, vertexCounter, -1
+        ibne        vertexCounter, vi00, vertexLoopNQ
+    vertexLoopNQ_epilogue:
+        ; stage 1 results of the previous iteration move on to stage 2
+        move        vertexP, vertexC
+        move.x      sinvwP,  sinvw
+        move        sspecP,  sspec
+        move.xyz    inNormP, inNorm
+        iadd        iADCp,   iADCc,  vi00
+        ; ---- stage 2: previous vertex (iBase - 1) -- screen space, face
+        ; culling, lighting, colour, stores. Its loads still come before any
+        ; store. ----
+        lq stqPacked, TEXCOORD_OFFSET-1(iBase)
+        DecompressUV16 stq, stqPacked
+        lq inColorPacked, COLOR_OFFSET-1(iBase)
+        DecompressColor8 inColor, inColorPacked
+        move        vertex, vertexP
+        mul.xyz     vertex, vertex,     sinvwP[x]
+        mul.xyz     vertex, vertex,     scale
+        add.xyz     vertex, vertex,     offset
+        move        vertex2, vertex3
+        move        vertex3, vertex
+        move.xyz    oldvector, vector
+        sub.xyz     vector, vertex3, vertex2
+        opmula.xyz  acc, vector, oldvector
+        opmsub.xyz  crossproduct, oldvector, vector
+        mulw.z      crossproduct, crossproduct, bfc_multiplier
+        fmand       z_sign, z_sign_mask
+        iaddiu      z_sign, z_sign, 0x7FE0
+        ior         iADC,   iADCp,  z_sign
+        mulx.w      bfc_multiplier, bfc_multiplier, bfc_multiplier
+        mfir.w      vertex, iADC
+        ftoi4.xy    vertex, vertex
+        ftoi0.z     vertex, vertex
+        mul         modStq, stq, sinvwP[x]
+        ; lighting: ambient + diffuse (matrix) + specular (cos^2 from stage 1)
+        SpecPower16 sspecP
+        lq          light, LIGHT_AMBIENT_SUM(vi00)  ; xyz = summed ambient, w = 1.0
+        DirLightsLoad
+        DirLightsMatrix light, inNormP
+        SpecAccumulate light, sspecP
+        add.xyzw    color, matDiffuse, inColor
+        mul         color, color, light
+        VectorNormalizeClamp color, color
+        loi 128.0
+        mul         color, color, i
+        ColorFPtoGsRGBAQ intColor, color
+        sq.xyz      modStq,   STQ(destAddress)
+        sq          intColor, RGBA(destAddress)
+        sq          vertex,   XYZ2(destAddress)
+        iaddiu      destAddress, destAddress, 3
+    b clipq_reload
+
+    ; Software-pipelined by hand, two stages per iteration: stage 1 of
+    ; vertex i and stage 2 of vertex i-1. VCL loop mode gives up on a loop
+    ; this size (76 upper instructions) and cannot overlap two whole vertices
+    ; in its linear mode either, but this block holds two independent chains
+    ; of about half a vertex each, which its linear optimizer does overlap.
+    ; Four vectors (clip-space vertex, 1/w, specular cos^2, normal) and two
+    ; integers cross from one stage to the other.
+    ; Every load in the block comes before every store (VCL will not move a
+    ; load past a store through another base register).
+    vertexLoopQ_entry:
+        ; ---- stage 1: vertex at iBase -- transform, clip test, specular cos^2 ----
+        lq inVert, POSITION_OFFSET(iBase)
+        DecompressPositionW inVert
+        lq inNormPacked, NORMAL_OFFSET(iBase)
+        DecompressNormal8 inNorm, inNormPacked
+        MatrixMultiplyVertex    vertexC, ObjectToScreen, inVert
+        mul clip_vertex, vertexC, clip_scale
+        clipw.xyz   clip_vertex, clip_vertex
+        fcand       VI01,   0x3FFFF
+        iaddiu      iADCc,  VI01,   0x7FFF
+        ; strip restart: negative packed normal w = no kick (ATHENA_STRIP_NO_KICK)
+        mtir        noKick, inNormPacked[w]
+        ior         iADCc,  iADCc,  noKick
+        ; clip queue bookkeeping for this vertex (stored by stage 2); the
+        ; queue state lives in VU memory, there are not enough integer
+        ; registers for it next to two stages in flight
+        ilw.x      kick0,    CLIPQ_STATE(vi00)
+        ilw.z      notStrip, CLIPQ_SAVE(vi00)
+        ilw.w      stripOr,  CLIPQ_SAVE(vi00)
+        ior        qOk,      noKick,  notStrip
+        iand       qOk,      qOk,     kick0
+        iand       qIncC,    qOk,     VI01
+        ior        kickNext, kick0,   stripOr
+        ilw.y      kick1,    CLIPQ_STATE(vi00)
+        ilw.z      kick2,    CLIPQ_STATE(vi00)
+        isw.x      kick1,    CLIPQ_STATE(vi00)
+        isw.y      kick2,    CLIPQ_STATE(vi00)
+        isw.z      kickNext, CLIPQ_STATE(vi00)
+        ; perspective divide and directional specular share one FDIV op
+        DirLightsLoad
+        SpecPerspective vertexC, inVert, inNorm
+        iaddiu      iBase, iBase, 1
+        iaddi       vertexCounter, vertexCounter, -1
+        ibeq        vertexCounter, vi00, vertexLoopQ_epilogue
+    vertexLoopQ:
+        ; stage 1 results of the previous iteration move on to stage 2
+        move        vertexP, vertexC
+        move.x      sinvwP,  sinvw
+        move        sspecP,  sspec
+        move.xyz    inNormP, inNorm
+        iadd        iADCp,   iADCc,  vi00
+        iadd        qIncP,   qIncC,  vi00
+        ; ---- stage 1: vertex at iBase -- transform, clip test, specular cos^2 ----
+        lq inVert, POSITION_OFFSET(iBase)
+        DecompressPositionW inVert
+        lq inNormPacked, NORMAL_OFFSET(iBase)
+        DecompressNormal8 inNorm, inNormPacked
+        MatrixMultiplyVertex    vertexC, ObjectToScreen, inVert
+        mul clip_vertex, vertexC, clip_scale
+        clipw.xyz   clip_vertex, clip_vertex
+        fcand       VI01,   0x3FFFF
+        iaddiu      iADCc,  VI01,   0x7FFF
+        ; strip restart: negative packed normal w = no kick (ATHENA_STRIP_NO_KICK)
+        mtir        noKick, inNormPacked[w]
+        ior         iADCc,  iADCc,  noKick
+        ; clip queue bookkeeping for this vertex (stored by stage 2); the
+        ; queue state lives in VU memory, there are not enough integer
+        ; registers for it next to two stages in flight
+        ilw.x      kick0,    CLIPQ_STATE(vi00)
+        ilw.z      notStrip, CLIPQ_SAVE(vi00)
+        ilw.w      stripOr,  CLIPQ_SAVE(vi00)
+        ior        qOk,      noKick,  notStrip
+        iand       qOk,      qOk,     kick0
+        iand       qIncC,    qOk,     VI01
+        ior        kickNext, kick0,   stripOr
+        ilw.y      kick1,    CLIPQ_STATE(vi00)
+        ilw.z      kick2,    CLIPQ_STATE(vi00)
+        isw.x      kick1,    CLIPQ_STATE(vi00)
+        isw.y      kick2,    CLIPQ_STATE(vi00)
+        isw.z      kickNext, CLIPQ_STATE(vi00)
+        ; perspective divide and directional specular share one FDIV op
+        DirLightsLoad
+        SpecPerspective vertexC, inVert, inNorm
+        ; ---- stage 2: previous vertex (iBase - 1) -- screen space, face
+        ; culling, lighting, colour, stores. Its loads still come before any
+        ; store. ----
+        lq stqPacked, TEXCOORD_OFFSET-1(iBase)
+        DecompressUV16 stq, stqPacked
+        lq inColorPacked, COLOR_OFFSET-1(iBase)
+        DecompressColor8 inColor, inColorPacked
+        move        vertex, vertexP
+        mul.xyz     vertex, vertex,     sinvwP[x]
+        mul.xyz     vertex, vertex,     scale
+        add.xyz     vertex, vertex,     offset
+        move        vertex2, vertex3
+        move        vertex3, vertex
+        move.xyz    oldvector, vector
+        sub.xyz     vector, vertex3, vertex2
+        opmula.xyz  acc, vector, oldvector
+        opmsub.xyz  crossproduct, oldvector, vector
+        mulw.z      crossproduct, crossproduct, bfc_multiplier
+        fmand       z_sign, z_sign_mask
+        iaddiu      z_sign, z_sign, 0x7FE0
+        ior         iADC,   iADCp,  z_sign
+        mulx.w      bfc_multiplier, bfc_multiplier, bfc_multiplier
+        mfir.w      vertex, iADC
+        ftoi4.xy    vertex, vertex
+        ftoi0.z     vertex, vertex
+        mul         modStq, stq, sinvwP[x]
+        ; lighting: ambient + diffuse (matrix) + specular (cos^2 from stage 1)
+        SpecPower16 sspecP
+        lq          light, LIGHT_AMBIENT_SUM(vi00)  ; xyz = summed ambient, w = 1.0
+        DirLightsLoad
+        DirLightsMatrix light, inNormP
+        SpecAccumulate light, sspecP
+        add.xyzw    color, matDiffuse, inColor
+        mul         color, color, light
+        VectorNormalizeClamp color, color
+        loi 128.0
+        mul         color, color, i
+        ColorFPtoGsRGBAQ intColor, color
+        sq.xyz      modStq,   STQ(destAddress)
+        sq          intColor, RGBA(destAddress)
+        sq          vertex,   XYZ2(destAddress)
+        ilw.w      listPtr,  CLIPQ_STATE(vi00)
+        iaddi      prevBase, iBase,   -1
+        isw.w      prevBase, TEXCOORD_OFFSET(listPtr) ; UV w lane: never read
+        iadd       listPtr,  listPtr, qIncP
+        isw.w      listPtr,  CLIPQ_STATE(vi00)
+        iaddiu      destAddress, destAddress, 3
+        iaddiu      iBase, iBase, 1
+        iaddi       vertexCounter, vertexCounter, -1
+        ibne        vertexCounter, vi00, vertexLoopQ
+    vertexLoopQ_epilogue:
+        ; stage 1 results of the previous iteration move on to stage 2
+        move        vertexP, vertexC
+        move.x      sinvwP,  sinvw
+        move        sspecP,  sspec
+        move.xyz    inNormP, inNorm
+        iadd        iADCp,   iADCc,  vi00
+        iadd        qIncP,   qIncC,  vi00
+        ; ---- stage 2: previous vertex (iBase - 1) -- screen space, face
+        ; culling, lighting, colour, stores. Its loads still come before any
+        ; store. ----
+        lq stqPacked, TEXCOORD_OFFSET-1(iBase)
+        DecompressUV16 stq, stqPacked
+        lq inColorPacked, COLOR_OFFSET-1(iBase)
+        DecompressColor8 inColor, inColorPacked
+        move        vertex, vertexP
+        mul.xyz     vertex, vertex,     sinvwP[x]
+        mul.xyz     vertex, vertex,     scale
+        add.xyz     vertex, vertex,     offset
+        move        vertex2, vertex3
+        move        vertex3, vertex
+        move.xyz    oldvector, vector
+        sub.xyz     vector, vertex3, vertex2
+        opmula.xyz  acc, vector, oldvector
+        opmsub.xyz  crossproduct, oldvector, vector
+        mulw.z      crossproduct, crossproduct, bfc_multiplier
+        fmand       z_sign, z_sign_mask
+        iaddiu      z_sign, z_sign, 0x7FE0
+        ior         iADC,   iADCp,  z_sign
+        mulx.w      bfc_multiplier, bfc_multiplier, bfc_multiplier
+        mfir.w      vertex, iADC
+        ftoi4.xy    vertex, vertex
+        ftoi0.z     vertex, vertex
+        mul         modStq, stq, sinvwP[x]
+        ; lighting: ambient + diffuse (matrix) + specular (cos^2 from stage 1)
+        SpecPower16 sspecP
+        lq          light, LIGHT_AMBIENT_SUM(vi00)  ; xyz = summed ambient, w = 1.0
+        DirLightsLoad
+        DirLightsMatrix light, inNormP
+        SpecAccumulate light, sspecP
+        add.xyzw    color, matDiffuse, inColor
+        mul         color, color, light
+        VectorNormalizeClamp color, color
+        loi 128.0
+        mul         color, color, i
+        ColorFPtoGsRGBAQ intColor, color
+        sq.xyz      modStq,   STQ(destAddress)
+        sq          intColor, RGBA(destAddress)
+        sq          vertex,   XYZ2(destAddress)
+        ilw.w      listPtr,  CLIPQ_STATE(vi00)
+        iaddi      prevBase, iBase,   -1
+        isw.w      prevBase, TEXCOORD_OFFSET(listPtr) ; UV w lane: never read
+        iadd       listPtr,  listPtr, qIncP
+        isw.w      listPtr,  CLIPQ_STATE(vi00)
+        iaddiu      destAddress, destAddress, 3
+    b clipq_reload
+
+spec_infinite:
+    ibne clipOn, vi00, vertexLoopQInf_entry
+
+    ; Software-pipelined by hand, two stages per iteration: stage 1 of
+    ; vertex i and stage 2 of vertex i-1. VCL loop mode gives up on a loop
+    ; this size (76 upper instructions) and cannot overlap two whole vertices
+    ; in its linear mode either, but this block holds two independent chains
+    ; of about half a vertex each, which its linear optimizer does overlap.
+    ; Four vectors (clip-space vertex, 1/w, specular cos^2, normal) and two
+    ; integers cross from one stage to the other.
+    ; Every load in the block comes before every store (VCL will not move a
+    ; load past a store through another base register).
+    vertexLoopNQInf_entry:
+        ; ---- stage 1: vertex at iBase -- transform, clip test, specular cos^2 ----
+        lq inVert, POSITION_OFFSET(iBase)
+        DecompressPositionW inVert
+        lq inNormPacked, NORMAL_OFFSET(iBase)
+        DecompressNormal8 inNorm, inNormPacked
+        MatrixMultiplyVertex    vertexC, ObjectToScreen, inVert
+        mul clip_vertex, vertexC, clip_scale
+        clipw.xyz   clip_vertex, clip_vertex
+        fcand       VI01,   0x3FFFF
+        iaddiu      iADCc,  VI01,   0x7FFF
+        ; strip restart: negative packed normal w = no kick (ATHENA_STRIP_NO_KICK)
+        mtir        noKick, inNormPacked[w]
+        ior         iADCc,  iADCc,  noKick
+        ; viewer at infinity: per-object half vectors, plain perspective divide
+        div         q,      vf00[w],    vertexC[w]
+        addq.x      sinvw,  vf00,   q
+        SpecInfinite sspec, inNorm
+        iaddiu      iBase, iBase, 1
+        iaddi       vertexCounter, vertexCounter, -1
+        ibeq        vertexCounter, vi00, vertexLoopNQInf_epilogue
+    vertexLoopNQInf:
+        ; stage 1 results of the previous iteration move on to stage 2
+        move        vertexP, vertexC
+        move.x      sinvwP,  sinvw
+        move        sspecP,  sspec
+        move.xyz    inNormP, inNorm
+        iadd        iADCp,   iADCc,  vi00
+        ; ---- stage 1: vertex at iBase -- transform, clip test, specular cos^2 ----
+        lq inVert, POSITION_OFFSET(iBase)
+        DecompressPositionW inVert
+        lq inNormPacked, NORMAL_OFFSET(iBase)
+        DecompressNormal8 inNorm, inNormPacked
+        MatrixMultiplyVertex    vertexC, ObjectToScreen, inVert
+        mul clip_vertex, vertexC, clip_scale
+        clipw.xyz   clip_vertex, clip_vertex
+        fcand       VI01,   0x3FFFF
+        iaddiu      iADCc,  VI01,   0x7FFF
+        ; strip restart: negative packed normal w = no kick (ATHENA_STRIP_NO_KICK)
+        mtir        noKick, inNormPacked[w]
+        ior         iADCc,  iADCc,  noKick
+        ; viewer at infinity: per-object half vectors, plain perspective divide
+        div         q,      vf00[w],    vertexC[w]
+        addq.x      sinvw,  vf00,   q
+        SpecInfinite sspec, inNorm
+        ; ---- stage 2: previous vertex (iBase - 1) -- screen space, face
+        ; culling, lighting, colour, stores. Its loads still come before any
+        ; store. ----
+        lq stqPacked, TEXCOORD_OFFSET-1(iBase)
+        DecompressUV16 stq, stqPacked
+        lq inColorPacked, COLOR_OFFSET-1(iBase)
+        DecompressColor8 inColor, inColorPacked
+        move        vertex, vertexP
+        mul.xyz     vertex, vertex,     sinvwP[x]
+        mul.xyz     vertex, vertex,     scale
+        add.xyz     vertex, vertex,     offset
+        move        vertex2, vertex3
+        move        vertex3, vertex
+        move.xyz    oldvector, vector
+        sub.xyz     vector, vertex3, vertex2
+        opmula.xyz  acc, vector, oldvector
+        opmsub.xyz  crossproduct, oldvector, vector
+        mulw.z      crossproduct, crossproduct, bfc_multiplier
+        fmand       z_sign, z_sign_mask
+        iaddiu      z_sign, z_sign, 0x7FE0
+        ior         iADC,   iADCp,  z_sign
+        mulx.w      bfc_multiplier, bfc_multiplier, bfc_multiplier
+        mfir.w      vertex, iADC
+        ftoi4.xy    vertex, vertex
+        ftoi0.z     vertex, vertex
+        mul         modStq, stq, sinvwP[x]
+        ; lighting: ambient + diffuse (matrix) + specular (cos^2 from stage 1)
+        SpecPower16 sspecP
+        lq          light, LIGHT_AMBIENT_SUM(vi00)  ; xyz = summed ambient, w = 1.0
+        DirLightsLoad
+        DirLightsMatrix light, inNormP
+        SpecAccumulate light, sspecP
+        add.xyzw    color, matDiffuse, inColor
+        mul         color, color, light
+        VectorNormalizeClamp color, color
+        loi 128.0
+        mul         color, color, i
+        ColorFPtoGsRGBAQ intColor, color
+        sq.xyz      modStq,   STQ(destAddress)
+        sq          intColor, RGBA(destAddress)
+        sq          vertex,   XYZ2(destAddress)
+        iaddiu      destAddress, destAddress, 3
+        iaddiu      iBase, iBase, 1
+        iaddi       vertexCounter, vertexCounter, -1
+        ibne        vertexCounter, vi00, vertexLoopNQInf
+    vertexLoopNQInf_epilogue:
+        ; stage 1 results of the previous iteration move on to stage 2
+        move        vertexP, vertexC
+        move.x      sinvwP,  sinvw
+        move        sspecP,  sspec
+        move.xyz    inNormP, inNorm
+        iadd        iADCp,   iADCc,  vi00
+        ; ---- stage 2: previous vertex (iBase - 1) -- screen space, face
+        ; culling, lighting, colour, stores. Its loads still come before any
+        ; store. ----
+        lq stqPacked, TEXCOORD_OFFSET-1(iBase)
+        DecompressUV16 stq, stqPacked
+        lq inColorPacked, COLOR_OFFSET-1(iBase)
+        DecompressColor8 inColor, inColorPacked
+        move        vertex, vertexP
+        mul.xyz     vertex, vertex,     sinvwP[x]
+        mul.xyz     vertex, vertex,     scale
+        add.xyz     vertex, vertex,     offset
+        move        vertex2, vertex3
+        move        vertex3, vertex
+        move.xyz    oldvector, vector
+        sub.xyz     vector, vertex3, vertex2
+        opmula.xyz  acc, vector, oldvector
+        opmsub.xyz  crossproduct, oldvector, vector
+        mulw.z      crossproduct, crossproduct, bfc_multiplier
+        fmand       z_sign, z_sign_mask
+        iaddiu      z_sign, z_sign, 0x7FE0
+        ior         iADC,   iADCp,  z_sign
+        mulx.w      bfc_multiplier, bfc_multiplier, bfc_multiplier
+        mfir.w      vertex, iADC
+        ftoi4.xy    vertex, vertex
+        ftoi0.z     vertex, vertex
+        mul         modStq, stq, sinvwP[x]
+        ; lighting: ambient + diffuse (matrix) + specular (cos^2 from stage 1)
+        SpecPower16 sspecP
+        lq          light, LIGHT_AMBIENT_SUM(vi00)  ; xyz = summed ambient, w = 1.0
+        DirLightsLoad
+        DirLightsMatrix light, inNormP
+        SpecAccumulate light, sspecP
+        add.xyzw    color, matDiffuse, inColor
+        mul         color, color, light
+        VectorNormalizeClamp color, color
+        loi 128.0
+        mul         color, color, i
+        ColorFPtoGsRGBAQ intColor, color
+        sq.xyz      modStq,   STQ(destAddress)
+        sq          intColor, RGBA(destAddress)
+        sq          vertex,   XYZ2(destAddress)
+        iaddiu      destAddress, destAddress, 3
+    b clipq_reload
+
+    ; Software-pipelined by hand, two stages per iteration: stage 1 of
+    ; vertex i and stage 2 of vertex i-1. VCL loop mode gives up on a loop
+    ; this size (76 upper instructions) and cannot overlap two whole vertices
+    ; in its linear mode either, but this block holds two independent chains
+    ; of about half a vertex each, which its linear optimizer does overlap.
+    ; Four vectors (clip-space vertex, 1/w, specular cos^2, normal) and two
+    ; integers cross from one stage to the other.
+    ; Every load in the block comes before every store (VCL will not move a
+    ; load past a store through another base register).
+    vertexLoopQInf_entry:
+        ; ---- stage 1: vertex at iBase -- transform, clip test, specular cos^2 ----
+        lq inVert, POSITION_OFFSET(iBase)
+        DecompressPositionW inVert
+        lq inNormPacked, NORMAL_OFFSET(iBase)
+        DecompressNormal8 inNorm, inNormPacked
+        MatrixMultiplyVertex    vertexC, ObjectToScreen, inVert
+        mul clip_vertex, vertexC, clip_scale
+        clipw.xyz   clip_vertex, clip_vertex
+        fcand       VI01,   0x3FFFF
+        iaddiu      iADCc,  VI01,   0x7FFF
+        ; strip restart: negative packed normal w = no kick (ATHENA_STRIP_NO_KICK)
+        mtir        noKick, inNormPacked[w]
+        ior         iADCc,  iADCc,  noKick
+        ; clip queue bookkeeping for this vertex (stored by stage 2); the
+        ; queue state lives in VU memory, there are not enough integer
+        ; registers for it next to two stages in flight
+        ilw.x      kick0,    CLIPQ_STATE(vi00)
+        ilw.z      notStrip, CLIPQ_SAVE(vi00)
+        ilw.w      stripOr,  CLIPQ_SAVE(vi00)
+        ior        qOk,      noKick,  notStrip
+        iand       qOk,      qOk,     kick0
+        iand       qIncC,    qOk,     VI01
+        ior        kickNext, kick0,   stripOr
+        ilw.y      kick1,    CLIPQ_STATE(vi00)
+        ilw.z      kick2,    CLIPQ_STATE(vi00)
+        isw.x      kick1,    CLIPQ_STATE(vi00)
+        isw.y      kick2,    CLIPQ_STATE(vi00)
+        isw.z      kickNext, CLIPQ_STATE(vi00)
+        ; viewer at infinity: per-object half vectors, plain perspective divide
+        div         q,      vf00[w],    vertexC[w]
+        addq.x      sinvw,  vf00,   q
+        SpecInfinite sspec, inNorm
+        iaddiu      iBase, iBase, 1
+        iaddi       vertexCounter, vertexCounter, -1
+        ibeq        vertexCounter, vi00, vertexLoopQInf_epilogue
+    vertexLoopQInf:
+        ; stage 1 results of the previous iteration move on to stage 2
+        move        vertexP, vertexC
+        move.x      sinvwP,  sinvw
+        move        sspecP,  sspec
+        move.xyz    inNormP, inNorm
+        iadd        iADCp,   iADCc,  vi00
+        iadd        qIncP,   qIncC,  vi00
+        ; ---- stage 1: vertex at iBase -- transform, clip test, specular cos^2 ----
+        lq inVert, POSITION_OFFSET(iBase)
+        DecompressPositionW inVert
+        lq inNormPacked, NORMAL_OFFSET(iBase)
+        DecompressNormal8 inNorm, inNormPacked
+        MatrixMultiplyVertex    vertexC, ObjectToScreen, inVert
+        mul clip_vertex, vertexC, clip_scale
+        clipw.xyz   clip_vertex, clip_vertex
+        fcand       VI01,   0x3FFFF
+        iaddiu      iADCc,  VI01,   0x7FFF
+        ; strip restart: negative packed normal w = no kick (ATHENA_STRIP_NO_KICK)
+        mtir        noKick, inNormPacked[w]
+        ior         iADCc,  iADCc,  noKick
+        ; clip queue bookkeeping for this vertex (stored by stage 2); the
+        ; queue state lives in VU memory, there are not enough integer
+        ; registers for it next to two stages in flight
+        ilw.x      kick0,    CLIPQ_STATE(vi00)
+        ilw.z      notStrip, CLIPQ_SAVE(vi00)
+        ilw.w      stripOr,  CLIPQ_SAVE(vi00)
+        ior        qOk,      noKick,  notStrip
+        iand       qOk,      qOk,     kick0
+        iand       qIncC,    qOk,     VI01
+        ior        kickNext, kick0,   stripOr
+        ilw.y      kick1,    CLIPQ_STATE(vi00)
+        ilw.z      kick2,    CLIPQ_STATE(vi00)
+        isw.x      kick1,    CLIPQ_STATE(vi00)
+        isw.y      kick2,    CLIPQ_STATE(vi00)
+        isw.z      kickNext, CLIPQ_STATE(vi00)
+        ; viewer at infinity: per-object half vectors, plain perspective divide
+        div         q,      vf00[w],    vertexC[w]
+        addq.x      sinvw,  vf00,   q
+        SpecInfinite sspec, inNorm
+        ; ---- stage 2: previous vertex (iBase - 1) -- screen space, face
+        ; culling, lighting, colour, stores. Its loads still come before any
+        ; store. ----
+        lq stqPacked, TEXCOORD_OFFSET-1(iBase)
+        DecompressUV16 stq, stqPacked
+        lq inColorPacked, COLOR_OFFSET-1(iBase)
+        DecompressColor8 inColor, inColorPacked
+        move        vertex, vertexP
+        mul.xyz     vertex, vertex,     sinvwP[x]
+        mul.xyz     vertex, vertex,     scale
+        add.xyz     vertex, vertex,     offset
+        move        vertex2, vertex3
+        move        vertex3, vertex
+        move.xyz    oldvector, vector
+        sub.xyz     vector, vertex3, vertex2
+        opmula.xyz  acc, vector, oldvector
+        opmsub.xyz  crossproduct, oldvector, vector
+        mulw.z      crossproduct, crossproduct, bfc_multiplier
+        fmand       z_sign, z_sign_mask
+        iaddiu      z_sign, z_sign, 0x7FE0
+        ior         iADC,   iADCp,  z_sign
+        mulx.w      bfc_multiplier, bfc_multiplier, bfc_multiplier
+        mfir.w      vertex, iADC
+        ftoi4.xy    vertex, vertex
+        ftoi0.z     vertex, vertex
+        mul         modStq, stq, sinvwP[x]
+        ; lighting: ambient + diffuse (matrix) + specular (cos^2 from stage 1)
+        SpecPower16 sspecP
+        lq          light, LIGHT_AMBIENT_SUM(vi00)  ; xyz = summed ambient, w = 1.0
+        DirLightsLoad
+        DirLightsMatrix light, inNormP
+        SpecAccumulate light, sspecP
+        add.xyzw    color, matDiffuse, inColor
+        mul         color, color, light
+        VectorNormalizeClamp color, color
+        loi 128.0
+        mul         color, color, i
+        ColorFPtoGsRGBAQ intColor, color
+        sq.xyz      modStq,   STQ(destAddress)
+        sq          intColor, RGBA(destAddress)
+        sq          vertex,   XYZ2(destAddress)
+        ilw.w      listPtr,  CLIPQ_STATE(vi00)
+        iaddi      prevBase, iBase,   -1
+        isw.w      prevBase, TEXCOORD_OFFSET(listPtr) ; UV w lane: never read
+        iadd       listPtr,  listPtr, qIncP
+        isw.w      listPtr,  CLIPQ_STATE(vi00)
+        iaddiu      destAddress, destAddress, 3
+        iaddiu      iBase, iBase, 1
+        iaddi       vertexCounter, vertexCounter, -1
+        ibne        vertexCounter, vi00, vertexLoopQInf
+    vertexLoopQInf_epilogue:
+        ; stage 1 results of the previous iteration move on to stage 2
+        move        vertexP, vertexC
+        move.x      sinvwP,  sinvw
+        move        sspecP,  sspec
+        move.xyz    inNormP, inNorm
+        iadd        iADCp,   iADCc,  vi00
+        iadd        qIncP,   qIncC,  vi00
+        ; ---- stage 2: previous vertex (iBase - 1) -- screen space, face
+        ; culling, lighting, colour, stores. Its loads still come before any
+        ; store. ----
+        lq stqPacked, TEXCOORD_OFFSET-1(iBase)
+        DecompressUV16 stq, stqPacked
+        lq inColorPacked, COLOR_OFFSET-1(iBase)
+        DecompressColor8 inColor, inColorPacked
+        move        vertex, vertexP
+        mul.xyz     vertex, vertex,     sinvwP[x]
+        mul.xyz     vertex, vertex,     scale
+        add.xyz     vertex, vertex,     offset
+        move        vertex2, vertex3
+        move        vertex3, vertex
+        move.xyz    oldvector, vector
+        sub.xyz     vector, vertex3, vertex2
+        opmula.xyz  acc, vector, oldvector
+        opmsub.xyz  crossproduct, oldvector, vector
+        mulw.z      crossproduct, crossproduct, bfc_multiplier
+        fmand       z_sign, z_sign_mask
+        iaddiu      z_sign, z_sign, 0x7FE0
+        ior         iADC,   iADCp,  z_sign
+        mulx.w      bfc_multiplier, bfc_multiplier, bfc_multiplier
+        mfir.w      vertex, iADC
+        ftoi4.xy    vertex, vertex
+        ftoi0.z     vertex, vertex
+        mul         modStq, stq, sinvwP[x]
+        ; lighting: ambient + diffuse (matrix) + specular (cos^2 from stage 1)
+        SpecPower16 sspecP
+        lq          light, LIGHT_AMBIENT_SUM(vi00)  ; xyz = summed ambient, w = 1.0
+        DirLightsLoad
+        DirLightsMatrix light, inNormP
+        SpecAccumulate light, sspecP
+        add.xyzw    color, matDiffuse, inColor
+        mul         color, color, light
+        VectorNormalizeClamp color, color
+        loi 128.0
+        mul         color, color, i
+        ColorFPtoGsRGBAQ intColor, color
+        sq.xyz      modStq,   STQ(destAddress)
+        sq          intColor, RGBA(destAddress)
+        sq          vertex,   XYZ2(destAddress)
+        ilw.w      listPtr,  CLIPQ_STATE(vi00)
+        iaddi      prevBase, iBase,   -1
+        isw.w      prevBase, TEXCOORD_OFFSET(listPtr) ; UV w lane: never read
+        iadd       listPtr,  listPtr, qIncP
+        isw.w      listPtr,  CLIPQ_STATE(vi00)
+        iaddiu      destAddress, destAddress, 3
+    b clipq_reload
+
     vertexLoop:
 
         ;////////// --- Load loop data --- //////////
@@ -286,23 +979,8 @@ no_tex_kick_cull:
         DirLightsLoad
         DirLightsMatrix light, inNorm
 
-        iadd  currDirLight, vi00, vi00
-        ibeq  dirLightQnt, vi00, skip_culled_directionaLightsLoop   ; do-while: 0 lights would never terminate
-        culled_directionaLightsLoop:
-
-            ; Diffuse is done for all lights by DirLightsMatrix above; this loop
-            ; is left with the per-light half-angle specular term only.
-            lq LightDirection, LIGHT_DIRECTION_PTR(currDirLight)
-
-            HalfAngle halfDir, LightDirection, viewDir
-
-            lq LightSpecular, LIGHT_SPECULAR_PTR(currDirLight)
-
-            SpecularPowerScale inNorm
-
-            iaddiu   currDirLight,  currDirLight,  1; increment the loop counter 
-            ibne    dirLightQnt,  currDirLight,  culled_directionaLightsLoop	; and repeat if needed
-        skip_culled_directionaLightsLoop:
+        ; Specular of every directional light at once (see DirSpecularSoA).
+        DirSpecularSoA light, inNorm, viewDir
 
         iadd  currPntLight, vi00, vi00
         ibeq  pntLightQnt, vi00, skip_culled_pointLightsLoop
@@ -363,8 +1041,10 @@ no_tex_kick_cull:
 
     ;//////////////////////////////////////////// 
 
-culled_kick:
+    ; The queue cursor lives in memory on every path into the clip queue pass.
+clipq_reload:
     ilw.w     listPtr,  CLIPQ_STATE(vi00)
+culled_kick:
     .include "vu1/proc/clip_queue_pass.i"
 
     ; kickAddress is rebuilt rather than kept alive through the clip queue pass,
