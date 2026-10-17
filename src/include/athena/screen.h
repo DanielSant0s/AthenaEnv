@@ -40,6 +40,12 @@ void athena_screen_clear(Color color);
 void athena_screen_wait_vblank(void);
 void athena_screen_set_vsync(bool enabled);
 void athena_screen_set_frame_counter(bool enabled);
+void athena_screen_set_frame_overlap(bool enabled);
+bool athena_screen_get_frame_overlap(void);
+
+#include <profiler.h>
+// Frame profile averaged over the last PROF_WINDOW frames (see profiler.h).
+const prof_report *athena_screen_get_profile(void);
 void athena_screen_set_clear_color(Color color);
 Color athena_screen_get_clear_color(void);
 
@@ -64,5 +70,11 @@ bool athena_screen_buffers_ready(void);
 
 int athena_screen_switch_context(void);
 void athena_screen_flush(void);
+
+AthenaImage *athena_screen_create_shuffle_lut(const uint32_t *linear_entries);
+void athena_screen_update_shuffle_lut(AthenaImage *lut, const uint32_t *linear_entries);
+void athena_screen_build_depth_fog_lut(AthenaImage *lut, const gs_depth_fog_config *cfg);
+void athena_screen_channel_shuffle(AthenaImage *dst, AthenaImage *source, AthenaImage *lut, const gs_channel_shuffle_config *cfg);
+void athena_screen_depth_fog(const gs_depth_fog_config *cfg);
 
 #endif /* ATHENA_SCREEN_H */

@@ -516,6 +516,47 @@ athena_skeleton* load_gltf_skeleton(cgltf_data* data, cgltf_skin* skin) {
     return skeleton;
 }
 
+// ATHENA_strip_restart (written by tools/gltf_tristrip): a strip primitive
+// whose index buffer holds the index type's maximum value as a restart marker.
+// The marker takes no vertex slot; the two vertices after it begin a new strip,
+// so the triangles they complete must not be drawn. Those vertices get a
+// negative normal w (ATHENA_STRIP_NO_KICK), which reaches VU1 in the packed
+// normal and is ORed into the GS ADC bit. Winding keeps alternating by position
+// across the marker -- the tool orders/reverses strips so that stays correct.
+static bool gltf_prim_has_restart(const cgltf_primitive *primitive) {
+    if (!primitive->indices)
+        return false;
+    for (cgltf_size i = 0; i < primitive->extensions_count; i++) {
+        if (primitive->extensions[i].name && strcmp(primitive->extensions[i].name, "ATHENA_strip_restart") == 0)
+            return true;
+    }
+    return false;
+}
+
+static uint32_t gltf_restart_value(const cgltf_accessor *indices) {
+    switch (indices->component_type) {
+        case cgltf_component_type_r_8u:  return 0xFFu;
+        case cgltf_component_type_r_16u: return 0xFFFFu;
+        default:                         return 0xFFFFFFFFu;
+    }
+}
+
+// Real vertices of a strip primitive (restart markers excluded).
+static uint32_t gltf_strip_vertex_count(const cgltf_primitive *primitive) {
+    if (!primitive->indices)
+        return primitive->attributes_count > 0 ? primitive->attributes[0].data->count : 0;
+
+    uint32_t count = primitive->indices->count;
+    if (gltf_prim_has_restart(primitive)) {
+        uint32_t rv = gltf_restart_value(primitive->indices);
+        for (cgltf_size i = 0; i < primitive->indices->count; i++) {
+            if (cgltf_accessor_read_index(primitive->indices, i) == rv)
+                count--;
+        }
+    }
+    return count;
+}
+
 void loadGLTF(athena_render_data* res_m, const char* path, GSSURFACE* text) {
     cgltf_options options = {0};
     cgltf_data* data = NULL;
@@ -532,8 +573,6 @@ void loadGLTF(athena_render_data* res_m, const char* path, GSSURFACE* text) {
         cgltf_free(data);
         return;
     }
-
-    res_m->tristrip = false; 
 
     res_m->texture_count = 0;
     res_m->textures = NULL;
@@ -561,16 +600,47 @@ void loadGLTF(athena_render_data* res_m, const char* path, GSSURFACE* text) {
         }
     }
 
+    // Strips are only drawn as strips when EVERY primitive is one: the
+    // tristrip flag is per mesh, not per material group. Anything mixed gets
+    // its strips unrolled into a list instead.
+    // Walk the nodes, not the meshes -- that is what the copy loop below does,
+    // so an instanced mesh is counted once per instance.
+    bool all_strips = true;
+    uint32_t prim_instances = 0;
+    for (cgltf_size node_idx = 0; node_idx < data->nodes_count; ++node_idx) {
+        cgltf_mesh* mesh = data->nodes[node_idx].mesh;
+        if (!mesh)
+            continue;
+        for (cgltf_size prim_idx = 0; prim_idx < mesh->primitives_count; ++prim_idx) {
+            prim_instances++;
+            if (mesh->primitives[prim_idx].type != cgltf_primitive_type_triangle_strip)
+                all_strips = false;
+        }
+    }
+    if (prim_instances == 0)
+        all_strips = false;
+
+    res_m->tristrip = all_strips;
+
     uint32_t total_vertices = 0;
-    for (cgltf_size mesh_idx = 0; mesh_idx < data->meshes_count; ++mesh_idx) {
-        cgltf_mesh* mesh = &data->meshes[mesh_idx];
+    for (cgltf_size node_idx = 0; node_idx < data->nodes_count; ++node_idx) {
+        cgltf_mesh* mesh = data->nodes[node_idx].mesh;
+        if (!mesh)
+            continue;
         for (cgltf_size prim_idx = 0; prim_idx < mesh->primitives_count; ++prim_idx) {
             cgltf_primitive* primitive = &mesh->primitives[prim_idx];
-            if (primitive->indices) {
-                total_vertices += primitive->indices->count;
+            uint32_t count = 0;
+            if (primitive->type == cgltf_primitive_type_triangle_strip) {
+                count = gltf_strip_vertex_count(primitive);
+                // Unrolled: an upper bound, index_count is trimmed after the copy.
+                if (!all_strips)
+                    count = count >= 3 ? (count - 2) * 3 : 0;
+            } else if (primitive->indices) {
+                count = primitive->indices->count;
             } else if (primitive->attributes_count > 0) {
-                total_vertices += primitive->attributes[0].data->count;
+                count = primitive->attributes[0].data->count;
             }
+            total_vertices += count;
         }
     }
 
@@ -587,7 +657,7 @@ void loadGLTF(athena_render_data* res_m, const char* path, GSSURFACE* text) {
         res_m->skin_data = (vertex_skin_data*)memalign(16, res_m->index_count * sizeof(vertex_skin_data));
     }
 
-    res_m->material_indices = (material_index*)malloc(data->meshes_count * sizeof(material_index));
+    res_m->material_indices = (material_index*)malloc((prim_instances ? prim_instances : 1) * sizeof(material_index));
     res_m->material_index_count = 0;
 
     uint32_t current_vertex = 0;
@@ -652,7 +722,52 @@ void loadGLTF(athena_render_data* res_m, const char* path, GSSURFACE* text) {
                 }
             }
 
-            if (primitive->indices) {
+            if (primitive->type == cgltf_primitive_type_triangle_strip) {
+                bool restart = gltf_prim_has_restart(primitive);
+                uint32_t rv = restart ? gltf_restart_value(primitive->indices) : 0;
+                uint32_t src_count = primitive->indices ? primitive->indices->count : vertex_count;
+
+                // pos counts real strip vertices (markers excluded): triangle
+                // pos-2 is completed by vertex pos and alternates winding by it.
+                uint32_t pos = 0, no_kick = 0, prev[2] = { 0, 0 };
+
+                for (uint32_t i = 0; i < src_count; ++i) {
+                    uint32_t index = primitive->indices ? cgltf_accessor_read_index(primitive->indices, i) : i;
+
+                    if (restart && index == rv) {
+                        no_kick = 2;
+                        continue;
+                    }
+
+                    bool kick = (no_kick == 0);
+                    if (no_kick) no_kick--;
+
+                    if (all_strips) {
+                        load_gltf_skinning_data(res_m, joints, weights, current_vertex, index);
+                        gltf_transfer_vertex(res_m, current_vertex, positions, texcoords, normals, colors, index, worldTransform, worldMatrixNormals);
+                        if (!kick)
+                            res_m->normals[current_vertex][3] = ATHENA_STRIP_NO_KICK;
+
+                        res_m->indices[current_vertex] = current_vertex;
+                        current_vertex++;
+                    } else if (kick && pos >= 2 && prev[0] != prev[1] && prev[1] != index && prev[0] != index) {
+                        uint32_t tri[3] = { prev[0], prev[1], index };
+                        if (pos & 1) { tri[0] = prev[1]; tri[1] = prev[0]; }
+
+                        for (int c = 0; c < 3; c++) {
+                            load_gltf_skinning_data(res_m, joints, weights, current_vertex, tri[c]);
+                            gltf_transfer_vertex(res_m, current_vertex, positions, texcoords, normals, colors, tri[c], worldTransform, worldMatrixNormals);
+                            res_m->indices[current_vertex] = current_vertex;
+                            current_vertex++;
+                        }
+                    }
+
+                    prev[0] = prev[1];
+                    prev[1] = index;
+                    pos++;
+                }
+            }
+            else if (primitive->indices) {
                 cgltf_accessor* indices_accessor = primitive->indices;
 
                 for (cgltf_size i = 0; i < indices_accessor->count; ++i) {
@@ -674,7 +789,7 @@ void loadGLTF(athena_render_data* res_m, const char* path, GSSURFACE* text) {
                 }
             }
 
-            if (res_m->material_index_count < data->meshes_count) {
+            if (res_m->material_index_count < prim_instances) {
                 res_m->material_indices[res_m->material_index_count].index = 
                     primitive->material ? (primitive->material - data->materials) : 0;
                 res_m->material_indices[res_m->material_index_count].end = current_vertex-1;
@@ -690,6 +805,10 @@ void loadGLTF(athena_render_data* res_m, const char* path, GSSURFACE* text) {
             if (weights) free(weights);
         }
     }
+
+    // Unrolled strips were sized for the worst case; degenerate and restart
+    // triangles were dropped. The arrays just keep their spare tail.
+    res_m->index_count = current_vertex;
 
     calculate_bbox(res_m);
 

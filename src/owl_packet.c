@@ -1,4 +1,5 @@
 #include <owl_packet.h>
+#include <profiler.h>
 #include <debug.h>
 #include <stdlib.h>
 
@@ -9,6 +10,11 @@ owl_packet internal_packet = { 0 };
 static uint32_t flush_generation = 0;
 // Chains with a lower index than this are known to have been read in full.
 static uint32_t consumed_generation = 0;
+// Last chain that DMA_REFs memory the EE may rewrite with no way to wait first
+// (JS-owned ArrayBuffers). See owl_mark_volatile_refs().
+static uint32_t volatile_generation = UINT32_MAX;
+// Runs before a chain is handed to the DMAC. See owl_set_pre_kick_hook().
+static void (*pre_kick_hook)(void) = NULL;
 
 void owl_init(void *ptr, size_t size) {
     controller.channel = CHANNEL_SIZE;
@@ -31,7 +37,12 @@ void owl_flush_packet() {
 
     owl_add_end_tag(&internal_packet, 0);
 
+    if (pre_kick_hook)
+        pre_kick_hook();
+
+    prof_push(PROF_GPU_WAIT);
     dmaKit_wait(controller.channel, 0);
+    prof_pop();
 
     // The wait above drained every chain sent so far, i.e. everything below
     // flush_generation.
@@ -65,9 +76,38 @@ void owl_wait_generation(uint32_t generation) {
         owl_flush_packet();
     }
 
+    prof_push(PROF_GPU_WAIT);
     dmaKit_wait(controller.channel, 0);
+    prof_pop();
 
     consumed_generation = flush_generation;
+}
+
+void owl_wait_inflight() {
+    prof_push(PROF_GPU_WAIT);
+
+    if (controller.channel != CHANNEL_SIZE)
+        dmaKit_wait(controller.channel, 0);
+
+    // Texture uploads ride PATH3, queued from the VIF1 interrupt handler, and
+    // can still be streaming after the VIF1 chain itself has drained.
+    dmaKit_wait(DMA_CHANNEL_GIF, 0);
+
+    prof_pop();
+
+    consumed_generation = flush_generation;
+}
+
+void owl_mark_volatile_refs() {
+    volatile_generation = flush_generation;
+}
+
+int owl_last_sent_has_volatile_refs() {
+    return flush_generation > 0 && volatile_generation == flush_generation - 1;
+}
+
+void owl_set_pre_kick_hook(void (*hook)(void)) {
+    pre_kick_hook = hook;
 }
 
 owl_packet *owl_query_packet(owl_channel channel, size_t size) {

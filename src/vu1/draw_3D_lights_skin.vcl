@@ -10,7 +10,37 @@
 .include "vu1/include/mem_layout.i"
 .include "vu1/include/athena_consts.i"
 .include "vu1/include/athena_macros.i"
-.include "vu1/include/vcl_sml.i"  
+.include "vu1/include/vcl_sml.i"
+
+; Clip queue hooks (vu1/proc/clip_queue_pass.i).
+.macro ClipQueueReadEntry
+    ; Entry = input address of the triangle's last vertex (UV slot w lane); its
+    ; output address follows from the vertex index: kick + 1 + 3 * index.
+    ilw.w                qVert, SKINNED_TEXCOORD_OFFSET(qPtr)
+    xtop                 qBase
+    isub                 qOut,  qVert, qBase
+    iadd                 qTmp,  qOut,  qOut
+    iadd                 qOut,  qTmp,  qOut
+    iadd                 qOut,  qOut,  qBase
+    iaddiu               qOut,  qOut,  SKINNED_INBUF_SIZE
+    iaddiu               qOut,  qOut,  4
+.endm
+.macro ClipQueueLoadTriangle
+    ; Stored by the vertex loop (clip space, after skinning): recomputing would
+    ; mean skinning the three vertices again.
+    lq                   CSVertex1, SKINNED_POSITION_OFFSET-2(qVert)
+    lq                   CSVertex2, SKINNED_POSITION_OFFSET-1(qVert)
+    lq                   CSVertex3, SKINNED_POSITION_OFFSET(qVert)
+.endm
+.macro ClipQueueLoadSTQ
+    VectorLoad           TempSTQ1Packed, SKINNED_TEXCOORD_OFFSET-2, qVert
+    DecompressUV16       TempSTQ1, TempSTQ1Packed
+    VectorLoad           TempSTQ2Packed, SKINNED_TEXCOORD_OFFSET-1, qVert
+    DecompressUV16       TempSTQ2, TempSTQ2Packed
+    VectorLoad           TempSTQ3Packed, SKINNED_TEXCOORD_OFFSET-0, qVert
+    DecompressUV16       TempSTQ3, TempSTQ3Packed
+.endm
+  
 
 --enter
 --endenter
@@ -53,22 +83,42 @@ ignore_face_culling:
     ; can be tested. Set before the branch below, because BOTH paths need it.
     iaddiu  texMask, vi00, 1
 
-    ilw.y       accurateClipping,    CLIPFAN_OFFSET(vi00)
-    ibne vi00,  accurateClipping, scissor_init
 
 cull_init:
     LoadCullScale clip_scale, 0.5
 
     ;//////////// --- Load data 1 --- /////////////
     ; Updated once per mesh
-    ilw.w       dirLightQnt,    NUM_DIR_LIGHTS(vi00) ; load active directional lights
-    ilw.w       pntLightQnt,    NUM_POINT_LIGHTS(vi00) ; load active point lights
 
     ;//////////// --- Load data 2 --- /////////////
     ; Updated dynamically
 culled_init:
     xtop    iBase
     xitop   vertCount
+
+    ; --- clip queue setup (see vu1/proc/clip_queue_pass.i) ---
+    ; listPtr: next free list entry. kick0..2: rotating "this vertex completes a
+    ; triangle" pattern -- 0,0,1 repeating for a triangle list, 0,0,1,1,1... for a
+    ; strip -- and all zero when clipping is off for this chunk, so nothing is queued.
+    iadd      listPtr, iBase, vi00
+    ilw.y     clipOn,  CLIPFAN_OFFSET(vi00)
+    ilw.z     isStrip, CLIPFAN_OFFSET(vi00)
+    iadd      kick2,   vi00, vi00
+    ibeq      clipOn,  vi00, clipq_setup_off
+    iaddiu    kick2,   vi00, 1
+clipq_setup_off:
+    iand      stripOr,  isStrip, kick2
+    iaddiu    notStrip, vi00, 1
+    isub      notStrip, notStrip, isStrip
+    ; Kept in VU memory, not registers: this vertex loop has inner loops, and
+    ; with the queue state live across them VCL runs out of registers.
+    isw.x     vi00,     CLIPQ_STATE(vi00)    ; kick0
+    isw.y     vi00,     CLIPQ_STATE(vi00)    ; kick1
+    isw.z     kick2,    CLIPQ_STATE(vi00)
+    isw.w     listPtr,  CLIPQ_STATE(vi00)
+    isw.z     notStrip, CLIPQ_SAVE(vi00)
+    isw.w     stripOr,  CLIPQ_SAVE(vi00)
+    ilw.w       pntLightQnt,    NUM_POINT_LIGHTS(vi00) ; load active point lights
     lq.w           bfc_multiplier, CLIPFAN_OFFSET(vi00) ; restart strip parity
 
     lq      primTag,        0(iBase) ; GIF tag - tell GS how many data we will send 
@@ -154,6 +204,7 @@ no_tex_kick_cull:
 
         ;////////////// --- Vertex --- //////////////
         MatrixMultiplyVertex	vertex, ObjectToScreen, final_vertex ; transform each vertex by the matrix
+        sq         vertex, SKINNED_POSITION_OFFSET(iBase) ; clip-space copy for the clip queue
 
         mul clip_vertex, vertex, clip_scale
 
@@ -190,6 +241,35 @@ no_tex_kick_cull:
         iaddiu		z_sign, z_sign, 0x7FE0
         ior        iADC, iADC, z_sign
 
+        ; Strip restart: the first two vertices after one carry a negative
+        ; packed normal w (ATHENA_STRIP_NO_KICK), which mtir returns as 0xFFxx --
+        ; bit 15, the ADC bit, so the triangle they complete is never drawn.
+        ; Ordinary vertices have w = 127: only bits below 15, which the GS ignores.
+        mtir       noKick, inNormPacked[w]
+        ior        iADC, iADC, noKick
+
+        ; Clip queue: a triangle the test above rejected (VI01 = some vertex outside
+        ; the guard band or the near/far planes) that would otherwise be drawn --
+        ; this vertex completes one (kick0) and is not a strip restart (bit 0 of the
+        ; packed normal w, see ATHENA_STRIP_NO_KICK; lists have no restarts) -- is
+        ; appended for clip_queue_pass.i. Always stored, advanced only when queued.
+        ilw.x      kick0,    CLIPQ_STATE(vi00)
+        ilw.w      listPtr,  CLIPQ_STATE(vi00)
+        ilw.z      notStrip, CLIPQ_SAVE(vi00)
+        ilw.w      stripOr,  CLIPQ_SAVE(vi00)
+        ior        qOk,     noKick,  notStrip
+        iand       qOk,     qOk,     kick0
+        iand       qInc,    qOk,     VI01
+        isw.w      iBase,       SKINNED_TEXCOORD_OFFSET(listPtr) ; UV w lane: never read
+        iadd       listPtr, listPtr, qInc
+        isw.w      listPtr,  CLIPQ_STATE(vi00)
+        ior        kickNext, kick0,  stripOr
+        ilw.y      kick1,    CLIPQ_STATE(vi00)
+        ilw.z      kick2,    CLIPQ_STATE(vi00)
+        isw.x      kick1,    CLIPQ_STATE(vi00)
+        isw.y      kick2,    CLIPQ_STATE(vi00)
+        isw.z      kickNext, CLIPQ_STATE(vi00)
+
         ; Next vertex of a tristrip is wound the other way round; x is -1 there
         ; and +1 for a triangle list, where this is a no-op.
         mulx.w        bfc_multiplier, bfc_multiplier, bfc_multiplier
@@ -211,25 +291,11 @@ no_tex_kick_cull:
         lq light, LIGHT_AMBIENT_SUM(vi00)  ; xyz = summed ambient, w = 1.0
         move intensity, vf00
 
-        iadd  currDirLight, vi00, vi00
-        ibeq  dirLightQnt, vi00, skip_culled_directionaLightsLoop   ; do-while: 0 lights would never terminate
-        culled_directionaLightsLoop:
-
-            lq LightDirection, LIGHT_DIRECTION_PTR(currDirLight)
-            
-            ; Diffuse lighting
-            VectorDotProduct intensity, normal, LightDirection
-
-            maxx.xyzw  intensity, intensity, vf00
-
-            lq LightDiffuse, LIGHT_DIFFUSE_PTR(currDirLight)
-
-            mul diffuse, LightDiffuse, intensity[x]
-            add.xyz light, light, diffuse
-
-            iaddiu   currDirLight,  currDirLight,  1; increment the loop counter 
-            ibne    dirLightQnt,  currDirLight,  culled_directionaLightsLoop	; and repeat if needed
-        skip_culled_directionaLightsLoop:
+        ; All directional lights in one matrix multiply (see DirLightsMatrix).
+        ; Constants loaded per vertex: the skinned loop is short on registers
+        ; and branchy (weight loop) anyway.
+        DirLightsLoad
+        DirLightsMatrix light, normal
 
         iadd  currPntLight, vi00, vi00
         ibeq  pntLightQnt, vi00, skip_culled_pointLightsLoop
@@ -286,212 +352,22 @@ no_tex_kick_cull:
 
     ;//////////////////////////////////////////// 
 
-    xgkick kickAddress ; dispatch to the GS rasterizer.
+culled_kick:
+    ilw.w     listPtr,  CLIPQ_STATE(vi00)
+    .include "vu1/proc/clip_queue_pass.i"
+
+    ; kickAddress is rebuilt rather than kept alive through the clip queue pass,
+    ; which needs every integer register it can get.
+    xtop      kickBase
+    iaddiu    kickAddress, kickBase,    SKINNED_INBUF_SIZE
+    iaddiu    kickAddress, kickAddress, 3
+    xgkick    kickAddress ; dispatch to the GS rasterizer.
 
 --barrier
 --cont
 
     b culled_init
 
-scissor_init:
-    iaddiu               StackPtr, vi00, STACK_OFFSET
-
-    .include "vu1/proc/setup_clip_trigger.i"
-
-    ;//////////// --- Load data 2 --- /////////////
-    ; Updated dynamically
-init:
-    xtop    iBase
-    xitop   vertCount
-    lq.w           bfc_multiplier, CLIPFAN_OFFSET(vi00) ; restart strip parity
-
-    lq      primTag,        0(iBase) ; GIF tag - tell GS how many data we will send
-    lq      matDiffuse,     1(iBase) ; material diffuse color
- 
-    ; See the comment in culled_init. Matters more here: this is the
-    ; accurate-clipping path, whose scissored triangles fire their own mid-loop
-    ; XGKICKs with no texture state attached.
-    iaddiu     texGiftagAddr,  iBase, SKINNED_INBUF_SIZE
-    ilw.x      texEnabled,     GIFTAG_OFFSET(iBase)
-    iand       texEnabled,     texEnabled, texMask
-    ibeq       texEnabled,     vi00,   no_tex_kick_clip
-    xgkick     texGiftagAddr
-no_tex_kick_clip:
-
-    iaddiu     kickAddress,    texGiftagAddr, 3
-    ;////////////////////////////////////////////
-
-    ;/////////// --- Store tags --- /////////////
-    sq primTag,    0(kickAddress) ; prim + tell gs how many data will be
-
-    ; Set the GifTag EOP bit to 1 and NLOOP to the number of vertices
-    iaddiu               Mask, vertCount, 0x7fff
-    iaddiu               Mask, Mask, 0x01
-    isw.x                Mask, 0(kickAddress)
-    ;//////////////////////////////////////////// 
-
-    iaddiu    outputAddress,    kickAddress,  1       ; helper pointer for data inserting
-
-    .include "vu1/proc/setup_clip_flags.i"
-
-    .include "vu1/proc/setup_vertex_queue.i"
-
-    iadd vertexCounter, vi00, vertCount ; loop vertCount times
-
-    loop:
-
-        ;////////// --- Load loop data --- //////////
-        lq inVert,  SKINNED_POSITION_OFFSET(iBase)
-        DecompressPositionW inVert
-
-        lq inNormPacked, SKINNED_NORMAL_OFFSET(iBase)
-        DecompressNormal8 inNorm, inNormPacked
-
-        lq inColorPacked, SKINNED_COLOR_OFFSET(iBase)
-        DecompressColor8 inColor, inColorPacked
-
-        lq stqPacked, SKINNED_TEXCOORD_OFFSET(iBase)
-        DecompressUV16 stq, stqPacked
-        ;////////////////////////////////////////////
-
-        lq boneIndices,    SKINNED_INDICES_OFFSET(iBase)
-        lq weightTest,     SKINNED_WEIGHTS_OFFSET(iBase)
-        itof12 boneWeights, weightTest
-
-        move final_vertex, vf00
-        move final_normal, vf00
-
-        skinWeightLoop:
-            mtir           boneIndex, boneIndices[x]
-
-            MatrixLoad	BoneMatrix, BONE_MATRICES, boneIndex
-  
-            MatrixMultiplyVertex ts_vertex, BoneMatrix, inVert
-            MatrixMultiplyVector ts_normal, BoneMatrix, inNorm
-
-            mul ts_vertex, ts_vertex, boneWeights[x]
-            mul ts_normal, ts_normal, boneWeights[x]
-
-            add final_vertex, final_vertex, ts_vertex
-            add final_normal, final_normal, ts_normal
-
-            mr32 boneIndices, boneIndices
-            mr32 boneWeights, boneWeights
-
-            sub.x weightTest, weightTest, weightTest
-            mr32  weightTest, weightTest
-
-            mtir  weightBits, weightTest[x]
-            ibne  weightBits, vi00,  skinWeightLoop
-
-        ;////////////// --- Vertex --- //////////////
-        MatrixMultiplyVertex	vertex, ObjectToScreen, final_vertex ; transform each vertex by the matrix
-        move formVertex, vertex
-        
-        VertexPersCorrST vertex, modStq, vertex, stq 
- 
-        mul.xyz    vertex, vertex,     scale
-        add.xyz    vertex, vertex,     offset
-
-        move vertex1, vertex2
-        move vertex2, vertex3       
-
-        move vertex3, vertex
-
-        VertexFpToGsXYZ2  vertex,vertex
-        ;//////////////////////////////////////////// 
-
-        ;//////////////// - NORMALS - /////////////////
-        VectorNormalize normal, final_normal
-    
-        lq light, LIGHT_AMBIENT_SUM(vi00)  ; xyz = summed ambient, w = 1.0
-        move intensity, vf00
-
-        iadd  currDirLight, vi00, vi00
-
-        ilw.w       dirLightQnt,    NUM_DIR_LIGHTS(vi00) ; load active directional lights
-        ibeq  dirLightQnt, vi00, skip_directionaLightsLoop
-
-        directionaLightsLoop: 
-
-            lq LightDirection, LIGHT_DIRECTION_PTR(currDirLight)
-            
-            ; Diffuse lighting
-            VectorDotProduct intensity, normal, LightDirection
-
-            maxx.xyzw  intensity, intensity, vf00
-
-            lq LightDiffuse, LIGHT_DIFFUSE_PTR(currDirLight)
-
-            mul diffuse, LightDiffuse, intensity[x]
-            add.xyz light, light, diffuse
-
-            iaddiu   currDirLight,  currDirLight,  1; increment the loop counter 
-            ibne    dirLightQnt,  currDirLight,  directionaLightsLoop	; and repeat if needed
-        skip_directionaLightsLoop:
-
-        iadd  currPntLight, vi00, vi00
-        ilw.w pntLightQnt, NUM_POINT_LIGHTS(vi00)
-        ibeq  pntLightQnt, vi00, skip_pointLightsLoop
-        pointLightsLoop:
-            lq PointPos, POINT_LIGHT_POS_PTR(currPntLight)
-            sub.xyz toLight, PointPos, final_vertex
-            mul.xyz distSq, toLight, toLight
-            add.x distSq, distSq, distSq[y]
-            add.x distSq, distSq, distSq[z]
-            loi 0.0001
-            max.x distSq, distSq, i
-            rsqrt q, vf00[w], distSq[x]
-            mul.xyz toLight, toLight, q
-
-            VectorDotProduct intensity, normal, toLight
-            maxx.xyzw intensity, intensity, vf00
-
-            lq PointDiffuse, POINT_LIGHT_DIFF_PTR(currPntLight)
-            mul.w attenDenom, PointDiffuse, distSq[x]
-            add.w attenDenom, vf00, attenDenom
-            div q, vf00[w], attenDenom[w]
-            mul.x intensity, intensity, q
-
-            mul diffuse, PointDiffuse, intensity[x]
-            add.xyz light, light, diffuse
-
-            iaddiu currPntLight, currPntLight, 1
-            ibne   pntLightQnt, currPntLight, pointLightsLoop
-        skip_pointLightsLoop:
-
-        add.xyzw   color, matDiffuse, inColor
-        mul    color, color,      light       ; color = color * light
-        VectorNormalizeClamp color, color
-        loi 128.0
-        mul color, color, i                        ; normalize RGBA
-        ColorFPtoGsRGBAQ intColor, color           ; convert to int
-        ;///////////////////////////////////////////
-
-
-        ;//////////// --- Store data --- ////////////
-        sq.xyz modStq,      STQ(outputAddress)       
-        sq intColor,    RGBA(outputAddress)     ; q is grabbed from stq
-        sq vertex,      XYZ2(outputAddress)      
-        ;////////////////////////////////////////////
-
-        .include "vu1/proc/process_scissor_clip_skin.i"
-
-        iaddiu         iBase,     iBase,     1                         
-
-        iaddiu          outputAddress,  outputAddress,  3
- 
-        iaddi   vertexCounter,  vertexCounter,  -1	; decrement the loop counter 
-        ibne    vertexCounter,  vi00,   loop	; and repeat if needed
-
-    ;//////////////////////////////////////////// 
-
-    xgkick kickAddress ; dispatch to the GS rasterizer.
-
---barrier
---cont
-
-    b init
 
 .include "vu1/proc/save_last_loop.i"
 

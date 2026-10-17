@@ -334,6 +334,12 @@ typedef struct athena_object_data {
     athena_bone_transform *bones;
     MATRIX *bone_matrices;
 
+    // bone_matrices is DMA_REF'd by draw_vu1_pass and rewritten every frame by
+    // update_bone_transforms; with frame overlap the previous frame's chain can
+    // still be reading it. Same scheme as athena_chain_cache.queued_gen.
+    uint32_t bones_queued_gen;
+    int      bones_queued;
+
     // Frustum-cull bounds for skinned meshes, rebuilt from the live bone
     // palette every render_object() -- see render_update_skinned_bounds().
     // NULL (and unused) for everything else, which is culled straight against
@@ -372,6 +378,15 @@ void cameraUpdate();
 // destination-offset expressions (2+batch_size*N) depend on this equality.
 #define BATCH_SIZE_SKINNED 36
 
+// Normal w of a strip vertex whose triangle must not be drawn: the first two
+// vertices after a strip restart (see the glTF loader's ATHENA_strip_restart).
+// The cook saturates it to int8 -128, which VU1 reads with mtir as 0xFF80:
+// bit 15 is the GS ADC bit, so every microprogram just ORs it into the
+// vertex's ADC, and bit 0 is clear, which the clip queue uses as "cannot
+// complete a triangle". Ordinary vertices keep w = 1.0 (127: bit 15 clear,
+// bit 0 set). Lighting only ever uses the normal's xyz, so w is free for this.
+#define ATHENA_STRIP_NO_KICK (-2.0f)
+
 // Mirrors mem_layout.i's INBUF_SIZE/SKINNED_INBUF_SIZE and BONE_MATRICES.
 // Keep in lockstep with mem_layout.i.
 #define RENDER_INBUF_SIZE 194
@@ -380,6 +395,7 @@ void cameraUpdate();
 #define MAX_VU1_BONES 46
 
 int clip_bounding_box(MATRIX local_clip, VECTOR *bounding_box);
+int bounding_box_inside_guard_band(MATRIX local_clip, VECTOR *bounding_box);
 void calculate_vertices_clipped(VECTOR *output,  int count, VECTOR *vertices, MATRIX local_screen);
 int draw_convert_xyz(xyz_t *output, float x, float y, int z, int count, vertex_f_t *vertices);
 
@@ -401,6 +417,8 @@ void render_begin();
 void render_invalidate_vu_view(void);
 
 void render_set_view(float fov, float near, float far, float width, float height);
+float render_get_near(void);
+float render_get_far(void);
 
 VECTOR *getCameraPosition();
 void    setCameraPosition(float x, float y, float z);
@@ -517,6 +535,9 @@ typedef struct {
 	// frame. draw_calls/triangles count only what actually got submitted, so
 	// these three together tell you how much the cull is really saving.
 	uint32_t objects_culled;
+	// Material groups (or whole objects) with accurate clipping on whose box
+	// sat inside the guard band, so they took VU1's fast path this frame.
+	uint32_t fast_clip_groups;
 } render_stats_t;
 
 const render_stats_t *render_get_stats(void);

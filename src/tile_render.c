@@ -161,6 +161,8 @@ void tile_render_render(
 			bake_giftags(packet, texture_mapping, i);
 
 			owl_add_unpack_data_ref(packet, 1, &sprite_batch[idxs_drawn], count*4, 1);
+			// JS writes this buffer directly; nothing can wait before it does.
+			owl_mark_volatile_refs();
 
 			owl_add_cnt_tag(packet, texture_mapping? 5 : 1, owl_vif_code_double(VIF_CODE(0, 0, VIF_NOP, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
 

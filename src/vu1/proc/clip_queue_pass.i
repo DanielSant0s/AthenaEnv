@@ -1,138 +1,61 @@
-        ;=====================================================================================
-        ; Push the clipping-space vertex queue down 1
-        ;=====================================================================================
-        move                 CSVertex1, CSVertex2
-        move                 CSVertex2, CSVertex3        
+; ==========================================================================================
+; Clip queue, pass 2. Replaced the per-vertex clipping path (process_scissor_clip*.i,
+; see git history); the scissoring below is that code, unchanged apart from its pointers.
+;
+; Pass 1 is the regular branch-free vertex loop. Every triangle it rejects because one
+; of its vertices left the guard band or crossed the near/far planes -- and that would
+; have been drawn otherwise (a kicking vertex, not a strip restart) -- gets appended to a
+; list when clipping is on for this chunk: the input address of its last vertex, kept in
+; the w lane of the UV slot of an already processed vertex (entry n is written at or
+; after vertex n + 2). That lane is never read, so it does not matter that VCL may
+; schedule the store ahead of the current vertex's own loads.
+;
+; Here each listed triangle is rebuilt in clip space, dropped if it sits entirely outside
+; one plane, and otherwise scissored against the real frustum into a fan that goes out on
+; its own XGKICK. So a chunk crossing the screen edge costs the fast path plus the few
+; triangles that actually touch the edge, instead of the full clipping path per vertex.
+;
+; In:  listPtr = one past the last entry (the list starts at xtop).
+;
+; The program supplies three macros, the only parts that differ between programs:
+;   ClipQueueLoadTriangle -- CSVertex1..3 = the triangle in clip space, from qVert
+;                            (recomputed from the positions, or stored by pass 1
+;                            for skinned meshes);
+;   ClipQueueLoadSTQ      -- TempSTQ1..3 = its texture coordinates, from qVert;
+;   ClipQueueReadEntry    -- qVert / qOut = input / output address of the entry at qPtr.
+; ==========================================================================================
 
-        ;=====================================================================================
-        ; Apply the world to clip matrix to the vertex (push onto above stack)
-        ;=====================================================================================
-        move CSVertex3, formVertex
-        
-        ;=====================================================================================
-        ; Perform clipping judgement on the the previous 3 vertices.  sets the clipping flags
-        ;=====================================================================================
-        clipw.xyz            CSVertex1, CSVertex1
-        clipw.xyz            CSVertex2, CSVertex2
-        clipw.xyz            CSVertex3, CSVertex3
+    xtop                 qPtr
+    ibeq                 qPtr, listPtr, clipq_done
 
-        ;=====================================================================================
-        ; Pushing the clipping flag result down 1
-        ;=====================================================================================
-        iadd                 ClipFlag1, vi00, ClipFlag2
-        iadd                 ClipFlag2, vi00, ClipFlag3
+clipq_loop:
+    ; The fan needs nearly every integer register: park the list cursor.
+    isw.x                qPtr,    CLIPQ_SAVE(vi00)
+    isw.y                listPtr, CLIPQ_SAVE(vi00)
 
-        ;=====================================================================================
-        ; AND clipping flags with 0x3f (current judgement) and store result in vi01.
-        ; vi01 will be 0 if the vertex is within the clip volume
-        ;=====================================================================================
-        fcand                vi01, 0x3f
+    ClipQueueReadEntry
 
-        ;=====================================================================================
-        ; store result in the clip result stack
-        ;=====================================================================================
-        iadd                 ClipFlag3, vi00, vi01
+    ClipQueueLoadTriangle
 
-    clip_strip:
-        ;=====================================================================================
-        ; ClipTrigger is 1, 2 or 3 if we're dealing with triangles or -1 for strips.  There's
-        ; no need to run the code immediately following if we got a strip
-        ;=====================================================================================
-        ibltz                ClipTrigger, check
+    clipw.xyz            CSVertex1, CSVertex1
+    clipw.xyz            CSVertex2, CSVertex2
+    clipw.xyz            CSVertex3, CSVertex3
 
-    clip_triangle:
-        ;=====================================================================================
-        ; If it's a triangle rather than a strip, you only need to perform the clipping check
-        ; every 3 verts (i.e. when ClipTrigger == 0)
-        ;=====================================================================================
-        iaddi                ClipTrigger, ClipTrigger, -1
-        ibgtz                ClipTrigger, after_scissoring
+    ; Entirely outside one plane (all 3 vertices): nothing to draw. Same masks as the
+    ; per-vertex path: -Z, +Z, -Y, +Y, -X, +X.
+    fcor                 vi01, 0xfdf7df
+    ibne                 vi01, vi00, clipq_next
+    fcor                 vi01, 0xfefbef
+    ibne                 vi01, vi00, clipq_next
+    fcor                 vi01, 0xff7df7
+    ibne                 vi01, vi00, clipq_next
+    fcor                 vi01, 0xffbefb
+    ibne                 vi01, vi00, clipq_next
+    fcor                 vi01, 0xffdf7d
+    ibne                 vi01, vi00, clipq_next
+    fcor                 vi01, 0xffefbe
+    ibne                 vi01, vi00, clipq_next
 
-        ;=====================================================================================
-        ; Reset the ClipTrigger
-        ;=====================================================================================
-        iaddiu               ClipTrigger, vi00, 3
-
-    check:
-        ;=====================================================================================
-        ; Clip judgement FIRST. BackfaceCull works on vertex1/2/3, which are already
-        ; through the perspective divide -- and a vertex behind the near plane divides
-        ; by a negative w, so it lands mirrored through the origin and the winding it
-        ; reports is meaningless. Testing before the clip judgement is what dropped
-        ; front-facing triangles right where geometry crosses a frustum plane: holes
-        ; along the near plane whenever the camera got close.
-        ;
-        ; So only a triangle that needs no scissoring -- every vertex inside, every
-        ; screen coordinate meaningful -- gets culled here. One that straddles a plane
-        ; goes to the fan uncalled and is drawn even if it faces away: a thin band at
-        ; the frustum edge, against holes in the middle of the mesh.
-        ;=====================================================================================
-        iadd                 ClipFlag1, ClipFlag1, ClipFlag2
-        iadd                 ClipFlag1, ClipFlag1, ClipFlag3
-        ibgtz                ClipFlag1, cull_vertex
-
-        BackfaceCull         vertex1, vertex2, vertex3
-        ibne                 z_sign, vi00, triangle_outside
-        b                    after_scissoring
-
-    cull_vertex:
-        ;=====================================================================================
-        ; Find out if we got one of those triangles that don't need to be displayed at all
-        ;=====================================================================================
- 
-        ;=====================================================================================
-        ; 0xfdf7df = 111111 011111 011111 011111
-        ; fcor returns 1 if all fields in result are 1, or 0 if they are not all 1
-        ; vi01 will return 1 if all 3 verts are clipped by the -Z plane, in which case we
-        ; don't have to display it at all
-        ;=====================================================================================
-        fcor                 vi01, 0xfdf7df
-        ibne                 vi01, vi00, triangle_outside
- 
-        ;=====================================================================================
-        ; Ditto but this time fefbef = 111111 101111 101111 101111 (+Z)
-        ;=====================================================================================
-        fcor                 vi01, 0xfefbef
-        ibne                 vi01, vi00, triangle_outside
- 
-        ;=====================================================================================
-        ; Ditto but this time ff7df7 = 111111 110111 110111 110111 (-Y)
-        ;=====================================================================================
-        fcor                 vi01, 0xff7df7
-        ibne                 vi01, vi00, triangle_outside
- 
-        ;=====================================================================================
-        ; Ditto but this time ffbefb = 111111 111011 111011 111011 (+Y)
-        ;=====================================================================================
-        fcor                 vi01, 0xffbefb
-        ibne                 vi01, vi00, triangle_outside
- 
-        ;=====================================================================================
-        ; Ditto but this time ffdf7d = 111111 111101 111101 111101 (-X)
-        ;=====================================================================================
-        fcor                 vi01, 0xffdf7d
-        ibne                 vi01, vi00, triangle_outside
- 
-        ;=====================================================================================
-        ; Ditto but this time ffefbe = 111111 111110 111110 111110 (+X)
-        ;=====================================================================================
-        fcor                 vi01, 0xffefbe
-        ibne                 vi01, vi00, triangle_outside
- 
-        ;=====================================================================================
-        ; If we get here, it means we have to scissor
-        ;=====================================================================================
-
-        ;=====================================================================================
-        ; Save context
-        ;=====================================================================================
-        PushVertex           StackPtr, CSVertex1
-        PushVertex           StackPtr, CSVertex2
-        PushVertex           StackPtr, CSVertex3
-        PushInteger4         StackPtr, kickAddress, iBase,  ClipFlag1, ClipFlag2
-        PushInteger4         StackPtr, ClipFlag3, outputAddress, vertexCounter,  ClipTrigger
-
-        ;-----------------------------------------------------------------------------------------------------------------------------------
         ;=====================================================================================
         ; Setup pointers to clipping work buffers
         ;=====================================================================================
@@ -181,16 +104,7 @@
         ; athena_compact_uv / DecompressUV16 in athena_macros.i), not a raw
         ; float STQ -- decode each before use.
         ;=====================================================================================
-        VectorLoad           TempSTQ1Packed, SKINNED_TEXCOORD_OFFSET-2, iBase
-        DecompressUV16       TempSTQ1, TempSTQ1Packed
-        VectorLoad           TempSTQ2Packed, SKINNED_TEXCOORD_OFFSET-1, iBase
-        DecompressUV16       TempSTQ2, TempSTQ2Packed
-        VectorLoad           TempSTQ3Packed, SKINNED_TEXCOORD_OFFSET-0, iBase
-        DecompressUV16       TempSTQ3, TempSTQ3Packed
-
-        add.xy TempSTQ1, TempSTQ1, st_offset
-        add.xy TempSTQ2, TempSTQ2, st_offset
-        add.xy TempSTQ3, TempSTQ3, st_offset
+        ClipQueueLoadSTQ
 
         VectorSave           TempSTQ1,  0, ClipWorkBuf0
         VectorSave           TempSTQ2,  3, ClipWorkBuf0
@@ -205,13 +119,12 @@
         ; all of them -- a flat-shaded strip assumption that made every scissored triangle
         ; lose its gouraud, visible as solid bands where the mesh crosses a frustum plane.
         ;
-        ; Reading back 2 vertices is always in bounds: setup_clip_flags.i primes ClipFlag2
-        ; and ClipFlag3 to -2 per chunk, so the sum below never goes positive before the
-        ; third vertex and the first two can never reach this code.
+        ; Reading back 2 vertices is always in bounds: pass 1 only queues a vertex that
+        ; completes a triangle (kick0), never one of the first two of a chunk.
         ;=====================================================================================
-        VectorLoad           TempColor1, -5, outputAddress
-        VectorLoad           TempColor2, -2, outputAddress
-        VectorLoad           TempColor3,  1, outputAddress
+        VectorLoad           TempColor1, -5, qOut
+        VectorLoad           TempColor2, -2, qOut
+        VectorLoad           TempColor3,  1, qOut
  
         ColorGsRGBAQtoFP     TempColor1, TempColor1
         ColorGsRGBAQtoFP     TempColor2, TempColor2
@@ -226,9 +139,9 @@
         ; its allocator runs out of integer registers right here ("failed to
         ; assign an external ClipWorkBuf1") -- it stands in for the block
         ; boundary the old triangle/strip split used to provide.
-        b                    PLANE_START
+        b                    CQ_PLANE_START
 
-    PLANE_START:
+    CQ_PLANE_START:
         ;=====================================================================================
         ; Useful for clipping: A zero vector (0.f, 0.f, 0.f, 0.f)
         ;=====================================================================================
@@ -251,20 +164,20 @@
         lqi                  NextColor,  (ClipWorkBuf0++)
         lqi                  NextVertex, (ClipWorkBuf0++)
 
-    LOOP_Z_MINUS:
+    CQ_LOOP_Z_MINUS:
         ; Interpolate the vertex values at the plane
         bal                  RetAddr2, scissor_interpolation
      
         ; Repeat until we have no more vertices
         isubiu               vertexCounter, vertexCounter, 1
-        ibne                 vertexCounter, vi00, LOOP_Z_MINUS
+        ibne                 vertexCounter, vi00, CQ_LOOP_Z_MINUS
      
         ; Copy the triangle fan's first vertex to the end (in clipping work buffer 1)
         iaddiu               ClipWorkBuf0, vi00, CLIP_WORK_BUF_1
         bal                  RetAddr2, save_last_loop
      
         ; If all verts got clipped out, stop
-        ibeq                 newVertCount, vi00, SCISSOR_END
+        ibeq                 newVertCount, vi00, clipq_next
      
         ;=====================================================================================
         ; Scissor against the Z+ plane
@@ -283,20 +196,20 @@
         lqi                  NextColor,  (ClipWorkBuf0++)
         lqi                  NextVertex, (ClipWorkBuf0++)
 
-    LOOP_Z_PLUS:
+    CQ_LOOP_Z_PLUS:
         ; Interpolate the vertex values at the plane
         bal                  RetAddr2, scissor_interpolation
      
         ; Repeat until we have no more vertices
         isubiu               vertexCounter, vertexCounter, 1
-        ibne                 vertexCounter, vi00, LOOP_Z_PLUS
+        ibne                 vertexCounter, vi00, CQ_LOOP_Z_PLUS
      
         ; Copy the triangle fan's first vertex to the end (in clipping work buffer 0)
         iaddiu               ClipWorkBuf0, vi00, CLIP_WORK_BUF_0
         bal                  RetAddr2, save_last_loop
      
         ; If all verts got clipped out, stop
-        ibeq                 newVertCount, vi00, SCISSOR_END
+        ibeq                 newVertCount, vi00, clipq_next
      
         ;=====================================================================================
         ; Scissor against the X- plane
@@ -315,20 +228,20 @@
         lqi                  NextColor,  (ClipWorkBuf0++)
         lqi                  NextVertex, (ClipWorkBuf0++)
 
-    LOOP_X_MINUS:
+    CQ_LOOP_X_MINUS:
        ; Interpolate the vertex values at the plane
        bal                  RetAddr2, scissor_interpolation
 
        ; Repeat until we have no more vertices
        isubiu               vertexCounter, vertexCounter, 1
-       ibne                 vertexCounter, vi00, LOOP_X_MINUS
+       ibne                 vertexCounter, vi00, CQ_LOOP_X_MINUS
 
        ; Copy the triangle fan's first vertex to the end (in clipping work buffer 1)
        iaddiu               ClipWorkBuf0, vi00, CLIP_WORK_BUF_1
        bal                  RetAddr2, save_last_loop
 
        ; If all verts got clipped out, stop
-       ibeq                 newVertCount, vi00, SCISSOR_END
+       ibeq                 newVertCount, vi00, clipq_next
 
        ;=====================================================================================
        ; Scissor against the X+ plane
@@ -347,20 +260,20 @@
        lqi                  NextColor,  (ClipWorkBuf0++)
        lqi                  NextVertex, (ClipWorkBuf0++)
 
-    LOOP_X_PLUS:
+    CQ_LOOP_X_PLUS:
        ; Interpolate the vertex values at the plane
        bal                  RetAddr2, scissor_interpolation
 
        ; Repeat until we have no more vertices
        isubiu               vertexCounter, vertexCounter, 1
-       ibne                 vertexCounter, vi00, LOOP_X_PLUS
+       ibne                 vertexCounter, vi00, CQ_LOOP_X_PLUS
 
        ; Copy the triangle fan's first vertex to the end (in clipping work buffer 0)
        iaddiu               ClipWorkBuf0, vi00, CLIP_WORK_BUF_0
        bal                  RetAddr2, save_last_loop
 
        ; If all verts got clipped out, stop
-       ibeq                 newVertCount, vi00, SCISSOR_END
+       ibeq                 newVertCount, vi00, clipq_next
 
        ;=====================================================================================
        ; Scissor against the Y- plane
@@ -379,20 +292,20 @@
        lqi                  NextColor,  (ClipWorkBuf0++)
        lqi                  NextVertex, (ClipWorkBuf0++)
 
-    LOOP_Y_MINUS:
+    CQ_LOOP_Y_MINUS:
        ; Interpolate the vertex values at the plane
        bal                  RetAddr2, scissor_interpolation
 
        ; Repeat until we have no more vertices
        isubiu               vertexCounter, vertexCounter, 1
-       ibne                 vertexCounter, vi00, LOOP_Y_MINUS
+       ibne                 vertexCounter, vi00, CQ_LOOP_Y_MINUS
 
        ; Copy the triangle fan's first vertex to the end (in clipping work buffer 1)
        iaddiu               ClipWorkBuf0, vi00, CLIP_WORK_BUF_1
        bal                  RetAddr2, save_last_loop
 
        ; If all verts got clipped out, stop
-       ibeq                 newVertCount, vi00, SCISSOR_END
+       ibeq                 newVertCount, vi00, clipq_next
 
        ;=====================================================================================
        ; Scissor against the Y+ plane
@@ -411,20 +324,20 @@
        lqi                  NextColor,  (ClipWorkBuf0++)
        lqi                  NextVertex, (ClipWorkBuf0++)
 
-    LOOP_Y_PLUS:
+    CQ_LOOP_Y_PLUS:
        ; Interpolate the vertex values at the plane
        bal                  RetAddr2, scissor_interpolation
 
        ; Repeat until we have no more vertices
        isubiu               vertexCounter, vertexCounter, 1
-       ibne                 vertexCounter, vi00, LOOP_Y_PLUS
+       ibne                 vertexCounter, vi00, CQ_LOOP_Y_PLUS
 
        ; Copy the triangle fan's first vertex to the end (in clipping work buffer 0)
        iaddiu               ClipWorkBuf0, vi00, CLIP_WORK_BUF_0
        bal                  RetAddr2, save_last_loop
 
        ; If all verts got clipped out, stop
-       ibeq                 newVertCount, vi00, SCISSOR_END
+       ibeq                 newVertCount, vi00, clipq_next
 
         ;=====================================================================================
         ; If we get here, we gotta draw the triangle fan
@@ -434,19 +347,19 @@
         iadd                 vertexCounter,    vi00, newVertCount
 
         iaddiu               DummyXGKickPtr, vi00, DUMMY_XGKICK_BUF
-        iaddiu               kickAddress, vi00, CLIPFAN_OFFSET
+        iaddiu               fanKick, vi00, CLIPFAN_OFFSET
 
-        lq                   Uniqueflags,    0(kickAddress) 
+        lq                   UniqueFlags,    0(fanKick) 
 
         move                 ClipTag, primTag
         move.y               ClipTag, UniqueFlags
 
-        iaddiu               kickAddress, kickAddress, 1
+        iaddiu               fanKick, fanKick, 1
 
-        sq                   ClipTag,    0(kickAddress) ; prim + tell gs how many data will be
+        sq                   ClipTag,    0(fanKick) ; prim + tell gs how many data will be
 
         iadd                 vertexData, vi00, ClipWorkBuf0
-        iaddiu               outputAddress, kickAddress, 1
+        iaddiu               fanOut, fanKick, 1
 
         ; Clear the GifTag's NLOOP to 0 (for a dummy XGKick stall)
         iaddiu               Mask, vi00, 0x7fff
@@ -458,9 +371,9 @@
         ; Set the GifTag EOP bit to 1 and NLOOP to the number of vertices
         iaddiu               Mask, vertexCounter, 0x7fff
         iaddiu               Mask, Mask, 0x01
-        isw.x                Mask, 0(kickAddress)
+        isw.x                Mask, 0(fanKick)
 
-    LOOP2:
+    CQ_LOOP2:
         ;=====================================================================================
         ; Load a clip-space vertex, apply clip-to-screen matrix, perspective-correct it (and
         ; its STQ), convert it to GS format and then save it
@@ -479,51 +392,31 @@
 
         VertexFpToGsXYZ2    vertex, vertex
      
-        VertexSave           vertex,  2, outputAddress
-        VectorSave           STQTransform,     0, outputAddress
+        VertexSave           vertex,  2, fanOut
+        VectorSave           STQTransform,     0, fanOut
      
         ;=====================================================================================
         ; Convert the color to GS format and output it
         ;=====================================================================================
         ColorFPtoGSRGBAQ     Color, Color
-        VectorSave           Color, 1, outputAddress
+        VectorSave           Color, 1, fanOut
      
         ;=====================================================================================
         ; Next vertex...
         ;=====================================================================================
         iaddiu               vertexData, vertexData, 3
-        iaddiu               outputAddress, outputAddress, 3
+        iaddiu               fanOut, fanOut, 3
      
         iaddi                vertexCounter, vertexCounter, -1
-        ibne                 vertexCounter, vi00, LOOP2
+        ibne                 vertexCounter, vi00, CQ_LOOP2
      
         ; --- send result to GIF and stop ---
-        xgkick               kickAddress
+        xgkick               fanKick
 
-    SCISSOR_END:
-    ;-----------------------------------------------------------------------------------------------------------------------------------
+clipq_next:
+    ilw.x                qPtr,    CLIPQ_SAVE(vi00)
+    ilw.y                listPtr, CLIPQ_SAVE(vi00)
+    iaddiu               qPtr,    qPtr, 1
+    ibne                 qPtr,    listPtr, clipq_loop
 
-        ;=====================================================================================
-        ; Restore context
-        ;=====================================================================================
-        PopInteger4          StackPtr, ClipFlag3, outputAddress, vertexCounter, ClipTrigger
-        PopInteger4          StackPtr, kickAddress, iBase, ClipFlag1, ClipFlag2
-        PopVertex            StackPtr, CSVertex3
-        PopVertex            StackPtr, CSVertex2
-        PopVertex            StackPtr, CSVertex1
-
-    triangle_outside:
-        ;=====================================================================================
-        ; We don't need to draw this triangle after all...  Set the ADC bit (0x8000)
-        ;=====================================================================================
-        iaddiu               Mask, vi00, 0x7fff
-        iaddi                Mask, Mask, 1
-        isw.w                Mask, 2(outputAddress)
-
-    after_scissoring:
-        ;=====================================================================================
-        ; Every path above lands here, exactly once per vertex. Lane x of bfc_multiplier is
-        ; -1 for a tristrip, whose winding alternates vertex by vertex, and +1 otherwise --
-        ; so this keeps BackfaceCull in step with the strip and is a no-op for triangles.
-        ;=====================================================================================
-        mulx.w               bfc_multiplier, bfc_multiplier, bfc_multiplier
+clipq_done:

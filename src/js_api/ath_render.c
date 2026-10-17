@@ -2387,6 +2387,7 @@ static JSValue js_render_stats(JSContext *ctx, JSValue this_val, int argc, JSVal
 	JS_DefinePropertyValueStr(ctx, obj, "drawCalls", JS_NewUint32(ctx, stats->draw_calls), JS_PROP_C_W_E);
 	JS_DefinePropertyValueStr(ctx, obj, "triangles", JS_NewUint32(ctx, stats->triangles), JS_PROP_C_W_E);
 	JS_DefinePropertyValueStr(ctx, obj, "culled",    JS_NewUint32(ctx, stats->objects_culled), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "fastClip",  JS_NewUint32(ctx, stats->fast_clip_groups), JS_PROP_C_W_E);
 
 	return obj;
 }

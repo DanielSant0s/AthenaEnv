@@ -85,7 +85,7 @@ VU1_MPGS = draw_3D_colors.o \
 
 # VU0_MPGS = matrix_multiply.o
 
-APP_CORE = main.o athena_core.o bootlogo.o texture_manager.o owl_packet.o vif.o athena_math.o memory.o ee_tools.o module_system.o iop_manager.o taskman.o lockman.o pad.o system.o strUtils.o mpg_manager.o matrix.o vector.o excepHandler.o exceptions.o athena/system_facade.o athena/iop_facade.o athena/archive.o athena/pad.o athena/timer.o athena/mutex.o athena/task.o
+APP_CORE = main.o athena_core.o bootlogo.o texture_manager.o owl_packet.o profiler.o vif.o athena_math.o memory.o ee_tools.o module_system.o iop_manager.o taskman.o lockman.o pad.o system.o strUtils.o mpg_manager.o matrix.o vector.o excepHandler.o exceptions.o athena/system_facade.o athena/iop_facade.o athena/archive.o athena/pad.o athena/timer.o athena/mutex.o athena/task.o
 
 INI_READER = readini/src/readini.o
 
@@ -403,7 +403,7 @@ $(EE_SRC_DIR)%.vcl: $(EE_SRC_DIR)%.vclpp | $(EE_SRC_DIR)
 $(EE_SRC_DIR)%.vsm: $(EE_SRC_DIR)%.vcl | $(EE_SRC_DIR)
 	@echo VCL - $<
 	$(DIR_GUARD)
-	$(EE_VCL) -Isrc -g -o$@ $<
+	$(EE_VCL) -Isrc -g -t1 -o$@ $<
 
 $(EE_OBJ_DIR)%.o: $(EE_EMBED_DIR)%.c | $(EE_OBJ_DIR)
 	@echo BIN2C - $<

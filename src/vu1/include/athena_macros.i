@@ -42,6 +42,100 @@
    .endm
 
 ;//--------------------------------------------------------------------
+;// DirLightsMatrix - all 4 directional lights in one go, no loop.
+;//
+;// LDirX/Y/Z are LIGHT_DIR_T (the light directions transposed), so
+;// the multiply below leaves Li.N in lane i. Clamped at 0, each lane
+;// weights the diffuse colour of its light (LIGHT_DIFFUSE_PTR rows LDiff0..3)
+;// on top of the ambient already in \light. Lights that are not active
+;// have zero direction and zero colour, so the cost is constant and,
+;// unlike the per-light loop, there is no branch: a vertex loop built
+;// on this can be software-pipelined by VCL.
+;//
+;// \light comes in holding the ambient sum (w = 1.0, left untouched).
+;//--------------------------------------------------------------------
+   .macro   DirLightsMatrix light, normal
+   mul            acc,       LDirX,  \normal[x]
+   madd           acc,       LDirY,  \normal[y]
+   madd           dirDots,   LDirZ,  \normal[z]
+   maxx.xyzw      dirDots,   dirDots, vf00
+   mul.xyz        acc,       \light, vf00[w]
+   madd.xyz       acc,       LDiff0, dirDots[x]
+   madd.xyz       acc,       LDiff1, dirDots[y]
+   madd.xyz       acc,       LDiff2, dirDots[z]
+   madd.xyz       \light,    LDiff3, dirDots[w]
+   .endm
+
+;//--------------------------------------------------------------------
+;// PointLightsSoA - all 4 point lights in one go, no loop.
+;//
+;// The light positions come transposed (POINT_LIGHT_SOA), so lane i of
+;// dx/dy/dz is light i minus the vertex. Per light:
+;//
+;//   max(N.L, 0) / (1 + k d^2), L normalised
+;//   = max(N.Lu, 0) * rsqrt(d^2 * (1 + k d^2)^2), Lu unnormalised
+;//
+;// so one rsqrt per light replaces the rsqrt + div of the loop version
+;// (two on the FDIV unit, two on the EFU, which work in parallel).
+;// Unused lights have zero colour. Branch-free, like DirLightsMatrix.
+;// \vert and \normal are object space; \light accumulates (xyz).
+;//--------------------------------------------------------------------
+   .macro   PointLightsSoA light, vert, normal
+   lq             PntX,      POINT_LIGHT_SOA+0(vi00)
+   lq             PntY,      POINT_LIGHT_SOA+1(vi00)
+   lq             PntZ,      POINT_LIGHT_SOA+2(vi00)
+   lq             PntK,      POINT_LIGHT_SOA+3(vi00)
+   sub            pdx,       PntX,   \vert[x]
+   sub            pdy,       PntY,   \vert[y]
+   sub            pdz,       PntZ,   \vert[z]
+   mul            acc,       pdx,    \normal[x]
+   madd           acc,       pdy,    \normal[y]
+   madd           pndl,      pdz,    \normal[z]
+   maxx.xyzw      pndl,      pndl,   vf00
+   mul            acc,       pdx,    pdx
+   madd           acc,       pdy,    pdy
+   madd           pd2,       pdz,    pdz
+   loi            0.0001
+   maxi           pd2,       pd2,    i
+   mul            patt,      PntK,   pd2
+   add            patt,      patt,   vf00[w]
+   mul            patt,      patt,   patt
+   mul            patt,      patt,   pd2
+   rsqrt          q,         vf00[w], patt[x]
+   addq.x         pinv,      vf00,   q
+   rsqrt          q,         vf00[w], patt[y]
+   addq.y         pinv,      vf00,   q
+   ; Lights 2 and 3 on the EFU instead: it runs alongside the FDIV unit, which
+   ; already has the other two plus the perspective divide to get through.
+   ersqrt         p,         patt[z]
+   mfp.z          pinv,      p
+   ersqrt         p,         patt[w]
+   mfp.w          pinv,      p
+   mul            pndl,      pndl,   pinv
+   lq             PntDiff0,  POINT_LIGHT_DIFF_PTR+0(vi00)
+   lq             PntDiff1,  POINT_LIGHT_DIFF_PTR+1(vi00)
+   lq             PntDiff2,  POINT_LIGHT_DIFF_PTR+2(vi00)
+   lq             PntDiff3,  POINT_LIGHT_DIFF_PTR+3(vi00)
+   mul.xyz        acc,       \light, vf00[w]
+   madd.xyz       acc,       PntDiff0, pndl[x]
+   madd.xyz       acc,       PntDiff1, pndl[y]
+   madd.xyz       acc,       PntDiff2, pndl[z]
+   madd.xyz       \light,    PntDiff3, pndl[w]
+   .endm
+
+;// Loads the 7 constant rows DirLightsMatrix reads. Hoisted out of the
+;// vertex loop where registers allow it.
+   .macro   DirLightsLoad
+   lq             LDirX,     LIGHT_DIR_T+0(vi00)
+   lq             LDirY,     LIGHT_DIR_T+1(vi00)
+   lq             LDirZ,     LIGHT_DIR_T+2(vi00)
+   lq             LDiff0,    LIGHT_DIFFUSE_PTR+0(vi00)
+   lq             LDiff1,    LIGHT_DIFFUSE_PTR+1(vi00)
+   lq             LDiff2,    LIGHT_DIFFUSE_PTR+2(vi00)
+   lq             LDiff3,    LIGHT_DIFFUSE_PTR+3(vi00)
+   .endm
+
+;//--------------------------------------------------------------------
 ;// BackfaceCull
 ;//--------------------------------------------------------------------
 

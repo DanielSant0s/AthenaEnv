@@ -306,6 +306,115 @@ declare namespace Screen {
     const DISPLAY_BUFFER: number;
     const DEPTH_BUFFER: number;
 
+    // -- channel shuffle masks & fog curves ------------------------------------
+    const CHANNEL_RED: number;
+    const CHANNEL_GREEN: number;
+    const CHANNEL_BLUE: number;
+    const CHANNEL_ALPHA: number;
+    const CHANNEL_RGB: number;
+    const CHANNEL_ALL: number;
+
+    const FOG_LINEAR: number;
+    const FOG_EXP: number;
+    const FOG_EXP2: number;
+
+    interface ChannelShuffleOptions {
+        /** Destination surface (`Image` or buffer id like `Screen.DRAW_BUFFER`). Defaults to `Screen.DRAW_BUFFER`. */
+        dst?: Image | number;
+        /** Input channel mask (`Screen.CHANNEL_RED` | `GREEN` | `BLUE` | `ALPHA`). */
+        inChannel?: number;
+        /** Output channel write mask (`Screen.CHANNEL_RGB`, `Screen.CHANNEL_ALL`, etc.). Defaults to `Screen.CHANNEL_RGB`. */
+        outMask?: number;
+        /** Enable hardware alpha blending. Defaults to `true`. */
+        alphaBlend?: boolean;
+        /** Packed GS alpha-blend equation (e.g. `Screen.BLEND_DEFAULT`, `Screen.BLEND_ADD`, or `Screen.alphaEquation(...)`). */
+        blendEquation?: number | bigint;
+        /** Enable hardware alpha test (`ALPHA_GREATER, 0`) to skip transparent pixels. Defaults to `true`. */
+        alphaTest?: boolean;
+        /** Enable hardware depth testing during shuffle. Defaults to `false`. */
+        zTest?: boolean;
+        /** Depth test method (`Screen.DEPTH_ALWAYS`, `Screen.DEPTH_GEQUAL`, etc.). */
+        zTestMethod?: number;
+        /** Reference Z value emitted with shuffle sprites when `zTest` is enabled. */
+        zRef?: number;
+        /** Region start X (page-aligned to 64). Defaults to `0`. */
+        x?: number;
+        /** Region start Y (page-aligned to 32). Defaults to `0`. */
+        y?: number;
+        /** Region width in pixels. Defaults to full buffer width. */
+        width?: number;
+        /** Region height in pixels. Defaults to full buffer height. */
+        height?: number;
+    }
+
+    interface DepthFogOptions {
+        /** Camera near clip plane distance. Defaults to the active `Render.setView` near value. */
+        near?: number;
+        /** Camera far clip plane distance. Defaults to the active `Render.setView` far value. */
+        far?: number;
+        /** Fog falloff curve (`Screen.FOG_LINEAR`, `Screen.FOG_EXP`, `Screen.FOG_EXP2`). Defaults to `Screen.FOG_LINEAR`. */
+        curve?: number;
+        /** Exponential fog density (used when `curve` is `FOG_EXP` or `FOG_EXP2`). Defaults to `1.5`. */
+        density?: number;
+        /** Fog factor (`0.0 .. 1.0`) applied to unwritten Z-buffer pixels (`Z == 0`, e.g. skybox). Defaults to `0.0`. */
+        skyFog?: number;
+        /**
+         * Left-shift the Z buffer by this many bits before the fog CLUT lookup (`1..7`).
+         * Spreads a narrow 24-bit depth band across the blue byte. `0` leaves Z untouched.
+         */
+        shift?: number;
+    }
+
+    /**
+     * Creates a 256-entry `PSMCT32` (`16x16`) Lookup Table (CLUT) in VRAM, automatically swizzled for `CSM1` Channel Shuffle.
+     * @param entriesOrFn Optional 256-entry array/`Uint32Array` of `Color` values, or a generator `(index: number) => RGBAColor` for `0..255`.
+     */
+    function createShuffleLUT(entriesOrFn?: ArrayLike<RGBAColor> | ((index: number) => RGBAColor)): Image;
+
+    /**
+     * Updates an existing Channel Shuffle LUT `Image` in place (`CSM1`-swizzled) and uploads it inline via `VIF1 DIRECT`.
+     */
+    function updateShuffleLUT(lut: Image, entriesOrFn: ArrayLike<RGBAColor> | ((index: number) => RGBAColor)): void;
+
+    /**
+     * Populates a Channel Shuffle LUT `Image` with a perspective-linearized hardware Z-buffer Depth Fog ramp.
+     */
+    function buildDepthFogLUT(lut: Image, color: RGBAColor, start: number, end: number, options?: DepthFogOptions): void;
+
+    /**
+     * Executes a hardware PS2 GS `PSMT8` Channel Shuffle / Depth Shuffle pass across the screen (or sub-region).
+     * Reinterprets a 32-bit RGBA or Z-buffer (`source`) as an 8-bit indexed texture (`PSMT8`), extracts `inChannel`
+     * via the GS 64x32 page-swizzle UV offset trick, remaps each byte through `lut` (`16x16 PSMCT32`), and draws/blends
+     * into `options.dst` (default `Screen.DRAW_BUFFER`).
+     */
+    function channelShuffle(source: Image | number | null, lut: Image, inChannel?: number | ChannelShuffleOptions, options?: ChannelShuffleOptions): void;
+
+    /**
+     * Applies single-pass hardware Depth Fog to the active draw buffer by channel-shuffling the Z-buffer's MSB byte
+     * through a cached, perspective-linearized 256-entry fog CLUT.
+     * @param color Fog RGB color and maximum alpha (`0..128`).
+     * @param start Camera-space distance where fog begins (`0%` fog).
+     * @param end Camera-space distance where fog reaches full opacity (`100%` of `color` alpha).
+     * @param options Optional curve (`FOG_LINEAR` / `FOG_EXP` / `FOG_EXP2`), density, and skybox fog factor.
+     */
+    function depthFog(color: RGBAColor, start: number, end: number, options?: DepthFogOptions): void;
+
+    /**
+     * Left-shifts the active Z buffer in place so the blue byte covers a usable depth range.
+     * 24-bit Z is stored as R[7:0] G[15:8] B[23:16]. Green is saved into Z alpha, blue is
+     * doubled `bits` times (saturating at 255), then the saved green bits are scaled by
+     * `1/2^bits` and added back into blue.
+     * Call it after the 3D pass and before {@link channelShuffle} or {@link depthFog}.
+     * @param bits Shift count, clamped to `1..7`.
+     */
+    function depthBitShift(bits: number): void;
+
+    /**
+     * Inverts only the blue byte of the active Z buffer (`255 - B`).
+     * Use after {@link depthBitShift} when a later pass wants far = 255 and near = 0.
+     */
+    function depthInvertBlue(): void;
+
     /** Runs `loopFn` every frame with automatic clear/flip (ideal for quick demos). */
     function display(loopFn: () => void): void;
     /** Persists a clear color used by {@link display} and as the default for {@link clear} with no args. */
@@ -319,6 +428,19 @@ declare namespace Screen {
     function setVSync(enabled: boolean): void;
     /** Required before {@link getFPS} will return meaningful values. */
     function setFrameCounter(enabled: boolean): void;
+    /**
+     * Lets the EE build the next frame (game logic, physics, draw packets) while the GS is still
+     * drawing the previous one, so a frame costs max(CPU, GPU) instead of CPU + GPU. On by default;
+     * only affects double-buffered modes. Disable to make {@link flip} block until the frame is on screen.
+     */
+    function setFrameOverlap(enabled: boolean): void;
+    function getFrameOverlap(): boolean;
+    /**
+     * EE time per frame in milliseconds, averaged over the last 30 frames. Sections
+     * never overlap: `script` is everything not inside another one. `gpuWait` is the
+     * time the CPU sat blocked on the GPU -- near zero means the CPU is the bottleneck.
+     */
+    function getProfile(): { frame: number; script: number; render: number; anim: number; physics: number; gpuWait: number; vsync: number };
     function waitVblankStart(): void;
     /** @param frameIntervalMs Measurement window. Defaults to 1000. */
     function getFPS(frameIntervalMs?: number): number;

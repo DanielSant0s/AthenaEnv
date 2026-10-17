@@ -103,6 +103,25 @@ int owl_generation_read(uint32_t generation);
 // sent early if it is still being filled, and then waited on.
 void owl_wait_generation(uint32_t generation);
 
+// Blocks until every chain sent so far -- and the PATH3 texture uploads they
+// triggered -- has been read. For freeing or rewriting DMA_REF'd memory that
+// has no generation of its own to wait on (destroyed images, glyph atlases,
+// decoded video frames).
+void owl_wait_inflight();
+
+// The chain being filled DMA_REFs memory the EE can rewrite without waiting
+// first (a JS-owned ArrayBuffer). The flip then drains that chain before
+// returning instead of letting it overlap the next frame.
+void owl_mark_volatile_refs();
+
+// Whether the most recently sent chain was marked by owl_mark_volatile_refs().
+int owl_last_sent_has_volatile_refs();
+
+// Called by owl_flush_packet() right before a chain is handed to the DMAC.
+// graphics.c uses it to finish presenting the previous frame before any of the
+// next frame's GS work can reach the buffer that is still on screen.
+void owl_set_pre_kick_hook(void (*hook)(void));
+
 owl_controller *owl_get_controller();
 
 void vu1_set_double_buffer_settings(uint32_t base, uint32_t offset);

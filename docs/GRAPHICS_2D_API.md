@@ -76,6 +76,8 @@ async_list.process();
 * `Screen.getMemoryStats(statId = Screen.VRAM_USED_TOTAL)` – Returns VRAM usage in bytes. Other counters: `VRAM_SIZE`, `VRAM_USED_STATIC`, `VRAM_USED_DYNAMIC`.
 * `Screen.setVSync(enabled)` – Enables/disables VSync (locks FPS to the mode's refresh rate).
 * `Screen.setFrameCounter(enabled)` – Enables internal FPS counter required by `Screen.getFPS()`.
+* `Screen.setFrameOverlap(enabled)` / `Screen.getFrameOverlap()` – Frame overlap (default on, double-buffered modes only): `Screen.flip()` returns as soon as the frame is queued, and the CPU builds the next frame while the GS is still drawing the current one. Disable it to make `flip()` block until the frame is on screen.
+* `Screen.getProfile()` – CPU (EE) time per frame in ms, averaged over the last 30 frames: `{ frame, script, render, anim, physics, gpuWait, vsync }`. The sections never overlap (`script` is everything not covered by another one, JS included). `gpuWait` is time spent blocked on the GPU: near zero means the CPU is the bottleneck, large means the GPU is.
 * `Screen.waitVblankStart()` – Blocks until the next vertical blank.
 * `Screen.getFPS(frameIntervalMs = 1000)` – Returns the measured FPS over the given window (requires frame counter enabled).
 * `Screen.getMode()` – Returns the active video mode object: `{ mode, width, height, psm, interlace, field, double_buffering, zbuffering, psmz }`.

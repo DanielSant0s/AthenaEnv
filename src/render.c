@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <profiler.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <malloc.h>
@@ -209,11 +210,20 @@ void render_begin() {
 	render_sync_static_lights();
 }
 
+static float g_render_near = 1.0f;
+static float g_render_far  = 4000.0f;
+
+float render_get_near(void) { return g_render_near; }
+float render_get_far(void)  { return g_render_far; }
+
 void render_set_view(float fov, float near, float far, float width, float height) {
 	if (width == 0.0f && height == 0.0f) {
 		width = gsGlobal->Width;
 		height = gsGlobal->Height * ((gsGlobal->Interlace == GS_INTERLACED) && (gsGlobal->Field == GS_FRAME)? 2 : 1);
 	}
+
+	g_render_near = near;
+	g_render_far  = far;
 
 	create_view(view_screen, DEG2RAD(fov), near, far, width, height);
 	matrix_functions->multiply(world_screen, world_view, view_screen);
@@ -381,7 +391,15 @@ int render_object_in_frustum(athena_object_data *obj) {
 	return !clip_bounding_box(local_screen, bounds);
 }
 
+static void render_object_impl(athena_object_data *obj);
+
 void render_object(athena_object_data *obj) {
+	prof_push(PROF_RENDER);
+	render_object_impl(obj);
+	prof_pop();
+}
+
+static void render_object_impl(athena_object_data *obj) {
 	if (!obj || !obj->data)
 		return;
 
@@ -400,9 +418,13 @@ void render_object(athena_object_data *obj) {
 	// entirely (process_animation() is driven by wall clock, so it picks up
 	// again correctly whenever the object comes back into view).
 	if (obj->data->skeleton && obj->bone_matrices) {
+		prof_push(PROF_ANIM);
 		process_animation(obj);
+		if (obj->bones_queued && !owl_generation_read(obj->bones_queued_gen))
+			owl_wait_generation(obj->bones_queued_gen);
 		update_bone_transforms(obj);
 		render_update_skinned_bounds(obj);
+		prof_pop();
 	}
 
 	if (!render_object_in_frustum(obj)) {
@@ -761,7 +783,10 @@ void update_object_space(athena_object_data *obj) {
 		obj->update_collision(obj);
 }
 
-static void bake_giftags(owl_packet *packet, athena_render_data *data, bool texture_mapping, int mat_id) {
+// Also selects the VU1 path: lane y non-zero = accurate (scissoring) path, zero
+// = fast path. Every microprogram reads it once on entry, and each material
+// group enters with MSCALF, so this can change from one material to the next.
+static void emit_clipfan_giftag(owl_packet *packet, athena_render_data *data, bool texture_mapping, bool accurate) {
 	prim_reg_t prim_data = {
 		.PRIM = GS_PRIM_PRIM_TRIFAN,
 		.IIP = data->attributes.shade_model,
@@ -783,41 +808,11 @@ static void bake_giftags(owl_packet *packet, athena_render_data *data, bool text
 		.NREG = 3
 	};
 
-	prim_data.PRIM = (data->tristrip? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE);
-
-	// NLOOP carries the "kick texture state" flag to the VU, which reads it via
-	// ilw.x and skips its texture XGKICK when 0. Free: every microprogram
-	// overwrites word x of its output copy with the real vertex count.
-	// Must ride here, not in CLIPFAN's spare lane: this unpack is double-buffered,
-	// CLIPFAN is static and the VIF writes chunk N+1 while the VU runs chunk N.
-	giftag_t prim_tag = {
-		.NLOOP = texture_mapping ? 1 : 0,
-		.EOP = 1,
-		.PRE = 1,
-		.PRIM = prim_data.data,
-		.FLG = 0,
-		.NREG = 3
-	};
-
 	owl_add_unpack_data_cnt(packet, 26, 1, 0);
-	// x: per-vertex winding flip for the backface test. A tristrip alternates
-	// winding vertex by vertex, so a fixed-sign test would cull every other
-	// triangle; the VU multiplies its culling direction by this every vertex.
 	owl_add_float(packet, data->tristrip ? -1.0f : 1.0f);
-	owl_add_uint(packet, data->attributes.accurate_clipping? (clip_tag.data >> 32) : 0);
-	// z stays an integer: setup_clip_trigger.i reads it with mtir (bit pattern,
-	// not value) to pick per-triangle vs per-vertex clip judgement.
+	owl_add_uint(packet, accurate ? (clip_tag.data >> 32) : 0);
 	owl_add_uint(packet, data->tristrip);
-	// float, not uint: the VU multiplies the triangle edge by this lane
-	// (bfc_multiplier, +1 cull back / -1 cull front) and only then converts it
-	// with ftoi0 to decide whether culling is on at all. Sent as an integer,
-	// CULL_FACE_BACK's 1.0f arrived as the bit pattern 0x00000001 -- a denormal
-	// the VU reads as ~0, which both zeroed the edge vector and made the enable
-	// test see "no culling". Face culling has never actually run.
 	owl_add_float(packet, data->attributes.face_culling);
-	owl_add_unpack_data_cnt(packet, 0, 1, 1);
-	owl_add_ulong(packet, prim_tag.data);
-	owl_add_ulong(packet, DRAW_STQ2_REGLIST);
 }
 
 // Cook constants. Clamping AFTER the scale is equivalent to clamping before it
@@ -829,6 +824,11 @@ static const VECTOR COOK_ZERO  = { 0.0f, 0.0f, 0.0f, 0.0f };
 static const VECTOR COOK_C255  = { 255.0f, 255.0f, 255.0f, 255.0f };
 static const VECTOR COOK_C127  = { 127.0f, 127.0f, 127.0f, 0.0f };     // .w = 0 forces normal.w = 0
 static const VECTOR COOK_CN127 = { -127.0f, -127.0f, -127.0f, 0.0f };
+// Strip meshes keep normal.w: it carries ATHENA_STRIP_NO_KICK (-2 saturates to
+// -128), which VU1 ORs into the ADC bit. Everything else still gets w = 0, so a
+// stray w in script-built normals can never suppress triangles.
+static const VECTOR COOK_C127W  = { 127.0f, 127.0f, 127.0f, 127.0f };
+static const VECTOR COOK_CN127W = { -127.0f, -127.0f, -127.0f, -128.0f };
 static const VECTOR COOK_C256  = { 256.0f, 256.0f, 256.0f, 256.0f };
 static const VECTOR COOK_UVHI  = {  127.99f*256.0f,  127.99f*256.0f,  127.99f*256.0f,  127.99f*256.0f };
 static const VECTOR COOK_UVLO  = { -127.99f*256.0f, -127.99f*256.0f, -127.99f*256.0f, -127.99f*256.0f };
@@ -875,7 +875,7 @@ static void cook_colors_range(athena_compact_color *dst, const VECTOR *src, uint
 	: "$8", "memory");
 }
 
-static void cook_normals_range(athena_compact_normal *dst, const VECTOR *src, uint32_t count) {
+static void cook_normals_range(athena_compact_normal *dst, const VECTOR *src, uint32_t count, bool keep_w) {
 	if (count == 0)
 		return;
 
@@ -899,7 +899,7 @@ static void cook_normals_range(athena_compact_normal *dst, const VECTOR *src, ui
 	"addiu  %0, %0, 0x4         \n"
 	".set reorder               \n"
 	: "+r" (dst), "+r" (src), "+r" (count)
-	: "r" (COOK_C127), "r" (COOK_CN127)
+	: "r" (keep_w ? COOK_C127W : COOK_C127), "r" (keep_w ? COOK_CN127W : COOK_CN127)
 	: "$8", "memory");
 }
 
@@ -1118,7 +1118,7 @@ static void render_cook_compact_vertices(athena_render_data *data) {
 			cook_colors_range(&data->compact_colors[dst], &data->colours[src], count);
 
 		if (cook_normals)
-			cook_normals_range(&data->compact_normals[dst], &data->normals[src], count);
+			cook_normals_range(&data->compact_normals[dst], &data->normals[src], count, data->tristrip);
 
 		if (cook_uvs)
 			cook_uvs_range(&data->compact_uvs[dst], &data->texcoords[src], count);
@@ -1189,9 +1189,15 @@ void render_freeze_compact_vertices(athena_render_data *data) {
 // FLUSHA/NOP/ITOP/MSCALF-or-MSCNT trailer. Mirrors draw_vu1_with_colors'
 // chunk loop, including the last_index==-1 MSCALF-vs-MSCNT condition.
 
-// Bakes a tex_giftag slot: AD header + two inert AD pairs. The pairs default to
-// GIF_NOP because an untextured material's slot is never refreshed, and an AD
-// address of 0 is GS_PRIM -- zeroed memory would write PRIM=0 to the GS.
+#define MAT_GIFTAG_STRIDE 13
+
+// Bakes a material's 13-QW slot:
+//   slot[0]    : AD header (2 registers, EOP=1)
+//   slot[1]    : GS_TEX0 (or GIF_NOP if untextured)
+//   slot[2]    : GS_TEX1 (or GIF_NOP if untextured)
+//   slot[3]    : prim_tag for chunk 0 of the material (NLOOP = texture_mapping ? 1 : 0)
+//   slot[4]    : prim_tag for chunks 1..N-1 of the material (NLOOP = 0, skips redundant TEX0/TEX1 XGKICK)
+//   slot[5..12]: 8-corner sub-mesh bounding box (VECTOR[8]) for per-submesh VU0 frustum culling
 static inline void render_bake_tex_giftag_header(owl_qword *slot) {
 	owl_qword header;
 	header.dword[1] = GIF_AD;
@@ -1203,6 +1209,8 @@ static inline void render_bake_tex_giftag_header(owl_qword *slot) {
 	nop_pair.dword[0] = 0;
 	slot[1] = nop_pair;
 	slot[2] = nop_pair;
+	slot[3] = nop_pair;
+	slot[4] = nop_pair;
 }
 
 // Which attribute set a chain slot was baked for. colors/lights/spec/ref share
@@ -1214,39 +1222,42 @@ typedef enum {
 	CHAIN_REF,      // positions, normals, colours; skips materials without a ref texture
 } eChainKind;
 
-// Bakes one DMA_CALL sub-chain per material chunk: the unpacks (all DMA_REF)
-// plus the FLUSHA/NOP/ITOP/MSCALF-or-MSCNT trailer. Mirrors the caller's chunk
-// loop, including the last_index==-1 MSCALF-vs-MSCNT condition.
+// Bakes one contiguous DMA_CALL sub-chain per material group: all chunks of a
+// material run back-to-back inside a single DMA_CALL, with VIF_FLUSHA + texture
+// XGKICK only on the first chunk of each material and VIF_FLUSH + VIF_MSCNT on
+// subsequent chunks so VIF1/VU1/GS double-buffering streams at full hardware speed.
 static void render_build_chain(athena_object_data *obj, athena_chain_cache *chain,
                                int pass_state, int batch_size, int mpg_addr,
                                eChainKind kind) {
 	athena_render_data *data = obj->data;
 
-	// Everything below frees and rewrites buffers the DMAC reaches by reference.
-	// A rebuild triggered mid-frame (geometry or material table mutated between
-	// two draws of the same object) would pull them out from under a draw call
-	// that is still queued -- and the buffer is not just rewritten, it is freed.
 	render_chain_wait_if_queued(chain);
 
 	bool is_ref  = (kind == CHAIN_REF);
 	bool skinned = (data->skeleton != NULL) && (data->compact_skin_indices != NULL);
-	bool want_normals = (kind != CHAIN_COLORS);
+	// Every microprogram reads the packed normal, the colors ones included:
+	// its w carries the strip no-kick flag (ATHENA_STRIP_NO_KICK), so the slot
+	// can never be left holding a previous draw's normals.
+	bool want_normals = true;
 
-	// Lands at texGiftagAddr: the chunk's OUTPUT window, XGKICKed standalone
-	// ahead of kickAddress = texGiftagAddr+3. See RENDER_INBUF_SIZE.
 	int tex_giftag_dest = data->skeleton ? RENDER_SKINNED_INBUF_SIZE : RENDER_INBUF_SIZE;
 
-	// Slot numbering: skinned meshes spend slots 0..1 on the bone data.
 	int slot0 = skinned ? 2 : 0;
 	int dst_positions = 2 + batch_size * slot0;
 	int dst_normals   = 2 + batch_size * (slot0 + 1);
 	int dst_colours   = 2 + batch_size * (slot0 + 2);
 	int dst_uvs       = 2 + batch_size * (slot0 + 3);
 
-	int chunk_cap = batch_size - (batch_size % 12);
+	// A triangle list chunks on whole triangles. A strip chunk has to repeat
+	// the last two vertices of the previous chunk instead (the GIFtag restarts
+	// the strip at every chunk), and the step between chunks has to stay a
+	// multiple of 4 so every DMA_REF below still lands on a quadword (12-byte
+	// positions) and keeps the strip parity even (VU1 restarts it per chunk):
+	// 48 -> 46-vertex chunks advancing 44, 36 -> 34 advancing 32.
+	bool strip = data->tristrip;
+	int chunk_cap = strip ? ((batch_size - 2) & ~3) + 2 : batch_size - (batch_size % 12);
+	#define CHUNK_STEP(count, left) ((strip && (left) > (count)) ? (count) - 2 : (count))
 
-	// A material the caller will skip contributes no chunks, but still advances
-	// last_index -- keep both passes below in lockstep with the draw loop.
 	#define CHAIN_SKIPS(i) (is_ref && data->materials[data->material_indices[i].index].ref_texture_id == -1)
 
 	uint32_t chunk_count = 0;
@@ -1256,7 +1267,7 @@ static void render_build_chain(athena_object_data *obj, athena_chain_cache *chai
 			int idxs_to_draw = (data->material_indices[i].end - last_index);
 			while (idxs_to_draw > 0) {
 				int count = idxs_to_draw < chunk_cap ? idxs_to_draw : chunk_cap;
-				idxs_to_draw -= count;
+				idxs_to_draw -= CHUNK_STEP(count, idxs_to_draw);
 				chunk_count++;
 			}
 		}
@@ -1265,7 +1276,6 @@ static void render_build_chain(athena_object_data *obj, athena_chain_cache *chai
 
 	chain->mpg_addr = mpg_addr;
 	chain->built_version = data->chain_version;
-
 
 	if (chunk_count == 0) {
 		free(chain->buffer);
@@ -1279,9 +1289,9 @@ static void render_build_chain(athena_object_data *obj, athena_chain_cache *chai
 		return;
 	}
 
-	// Worst case per chunk: tex_giftag + diffuse + skin_idx + skin_w + positions +
-	// normals + colours + uvs + trailer (2) + DMA_RET = 11. Reserve 12 for slack.
-	uint32_t qwc_budget = chunk_count * 12;
+	// Worst case per chunk: prim_tag + tex_giftag + diffuse + skin_idx + skin_w +
+	// positions + normals + colours + uvs + trailer (2) + DMA_RET = 12. Reserve 13.
+	uint32_t qwc_budget = chunk_count * 13;
 
 	if (chain->qwc_alloc < qwc_budget) {
 		free(chain->buffer);
@@ -1290,26 +1300,29 @@ static void render_build_chain(athena_object_data *obj, athena_chain_cache *chai
 	}
 
 	free(chain->chunk_offset);
-	chain->chunk_offset = (uint32_t*)malloc(chunk_count * sizeof(uint32_t));
+	chain->chunk_offset = (uint32_t*)malloc(data->material_index_count * sizeof(uint32_t));
 	chain->chunk_count = chunk_count;
 
-	// One 3-QW slot per material, shared by all its chunks. Baked with inert
-	// defaults so an untextured material's slot is well-formed even though
-	// render_update_tex_giftag never touches it.
 	free(chain->tex_giftag);
-	chain->tex_giftag = (owl_qword*)memalign(16, data->material_index_count * 3 * sizeof(owl_qword));
+	chain->tex_giftag = (owl_qword*)memalign(16, data->material_index_count * MAT_GIFTAG_STRIDE * sizeof(owl_qword));
 
 	for (int i = 0; i < data->material_index_count; i++)
-		render_bake_tex_giftag_header(&chain->tex_giftag[i * 3]);
+		render_bake_tex_giftag_header(&chain->tex_giftag[i * MAT_GIFTAG_STRIDE]);
 
 	owl_packet chain_pkt = { 0 };
 	chain_pkt.ptr = chain->buffer;
 
-	uint32_t chunk_idx = 0;
 	last_index = -1;
 
 	for (int i = 0; i < data->material_index_count; i++) {
+		chain->chunk_offset[i] = 0;
 		if (CHAIN_SKIPS(i)) {
+			last_index = data->material_indices[i].end;
+			continue;
+		}
+
+		int idxs_to_draw = (data->material_indices[i].end - last_index);
+		if (idxs_to_draw <= 0) {
 			last_index = data->material_indices[i].end;
 			continue;
 		}
@@ -1327,15 +1340,40 @@ static void render_build_chain(athena_object_data *obj, athena_chain_cache *chai
 		athena_compact_skin_indices* skin_indices = skinned ? &data->compact_skin_indices[base] : NULL;
 		athena_compact_skin_weights* skin_weights = skinned ? &data->compact_skin_weights[base] : NULL;
 
-		int idxs_to_draw = (data->material_indices[i].end - last_index);
+		// Precompute the 8-corner AABB for this sub-mesh so draw_vu1_pass can
+		// frustum-cull individual spatial sectors/materials on VU0 in ~20 cycles.
+		{
+			float min_x = positions[0].x, min_y = positions[0].y, min_z = positions[0].z;
+			float max_x = min_x,          max_y = min_y,          max_z = min_z;
+			for (int v = 1; v < idxs_to_draw; v++) {
+				float px = positions[v].x, py = positions[v].y, pz = positions[v].z;
+				if (px < min_x) min_x = px; else if (px > max_x) max_x = px;
+				if (py < min_y) min_y = py; else if (py > max_y) max_y = py;
+				if (pz < min_z) min_z = pz; else if (pz > max_z) max_z = pz;
+			}
+			VECTOR *sub_bbox = (VECTOR*)&chain->tex_giftag[i * MAT_GIFTAG_STRIDE + 5];
+			for (int c = 0; c < 8; c++) {
+				sub_bbox[c][0] = (c & 1) ? max_x : min_x;
+				sub_bbox[c][1] = (c & 2) ? max_y : min_y;
+				sub_bbox[c][2] = (c & 4) ? max_z : min_z;
+				sub_bbox[c][3] = 1.0f;
+			}
+		}
+
+		chain->chunk_offset[i] = (uint32_t)(chain_pkt.ptr - chain->buffer);
+
 		int idxs_drawn = 0;
+		int chunk_in_mat = 0;
 
 		while (idxs_to_draw > 0) {
 			int count = idxs_to_draw < chunk_cap ? idxs_to_draw : chunk_cap;
+			owl_qword *mat_slot = &chain->tex_giftag[i * MAT_GIFTAG_STRIDE];
 
-			chain->chunk_offset[chunk_idx] = (uint32_t)(chain_pkt.ptr - chain->buffer);
+			owl_add_unpack_data_ref(&chain_pkt, 0, &mat_slot[chunk_in_mat == 0 ? 3 : 4], 1, 1);
 
-			owl_add_unpack_data_ref(&chain_pkt, tex_giftag_dest, &chain->tex_giftag[i * 3], 3, 1);
+			if (chunk_in_mat == 0 || (kind == CHAIN_COLORS && chunk_in_mat == 1))
+				owl_add_unpack_data_ref(&chain_pkt, tex_giftag_dest, &mat_slot[0], 3, 1);
+
 			owl_add_unpack_data_ref(&chain_pkt, 1, (void*)&mat->diffuse, 1, 1);
 
 			if (skinned) {
@@ -1353,31 +1391,32 @@ static void render_build_chain(athena_object_data *obj, athena_chain_cache *chai
 			if (texcoords)
 				owl_add_unpack_data_ref_packed(&chain_pkt, dst_uvs, &texcoords[idxs_drawn], count, UNPACK_V2_16, sizeof(athena_compact_uv), 1, 0);
 
-			// FLUSHA waits for PATH1/2/3 to go idle. PATH3 is the load-bearing
-			// one: render_trigger_texture_upload fires a VIF interrupt whose
-			// handler queues the texture transfer on PATH3, running in parallel
-			// with this VIF1 unpack. Without the wait, the XGKICK below can
-			// reach the GS while that upload is still streaming.
+			// Only the first chunk of a material needs FLUSHA + MSCALF (to wait for any
+			// async PATH3 texture upload queued before this material and make each
+			// sub-mesh self-contained for frustum culling). Subsequent chunks of the
+			// same material use FLUSH + MSCNT so VU1/GIF double-buffering streams at peak speed.
 			owl_add_cnt_tag(&chain_pkt, 1, owl_vif_code_double(VIF_CODE(0, 0, VIF_NOP, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
-			owl_add_uint(&chain_pkt, VIF_CODE(0, 0, VIF_FLUSHA, 0));
+			owl_add_uint(&chain_pkt, VIF_CODE(0, 0, (chunk_in_mat == 0 ? VIF_FLUSHA : VIF_FLUSH), 0));
 			owl_add_uint(&chain_pkt, VIF_CODE(0, 0, VIF_NOP, 0));
 			owl_add_uint(&chain_pkt, VIF_CODE(count, 0, VIF_ITOP, 0));
-			owl_add_uint(&chain_pkt, VIF_CODE(mpg_addr, 0, (last_index == -1? VIF_MSCALF : VIF_MSCNT), 0));
+			owl_add_uint(&chain_pkt, VIF_CODE(mpg_addr, 0, (chunk_in_mat == 0 ? VIF_MSCALF : VIF_MSCNT), 0));
 
-			owl_add_dma_ret(&chain_pkt);
-
-			idxs_to_draw -= count;
-			idxs_drawn += count;
-			chunk_idx++;
+			chunk_in_mat++;
+			int step = CHUNK_STEP(count, idxs_to_draw);
+			idxs_to_draw -= step;
+			idxs_drawn += step;
 		}
+
+		owl_add_dma_ret(&chain_pkt);
 
 		last_index = data->material_indices[i].end;
 	}
 
 	#undef CHAIN_SKIPS
+	#undef CHUNK_STEP
 
 	SyncDCache(chain->buffer, &chain->buffer[qwc_budget - 1]);
-	SyncDCache(chain->tex_giftag, &chain->tex_giftag[data->material_index_count * 3 - 1]);
+	SyncDCache(chain->tex_giftag, &chain->tex_giftag[data->material_index_count * MAT_GIFTAG_STRIDE - 1]);
 }
 
 // Blocks until the DMAC is done with whatever this chain last queued, so its
@@ -1390,55 +1429,77 @@ static void render_chain_wait_if_queued(athena_chain_cache *chain) {
 	owl_wait_generation(chain->queued_gen);
 }
 
-// Refreshes the TEX0/TEX1 quadwords of a tex_giftag slot (the header, slot[0],
-// is constant -- see render_bake_tex_giftag_header). Called from the material
-// loop of every draw_vu1_* whenever texture_mapping is true, NOT gated on
-// whether the texture was rebound: gsGlobal->PrimContext flips every frame
-// regardless, so the words really do change from one frame to the next.
-//
-// The slot is DMA_REF'd by the chunks, though, so it belongs to the last draw
-// call until the DMAC has read it. Drawing the SAME render data twice in one
-// frame with a different texture in between (setTexture, or a shared RenderData
-// swapped between two objects) would otherwise rewrite the slot under the first
-// draw and render both with the second texture. Hence: compute first, write only
-// if something actually changed, and wait the earlier draw out before it does.
-static void render_update_tex_giftag(athena_chain_cache *chain, int mat_id, GSSURFACE *tex) {
-	owl_qword *slot = &chain->tex_giftag[mat_id * 3];
-	int tw, th;
-	athena_set_tw_th(tex, &tw, &th);
+static void render_update_mat_giftags(athena_chain_cache *chain, athena_render_data *data,
+                                      int mat_id, bool texture_mapping, GSSURFACE *tex) {
+	owl_qword *slot = &chain->tex_giftag[mat_id * MAT_GIFTAG_STRIDE];
 
-	owl_qword tex0, tex1;
+	prim_reg_t prim_data = {
+		.PRIM = (data->tristrip ? GS_PRIM_PRIM_TRISTRIP : GS_PRIM_PRIM_TRIANGLE),
+		.IIP = data->attributes.shade_model,
+		.TME = texture_mapping,
+		.FGE = gsGlobal->PrimFogEnable,
+		.ABE = gsGlobal->PrimAlphaEnable,
+		.AA1 = gsGlobal->PrimAAEnable,
+		.FST = 0,
+		.CTXT = gsGlobal->PrimContext,
+		.FIX = 0
+	};
 
-	tex0.dword[1] = GS_TEX0_1 + gsGlobal->PrimContext;
-	tex0.dword[0] = GS_SETREG_TEX0((tex->Vram & ~TRANSFER_REQUEST_MASK) / 256,
-	                                   tex->TBW,
-	                                   tex->PSM,
-	                                   tw, th,
-	                                   gsGlobal->PrimAlphaEnable,
-	                                   COLOR_MODULATE,
-	                                   (tex->VramClut & ~TRANSFER_REQUEST_MASK) / 256,
-	                                   tex->ClutPSM,
-	                                   0, 0,
-	                                   tex->VramClut ? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD);
+	giftag_t prim_first = {
+		.NLOOP = texture_mapping ? 1 : 0,
+		.EOP = 1,
+		.PRE = 1,
+		.PRIM = prim_data.data,
+		.FLG = 0,
+		.NREG = 3
+	};
 
-	tex1.dword[1] = GS_TEX1_1 + gsGlobal->PrimContext;
-	tex1.dword[0] = GS_SETREG_TEX1(1, 0, tex->Filter, tex->Filter, 0, 0, 0);
+	giftag_t prim_next = prim_first;
+	prim_next.NLOOP = 0;
 
-	// Rewriting the same values is not a hazard, and it is the common case
-	// (same texture, same context, every chunk of every object).
+	owl_qword p0, p1;
+	p0.dword[0] = prim_first.data;
+	p0.dword[1] = DRAW_STQ2_REGLIST;
+	p1.dword[0] = prim_next.data;
+	p1.dword[1] = DRAW_STQ2_REGLIST;
+
+	owl_qword tex0 = slot[1];
+	owl_qword tex1 = slot[2];
+
+	if (texture_mapping && tex) {
+		int tw, th;
+		athena_set_tw_th(tex, &tw, &th);
+
+		tex0.dword[1] = GS_TEX0_1 + gsGlobal->PrimContext;
+		tex0.dword[0] = GS_SETREG_TEX0((tex->Vram & ~TRANSFER_REQUEST_MASK) / 256,
+		                               tex->TBW,
+		                               tex->PSM,
+		                               tw, th,
+		                               gsGlobal->PrimAlphaEnable,
+		                               COLOR_MODULATE,
+		                               (tex->VramClut & ~TRANSFER_REQUEST_MASK) / 256,
+		                               tex->ClutPSM,
+		                               0, 0,
+		                               tex->VramClut ? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD);
+
+		tex1.dword[1] = GS_TEX1_1 + gsGlobal->PrimContext;
+		tex1.dword[0] = GS_SETREG_TEX1(1, 0, tex->Filter, tex->Filter, 0, 0, 0);
+	}
+
 	if (slot[1].dword[0] == tex0.dword[0] && slot[1].dword[1] == tex0.dword[1] &&
-	    slot[2].dword[0] == tex1.dword[0] && slot[2].dword[1] == tex1.dword[1])
+	    slot[2].dword[0] == tex1.dword[0] && slot[2].dword[1] == tex1.dword[1] &&
+	    slot[3].dword[0] == p0.dword[0]   && slot[3].dword[1] == p0.dword[1]   &&
+	    slot[4].dword[0] == p1.dword[0]   && slot[4].dword[1] == p1.dword[1])
 		return;
 
 	render_chain_wait_if_queued(chain);
 
 	slot[1] = tex0;
 	slot[2] = tex1;
+	slot[3] = p0;
+	slot[4] = p1;
 
-	// Read by the DMA controller (owl_add_unpack_data_ref's DMA_REF), not by
-	// the EE core, so it needs an explicit writeback -- the CPU write above
-	// can still be sitting in D-cache otherwise.
-	SyncDCache(&slot[1], &slot[2]);
+	SyncDCache(&slot[1], &slot[4]);
 }
 
 static inline void render_trigger_texture_upload(owl_packet *packet, int texture_id) {
@@ -1451,7 +1512,7 @@ static inline void render_trigger_texture_upload(owl_packet *packet, int texture
 }
 
 static inline int render_object_lighting_qwc(void) {
-	return (pnt_light_count.w > 0) ? (1 + 5 + 1 + 8) : (1 + 5);
+	return (pnt_light_count.w > 0) ? (1 + 5 + 1 + 3 + 1 + 8 + 1 + 4) : (1 + 5 + 1 + 3);
 }
 
 static void render_upload_object_lighting(owl_packet *packet, athena_object_data *obj) {
@@ -1515,6 +1576,20 @@ static void render_upload_object_lighting(owl_packet *packet, athena_object_data
 	owl_add_uquad_ptr(packet, obj_dir[2]);
 	owl_add_uquad_ptr(packet, obj_dir[3]);
 
+	// Same directions transposed for the matrix form (LIGHT_DIR_T in
+	// mem_layout.i): row k holds component k of all 4 lights.
+	VECTOR dir_t[3] qw_aligned;
+	for (int k = 0; k < 3; k++) {
+		dir_t[k][0] = obj_dir[0][k];
+		dir_t[k][1] = obj_dir[1][k];
+		dir_t[k][2] = obj_dir[2][k];
+		dir_t[k][3] = obj_dir[3][k];
+	}
+	owl_add_unpack_data_cnt(packet, 136, 3, 0);
+	owl_add_uquad_ptr(packet, dir_t[0]);
+	owl_add_uquad_ptr(packet, dir_t[1]);
+	owl_add_uquad_ptr(packet, dir_t[2]);
+
 	if (pnt_light_count.w > 0) {
 		VECTOR obj_ppos[4] qw_aligned;
 		VECTOR obj_pdiff[4] qw_aligned;
@@ -1554,6 +1629,21 @@ static void render_upload_object_lighting(owl_packet *packet, athena_object_data
 		owl_add_uquad_ptr(packet, obj_pdiff[1]);
 		owl_add_uquad_ptr(packet, obj_pdiff[2]);
 		owl_add_uquad_ptr(packet, obj_pdiff[3]);
+
+		// Transposed copy for PointLightsSoA (POINT_LIGHT_SOA in mem_layout.i):
+		// x, y, z of the 4 positions, then the 4 attenuations.
+		VECTOR p_soa[4] qw_aligned;
+		for (int i = 0; i < 4; i++) {
+			p_soa[0][i] = obj_ppos[i][0];
+			p_soa[1][i] = obj_ppos[i][1];
+			p_soa[2][i] = obj_ppos[i][2];
+			p_soa[3][i] = obj_pdiff[i][3];
+		}
+		owl_add_unpack_data_cnt(packet, 1009, 4, 0);
+		owl_add_uquad_ptr(packet, p_soa[0]);
+		owl_add_uquad_ptr(packet, p_soa[1]);
+		owl_add_uquad_ptr(packet, p_soa[2]);
+		owl_add_uquad_ptr(packet, p_soa[3]);
 	}
 }
 
@@ -1608,15 +1698,46 @@ static void draw_vu1_pass(athena_object_data *obj, int pass_state,
 		if (bone_cnt > MAX_VU1_BONES)
 			bone_cnt = MAX_VU1_BONES;
 		owl_add_unpack_data_ref(packet, VU1_BONE_MATRICES_ADDR, (void*)obj->bone_matrices, bone_cnt * 4, 0);
+		obj->bones_queued_gen = owl_flush_generation();
+		obj->bones_queued = 1;
 	}
 
-	int chunk_cap = batch_size - (batch_size % 12);
+	MATRIX local_clip;
+	bool cull_submeshes = (!data->skeleton && data->material_index_count > 1);
+	bool accurate_clipping = data->attributes.accurate_clipping;
+	if (cull_submeshes || accurate_clipping) {
+		matrix_functions->multiply(local_clip, obj->transform, world_screen);
+	}
+
+	// Accurate clipping only matters for geometry that can cross the guard
+	// band or the near/far planes. Anything whose box sits entirely inside
+	// takes the fast path instead -- same image, a fraction of the VU1 work.
+	// Per material group when the mesh has several (the same boxes the cull
+	// test above uses), else once for the whole object: the animated box for
+	// a skinned mesh, the bind-time one otherwise.
+	bool object_inside = false;
+	if (accurate_clipping && !cull_submeshes) {
+		VECTOR *bounds = obj->skinned_bounds ? obj->skinned_bounds
+		                                     : (data->skeleton ? NULL : data->bounding_box);
+		object_inside = bounds && bounding_box_inside_guard_band(local_clip, bounds);
+	}
 
 	int last_index = -1;
+	int prev_clipfan = -1;
 	GSSURFACE* tex = NULL;
 	int texture_id;
-	uint32_t chunk_idx = 0;
 	for (int i = 0; i < data->material_index_count; i++) {
+		int idxs_to_draw = (data->material_indices[i].end - last_index);
+		if (idxs_to_draw <= 0) {
+			last_index = data->material_indices[i].end;
+			continue;
+		}
+
+		if (cull_submeshes && clip_bounding_box(local_clip, (VECTOR*)&chain->tex_giftag[i * MAT_GIFTAG_STRIDE + 5])) {
+			last_index = data->material_indices[i].end;
+			continue;
+		}
+
 		const ath_mat *mat = &data->materials[data->material_indices[i].index];
 		bool texture_mapping;
 
@@ -1630,8 +1751,8 @@ static void draw_vu1_pass(athena_object_data *obj, int pass_state,
 			texture_mapping = (((mat->texture_id != -1) && data->attributes.texture_mapping) || pass_state);
 		}
 
+		GSSURFACE *cur_tex = NULL;
 		if (texture_mapping) {
-			GSSURFACE *cur_tex = NULL;
 			if (is_ref) {
 				cur_tex = data->textures[mat->ref_texture_id];
 			} else {
@@ -1654,24 +1775,25 @@ static void draw_vu1_pass(athena_object_data *obj, int pass_state,
 				owl_query_packet(CHANNEL_VIF1, 1);
 				render_trigger_texture_upload(packet, texture_id);
 			}
-
-			render_update_tex_giftag(chain, i, tex);
 		}
 
-		int idxs_to_draw = (data->material_indices[i].end - last_index);
+		render_update_mat_giftags(chain, data, i, texture_mapping, cur_tex);
 
-		while (idxs_to_draw > 0) {
-			owl_query_packet(CHANNEL_VIF1, 5);
+		bool accurate = accurate_clipping && !(cull_submeshes
+			? bounding_box_inside_guard_band(local_clip, (VECTOR*)&chain->tex_giftag[i * MAT_GIFTAG_STRIDE + 5])
+			: object_inside);
+		if (!accurate && accurate_clipping)
+			g_render_stats.fast_clip_groups++;
 
-			int count = idxs_to_draw < chunk_cap ? idxs_to_draw : chunk_cap;
-
-			bake_giftags(packet, data, texture_mapping, i);
-
-			owl_add_dma_call(packet, &chain->buffer[chain->chunk_offset[chunk_idx]]);
-
-			idxs_to_draw -= count;
-			chunk_idx++;
+		int clipfan = (int)texture_mapping | ((int)accurate << 1);
+		if (clipfan != prev_clipfan) {
+			owl_query_packet(CHANNEL_VIF1, 2);
+			emit_clipfan_giftag(packet, data, texture_mapping, accurate);
+			prev_clipfan = clipfan;
 		}
+
+		owl_query_packet(CHANNEL_VIF1, 1);
+		owl_add_dma_call(packet, &chain->buffer[chain->chunk_offset[i]]);
 
 		last_index = data->material_indices[i].end;
 	}

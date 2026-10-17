@@ -5,6 +5,7 @@
 #include <athena/image.h>
 #include <graphics.h>
 #include <texture_manager.h>
+#include <owl_packet.h>
 
 static GSSURFACE *athena_image_alloc_surface(void) {
     GSSURFACE *tex = calloc(1, sizeof(GSSURFACE));
@@ -82,6 +83,10 @@ void athena_image_destroy(AthenaImage *image) {
         return;
 
     if (image->tex && image->owns_surface) {
+        // An in-flight chain may still be drawing from this surface or
+        // uploading it from Mem (frame overlap, see graphics.c).
+        owl_wait_inflight();
+
         texture_manager_free(image->tex);
         if (image->tex->Mem) {
             free(image->tex->Mem);

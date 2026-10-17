@@ -8,6 +8,7 @@
 #include <malloc.h>
 #include <atlas.h>
 #include <graphics.h>
+#include <owl_packet.h>
 
 static inline struct atlas_allocation_t *allocNew(int x, int y, size_t width, size_t height)
 {
@@ -157,6 +158,9 @@ static void atlasCopyData(atlas_t *atlas, struct atlas_allocation_t *al, size_t 
 
     const char *src = (const char *)surface;
     char *data = (char *)atlas->surface.Mem;
+
+    // The previous frame may still be uploading this atlas from Mem.
+    owl_wait_inflight();
 
     // advance the pointer to the atlas position start (first pixel)
     data += ps * (al->y * atlas->allocation->w + al->x);

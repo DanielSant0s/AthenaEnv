@@ -1,5 +1,9 @@
+#include <stdlib.h>
+#include <string.h>
+#include <malloc.h>
 #include <athena/screen.h>
 #include <owl_packet.h>
+#include <texture_manager.h>
 
 static Color athena_clear_color = GS_SETREG_RGBAQ(0x00, 0x00, 0x00, 0x80, 0x00);
 static AthenaImage *athena_screen_buffers[3];
@@ -24,6 +28,18 @@ void athena_screen_set_vsync(bool enabled) {
 
 void athena_screen_set_frame_counter(bool enabled) {
     toggleFrameCounter(enabled);
+}
+
+void athena_screen_set_frame_overlap(bool enabled) {
+    setFrameOverlap(enabled);
+}
+
+bool athena_screen_get_frame_overlap(void) {
+    return getFrameOverlap();
+}
+
+const prof_report *athena_screen_get_profile(void) {
+    return prof_get_report();
 }
 
 void athena_screen_set_clear_color(Color color) {
@@ -109,7 +125,7 @@ bool athena_screen_buffers_ready(void) {
 
 int athena_screen_init_buffers(void) {
     if (athena_screen_buffers_initialized)
-        return -1;
+        return 0;
 
     for (int i = 0; i < 3; i++) {
         AthenaImage *image = athena_image_wrap(main_screen_buffer[i], false);
@@ -156,3 +172,85 @@ int athena_screen_switch_context(void) {
 void athena_screen_flush(void) {
     owl_flush_packet();
 }
+
+AthenaImage *athena_screen_create_shuffle_lut(const uint32_t *linear_entries) {
+    AthenaImage *image = athena_image_create_empty(false);
+    if (!image)
+        return NULL;
+
+    GSSURFACE *tex = image->tex;
+    tex->Width = 16;
+    tex->Height = 16;
+    tex->PSM = GS_PSM_CT32;
+    tex->TBW = 1;
+    tex->Filter = GS_FILTER_NEAREST;
+    tex->Delayed = false;
+    tex->Mem = memalign(128, 256 * sizeof(uint32_t));
+    if (!tex->Mem) {
+        athena_image_destroy(image);
+        return NULL;
+    }
+
+    if (linear_entries) {
+        gs_clut_swizzle_csm1(tex->Mem, linear_entries);
+    } else {
+        uint32_t identity[256];
+        for (uint32_t i = 0; i < 256; i++) {
+            identity[i] = i | (i << 8) | (i << 16) | (0x80u << 24);
+        }
+        gs_clut_swizzle_csm1(tex->Mem, identity);
+    }
+
+    image->loaded = true;
+    image->width = 16.0f;
+    image->height = 16.0f;
+    image->endx = 16.0f;
+    image->endy = 16.0f;
+
+    gs_upload_clut_inline(tex, tex->Mem);
+    return image;
+}
+
+void athena_screen_update_shuffle_lut(AthenaImage *lut, const uint32_t *linear_entries) {
+    if (!lut || !lut->tex || !linear_entries)
+        return;
+
+    GSSURFACE *tex = lut->tex;
+    if (!tex->Mem) {
+        tex->Mem = memalign(128, 256 * sizeof(uint32_t));
+        if (!tex->Mem)
+            return;
+    }
+
+    gs_clut_swizzle_csm1(tex->Mem, linear_entries);
+    gs_upload_clut_inline(tex, tex->Mem);
+}
+
+void athena_screen_build_depth_fog_lut(AthenaImage *lut, const gs_depth_fog_config *cfg) {
+    if (!lut || !lut->tex || !cfg)
+        return;
+
+    GSSURFACE *tex = lut->tex;
+    if (!tex->Mem) {
+        tex->Mem = memalign(128, 256 * sizeof(uint32_t));
+        if (!tex->Mem)
+            return;
+    }
+
+    gs_build_depth_fog_lut(tex->Mem, cfg);
+    gs_upload_clut_inline(tex, tex->Mem);
+}
+
+void athena_screen_channel_shuffle(AthenaImage *dst, AthenaImage *source, AthenaImage *lut, const gs_channel_shuffle_config *cfg) {
+    if (!lut || !lut->tex)
+        return;
+
+    GSSURFACE *dst_surf = dst ? dst->tex : NULL;
+    GSSURFACE *src_surf = source ? source->tex : NULL;
+    gs_channel_shuffle_ex(dst_surf, src_surf, lut->tex, cfg);
+}
+
+void athena_screen_depth_fog(const gs_depth_fog_config *cfg) {
+    gs_depth_fog(cfg);
+}
+

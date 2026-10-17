@@ -1,0 +1,112 @@
+{
+ "asset": {
+  "version": "2.0",
+  "generator": "AthenaEnv tristrip.py (from OBJ)"
+ },
+ "scene": 0,
+ "scenes": [
+  {
+   "nodes": [
+    0
+   ]
+  }
+ ],
+ "nodes": [
+  {
+   "mesh": 0,
+   "name": "monkey"
+  }
+ ],
+ "meshes": [
+  {
+   "primitives": [
+    {
+     "attributes": {
+      "POSITION": 0,
+      "NORMAL": 1,
+      "TEXCOORD_0": 2
+     },
+     "mode": 5,
+     "indices": 3,
+     "extensions": {
+      "ATHENA_strip_restart": {}
+     }
+    }
+   ]
+  }
+ ],
+ "accessors": [
+  {
+   "componentType": 5126,
+   "count": 626,
+   "type": "VEC3",
+   "min": [
+    -1.3364989757537842,
+    -0.9744210243225098,
+    -0.8007810115814209
+   ],
+   "max": [
+    1.3364980220794678,
+    0.9496039748191833,
+    0.8288009762763977
+   ],
+   "bufferView": 0
+  },
+  {
+   "componentType": 5126,
+   "count": 626,
+   "type": "VEC3",
+   "bufferView": 1
+  },
+  {
+   "componentType": 5126,
+   "count": 626,
+   "type": "VEC2",
+   "bufferView": 2
+  },
+  {
+   "componentType": 5123,
+   "type": "SCALAR",
+   "bufferView": 3,
+   "count": 1552
+  }
+ ],
+ "bufferViews": [
+  {
+   "buffer": 0,
+   "byteOffset": 0,
+   "byteLength": 7512,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 7512,
+   "byteLength": 7512,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 15024,
+   "byteLength": 5008,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 20032,
+   "byteLength": 3104,
+   "target": 34963
+  }
+ ],
+ "buffers": [
+  {
+   "uri": "monkey_strip.bin",
+   "byteLength": 23136
+  }
+ ],
+ "extensionsUsed": [
+  "ATHENA_strip_restart"
+ ],
+ "extensionsRequired": [
+  "ATHENA_strip_restart"
+ ]
+}

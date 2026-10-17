@@ -195,8 +195,8 @@ const thread = new Thread(() => console.log("Hello from a thread!"), "Thread: He
 ## Timer module
 
 * `let timer = Timer.new()`
-* `Timer.getTime(timer)`
-* `Timer.setTime(src, value)`
+* `Timer.getTime(timer)` – Elapsed time in **microseconds** (divide by 1000 for ms).
+* `Timer.setTime(src, value)` – Sets the elapsed time, in microseconds.
 * `Timer.destroy(timer)`
 * `Timer.pause(timer)`
 * `Timer.resume(timer)`

@@ -32,9 +32,23 @@ POINT_LIGHT_POS_PTR  .assign 124 ; 124..127 (xyz = obj-space pos, w = 1.0)
 POINT_LIGHT_DIFF_PTR .assign 128 ; 128..131 (xyz = diffuse rgb, w = quad atten)
 POINT_LIGHT_SPEC_PTR .assign 132 ; 132..135 (xyz = specular rgb, w = 0.0)
 
+; The 4 object-space directional light directions again, transposed: 136 holds
+; the 4 x components, 137 the 4 y, 138 the 4 z. One matrix multiply against the
+; normal then yields all 4 N.L at once (DirLightsMatrix). Unused lights are 0.
+LIGHT_DIR_T          .assign 136 ; 136..138
+CLIPQ_SAVE           .assign 139 ; x/y: clip queue cursor parked during a fan
+                                ; z/w: notStrip / stripOr (memory-resident queue)
+CLIPQ_STATE          .assign 140 ; x,y,z: kick pattern, w: listPtr (memory-resident queue)
+
 ; Double buffer occupies 141..482 (342 QW) and 483..824 (342 QW).
 ; 825..1008 = 184 QW = 46 bones; stack lives above at 1009..1022.
 BONE_MATRICES       .assign 825
+
+; Point lights again, transposed for PointLightsSoA: 1009 = the 4 x positions,
+; 1010 = y, 1011 = z, 1012 = the 4 quadratic attenuations. Sits in the bottom of
+; the stack area, which the per-vertex clipping path never pushes that deep
+; (5 QW from 1022 down).
+POINT_LIGHT_SOA     .assign 1009 ; 1009..1012
 
 DUMMY_XGKICK_BUF    .assign 1023
 

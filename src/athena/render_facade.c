@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include <kernel.h>
+#include <owl_packet.h>
 
 #include <athena/render_facade.h>
 
@@ -75,6 +76,9 @@ void athena_render_data_destroy(AthenaRenderData *rd)
 
     if (!rd)
         return;
+
+    // Everything freed below may be DMA_REF'd by a chain still in flight.
+    owl_wait_inflight();
 
     if (rd->m.indices)
         free(rd->m.indices);
@@ -316,6 +320,8 @@ void athena_render_object_destroy(AthenaRenderObject *ro)
         return;
 
     if (ro->obj.bones) {
+        // bone_matrices is DMA_REF'd by the last frame's chain.
+        owl_wait_inflight();
         free(ro->obj.bones);
         free(ro->obj.bone_matrices);
     }

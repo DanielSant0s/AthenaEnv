@@ -317,11 +317,12 @@ _blockSplitFreeAligned(struct SVramBlock * block, unsigned int size, unsigned in
 	struct SVramBlock * pAlignmentBlock = NULL;
 
 	if (aligned_start > block->iStart) {
-		pAlignmentBlock = _blockCreate(block->iStart, aligned_start - block->iStart);
+		unsigned int pad = aligned_start - block->iStart;
+		pAlignmentBlock = _blockCreate(block->iStart, pad);
 		_blockInsertAfter(block, pAlignmentBlock);
 
 		block->iStart = aligned_start;
-		block->iSize -= (aligned_start - block->iStart);
+		block->iSize -= pad;
 	}
 
 	if (block->iSize > size) {
@@ -533,6 +534,13 @@ int texture_manager_bind(GSCONTEXT *gsGlobal, GSSURFACE *tex, bool async) {
 	}
 
 	if (block == NULL) {
+		// Allocating may evict a block the previous frame is still drawing
+		// from (use counts were reset at the flip), and the VIF1 interrupt
+		// that services that frame's pending uploads reads tex->Vram live --
+		// retargeting a texture here would redirect its upload. Let the
+		// in-flight frame finish first; resident textures never get here.
+		graphics_finish_previous_frame();
+
 		block = _blockAlloc(tsize + csize, tex->PageAligned);
 		block->tex = tex;
 		block->iUseCount = 0;

@@ -29,10 +29,45 @@
 #define GS_ZBUF_16  0x02
 #define GS_ZBUF_16S 0x0A
 
-#define CHANNEL_SHUFFLE_RED 0x000000FF
+#define CHANNEL_SHUFFLE_RED   0x000000FF
 #define CHANNEL_SHUFFLE_GREEN 0x0000FF00
-#define CHANNEL_SHUFFLE_BLUE 0x00FF0000
+#define CHANNEL_SHUFFLE_BLUE  0x00FF0000
 #define CHANNEL_SHUFFLE_ALPHA 0xFF000000
+#define CHANNEL_SHUFFLE_RGB   0x00FFFFFF
+#define CHANNEL_SHUFFLE_ALL   0xFFFFFFFF
+
+typedef enum {
+	FOG_CURVE_LINEAR = 0,
+	FOG_CURVE_EXP    = 1,
+	FOG_CURVE_EXP2   = 2
+} eFogCurve;
+
+typedef struct {
+	uint32_t in_channel;
+	uint32_t out_mask;
+	uint32_t x;
+	uint32_t y;
+	uint32_t width;
+	uint32_t height;
+	bool     alpha_blend;
+	uint64_t blend_equation;
+	bool     alpha_test;
+	bool     z_test_enable;
+	uint8_t  z_test_method;
+	uint32_t z_ref;
+} gs_channel_shuffle_config;
+
+typedef struct {
+	uint64_t  color;
+	float     start;
+	float     end;
+	float     near_z;
+	float     far_z;
+	float     density;
+	float     sky_fog;
+	eFogCurve curve;
+	int       shift;
+} gs_depth_fog_config;
 
 struct gsContext
 {
@@ -274,9 +309,9 @@ void flush_gs_texcache();
 
 #define ALPHA_EQUATION(A,B,C,D,FIX) ( (((uint64_t)(A))&3) | ((((uint64_t)(B))&3)<<2) | ((((uint64_t)(C))&3)<<4) | ((((uint64_t)(D))&3)<<6) | ((((uint64_t)(FIX)))<<32UL) )//(A - B)*C >> 7 + D
 
-#define GS_ALPHA_BLEND_NORMAL         (ALPHA_EQUATION(SRC_RGB, DST_RGB, SRC_ALPHA, DST_ALPHA, 0x00))
-#define GS_ALPHA_BLEND_ADD_NOALPHA    (ALPHA_EQUATION(SRC_RGB, ZERO_RGB, ALPHA_FIX, DST_ALPHA, 0x80))
-#define GS_ALPHA_BLEND_ADD            (ALPHA_EQUATION(SRC_RGB, ZERO_RGB, SRC_ALPHA, DST_ALPHA, 0x00))
+#define GS_ALPHA_BLEND_NORMAL         (ALPHA_EQUATION(SRC_RGB, DST_RGB, SRC_ALPHA, DST_RGB, 0x00))
+#define GS_ALPHA_BLEND_ADD_NOALPHA    (ALPHA_EQUATION(SRC_RGB, ZERO_RGB, ALPHA_FIX, DST_RGB, 0x80))
+#define GS_ALPHA_BLEND_ADD            (ALPHA_EQUATION(SRC_RGB, ZERO_RGB, SRC_ALPHA, DST_RGB, 0x00))
 
 extern GSCONTEXT *gsGlobal;
 extern GSSURFACE *cur_screen_buffer[3];
@@ -358,6 +393,21 @@ void setVSync(bool vsync_flag);
 
 void toggleFrameCounter(bool enable);
 
+// Let the EE build the next frame while the GS is still drawing the previous
+// one (default on). See flip_double_buffered() in graphics.c.
+void setFrameOverlap(bool enable);
+bool getFrameOverlap(void);
+
+// Blocks until the previous frame (still drawing under frame overlap) is done
+// and on screen. No-op once that has happened -- i.e. once anything of the
+// current frame has been sent. For changes the in-flight frame must not see,
+// such as handing its VRAM to another texture.
+void graphics_finish_previous_frame(void);
+
+// Sends whatever is queued and blocks until the GS has finished it and the
+// pending frame (if any) is on screen.
+void graphics_sync(void);
+
 GSCONTEXT *getGSGLOBAL();
 
 int GetInterlacedFrameMode();
@@ -381,6 +431,15 @@ void draw_image(GSSURFACE* source, float x, float y, float width, float height, 
 void draw_image_rotate(GSSURFACE* source, float x, float y, float width, float height, float startx, float starty, float endx, float endy, float angle, Color color);
 
 void gs_copy_block(GSSURFACE *src, int src_x, int src_y, GSSURFACE *dst, int dst_x, int dst_y);
+
+void gs_clut_swizzle_csm1(uint32_t *dst_csm1, const uint32_t *src_linear);
+void gs_upload_clut_inline(GSSURFACE *pal, const uint32_t *csm1_entries);
+void gs_build_depth_fog_lut(uint32_t *dst_csm1, const gs_depth_fog_config *cfg);
+void gs_channel_shuffle_ex(GSSURFACE *dst, GSSURFACE *source, GSSURFACE *pal, const gs_channel_shuffle_config *cfg);
+void gs_channel_shuffle(GSSURFACE *dst, uint32_t in_channel, uint32_t out_mask, GSSURFACE *source, GSSURFACE *pal, bool alpha_blend, uint64_t blend_equation);
+void gs_depth_fog(const gs_depth_fog_config *cfg);
+void gs_depth_bitshift(int shift_bits);
+void gs_depth_invert_blue(void);
 
 void draw_point(float x, float y, Color color);
 void draw_line(float x, float y, float x2, float y2, Color color);

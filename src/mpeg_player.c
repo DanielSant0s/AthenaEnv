@@ -290,6 +290,10 @@ bool mpeg_player_decode_frame(MPEGPlayer* player) {
     
     // Try to decode next frame
     int64_t pts;
+
+    // The previous frame may still be uploading frame_data as a texture.
+    owl_wait_inflight();
+
     dbgprintf("mpeg: [decode_frame] before MPEG_Picture, frame=%d\n", player->current_frame);
     bool ok = MPEG_Picture(player->frame_data, &pts);
     dbgprintf("mpeg: [decode_frame] after MPEG_Picture, ok=%d\n", ok);

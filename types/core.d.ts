@@ -323,9 +323,9 @@ type TimerHandle = number;
 interface TimerModule {
     /** Create a new timer instance. */
     "new"(): TimerHandle;
-    /** Get the elapsed time of `timer`. */
+    /** Get the elapsed time of `timer`, in microseconds. */
     getTime(timer: TimerHandle): number;
-    /** Set the elapsed time of `timer`. */
+    /** Set the elapsed time of `timer`, in microseconds. */
     setTime(timer: TimerHandle, value: number): void;
     /** Destroy `timer`, releasing its resources. */
     destroy(timer: TimerHandle): void;

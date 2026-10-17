@@ -8,12 +8,17 @@ font.outline_color = Color.new(0, 0, 0);
 Screen.setFrameCounter(true);
 
 const canvas = Screen.getMode();
+canvas.psm = Screen.CT32;
 canvas.zbuffering = true;
-canvas.psmz = Screen.Z16S;
+canvas.psmz = Screen.Z24;
 Screen.setMode(canvas);
 
+Screen.initBuffers();
+const fbuf = Screen.getBuffer(Screen.DRAW_BUFFER);
+const zbuf = Screen.getBuffer(Screen.DEPTH_BUFFER);
+
 Render.init();
-Render.setView(60.0, 0.8, 4000.0);
+Render.setView(60.0, 2.0, 250.0);
 
 // Change root folder to "render" for asset loading
 os.chdir("render");
@@ -29,17 +34,89 @@ const space = Physics.Space();
 
 world.setGravity(0.0f, -18.0f, 0.0f);
 
-// --- Static Environment (Courtyard TriMesh) ---
-const scene = new RenderData("scene.gltf");
+// --- Static Environment (Crytek/Khronos Sponza Palace Atrium + Walkable North Terrace) ---
+const scene = new RenderData("sponza_strip.gltf");
 scene.face_culling = Render.CULL_FACE_BACK;
 scene.accurate_clipping = true;
 scene.pipeline = Render.PL_DEFAULT;
-scene.getTexture(0).filter = LINEAR;
+for (let i = 0; i < 8; i++) {
+    const tex = scene.getTexture(i);
+    if (tex) tex.filter = LINEAR;
+}
+scene.freeze();
 
 const scene_object = new RenderObject(scene);
-const scene_collision = Physics.GeomRenderObject(space, scene_object);
-scene.freeze();
-scene_object.setCollision(scene_collision);
+
+// --- Watertight Scene Collision Composed Purely of Native Primitives (Plane + Box) ---
+// Every geom must stay referenced. The JS finalizer destroys the native geom,
+// so a temporary that nobody holds is removed from the space on the next GC.
+const staticGeoms = [];
+
+function addStaticBox(x0, y0, z0, x1, y1, z1) {
+    const g = Physics.GeomBox(space, x1 - x0, y1 - y0, z1 - z0);
+    g.setPosition(0.5f * (x0 + x1), 0.5f * (y0 + y1), 0.5f * (z0 + z1));
+    staticGeoms.push(g);
+    return g;
+}
+
+// 1. Courtyard floor slab. Top face is Y = 0, matching the visual floor.
+// A finite box (not an infinite plane) so the broadphase AABB stays in range.
+addStaticBox(-8.53f, -0.80f, -19.10f, 8.53f, 0.0f, 19.10f);
+
+// 2. Outer Sponza Palace Boundary Walls (X = ±8.53m, Z = ±19.10m)
+addStaticBox(-9.53f, 0.0f, -20.0f, -8.53f, 12.0f,  20.0f); // West Outer Wall
+addStaticBox( 8.53f, 0.0f, -20.0f,  9.53f, 12.0f,  20.0f); // East Outer Wall
+addStaticBox(-9.53f, 0.0f, -20.1f,  9.53f, 12.0f, -19.1f); // North Outer Wall
+addStaticBox(-9.53f, 0.0f,  19.1f,  9.53f, 12.0f,  20.1f); // South Outer Wall
+
+// 3. 8 Ground-Floor Colonnade Columns + 4 Corner Piers (exact Khronos Sponza coordinates)
+const colZ = [-7.775f, -2.534f, 2.610f, 7.775f];
+for (let i = 0; i < colZ.length; i++) {
+    const cz = colZ[i];
+    addStaticBox(-3.735f, 0.0f, cz - 0.36f, -3.015f, 3.20f, cz + 0.36f); // West Column
+    addStaticBox( 3.043f, 0.0f, cz - 0.36f,  3.765f, 3.20f, cz + 0.36f); // East Column
+}
+const pierZ = [-13.139f, 13.114f];
+for (let i = 0; i < pierZ.length; i++) {
+    const pz = pierZ[i];
+    addStaticBox(-3.763f, 0.0f, pz - 0.57f, -2.618f, 3.20f, pz + 0.57f); // West Corner Pier
+    addStaticBox( 2.619f, 0.0f, pz - 0.57f,  3.764f, 3.20f, pz + 0.57f); // East Corner Pier
+}
+
+// 4. 8 Courtyard Stone Planters
+const planterPos = [
+    [-2.62f, -12.58f], [ 2.68f, -12.58f],
+    [-2.64f,  -2.52f], [ 2.63f,  -2.52f],
+    [-2.65f,   2.58f], [ 2.63f,   2.58f],
+    [-2.65f,  12.58f], [ 2.63f,  12.58f]
+];
+for (let i = 0; i < planterPos.length; i++) {
+    const px = planterPos[i][0], pz = planterPos[i][1];
+    addStaticBox(px - 0.42f, 0.0f, pz - 0.42f, px + 0.42f, 0.92f, pz + 0.42f);
+}
+
+// 5. North Terrace Multi-Level Stone Course (Steps + Platforms + Trophy Pedestal)
+// Central Approach Staircase (5 stone steps from Z = -4.20 to -7.80, Y = 0.0 to 1.05m)
+for (let s = 0; s < 5; s++) {
+    const zFront = -4.20f - s * (3.60f / 5.0f);
+    const yTop   = (s + 1) * (1.05f / 5.0f);
+    addStaticBox(-1.60f, 0.0f, -7.80f, 1.60f, yTop, zFront);
+}
+// Tier-1 Lower North Terrace Platform (Y = 1.05m)
+addStaticBox(-3.10f, 0.0f, -10.20f, 3.10f, 1.05f, -7.80f);
+
+// Twin Side Staircases up to Tier-2 (4 stone steps from Z = -9.60 to -12.10, Y = 1.05 to 1.95m)
+for (let s = 0; s < 4; s++) {
+    const zFront = -9.60f - s * (2.50f / 4.0f);
+    const yTop   = 1.05f + (s + 1) * (0.90f / 4.0f);
+    addStaticBox(-2.95f, 0.0f, -12.10f, -1.65f, yTop, zFront);
+    addStaticBox( 1.65f, 0.0f, -12.10f,  2.95f, yTop, zFront);
+}
+// Tier-2 Upper North Balcony (Y = 1.95m)
+addStaticBox(-3.10f, 0.0f, -13.60f, 3.10f, 1.95f, -12.10f);
+
+// Tier-3 Central Trophy Pedestal (Y = 2.55m)
+addStaticBox(-1.15f, 1.95f, -13.55f, 1.15f, 2.55f, -12.25f);
 
 // --- Player Character (3rd-Person Walking Simulator) ---
 const skin_anims = new AnimCollection("Twerk.gltf");
@@ -52,7 +129,7 @@ gltf_skin.freeze();
 const skin_object = new RenderObject(gltf_skin);
 
 const PLAYER_RADIUS = 0.34f;
-const PLAYER_START = { x: 0.0f, y: 1.0f, z: 4.5f };
+const PLAYER_START = { x: 0.0f, y: 1.0f, z: 6.5f };
 
 const player_geom = Physics.GeomSphere(space, PLAYER_RADIUS);
 const player_body = Physics.Body(world);
@@ -60,7 +137,7 @@ player_body.setMassSphere(2.5f, PLAYER_RADIUS);
 player_geom.setBody(player_body);
 player_body.setPosition(PLAYER_START.x, PLAYER_START.y, PLAYER_START.z);
 
-let playerYaw = Math.PI; // Facing -Z toward the crate pyramid
+let playerYaw = Math.PI; // Facing -Z down the Sponza atrium toward the crate pyramid & North Terrace
 let walkCycle = 0.0f;
 let currentAnim = "idle";
 const emotes = ["samba", "gangnam", "hiphop", "twerk", "capoeira"];
@@ -71,18 +148,19 @@ const RIGHT_TOE_BONE  = 23; // mixamorig:RightToeBase in Twerk.gltf
 let animTimer = 0;
 let jumpWindup = 0;
 let jumpCooldown = 0;
+let groundGrace = 6;
 let kickPhase = 0;
 let kickHits = 0;
 let kickCooldown = 0;
-const kickHitBodies = [false, false, false, false, false, false, false, false, false, false, false, false];
-let statusText = "WALKING SIMULATOR READY";
+const kickHitBodies = [false, false, false, false, false, false, false, false, false, false, false, false, false, false];
+let statusText = "SPONZA ATRIUM READY";
 let statusTimer = 120;
 
 skin_object.position = { x: PLAYER_START.x, y: PLAYER_START.y - PLAYER_RADIUS, z: PLAYER_START.z };
 skin_object.rotation = { x: Math.PI / 2, y: 0.0f, z: playerYaw };
 skin_object.playAnim(skin_anims["idle"] || skin_anims["twerk"], true);
 
-// --- Dynamic Physics Crates (Pyramid + Side Crates) ---
+// --- Dynamic Physics Crates (Courtyard Pyramid + North Terrace Balcony Crates) ---
 const box = new RenderData("box_bump.gltf");
 box.face_culling = Render.CULL_FACE_BACK;
 box.freeze();
@@ -90,18 +168,22 @@ box.freeze();
 const CRATE_HALF = 0.38f;
 const CRATE_SIZE = CRATE_HALF * 2.0f;
 const crateSpawns = [
-    // Bottom row of pyramid
-    { x: -0.82f, y: CRATE_HALF + 0.02f, z: -2.5f },
-    { x:  0.00f, y: CRATE_HALF + 0.02f, z: -2.5f },
-    { x:  0.82f, y: CRATE_HALF + 0.02f, z: -2.5f },
-    // Middle row of pyramid
-    { x: -0.41f, y: CRATE_HALF * 3.0f + 0.05f, z: -2.5f },
-    { x:  0.41f, y: CRATE_HALF * 3.0f + 0.05f, z: -2.5f },
-    // Top crate of pyramid
-    { x:  0.00f, y: CRATE_HALF * 5.0f + 0.08f, z: -2.5f },
-    // Extra side crates
-    { x: -2.60f, y: CRATE_HALF + 0.02f, z:  0.5f },
-    { x:  2.60f, y: CRATE_HALF + 0.02f, z:  0.5f }
+    // Bottom row of courtyard pyramid
+    { x: -0.82f, y: CRATE_HALF + 0.02f, z: 0.5f },
+    { x:  0.00f, y: CRATE_HALF + 0.02f, z: 0.5f },
+    { x:  0.82f, y: CRATE_HALF + 0.02f, z: 0.5f },
+    // Middle row of courtyard pyramid
+    { x: -0.41f, y: CRATE_HALF * 3.0f + 0.05f, z: 0.5f },
+    { x:  0.41f, y: CRATE_HALF * 3.0f + 0.05f, z: 0.5f },
+    // Top crate of courtyard pyramid
+    { x:  0.00f, y: CRATE_HALF * 5.0f + 0.08f, z: 0.5f },
+    // Tier-1 North Terrace Ledge Crates (Y = 1.05m, kickable off the balcony!)
+    { x: -2.25f, y: 1.05f + CRATE_HALF + 0.03f, z: -8.5f },
+    { x:  2.25f, y: 1.05f + CRATE_HALF + 0.03f, z: -8.5f },
+    // Tier-2 Upper Terrace Pedestal Crates (Y = 1.95m & Y = 2.55m)
+    { x: -2.10f, y: 1.95f + CRATE_HALF + 0.03f, z: -12.6f },
+    { x:  2.10f, y: 1.95f + CRATE_HALF + 0.03f, z: -12.6f },
+    { x:  0.00f, y: 2.55f + CRATE_HALF + 0.03f, z: -12.95f }
 ];
 
 const crates = [];
@@ -123,15 +205,15 @@ for (let i = 0; i < crateSpawns.length; i++) {
 
 // --- Dynamic Rolling / Throwable Monkey Spheres ---
 const monkeyTex = new Image("monkey.png");
-const monkeyData = new RenderData("monkey.obj", monkeyTex);
+const monkeyData = new RenderData("monkey_strip.gltf", monkeyTex);
 monkeyData.face_culling = Render.CULL_FACE_BACK;
 monkeyData.freeze();
 
 const BALL_RADIUS = 0.45f;
 const ballSpawns = [
-    { x: -1.8f, y: 1.5f, z: 1.8f },
-    { x:  1.8f, y: 1.5f, z: 1.8f },
-    { x:  0.0f, y: 2.5f, z: 0.2f }
+    { x: -1.8f, y: 1.5f, z: 3.5f },
+    { x:  1.8f, y: 1.5f, z: 3.5f },
+    { x:  0.0f, y: 2.2f, z: -9.0f }
 ];
 
 const balls = [];
@@ -167,6 +249,7 @@ function resetSandbox() {
     player_body.setRotation(identityRot);
     playerYaw = Math.PI;
     jumpWindup = 0;
+    groundGrace = 6;
     kickPhase = 0;
 
     for (let i = 0; i < crates.length; i++) {
@@ -191,21 +274,279 @@ function resetSandbox() {
 
 // --- Third-Person Follow Camera State ---
 let camYaw = 0.0f;
-let camPitch = 0.38f;
-let camDist = 6.2f;
+let camPitch = 0.34f;
+let camDist = 5.8f;
 let camTargetX = PLAYER_START.x;
 let camTargetY = PLAYER_START.y + 0.8f;
 let camTargetZ = PLAYER_START.z;
 
-// --- Lighting ---
+// --- Architectural Atrium Lighting (Sunlight + Warm Colonnade Fill) ---
 const light = Lights.new();
-Lights.set(light, Lights.DIRECTION, 0.2f, 1.0f, 0.8f);
-Lights.set(light, Lights.AMBIENT,   0.18f, 0.20f, 0.25f);
-Lights.set(light, Lights.DIFFUSE,   0.65f, 0.65f, 0.60f);
-Lights.set(light, Lights.SPECULAR,  1.0f, 1.0f, 0.8f);
+Lights.set(light, Lights.DIRECTION, 0.35f, 0.90f, 0.45f);
+Lights.set(light, Lights.AMBIENT,   0.26f, 0.27f, 0.30f);
+Lights.set(light, Lights.DIFFUSE,   0.78f, 0.74f, 0.66f);
+Lights.set(light, Lights.SPECULAR,  1.00f, 0.95f, 0.85f);
+
+const fillLight = Lights.new();
+Lights.set(fillLight, Lights.DIRECTION, -0.45f, 0.55f, -0.70f);
+Lights.set(fillLight, Lights.AMBIENT,    0.05f, 0.04f, 0.03f);
+Lights.set(fillLight, Lights.DIFFUSE,    0.34f, 0.27f, 0.20f);
 
 const pad = Pads.get();
 const gray = Color.new(180, 180, 220, 128);
+
+// --- Hardware Channel Shuffle, Depth Fog & DOF Presets (SELECT to cycle) ---
+const DOF_SHIFT = 3;
+
+const FOG_PRESETS = [
+    {
+        name: "MIST FOG (LINEAR)",
+        type: "fog",
+        color: Color.new(182, 198, 225, 112),
+        start: 8.5f,
+        end: 36.0f,
+        opts: { curve: Screen.FOG_LINEAR, skyFog: 0.35f, shift: 4 }
+    },
+    {
+        name: "DEPTH OF FIELD (DOF)",
+        type: "dof",
+        strength: 124
+    },
+    {
+        name: "DOF + MIST FOG",
+        type: "dof_fog",
+        strength: 118,
+        color: Color.new(182, 198, 225, 108),
+        start: 9.0f,
+        end: 36.0f,
+        opts: { curve: Screen.FOG_LINEAR, skyFog: 0.35f, shift: DOF_SHIFT }
+    },
+    {
+        name: "SILENT HILL (EXP2)",
+        type: "fog",
+        color: Color.new(195, 200, 208, 124),
+        start: 5.5f,
+        end: 24.0f,
+        opts: { curve: Screen.FOG_EXP2, density: 1.85f, skyFog: 0.85f, shift: 4 }
+    },
+    {
+        name: "GOLDEN DUSK (EXP)",
+        type: "fog",
+        color: Color.new(235, 165, 105, 110),
+        start: 7.5f,
+        end: 32.0f,
+        opts: { curve: Screen.FOG_EXP, density: 1.6f, skyFog: 0.45f, shift: 4 }
+    },
+    {
+        name: "Z-BUFFER SHUFFLE LUT",
+        type: "lut"
+    },
+    {
+        name: "NORMALIZED Z (SHIFT 4)",
+        type: "shift",
+        shift: 4
+    },
+    {
+        name: "POSTFX OFF",
+        type: "off"
+    }
+];
+let fogPresetIdx = 0;
+
+// --- Automatic benchmark ---
+// Cycles through lighting on/off x post-fx on/off, BENCH_PHASE_MS each, and
+// logs the averaged Screen.getProfile() of every phase to the console (the
+// first BENCH_WARMUP_MS of a phase are skipped so the switch itself and the
+// profiler's 30-frame window do not leak into the numbers). Set BENCHMARK to
+// false to play normally: lighting and post-fx then stay as configured above.
+const BENCHMARK = false;
+const BENCH_PHASE_MS = 10000;
+const BENCH_WARMUP_MS = 2000;
+const BENCH_PHASES = [
+    { name: "lights ON  | postfx ON ", lights: true,  postfx: true  },
+    { name: "lights ON  | postfx OFF", lights: true,  postfx: false },
+    { name: "lights OFF | postfx ON ", lights: false, postfx: true  },
+    { name: "lights OFF | postfx OFF", lights: false, postfx: false },
+];
+const BENCH_KEYS = ["frame", "script", "render", "anim", "physics", "gpuWait", "vsync"];
+
+let benchPhase = 0;
+let benchPostfx = true;
+let benchSum = null;
+let benchFastClip = 0;
+let benchSamples = 0;
+const benchTimer = Timer.new();
+
+function benchApply() {
+    const phase = BENCH_PHASES[benchPhase];
+    scene.pipeline = phase.lights ? Render.PL_DEFAULT : Render.PL_NO_LIGHTS;
+    benchPostfx = phase.postfx;
+    benchSum = {};
+    for (const k of BENCH_KEYS) benchSum[k] = 0;
+    benchFastClip = 0;
+    benchSamples = 0;
+    Timer.reset(benchTimer);
+}
+
+function benchTick() {
+    // Timer counts in microseconds.
+    const elapsed = Timer.getTime(benchTimer) / 1000;
+
+    if (elapsed >= BENCH_WARMUP_MS) {
+        const prof = Screen.getProfile();
+        for (const k of BENCH_KEYS) benchSum[k] += prof[k];
+        benchFastClip += Render.stats().fastClip;
+        benchSamples++;
+    }
+
+    if (elapsed < BENCH_PHASE_MS || benchSamples === 0)
+        return;
+
+    const avg = {};
+    for (const k of BENCH_KEYS) avg[k] = benchSum[k] / benchSamples;
+    console.log(
+        `[bench] ${BENCH_PHASES[benchPhase].name} | ${(1000 / avg.frame).toFixed(1)} fps | ` +
+        `frame ${avg.frame.toFixed(1)} | script ${avg.script.toFixed(1)} | render ${avg.render.toFixed(1)} | ` +
+        `anim ${avg.anim.toFixed(1)} | phys ${avg.physics.toFixed(1)} | gpu wait ${avg.gpuWait.toFixed(1)} | ` +
+        `vsync ${avg.vsync.toFixed(1)} (ms) | fast clip groups ${(benchFastClip / benchSamples).toFixed(1)}`);
+
+    benchPhase = (benchPhase + 1) % BENCH_PHASES.length;
+    benchApply();
+}
+
+if (BENCHMARK) {
+    console.log("[bench] automatic benchmark on: 4 phases, " + (BENCH_PHASE_MS / 1000) + " s each");
+    benchApply();
+}
+
+// Custom 256-entry CSM1 LUT for Depth of Field (DOF) Alpha Mask:
+// Reconstructs eye-space distance d (in meters) from the shifted Z24 MSB byte b.
+// Keeps foreground & player (~2m..9.5m) 100% sharp (alpha = 0) and smoothly ramps
+// out-of-focus background (9.5m..26m+) up to alpha = 128 (0x80).
+const dofMaskLUT = Screen.createShuffleLUT((b) => {
+    if (b === 0) return Color.new(0, 0, 0, 128); // Sky / far horizon: full blur
+
+    const byteScale = 65536.0f / (1 << DOF_SHIFT);
+    const screenScaleZ = 4194304.0f;
+    const nearZ = 2.0f;
+    const farZ = 250.0f;
+
+    const zGs = Math.min(screenScaleZ * 2.0f, (b + 0.5f) * byteScale);
+    const zNdc = (zGs / screenScaleZ) - 1.0f;
+    const denom = (farZ + nearZ) + zNdc * (farZ - nearZ);
+    const d = denom > 0.0001f ? (2.0f * farZ * nearZ) / denom : farZ;
+
+    const focusEnd = 9.5f;
+    const blurFull = 26.0f;
+    if (d <= focusEnd) return Color.new(0, 0, 0, 0);
+
+    const t = Math.min(1.0f, (d - focusEnd) / (blurFull - focusEnd));
+    const smooth = t * t * (3.0f - 2.0f * t);
+    const alpha = Math.min(128, Math.floor(smooth * 128.0f + 0.5f));
+    return Color.new(0, 0, 0, alpha);
+});
+
+// Draws `img` over [0, dstW) x [0, dstH) as vertical strips of `stripW` pixels
+// instead of one screen-sized sprite, so the GS stays within one texture page
+// and one frame page column at a time. The texel mapping is the same
+// continuous [u0, u1] x [v0, v1] a single sprite would use, evaluated at each
+// strip edge, so there are no seams.
+function drawInStrips(img, dstW, dstH, u0, v0, u1, v1, stripW) {
+    const du = (u1 - u0) / dstW;
+    img.starty = v0;
+    img.endy = v1;
+    img.height = dstH;
+    for (let x = 0; x < dstW; x += stripW) {
+        const x1 = Math.min(x + stripW, dstW);
+        img.startx = u0 + x * du;
+        img.endx = u0 + x1 * du;
+        img.width = x1 - x;
+        img.draw(x, 0);
+    }
+    img.startx = u0;
+    img.endx = u1;
+}
+
+function renderDepthOfField(strength = 124, alreadyShifted = false) {
+    const w = canvas.width;
+    const h = canvas.height;
+    const halfW = w >> 1;
+    const halfH = h >> 1;
+
+    // 1. Shift Z24 up by DOF_SHIFT bits to expand depth precision around the focal plane
+    if (!alreadyShifted) {
+        Screen.depthBitShift(DOF_SHIFT);
+    }
+
+    // 2. Channel Shuffle: map Z-buffer Blue MSB -> Framebuffer Alpha ONLY (RGB untouched)
+    Screen.channelShuffle(Screen.DEPTH_BUFFER, dofMaskLUT, Screen.CHANNEL_BLUE, {
+        outMask: Screen.CHANNEL_ALPHA,
+        alphaBlend: false,
+        alphaTest: false,
+        unswizzle: true
+    });
+
+    // 3. Downsample Framebuffer (RGB + DOF Alpha) 2x2 -> Z-buffer scratch space (half-res)
+    // Mask Z-writes (ZMSK = 1) so drawing into zbuf doesn't write Z=0 over the blurred RGB+A!
+    Screen.setParam(Screen.DEPTH_TEST_ENABLE, false);
+    Screen.setParam(Screen.ALPHA_TEST_ENABLE, false);
+    Screen.setBuffer(Screen.DEPTH_BUFFER, zbuf, 1);
+
+    zbuf.bpp = 32; // Treat Z-buffer memory as 32-bit RGBA surface (GS_PSM_CT32)
+    Screen.setBuffer(Screen.DRAW_BUFFER, zbuf, 0);
+
+    Screen.setParam(
+        Screen.ALPHA_BLEND_EQUATION,
+        Screen.alphaEquation(Screen.SRC_RGB, Screen.ZERO_RGB, Screen.ALPHA_FIX, Screen.ZERO_RGB, 0x80)
+    );
+
+    fbuf.filter = LINEAR;
+    fbuf.color = Color.new(128, 128, 128, 128);
+    // 32-pixel strips: each reads one 64-texel source page column (2:1).
+    drawInStrips(fbuf, halfW, halfH, 0.5f, 0.5f, w - 0.5f, h - 0.5f, 32);
+
+    // 4. Upsample half-res Z-buffer scratch -> Framebuffer RGB weighted by blurred Alpha mask
+    Screen.setBuffer(Screen.DRAW_BUFFER, fbuf, 0xFF000000); // Mask Alpha, write RGB only
+    Screen.setParam(
+        Screen.ALPHA_BLEND_EQUATION,
+        Screen.alphaEquation(Screen.SRC_RGB, Screen.DST_RGB, Screen.SRC_ALPHA, Screen.DST_RGB, 0)
+    );
+
+    zbuf.filter = LINEAR;
+    zbuf.color = Color.new(128, 128, 128, strength);
+    // 64-pixel strips: one frame page column each (reading 32 source texels).
+    drawInStrips(zbuf, w, h, 0.5f, 0.5f, halfW - 0.5f, halfH - 0.5f, 64);
+
+    // 5. Restore Z-buffer format (GS_PSMZ_24), Z-writes, Draw buffer mask, and default blend
+    fbuf.width = w;
+    fbuf.height = h;
+    zbuf.width = w;
+    zbuf.height = h;
+    zbuf.bpp = 26;
+    Screen.setBuffer(Screen.DEPTH_BUFFER, zbuf, 0);
+    Screen.setBuffer(Screen.DRAW_BUFFER, fbuf, 0);
+    Screen.setParam(Screen.ALPHA_BLEND_EQUATION, Screen.BLEND_DEFAULT);
+}
+
+// Custom 256-entry CSM1 LUT for raw Depth Channel Shuffle visualization
+const depthHeatmapLUT = Screen.createShuffleLUT((b) => {
+    if (b === 0) return Color.new(15, 18, 35, 115);
+    // In Z24, MSB byte b is in [1..128] (with far_z=48 and near_z=2, courtyard spans b=4..128)
+    const norm = Math.min(1.0f, b / 64.0f);
+    const r = Math.min(255, Math.floor(norm * 510.0f));
+    const g = Math.min(255, Math.max(0, Math.floor((norm - 0.25f) * 360.0f)));
+    const bl = Math.min(255, Math.max(40, Math.floor((1.0f - norm) * 255.0f)));
+    return Color.new(r, g, bl, 118);
+});
+
+const depthNormalizedLUT = Screen.createShuffleLUT((b) => {
+    if (b === 0) return Color.new(15, 18, 35, 115);
+    const norm = Math.min(1.0f, b / 160.0f);
+    const r = Math.min(255, Math.floor(norm * 510.0f));
+    const g = Math.min(255, Math.max(0, Math.floor((norm - 0.25f) * 360.0f)));
+    const bl = Math.min(255, Math.max(40, Math.floor((1.0f - norm) * 255.0f)));
+    return Color.new(r, g, bl, 118);
+});
 
 Screen.setParam(Screen.ALPHA_TEST_ENABLE, false);
 Screen.setParam(Screen.ALPHA_TEST_METHOD, Screen.ALPHA_LESS);
@@ -222,8 +563,14 @@ while (true) {
         std.reload("main.js");
     }
 
-    if (pad.justPressed(Pads.START) || pad.justPressed(Pads.SELECT)) {
+    if (pad.justPressed(Pads.START)) {
         resetSandbox();
+    }
+
+    if (pad.justPressed(Pads.SELECT)) {
+        fogPresetIdx = (fogPresetIdx + 1) % FOG_PRESETS.length;
+        statusText = `POST-FX: ${FOG_PRESETS[fogPresetIdx].name}`;
+        statusTimer = 110;
     }
 
     // --- 1. Camera Orbit & Zoom Input (Right Stick + L2/R2) ---
@@ -276,11 +623,11 @@ while (true) {
     if (statusTimer > 0) statusTimer--;
     if (animTimer > 0) animTimer--;
 
-    const onFloor = (py <= PLAYER_RADIUS + 0.12f && Math.abs(vy) < 1.8f);
+    const onFloor = (groundGrace > 0) || (py <= PLAYER_RADIUS + 0.12f && Math.abs(vy) < 1.8f);
 
     // Check if the character is standing / balancing on top of a crate or ball
     let onProp = false;
-    if (!onFloor && Math.abs(vy) < 2.2f && jumpCooldown < 30) {
+    if (Math.abs(vy) < 2.2f && jumpCooldown < 30) {
         for (let i = 0; i < allProps.length; i++) {
             const bp = allProps[i].body.getPosition();
             const dx = px - bp[0];
@@ -294,7 +641,7 @@ while (true) {
     }
 
     const isGrounded = onFloor || onProp;
-    const isBalancing = onProp || (onFloor && Math.abs(vy) > 0.30f && jumpWindup === 0 && jumpCooldown === 0);
+    const isBalancing = onProp;
 
     const isSprinting = pad.pressed(Pads.R1);
     const moveSpeed = isSprinting ? 5.2f : 2.2f;
@@ -351,6 +698,7 @@ while (true) {
         jumpWindup--;
         if (jumpWindup === 0) {
             vy = 7.4f;
+            groundGrace = 0;
             statusText = "JUMP!";
             statusTimer = 45;
         }
@@ -510,11 +858,23 @@ while (true) {
     }
 
     // Apply player velocity & lock player body rotation
+    const preStepVy = vy;
     player_body.setLinearVel(vx, vy, vz);
     player_body.setAngularVel(0.0f, 0.0f, 0.0f);
 
     // --- 4. Step Physics World & Resolve Collisions ---
     const contacts = world.stepWithContacts(space, jgroup, 0.016f);
+
+    // Multi-level ground & ramp contact detection:
+    // Free-fall changes vy by -18.0 * 0.016 = -0.288 per step. If normal forces from
+    // the floor, terrace, or ramps counteract gravity, refresh groundGrace.
+    const postVel = player_body.getLinearVel();
+    const postVy = postVel[1];
+    if (jumpCooldown < 38 && (postVy - preStepVy) > -0.18f && postVy > -2.4f && postVy < 2.8f) {
+        groundGrace = 6;
+    } else if (groundGrace > 0) {
+        groundGrace--;
+    }
 
     // Sync player visual mesh
     const newPos = player_body.getPosition();
@@ -558,6 +918,32 @@ while (true) {
 
     skin_object.render();
 
+    // --- 6.5. Hardware Depth Fog / DOF / Channel Shuffle Post-Pass ---
+    const activeFog = FOG_PRESETS[fogPresetIdx];
+    if (!benchPostfx) {
+        // benchmark phase with post-fx off
+    } else if (activeFog.type === "fog") {
+        Screen.depthFog(activeFog.color, activeFog.start, activeFog.end, activeFog.opts);
+    } else if (activeFog.type === "dof") {
+        renderDepthOfField(activeFog.strength, false);
+    } else if (activeFog.type === "dof_fog") {
+        Screen.depthFog(activeFog.color, activeFog.start, activeFog.end, activeFog.opts);
+        renderDepthOfField(activeFog.strength, true);
+    } else if (activeFog.type === "lut") {
+        Screen.channelShuffle(Screen.DEPTH_BUFFER, depthHeatmapLUT, Screen.CHANNEL_BLUE, {
+            outMask: Screen.CHANNEL_RGB,
+            alphaBlend: true,
+            alphaTest: true
+        });
+    } else if (activeFog.type === "shift") {
+        Screen.depthBitShift(activeFog.shift);
+        Screen.channelShuffle(Screen.DEPTH_BUFFER, depthNormalizedLUT, Screen.CHANNEL_BLUE, {
+            outMask: Screen.CHANNEL_RGB,
+            alphaBlend: true,
+            alphaTest: true
+        });
+    }
+
     // --- 7. HUD Overlay ---
     Screen.setParam(Screen.DEPTH_TEST_ENABLE, false);
 
@@ -570,9 +956,15 @@ while (true) {
                 : (inputMag > 0.08f
                     ? (isSprinting ? "SPRINTING" : "WALKING")
                     : (emoteActive ? "DANCING" : "IDLE"))));
-    font.print(10, 10, `${Screen.getFPS(360)} FPS | ${stateLabel} (${currentAnim.toUpperCase()}) | Contacts: ${contacts.length}`);
+    const renderStats = Render.stats();
+    font.print(10, 10, `${Screen.getFPS(360)} FPS | ${stateLabel} (${currentAnim.toUpperCase()}) | Fog: ${activeFog.name} | Fast clip: ${renderStats.fastClip}`);
     font.print(10, 26, "L-Stick/DPad: Walk (+R1 Run) | R-Stick: Camera | X: Jump");
-    font.print(10, 42, "SQUARE: Kick | CIRCLE: Throw Ball | L1: Dance | START: Reset");
+    font.print(10, 42, "SQUARE: Kick | CIRCLE: Throw | L1: Dance | SELECT: Fog | START: Reset");
+
+    const prof = Screen.getProfile();
+    if (BENCHMARK) benchTick();
+    font.print(10, 400, `frame ${prof.frame.toFixed(1)} | script ${prof.script.toFixed(1)} | render ${prof.render.toFixed(1)} | anim ${prof.anim.toFixed(1)} | phys ${prof.physics.toFixed(1)}`);
+    font.print(10, 416, `gpu wait ${prof.gpuWait.toFixed(1)} | vsync ${prof.vsync.toFixed(1)} (ms)`);
 
     if (statusTimer > 0) {
         font.print(10, 62, `>> ${statusText}`);

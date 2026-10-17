@@ -52,6 +52,8 @@ interface RenderStats {
     drawCalls: number;
     triangles: number;
     culled: number;
+    /** Material groups drawn with accurate clipping skipped because their box sat fully inside the guard band. */
+    fastClip: number;
 }
 
 declare namespace Render {

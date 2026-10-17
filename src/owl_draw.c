@@ -27,7 +27,8 @@ const float OWL_XYOFFSET_FLOAT[4] qw_aligned = { 320.0f, 224.0f, 1023.9375f, 102
 
 void draw_image(GSSURFACE* source, float x, float y, float width, float height, float startx, float starty, float endx, float endy, Color color)
 {
-	if (source == cur_screen_buffer[0] || source == cur_screen_buffer[1] || source == cur_screen_buffer[2]) {
+	if (source == cur_screen_buffer[0] || source == cur_screen_buffer[1] || source == cur_screen_buffer[2] ||
+	    source == main_screen_buffer[0] || source == main_screen_buffer[1] || source == main_screen_buffer[2]) {
 		flush_gs_texcache();
 	}
 

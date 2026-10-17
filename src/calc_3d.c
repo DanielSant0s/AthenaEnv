@@ -57,6 +57,38 @@ int clip_bounding_box(MATRIX local_clip, VECTOR *bounding_box)
 	return ret;
 }
 
+// 1 when all 8 corners land where VU1's fast (non-scissoring) path draws every
+// triangle intact: the guard band LoadCullScale sets up (|x|, |y| <= 2w), the
+// real near/far planes (|z| <= w) and w > 0. The volume is convex and the
+// transform linear, so the corners being inside means the whole box is.
+// Margins keep a vertex that rounds differently on VU1 from tipping over.
+// A degenerate box (min == max, e.g. bounds never computed) never qualifies.
+int bounding_box_inside_guard_band(MATRIX m, VECTOR *box)
+{
+    const float xy_band = 2.0f * 0.95f;
+    const float z_band  = 0.98f;
+
+    if (box[0][0] == box[7][0] && box[0][1] == box[7][1] && box[0][2] == box[7][2])
+        return 0;
+
+    for (int c = 0; c < 8; c++) {
+        float x = box[c][0], y = box[c][1], z = box[c][2];
+
+        float cw = x * m[3] + y * m[7] + z * m[11] + m[15];
+        if (!(cw > 0.0f))
+            return 0;
+
+        float cx = x * m[0] + y * m[4] + z * m[8]  + m[12];
+        float cy = x * m[1] + y * m[5] + z * m[9]  + m[13];
+        float cz = x * m[2] + y * m[6] + z * m[10] + m[14];
+
+        if (fabsf(cx) > xy_band * cw || fabsf(cy) > xy_band * cw || fabsf(cz) > z_band * cw)
+            return 0;
+    }
+
+    return 1;
+}
+
 void calculate_vertices_clipped(VECTOR *output,  int count, VECTOR *vertices, MATRIX local_screen) {
 	asm __volatile__ (
 	"lqc2		$vf1, 0x00(%3)	    \n"	//set local_screen matrix[0]

@@ -5,6 +5,7 @@
 #include <float.h>
 
 #include <physics.h>
+#include <profiler.h>
 #include <vector.h>
 #include <matrix.h>
 #include <athena_math.h>
@@ -2546,13 +2547,51 @@ AthenaPhysicsGeom *athena_physics_geom_create_from_render_object(AthenaPhysicsSp
         return NULL;
 
     athena_render_data *data = obj->data;
+    const uint32_t *indices = data->indices;
+    uint32_t index_count = data->index_count;
+    uint32_t *strip_list = NULL;
+
+    // The trimesh wants a triangle list. A strip mesh is unrolled here: every
+    // material group is its own strip (the renderer restarts at each group),
+    // odd triangles swap their first two vertices to keep the winding, and the
+    // degenerate stitching triangles are dropped, as are the ones completed by
+    // a no-kick vertex (strip restart, ATHENA_STRIP_NO_KICK in normal w).
+    if (data->tristrip) {
+        strip_list = (uint32_t *)malloc(sizeof(uint32_t) * (data->index_count - 2) * 3);
+        if (!strip_list) return NULL;
+
+        index_count = 0;
+        uint32_t start = 0;
+        int groups = data->material_index_count > 0 ? data->material_index_count : 1;
+        for (int gi = 0; gi < groups; gi++) {
+            uint32_t end = data->material_index_count > 0 ? data->material_indices[gi].end + 1 : data->index_count;
+            if (end > data->index_count) end = data->index_count;
+            for (uint32_t v = start; v + 2 < end; v++) {
+                uint32_t a = data->indices ? data->indices[v]     : v;
+                uint32_t b = data->indices ? data->indices[v + 1] : v + 1;
+                uint32_t c = data->indices ? data->indices[v + 2] : v + 2;
+                if (a == b || b == c || a == c)
+                    continue;
+                if (data->normals && data->normals[c][3] < 0.0f)
+                    continue;
+                if ((v - start) & 1) { uint32_t t = a; a = b; b = t; }
+                strip_list[index_count++] = a;
+                strip_list[index_count++] = b;
+                strip_list[index_count++] = c;
+            }
+            start = end;
+        }
+        indices = strip_list;
+    }
+
     AthenaPhysicsGeom *g = athena_physics_geom_create_trimesh(
         space,
         (const VECTOR *)data->positions,
         data->index_count,
-        data->indices,
-        data->index_count
+        indices,
+        index_count
     );
+    free(strip_list);
     if (!g) return NULL;
 
     g->position[0] = obj->position[0];
@@ -3577,7 +3616,15 @@ static int add_angular_row(AthenaSolverRow *rows, int count, int max_rows,
     return count;
 }
 
+static void physics_world_step(AthenaPhysicsWorld *world, float step_size);
+
 void athena_physics_world_step(AthenaPhysicsWorld *world, float step_size) {
+    prof_push(PROF_PHYSICS);
+    physics_world_step(world, step_size);
+    prof_pop();
+}
+
+static void physics_world_step(AthenaPhysicsWorld *world, float step_size) {
     if (!world || step_size <= 1e-7f) return;
 
     float dt = step_size;
