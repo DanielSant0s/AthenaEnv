@@ -168,7 +168,7 @@
      /* Struct field access */
      IR_LOAD_FIELD,      /* Load field: base ptr resolved from operand.field.local_idx, push value at offset */
      IR_STORE_FIELD,     /* Store field: pop value, base ptr resolved from operand.field.local_idx, write at offset */
-     IR_LOAD_FIELD_ADDR, /* Load field address: push base + offset (for array fields) */
+     IR_LOAD_FIELD_ADDR, /* Pop base ptr, push base + offset (for array fields) */
 
      /* Struct ARRAY field access: unlike IR_LOAD_FIELD/IR_STORE_FIELD above,
       * the struct base pointer here is a genuine runtime value already on
@@ -253,6 +253,8 @@
      int instr_capacity;
      int label_id;
      int successors[2];      /* Branch targets (-1 = none) */
+     int entry_stack_depth;  /* Inferred operand representation at CFG entry */
+     NativeType entry_stack_types[NC_MAX_STACK_DEPTH];
  } IRBasicBlock;
  
  /*
@@ -379,29 +381,9 @@
      NativeFuncEntry native_funcs[NC_MAX_NATIVE_FUNCS];
      int native_func_count;
      
-     /* Struct type tracking for field access */
-     struct NativeStructDef *local_struct_defs[NC_MAX_LOCALS];  /* Struct def for each struct-typed local */
+     /* Argument schemas; bytecode object analysis propagates them to locals. */
+     struct NativeStructDef *local_struct_defs[NC_MAX_LOCALS];  /* Struct def for each struct argument */
      int last_loaded_local;  /* Index of last loaded local (for getter) */
-     int last_put_field_target;  /* Index of target for next put_field (not reset by getters) */
-
-     /* Pushed by OP_get_array_el/OP_get_array_el2 when the indexed local is a
-      * struct array (nc_arg_is_struct_array): holds the ELEMENT struct def so
-      * the matching OP_get_field/OP_put_field knows to consume the
-      * IR_ARRAY_ELEM_ADDR result already on the eval stack (IR_LOAD_FIELD_DYN/
-      * IR_STORE_FIELD_DYN) instead of the fixed-local-slot IR_LOAD_FIELD/
-      * IR_STORE_FIELD path, then pops it.
-      *
-      * A single pending slot breaks as soon as one struct-array field access
-      * appears inside another's containing expression - e.g.
-      * `arr[i].x = arr[i].x + arr[i].vx`: the LHS's `arr[i]` pushes first,
-      * but two more complete `arr[i].field` reads (for the RHS) push AND pop
-      * their own entries before the LHS's put_field ever runs, so a single
-      * slot would already be cleared by the time the LHS needs it. Same
-      * failure mode pending_intrinsic_stack below exists to avoid for
-      * Math.atan2(Math.sqrt(...)) - LIFO stack, not a single slot. */
-     struct NativeStructDef *pending_struct_elem_stack[NC_MAX_PENDING_INTRINSICS];
-     int pending_struct_elem_depth;
-
 
      /* Track which local each stack item came from for field access resolution */
      int stack_local_source[NC_MAX_STACK_DEPTH];  /* Which local does each stack item come from? -1 if unknown */
@@ -540,4 +522,3 @@ NativeType native_array_element_type(NativeType array_type);
 #endif
 
 #endif /* NATIVE_COMPILER_H */
- 

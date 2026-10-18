@@ -44,6 +44,7 @@
 #include <athena/matrix.h>
 #include <athena/screen.h>
 #include <athena/sprite.h>
+#include <athena/particles.h>
 #include <athena/image.h>
 #include <athena/image_list.h>
 #include <athena/font.h>

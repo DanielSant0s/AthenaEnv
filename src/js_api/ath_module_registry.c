@@ -33,6 +33,7 @@ static const athena_js_module_entry_t athena_js_modules[] = {
     { athena_anim_3d_init },
     { athena_shadows_init },
     { athena_tilemap_init },
+    { athena_particles_init },
 #endif
 #ifdef ATHENA_PHYSICS
     { athena_physics_init },
@@ -137,6 +138,8 @@ const char *athena_js_globals_prelude(void) {
         "globalThis.Lights = Lights;\n"
         "globalThis.Camera = Camera;\n"
         "globalThis.Shadows = Shadows;\n"
+        "import * as Particles from 'Particles';\n"
+        "globalThis.Particles = Particles;\n"
         "import TileMap from 'TileMap';\n"
         "globalThis.TileMap = TileMap;\n"
 #endif

@@ -23,11 +23,14 @@ register_vu_program(VU1Draw2D_TileList);
 vu_mpg *vu1_tile_list = NULL;
 
 void tile_render_init() {
+    if (vu1_tile_list) return;
     vu1_tile_list = vu_mpg_load_buffer(embed_vu_code_ptr(VU1Draw2D_TileList), embed_vu_code_size(VU1Draw2D_TileList), VECTOR_UNIT_1, false);
 }
 
 void tile_render_begin() {
-    vu1_set_double_buffer_settings(2, 452); 
+    // The microprogram puts its output at TOP+202. Fifty sprites consume
+    // 251 output qwords, so the next input must start at TOP+453, not +452.
+    vu1_set_double_buffer_settings(2, 453);
 }
 
 #define BATCH_SIZE_2D 50
@@ -39,6 +42,10 @@ void tile_render_set_camera(float x, float y) {
     offset_camera[3] = y;
 }
 
+
+void tile_render_get_camera(float *x, float *y) {
+    *x = offset_camera[2]; *y = offset_camera[3];
+}
 
 static void bake_giftags(owl_packet *packet, bool texture_mapping, int mat_id) {
 	prim_reg_t prim_data = {
@@ -88,12 +95,12 @@ const athena_tilemap_layout *tile_render_layout() {
 	return &k_tile_layout;
 }
 
-void tile_render_render(
+static void tile_render_render_impl(
 	athena_tilemap_descriptor *descriptor,
 	athena_sprite_data *sprites,
 	float x,
 	float y,
-	float zindex) {
+	float zindex, bool volatile_refs) {
     if (!descriptor || !sprites || descriptor->material_count == 0)
         return;
 
@@ -160,9 +167,12 @@ void tile_render_render(
   
 			bake_giftags(packet, texture_mapping, i);
 
+			// SpriteBuffer/TypedArray writes go through the EE data cache. The
+			// DMAC reads main RAM, so publish this range before queueing its REF.
+			SyncDCache(&sprite_batch[idxs_drawn], &sprite_batch[idxs_drawn + count]);
 			owl_add_unpack_data_ref(packet, 1, &sprite_batch[idxs_drawn], count*4, 1);
 			// JS writes this buffer directly; nothing can wait before it does.
-			owl_mark_volatile_refs();
+			if (volatile_refs) owl_mark_volatile_refs();
 
 			owl_add_cnt_tag(packet, texture_mapping? 5 : 1, owl_vif_code_double(VIF_CODE(0, 0, VIF_NOP, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
 
@@ -212,4 +222,13 @@ void tile_render_render(
 
     set_screen_param(ALPHA_BLEND_EQUATION, old_alpha);
 
+}
+
+void tile_render_render(athena_tilemap_descriptor *d, athena_sprite_data *s,
+                        float x, float y, float z) {
+    tile_render_render_impl(d, s, x, y, z, true);
+}
+void tile_render_render_native(athena_tilemap_descriptor *d, athena_sprite_data *s,
+                               float x, float y, float z) {
+    tile_render_render_impl(d, s, x, y, z, false);
 }

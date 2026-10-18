@@ -27,6 +27,50 @@ const sky = new Image("sky.png");
 sky.width = canvas.width;
 sky.height = canvas.height;
 
+// Native particles: one shared atlas/pool for dust, wood chips and stone grit.
+// Emit only on footsteps, landings and impacts; R3 changes the density budget.
+const FX_LEVELS = [0, 128, 256, 512, 1024];
+const fxAtlas = new Image("fx_atlas.png");
+fxAtlas.filter = LINEAR;
+const fxSystem = new Particles.System({ texture: fxAtlas, capacity: 1024, space: "world", seed: 42978 });
+const fxDust = fxSystem.createEmitter({
+    frame: [0, 0, 32, 32], lifetime: [0.45, 0.9], size: [0.14, 0.28], scaleEnd: 3,
+    velocityMin: [-0.4, 0.15, -0.4], velocityMax: [0.4, 0.65, 0.4],
+    acceleration: [0, -0.12, 0], drag: 1.8, spread: [0.08, 0.02, 0.08],
+    color: [128, 118, 100, 45], colorEnd: [128, 118, 100, 0], fadeIn: 0.08
+});
+const fxWood = fxSystem.createEmitter({
+    frame: [32, 0, 32, 32], lifetime: [0.35, 0.8], size: [0.025, 0.065], scaleEnd: 0.65,
+    velocityMin: [-1.8, 1, -1.8], velocityMax: [1.8, 3, 1.8], acceleration: [0, -9, 0],
+    color: [128, 90, 55, 128], colorEnd: [128, 90, 55, 0]
+});
+const fxStone = fxSystem.createEmitter({
+    frame: [32, 0, 32, 32], lifetime: [0.3, 0.65], size: [0.02, 0.055], scaleEnd: 0.65,
+    velocityMin: [-1.5, 0.6, -1.5], velocityMax: [1.5, 2, 1.5], acceleration: [0, -9, 0],
+    color: [120, 118, 112, 128], colorEnd: [120, 118, 112, 0]
+});
+let fxLevel = 1;
+let fxNextStep = 0;
+function fxReset(level) {
+    fxLevel = level;
+    fxNextStep = 0;
+    fxSystem.clear(42978);
+}
+// material: 0 = dust, 1 = wood fragments + dust, 2 = stone grit + dust.
+function fxBurst(x, y, z, count, material = 0) {
+    const budget = FX_LEVELS[fxLevel];
+    count = Math.min(budget - fxSystem.activeCount, Math.ceil(count * budget / 128));
+    if (count <= 0) return;
+    const dust = material === 0 ? count : Math.ceil(count / 3);
+    fxDust.burst(dust, x, y, z);
+    if (count > dust) (material === 1 ? fxWood : fxStone).burst(count - dust, x, y, z);
+}
+function fxRender() {
+    // Same fixed simulation step as the rigid-body world below.
+    fxSystem.update(0.016);
+    fxSystem.draw();
+}
+
 // --- Physics World & Broadphase Space ---
 const world = Physics.World();
 const jgroup = Physics.JointGroup();
@@ -240,6 +284,31 @@ for (let i = 0; i < ballSpawns.length; i++) {
 }
 
 const allProps = crates.concat(balls);
+for (let i = 0; i < allProps.length; i++) {
+    allProps[i].fxPreviousVy = 0;
+    allProps[i].fxImpactCooldown = 0;
+}
+
+function fxPropImpacts() {
+    for (let i = 0; i < allProps.length; i++) {
+        const prop = allProps[i];
+        if (fxLevel === 0) {
+            prop.fxPreviousVy = 0;
+            continue;
+        }
+        prop.fxImpactCooldown -= 0.016;
+        const velocity = prop.body.getLinearVel();
+        // A falling prop abruptly loses downward speed at a real collision.
+        // Resting contacts, gravity and the upward throw impulse do not emit.
+        if (prop.fxPreviousVy < -2.2 && velocity[1] - prop.fxPreviousVy > 1.8 && prop.fxImpactCooldown <= 0) {
+            const position = prop.body.getPosition();
+            const radius = i < crates.length ? CRATE_HALF : BALL_RADIUS;
+            fxBurst(position[0], position[1] - radius + 0.025, position[2], 16, i < crates.length ? 1 : 2);
+            prop.fxImpactCooldown = 0.2;
+        }
+        prop.fxPreviousVy = velocity[1];
+    }
+}
 
 function resetSandbox() {
     const identityRot = [
@@ -256,6 +325,10 @@ function resetSandbox() {
     jumpWindup = 0;
     groundGrace = 6;
     kickPhase = 0;
+    for (let i = 0; i < allProps.length; i++) {
+        allProps[i].fxPreviousVy = 0;
+        allProps[i].fxImpactCooldown = 0;
+    }
 
     for (let i = 0; i < crates.length; i++) {
         const c = crates[i];
@@ -362,8 +435,8 @@ let fogPresetIdx = 0;
 // --- Automatic benchmark ---
 // Cycles through lighting on/off x post-fx on/off, BENCH_PHASE_MS each, and
 // logs the averaged Screen.getProfile() of every phase to the console (the
-// first BENCH_WARMUP_MS of a phase are skipped so the switch itself and the
-// profiler's 30-frame window do not leak into the numbers). Set BENCHMARK to
+// first BENCH_WARMUP_MS and two 30-frame profiler windows of a phase are skipped
+// so a report spanning the phase switch cannot leak into the numbers). Set BENCHMARK to
 // false to play normally: lighting and post-fx then stay as configured above.
 const BENCHMARK = false;
 const BENCH_PHASE_MS = 10000;
@@ -375,39 +448,32 @@ const BENCH_PHASES = [
     { name: "lights OFF | postfx OFF", lights: false, postfx: false },
 ];
 const BENCH_KEYS = ["frame", "script", "render", "anim", "physics", "gpuWait", "vsync"];
-
 let benchPhase = 0;
 let benchPostfx = true;
 let benchSum = null;
 let benchFastClip = 0;
 let benchSamples = 0;
+let benchFrames = 0;
 const benchTimer = Timer.new();
-
 function benchApply() {
     const phase = BENCH_PHASES[benchPhase];
     scene.pipeline = phase.lights ? Render.PL_DEFAULT : Render.PL_NO_LIGHTS;
     benchPostfx = phase.postfx;
     benchSum = {};
     for (const k of BENCH_KEYS) benchSum[k] = 0;
-    benchFastClip = 0;
-    benchSamples = 0;
+    benchFastClip = benchSamples = benchFrames = 0;
     Timer.reset(benchTimer);
 }
-
 function benchTick() {
-    // Timer counts in microseconds.
     const elapsed = Timer.getTime(benchTimer) / 1000;
-
-    if (elapsed >= BENCH_WARMUP_MS) {
+    benchFrames++;
+    if (elapsed >= BENCH_WARMUP_MS && benchFrames > 60) {
         const prof = Screen.getProfile();
         for (const k of BENCH_KEYS) benchSum[k] += prof[k];
         benchFastClip += Render.stats().fastClip;
         benchSamples++;
     }
-
-    if (elapsed < BENCH_PHASE_MS || benchSamples === 0)
-        return;
-
+    if (elapsed < BENCH_PHASE_MS || benchSamples === 0) return;
     const avg = {};
     for (const k of BENCH_KEYS) avg[k] = benchSum[k] / benchSamples;
     console.log(
@@ -415,7 +481,6 @@ function benchTick() {
         `frame ${avg.frame.toFixed(1)} | script ${avg.script.toFixed(1)} | render ${avg.render.toFixed(1)} | ` +
         `anim ${avg.anim.toFixed(1)} | phys ${avg.physics.toFixed(1)} | gpu wait ${avg.gpuWait.toFixed(1)} | ` +
         `vsync ${avg.vsync.toFixed(1)} (ms) | fast clip groups ${(benchFastClip / benchSamples).toFixed(1)}`);
-
     benchPhase = (benchPhase + 1) % BENCH_PHASES.length;
     benchApply();
 }
@@ -565,12 +630,16 @@ while (true) {
     pad.update();
 
     if (pad.justPressed(Pads.TRIANGLE)) {
+        fxSystem.dispose();
         os.chdir("..");
         std.reload("main.js");
     }
 
+    if (!BENCHMARK && pad.justPressed(Pads.R3)) fxReset((fxLevel + 1) % FX_LEVELS.length);
+
     if (pad.justPressed(Pads.START)) {
         resetSandbox();
+        fxReset(fxLevel);
     }
 
     if (pad.justPressed(Pads.SELECT)) {
@@ -707,6 +776,7 @@ while (true) {
             groundGrace = 0;
             statusText = "JUMP!";
             statusTimer = 45;
+            fxBurst(px, py - PLAYER_RADIUS + 0.025, pz, 8);
         }
     }
 
@@ -796,6 +866,7 @@ while (true) {
 
                     kickHitBodies[i] = true;
                     kickHits++;
+                    fxBurst(footX, footY, footZ, 20, i < crates.length ? 1 : 2);
                     statusText = `KICK IMPACT! (${kickHits} HIT)`;
                     statusTimer = 60;
                 }
@@ -877,6 +948,7 @@ while (true) {
     const postVel = player_body.getLinearVel();
     const postVy = postVel[1];
     if (jumpCooldown < 38 && (postVy - preStepVy) > -0.18f && postVy > -2.4f && postVy < 2.8f) {
+        if (!isGrounded && preStepVy < -2) fxBurst(px, py - PLAYER_RADIUS + 0.025, pz, 14);
         groundGrace = 6;
     } else if (groundGrace > 0) {
         groundGrace--;
@@ -885,6 +957,13 @@ while (true) {
     // Sync player visual mesh
     const newPos = player_body.getPosition();
     px = newPos[0]; py = newPos[1]; pz = newPos[2];
+    if (isGrounded && inputMag > 0.08 && walkCycle >= fxNextStep) {
+        const side = Math.floor(walkCycle / Math.PI) % 2 === 0 ? -1 : 1;
+        fxBurst(px + Math.cos(playerYaw) * 0.18 * side, py - PLAYER_RADIUS + 0.025,
+            pz + Math.sin(playerYaw) * 0.18 * side, isSprinting ? 5 : 3);
+        fxNextStep = walkCycle + Math.PI;
+    }
+    fxPropImpacts();
 
     skin_object.position = { x: px, y: py - PLAYER_RADIUS, z: pz };
     skin_object.rotation = { x: Math.PI / 2, y: 0.0f, z: playerYaw };
@@ -923,6 +1002,8 @@ while (true) {
     }
 
     skin_object.render();
+    // World-space billboards use scene depth, then receive the same fog/DOF.
+    fxRender();
 
     // --- 6.5. Hardware Depth Fog / DOF / Channel Shuffle Post-Pass ---
     const activeFog = FOG_PRESETS[fogPresetIdx];
@@ -968,13 +1049,16 @@ while (true) {
     font.print(10, 42, "SQUARE: Kick | CIRCLE: Throw | L1: Dance | SELECT: Fog | START: Reset");
 
     const prof = Screen.getProfile();
-    if (BENCHMARK) benchTick();
     font.print(10, 400, `frame ${prof.frame.toFixed(1)} | script ${prof.script.toFixed(1)} | render ${prof.render.toFixed(1)} | anim ${prof.anim.toFixed(1)} | phys ${prof.physics.toFixed(1)}`);
     font.print(10, 416, `gpu wait ${prof.gpuWait.toFixed(1)} | vsync ${prof.vsync.toFixed(1)} (ms)`);
+    const fxStats = fxSystem.stats();
+    font.print(10, 78, `Native particles: ${fxStats.active} active | ${fxStats.visible} visible | ${fxStats.batches} VU batches`);
+    font.print(10, 94, `R3: FX density OFF/128/256/512/1024 | current ${FX_LEVELS[fxLevel]}`);
 
     if (statusTimer > 0) {
         font.print(10, 62, `>> ${statusText}`);
     }
 
+    if (BENCHMARK) benchTick();
     Screen.flip();
 }

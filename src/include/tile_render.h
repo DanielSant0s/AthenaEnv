@@ -8,27 +8,7 @@
 #include <graphics.h>
 #include <render.h>
 
-typedef struct {
-	float x;
-	float y;
-	float w;
-	float h;
-
-	float u1;
-	float v1;
-	float u2;
-	float v2;
-
-	uint32_t r;
-	uint32_t g;
-	uint32_t b;
-	uint32_t a;
-
-	uint32_t pad0;
-	uint32_t pad1;
-	float zindex;
-	uint32_t pad2;
-} athena_sprite_data;
+#include <sprite_data.h>
 
 typedef struct {
 	int texture_index;
@@ -63,6 +43,11 @@ typedef struct {
 void tile_render_init();
 void tile_render_begin();
 void tile_render_set_camera(float x, float y);
+void tile_render_get_camera(float *x, float *y);
+/* Keep native buffers alive/unmodified until owl_wait_generation() completes
+   for the generation captured after submission with owl_flush_generation(). */
+void tile_render_render_native(athena_tilemap_descriptor *descriptor,
+    athena_sprite_data *sprites, float x, float y, float zindex);
 
 void tile_render_render(
 	athena_tilemap_descriptor *descriptor,

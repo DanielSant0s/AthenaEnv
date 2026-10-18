@@ -5,8 +5,8 @@
 		.global	VU1Draw2D_TileList_CodeStart
 		.global	VU1Draw2D_TileList_CodeEnd
 VU1Draw2D_TileList_CodeStart:
-__v_src_vu1_draw_2D_tile_list_vcl_4:
-; _LNOPT_w=[ normal2 ] 5 [17 0] 17   [__v_src_vu1_draw_2D_tile_list_vcl_4]
+__v_vu1_draw_2D_tile_list_vcl_4:
+; _LNOPT_w=[ normal2 ] 5 [17 0] 17   [__v_vu1_draw_2D_tile_list_vcl_4]
          max.xy        VF02,VF00,VF00                               lq            VF01,0(VI00)                        
          add.xy        VF01,VF02,VF01                               mr32.yz       VF02,VF01                                  ;	STALL_LATENCY ?3
          NOP                                                        mr32.xy       VF02,VF02                                  ;	STALL_LATENCY ?3
@@ -27,7 +27,7 @@ init:
          NOP                                                        isw.x         VI05,0(VI02)                        
          addi.x        VF02,VF00,I                                  iaddiu        VI04,VI04,0                         
 vertexLoop:
-; _LNOPT_w=[ normal2 ] 20 [41 17] 41   [vertexLoop]
+; _LNOPT_w=[ normal2 ] 22 [45 17] 45   [vertexLoop]
          NOP                                                        lq            VF03,0(VI01)                        
          sub.zw        VF05,VF00,VF00                               lq            VF04,1(VI01)                        
          add.xy        VF05,VF03,VF01                               lq            VF06,2(VI01)                               ;	STALL_LATENCY ?2
@@ -43,22 +43,24 @@ vertexLoop:
          minix.xy      VF03,VF03,VF02x                              NOP                                                      ;	STALL_LATENCY ?3
          ftoi4         VF04,VF04                                    lq.z          VF01,3(VI01)                        
          ftoi4         VF03,VF03                                    NOP                                                      ;	STALL_LATENCY ?2
-         add.z         VF04,VF04,VF01                               iaddiu        VI01,VI01,0x00000004                
-         add.z         VF03,VF03,VF01                               isubiu        VI04,VI04,1                                ;	STALL_LATENCY ?2
+         add.z         VF04,VF04,VF01                               NOP
+         add.z         VF03,VF03,VF01                               NOP                                                      ;	STALL_LATENCY ?2
+         ftoi0.z       VF04,VF04                                    iaddiu        VI01,VI01,0x00000004
+         ftoi0.z       VF03,VF03                                    isubiu        VI04,VI04,1                                ;	STALL_LATENCY ?2
          NOP                                                        sq            VF04,-3(VI03)                       
          NOP                                                        ibne          VI04,VI00,vertexLoop                
          NOP                                                        sq            VF03,-1(VI03)                              ;	STALL_LATENCY ?1
-; _LNOPT_w=[ normal2 ] 1 [1 0] 1   [__v_src_vu1_draw_2D_tile_list_vcl_7]
+; _LNOPT_w=[ normal2 ] 1 [1 0] 1   [__v_vu1_draw_2D_tile_list_vcl_7]
          NOP                                                        xgkick        VI02                                
-; _LNOPT_w=[ normal2 ] 2 [0 0] 2   [__v_src_vu1_draw_2D_tile_list_vcl_8]
+; _LNOPT_w=[ normal2 ] 2 [0 0] 2   [__v_vu1_draw_2D_tile_list_vcl_8]
          NOP[E]                                                     NOP                                               
          NOP                                                        NOP                                               
-; _LNOPT_w=[ normal2 ] 2 [2 0] 2   [__v_src_vu1_draw_2D_tile_list_vcl_9]
+; _LNOPT_w=[ normal2 ] 2 [2 0] 2   [__v_vu1_draw_2D_tile_list_vcl_9]
          NOP                                                        b             init                                
          NOP                                                        NOP                                               
 		.align 4
 VU1Draw2D_TileList_CodeEnd:
-;	iCount=42
+;	iCount=44
 ; register stats:
 ;   6 VU User integer
 ;   7 VU User floating point

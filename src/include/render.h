@@ -415,6 +415,8 @@ void render_begin();
 // camera position at 9) stale, so the next draw re-uploads it. Call from any
 // code that unpacks into VU1 static addresses 0..9 -- tile_render.c does.
 void render_invalidate_vu_view(void);
+// Restore static VU1 lighting after a 2D microprogram overwrites local memory.
+void render_restore_vu_lighting(void);
 
 void render_set_view(float fov, float near, float far, float width, float height);
 float render_get_near(void);

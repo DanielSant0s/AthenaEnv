@@ -397,6 +397,255 @@ static inline const JSOpCode *get_opcode_info(uint8_t op) {
     return &short_opcode_info(op);
 }
 
+/* Object provenance follows the bytecode operand stack, not the last local
+ * loaded. In `particles[index]`, that local is index; in `a.x = b.x`, it is b.
+ * Keep this analysis separate from numeric inference: all scalar values are
+ * equivalent here, while struct/array pointers retain their schema through
+ * locals, nested indexing, calls, and control-flow joins. */
+typedef struct NCObjectType {
+    NativeType type;
+    NativeStructDef *def;
+} NCObjectType;
+
+typedef struct NCObjectFlow {
+    int *offsets;
+    NCObjectType *values;
+    NCObjectType locals[NC_MAX_LOCALS];
+} NCObjectFlow;
+
+static bool nc_object_merge(NCObjectType *dst, NCObjectType src) {
+    if (src.type == NATIVE_TYPE_UNKNOWN ||
+        (dst->type == src.type && dst->def == src.def)) return false;
+    if (dst->type != NATIVE_TYPE_UNKNOWN) {
+        src.type = NATIVE_TYPE_VOID; /* incompatible object types */
+        src.def = NULL;
+    }
+    if (dst->type == src.type && dst->def == src.def) return false;
+    *dst = src;
+    return true;
+}
+
+static int nc_bytecode_local(uint8_t op, const uint8_t *p, int argc,
+                             bool *load, bool *store) {
+    *load = *store = false;
+    switch (op) {
+        case OP_get_arg: *load = true; return p[0] | (p[1] << 8);
+        case OP_put_arg: case OP_set_arg:
+            *store = true; return p[0] | (p[1] << 8);
+        case OP_get_loc: case OP_get_loc_check:
+            *load = true; return argc + (p[0] | (p[1] << 8));
+        case OP_put_loc: case OP_set_loc: case OP_put_loc_check:
+        case OP_put_loc_check_init:
+            *store = true; return argc + (p[0] | (p[1] << 8));
+        case OP_get_loc8: *load = true; return argc + p[0];
+        case OP_put_loc8: case OP_set_loc8:
+            *store = true; return argc + p[0];
+        default:
+            if (op >= OP_get_arg0 && op <= OP_get_arg3) {
+                *load = true; return op - OP_get_arg0;
+            }
+            if (op >= OP_put_arg0 && op <= OP_put_arg3) {
+                *store = true; return op - OP_put_arg0;
+            }
+            if (op >= OP_set_arg0 && op <= OP_set_arg3) {
+                *store = true; return op - OP_set_arg0;
+            }
+            if (op >= OP_get_loc0 && op <= OP_get_loc3) {
+                *load = true; return argc + op - OP_get_loc0;
+            }
+            if (op >= OP_put_loc0 && op <= OP_put_loc3) {
+                *store = true; return argc + op - OP_put_loc0;
+            }
+            if (op >= OP_set_loc0 && op <= OP_set_loc3) {
+                *store = true; return argc + op - OP_set_loc0;
+            }
+            return -1;
+    }
+}
+
+static int nc_bytecode_successors(const uint8_t *bc, size_t pc,
+                                  size_t len, int successors[2]) {
+    uint8_t op = bc[pc];
+    const JSOpCode *info = get_opcode_info(op);
+    int next = (int)pc + info->size;
+    bool jump = op == OP_goto || op == OP_goto8 || op == OP_goto16;
+    bool branch = op == OP_if_false || op == OP_if_true ||
+                  op == OP_if_false8 || op == OP_if_true8;
+    if (jump || branch) {
+        int32_t rel;
+        if (info->fmt == OP_FMT_label8) rel = (int8_t)bc[pc + 1];
+        else if (info->fmt == OP_FMT_label16)
+            rel = (int16_t)(bc[pc + 1] | (bc[pc + 2] << 8));
+        else
+            rel = (int32_t)((uint32_t)bc[pc + 1] | ((uint32_t)bc[pc + 2] << 8) |
+                           ((uint32_t)bc[pc + 3] << 16) | ((uint32_t)bc[pc + 4] << 24));
+        successors[0] = (int)pc + 1 + rel;
+        successors[1] = branch && next < (int)len ? next : -1;
+        return branch ? 2 : 1;
+    }
+    if (op == OP_return || op == OP_return_undef || op == OP_tail_call ||
+        op == OP_tail_call_method || op == OP_throw || op == OP_throw_error)
+        return 0;
+    successors[0] = next < (int)len ? next : -1;
+    return 1;
+}
+
+static int nc_bytecode_pops(uint8_t op, const uint8_t *p) {
+    const JSOpCode *info = get_opcode_info(op);
+    int n = info->n_pop;
+    if (info->fmt == OP_FMT_npop || info->fmt == OP_FMT_npop_u16)
+        n += p[0] | (p[1] << 8);
+    else if (info->fmt == OP_FMT_npopx)
+        n += op - OP_call0;
+    return n;
+}
+
+static const NativeStructField *nc_object_field(JSContext *ctx, NCObjectType obj,
+                                         const uint8_t *p) {
+    if (!ctx || !obj.def || obj.type != NATIVE_TYPE_PTR) return NULL;
+    JSAtom atom = (JSAtom)((uint32_t)p[0] | ((uint32_t)p[1] << 8) |
+                          ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24));
+    const char *name = JS_AtomToCString(ctx, atom);
+    const NativeStructField *field = NULL;
+    if (name) {
+        for (int i = 0; i < obj.def->field_count; i++) {
+            if (!strcmp(obj.def->fields[i].name, name)) {
+                field = &obj.def->fields[i];
+                break;
+            }
+        }
+        JS_FreeCString(ctx, name);
+    }
+    return field;
+}
+
+static int nc_analyze_objects(NativeCompiler *nc, const uint8_t *bc,
+                              size_t len, const NativeFuncSignature *sig,
+                              NCObjectFlow *flow) {
+    int *depths = malloc((len + 1) * sizeof(int));
+    int *queue = malloc((len + 1) * sizeof(int));
+    flow->offsets = malloc((len + 1) * sizeof(int));
+    if (!depths || !queue || !flow->offsets) goto oom;
+    for (size_t pc = 0; pc <= len; pc++) depths[pc] = flow->offsets[pc] = -1;
+    depths[0] = 0;
+    int head = 0, tail = 0, total = 0;
+    queue[tail++] = 0;
+    while (head < tail) {
+        int pc = queue[head++], succ[2];
+        const JSOpCode *info = get_opcode_info(bc[pc]);
+        if (!info->size || pc + info->size > len) goto invalid;
+        int pops = nc_bytecode_pops(bc[pc], bc + pc + 1);
+        int exit = depths[pc] - pops + info->n_push;
+        if (depths[pc] < pops || exit > NC_MAX_STACK_DEPTH) goto invalid;
+        flow->offsets[pc] = total;
+        total += depths[pc];
+        int count = nc_bytecode_successors(bc, pc, len, succ);
+        for (int s = 0; s < count; s++) {
+            int target = succ[s];
+            if (target == -1) continue;
+            if (target < 0 || target >= len) goto invalid;
+            if (depths[target] >= 0) {
+                if (depths[target] != exit) goto invalid;
+            } else {
+                depths[target] = exit;
+                queue[tail++] = target;
+            }
+        }
+    }
+    flow->values = calloc(total ? total : 1, sizeof(NCObjectType));
+    if (!flow->values) goto oom;
+    NCObjectType locals[NC_MAX_LOCALS] = {{0}};
+    NCObjectType scalar = {NATIVE_TYPE_INT32, NULL};
+    for (int i = 0; i < sig->arg_count; i++) {
+        locals[i].type = sig->arg_types[i];
+        locals[i].def = nc->local_struct_defs[i];
+        if (!locals[i].def && !NATIVE_TYPE_IS_ARRAY(locals[i].type) &&
+            !NATIVE_TYPE_IS_DYNAMIC_ARRAY(locals[i].type) &&
+            !NATIVE_TYPE_IS_STRING(locals[i].type)) locals[i] = scalar;
+    }
+    /* Monotone fixed point: UNKNOWN -> concrete -> incompatible. Stack slots
+     * occupy only the actual bytecode depth, rather than len * MAX_DEPTH. */
+    bool changed;
+    do {
+        changed = false;
+        for (int q = 0; q < tail; q++) {
+            int pc = queue[q], depth = depths[pc], succ[2];
+            uint8_t op = bc[pc];
+            const uint8_t *p = bc + pc + 1;
+            const JSOpCode *info = get_opcode_info(op);
+            int pops = nc_bytecode_pops(op, p), keep = depth - pops;
+            NCObjectType stack[NC_MAX_STACK_DEPTH];
+            memcpy(stack, flow->values + flow->offsets[pc], depth * sizeof(*stack));
+            NCObjectType a = pops ? stack[keep] : scalar;
+            NCObjectType top = depth ? stack[depth - 1] : scalar;
+            for (int i = 0; i < info->n_push; i++) stack[keep + i] = scalar;
+            bool load, store;
+            int local = nc_bytecode_local(op, p, sig->arg_count, &load, &store);
+            if (local >= 0 && local < NC_MAX_LOCALS) {
+                if (load) stack[keep] = locals[local];
+                if (store) {
+                    changed |= nc_object_merge(&locals[local], top);
+                    if (info->n_push) stack[keep] = top;
+                }
+            } else if (op == OP_get_array_el || op == OP_get_array_el2) {
+                NCObjectType result = scalar;
+                if (a.type == NATIVE_TYPE_STRUCT_ARRAY) {
+                    result.type = NATIVE_TYPE_PTR; result.def = a.def;
+                } else if (a.type == NATIVE_TYPE_UNKNOWN || a.type == NATIVE_TYPE_VOID)
+                    result = a;
+                stack[keep] = result;
+                if (op == OP_get_array_el2) { stack[keep] = a; stack[keep + 1] = result; }
+            } else if (op == OP_get_field) {
+                const NativeStructField *field = nc_object_field(nc->js_ctx, a, p);
+                if (field && (field->flags & FIELD_FLAG_ARRAY)) {
+                    stack[keep].type = field->type == NATIVE_TYPE_FLOAT32 ? NATIVE_TYPE_FLOAT32_ARRAY :
+                        field->type == NATIVE_TYPE_UINT32 ? NATIVE_TYPE_UINT32_ARRAY : NATIVE_TYPE_INT32_ARRAY;
+                } else if (a.type == NATIVE_TYPE_UNKNOWN) stack[keep] = a;
+            } else if (op == OP_get_field2) {
+                stack[keep] = a; /* receiver survives until call_method */
+            } else if (op == OP_dup) {
+                stack[keep] = stack[keep + 1] = top;
+            } else if (op == OP_dup1) {
+                stack[keep] = a; stack[keep + 1] = a; stack[keep + 2] = top;
+            } else if (op == OP_dup2 || op == OP_dup3) {
+                int n = op == OP_dup2 ? 2 : 3;
+                memcpy(stack + keep, flow->values + flow->offsets[pc] + keep, n * sizeof(*stack));
+                memcpy(stack + keep + n, stack + keep, n * sizeof(*stack));
+            } else if (op == OP_swap) {
+                stack[keep] = top; stack[keep + 1] = a;
+            } else if (op == OP_nip) {
+                stack[keep] = top;
+            }
+            int exit = keep + info->n_push;
+            int count = nc_bytecode_successors(bc, pc, len, succ);
+            for (int s = 0; s < count; s++) {
+                if (succ[s] < 0) continue;
+                NCObjectType *dst = flow->values + flow->offsets[succ[s]];
+                for (int i = 0; i < exit; i++) changed |= nc_object_merge(&dst[i], stack[i]);
+            }
+        }
+    } while (changed);
+    memcpy(flow->locals, locals, sizeof(locals));
+    /* Convert offsets to receiver locations for the decoder. */
+    for (int q = 0; q < tail; q++) {
+        int pc = queue[q], pops = get_opcode_info(bc[pc])->n_pop;
+        if (pops && depths[pc] >= pops) flow->offsets[pc] += depths[pc] - pops;
+        else flow->offsets[pc] = -1;
+    }
+    free(queue); free(depths);
+    return 0;
+invalid:
+    snprintf(nc->error_msg, sizeof(nc->error_msg), "Invalid bytecode operand stack in object analysis");
+    nc->has_error = true;
+    free(queue); free(depths);
+    return -1;
+oom:
+    snprintf(nc->error_msg, sizeof(nc->error_msg), "Out of memory analyzing native object types");
+    nc->has_error = true;
+    free(queue); free(depths);
+    return -1;
+}
+
 /* ============================================
  * Native Compiler Helpers
  * ============================================ */
@@ -405,31 +654,6 @@ static bool nc_is_dynamic_array(NativeType t) {
     return t == NATIVE_TYPE_DYNAMIC_INT32_ARRAY ||
            t == NATIVE_TYPE_DYNAMIC_UINT32_ARRAY ||
            t == NATIVE_TYPE_DYNAMIC_FLOAT32_ARRAY;
-}
-
-/* Struct arrays can ONLY ever be function arguments (there is no bytecode
- * path that declares a struct-array-typed local variable), so this checks
- * ir->sig.arg_types[] directly rather than nc_get_local_type()/
- * ir->local_types[]. That table is NOT reliably populated during
- * bytecode_to_ir: native_compile_function only copies sig->arg_types[] into
- * ir_func.local_types[] AFTER bytecode_to_ir returns ("Initialize locals
- * from signature - do this BEFORE type inference"), and OP_get_arg0-3 (the
- * compact opcodes QuickJS actually emits for small arg counts) never bump
- * local_count either. So during THIS pass - exactly when OP_get_array_el
- * needs the answer - ir->local_types[idx] for an argument is still
- * NATIVE_TYPE_UNKNOWN. (The pre-existing nc_is_dynamic_array(lt) check a few
- * lines below OP_get_array_el's struct-array branch has the same timing
- * problem, but gets away with it silently: IR_LOAD_ARRAY/IR_STORE_ARRAY's
- * codegen has its own correct dynamic-array detection, from the properly-
- * inferred type stack at codegen time, as a fallback. A struct can't fall
- * back like that - there's no scalar interpretation of "load a struct".)
- * ir->sig itself IS reliable throughout: it's set from the real signature
- * before bytecode_to_ir is even called, and preserved across the
- * ir_func_init() reset inside it (see the saved_sig dance at the top of
- * bytecode_to_ir). */
-static bool nc_arg_is_struct_array(const IRFunction *ir, int idx) {
-    return ir && idx >= 0 && idx < ir->sig.arg_count &&
-           ir->sig.arg_types[idx] == NATIVE_TYPE_STRUCT_ARRAY;
 }
 
 static NativeType nc_dynamic_elem(NativeType t) {
@@ -824,6 +1048,7 @@ int ir_create_block(IRFunction *ir) {
     block->label_id = idx;
     block->successors[0] = -1;
     block->successors[1] = -1;
+    block->entry_stack_depth = -1;
     
     return idx;
 }
@@ -991,97 +1216,23 @@ static int optimize_ir_strength_reduction(IRFunction *ir) {
  */
 static int optimize_ir_dead_code(IRFunction *ir) {
     int eliminated = 0;
-    
+    /* A value can be consumed in a successor (short-circuit expressions and
+     * ternaries do this routinely). Looking only for a later consumer in this
+     * block cannot prove a constant dead. Remove explicit unused values only;
+     * both the push and its matching drop must go to preserve stack depth. */
     for (int b = 0; b < ir->block_count; b++) {
         IRBasicBlock *block = &ir->blocks[b];
-        if (block->instr_count < 2) continue;
-        
-        /* Track which stack slots are "live" (will be used) */
-        /* Work backwards through instructions */
-        int stack_depth = 0;
-        bool *needed = (bool *)calloc(block->instr_count, sizeof(bool));
-        if (!needed) continue;
-        
-        /* Mark return/jump/store instructions as needed */
-        for (int i = block->instr_count - 1; i >= 0; i--) {
-            IRInstr *instr = &block->instrs[i];
-            
-            switch (instr->op) {
-                case IR_RETURN:
-                case IR_RETURN_VOID:
-                case IR_JUMP:
-                case IR_JUMP_IF_TRUE:
-                case IR_JUMP_IF_FALSE:
-                case IR_STORE_LOCAL:
-                case IR_STORE_ARRAY:
-                case IR_CALL:
-                case IR_TAIL_CALL:
-                case IR_CALL_C_FUNC:
-                case IR_ADD_LOCAL_CONST:
-                /* Struct-array field access: this pass predates these ops and
-                 * never learned to recognize them as consumers below, so a
-                 * CONST feeding IR_STORE_FIELD_DYN with no other whitelisted
-                 * op later in the same block (e.g. the true-branch of an if,
-                 * which falls through instead of jumping) was wrongly judged
-                 * dead and stripped to IR_NOP - leaving STORE_FIELD_DYN one
-                 * stack value short, so it popped the ARRAY_ELEM_ADDR result
-                 * as "value" and underflowed into a garbage register for
-                 * "base". [reg] see native_smoke.js 17.8/17.9. */
-                case IR_ARRAY_ELEM_ADDR:
-                case IR_LOAD_FIELD_DYN:
-                case IR_STORE_FIELD_DYN:
-                    needed[i] = true;
-                    break;
-                    
-                default:
-                    /* Check if next instruction consumes this value */
-                    if (i < block->instr_count - 1) {
-                        IRInstr *next = &block->instrs[i + 1];
-                        /* Binary ops and comparisons consume 2 values */
-                        if ((next->op >= IR_ADD_I32 && next->op <= IR_SAR) ||
-                            (next->op >= IR_EQ_I32 && next->op <= IR_LE_F32) ||
-                            next->op == IR_MIN_F32 || next->op == IR_MAX_F32 ||
-                            next->op == IR_STORE_LOCAL || next->op == IR_STORE_ARRAY) {
-                            needed[i] = true;
-                        }
-                        /* Unary ops consume 1 value */
-                        if (next->op == IR_NEG_I32 || next->op == IR_NEG_F32 ||
-                            next->op == IR_NOT || next->op == IR_SQRT_F32 ||
-                            next->op == IR_ABS_F32 || next->op == IR_I32_TO_F32 ||
-                            next->op == IR_F32_TO_I32 || next->op == IR_SIGN_F32 ||
-                            next->op == IR_FROUND_F32 ||
-                            next->op == IR_RETURN || next->op == IR_JUMP_IF_TRUE ||
-                            next->op == IR_JUMP_IF_FALSE) {
-                            needed[i] = true;
-                        }
-                    }
-                    break;
+        for (int i = 0; i + 1 < block->instr_count; i++) {
+            IROp op = block->instrs[i].op;
+            if ((op == IR_CONST_I32 || op == IR_CONST_F32 || op == IR_CONST_I64) &&
+                block->instrs[i + 1].op == IR_DROP) {
+                block->instrs[i].op = IR_NOP;
+                block->instrs[i + 1].op = IR_NOP;
+                eliminated += 2;
+                i++;
             }
         }
-        
-        /* Remove unneeded CONST that push unused values */
-        for (int i = 0; i < block->instr_count; i++) {
-            IRInstr *instr = &block->instrs[i];
-            
-            if (!needed[i] && (instr->op == IR_CONST_I32 || instr->op == IR_CONST_F32)) {
-                /* Check if this const is consumed by any later instruction */
-                bool is_consumed = false;
-                for (int j = i + 1; j < block->instr_count && !is_consumed; j++) {
-                    if (needed[j]) {
-                        is_consumed = true;
-                    }
-                }
-                
-                if (!is_consumed) {
-                    instr->op = IR_NOP;
-                    eliminated++;
-                }
-            }
-        }
-        
-        free(needed);
     }
-    
     return eliminated;
 }
 
@@ -1579,31 +1730,36 @@ static void reorder_blocks_by_execution(IRFunction *ir) {
  * Translate QuickJS bytecode to IR.
  * This handles a subset of opcodes suitable for numeric computation.
  */
-int bytecode_to_ir(NativeCompiler *nc, const uint8_t *bytecode, 
-                   size_t bytecode_len, IRFunction *ir_out) {
+static int bytecode_to_ir_impl(NativeCompiler *nc, const uint8_t *bytecode,
+                               size_t bytecode_len, IRFunction *ir_out,
+                               const NCObjectFlow *objects) {
     if (!nc || !bytecode || !ir_out) return -1;
     
     /* Preserve signature before initializing (ir_func_init zeros everything) */
     NativeFuncSignature saved_sig = ir_out->sig;
     
+    ir_func_free(ir_out);
     ir_func_init(ir_out);
     
     /* Restore signature after initialization */
     ir_out->sig = saved_sig;
+    for (int i = 0; i < NC_MAX_LOCALS; i++) {
+        NativeType t = objects->locals[i].type;
+        if (t != NATIVE_TYPE_UNKNOWN && t != NATIVE_TYPE_VOID && t != NATIVE_TYPE_INT32)
+            ir_out->local_types[i] = t;
+    }
     
     /* Initialize pending intrinsic state (IR_NOP is not 0, so explicit init needed) */
     nc->pending_intrinsic_op = IR_NOP;
     nc->pending_intrinsic_entry = NULL;
     nc->pending_intrinsic_elem_type = NATIVE_TYPE_UNKNOWN;
     nc->pending_intrinsic_depth = 0;
-    nc->last_put_field_target = -1;
     
     /* Note: local_struct_defs is populated by ath_native.c with per-argument struct defs
      * before calling native_compile_function. Do NOT overwrite here. */
     
     /* Initialize field access tracking */
     nc->last_loaded_local = -1;
-    nc->pending_struct_elem_depth = 0;
     for (int i = 0; i < NC_MAX_STACK_DEPTH; i++) {
         nc->stack_local_source[i] = -1;
     }
@@ -1839,6 +1995,10 @@ int bytecode_to_ir(NativeCompiler *nc, const uint8_t *bytecode,
             }
         }
         
+        NCObjectType object = {0};
+        if (objects->offsets[current_pc] >= 0)
+            object = objects->values[objects->offsets[current_pc]];
+
         switch (op) {
             /* Push integer constants */
             case OP_push_i32: {
@@ -2819,71 +2979,26 @@ int bytecode_to_ir(NativeCompiler *nc, const uint8_t *bytecode,
             }
             
             /* Array access */
-            case OP_get_array_el: {
-                NativeType lt = nc_get_local_type(ir_out, nc->last_loaded_local);
-                struct NativeStructDef *elem_def =
-                    (nc->last_loaded_local >= 0 && nc->last_loaded_local < NC_MAX_LOCALS)
-                    ? nc->local_struct_defs[nc->last_loaded_local] : NULL;
-                if (nc_arg_is_struct_array(ir_out, nc->last_loaded_local) && elem_def) {
-                    /* arr[i] on a struct array: push the ELEMENT ADDRESS, not a
-                     * loaded scalar. The matching OP_get_field/OP_put_field
-                     * pops it off pending_struct_elem_stack - a stack, not a
-                     * single slot, because arr[i]'s own field access can have
-                     * OTHER complete arr[j].field reads nested inside it
-                     * before that happens (arr[i].x = arr[i].x + arr[i].vx) -
-                     * see the struct comment on pending_struct_elem_stack. */
-                    if (nc->pending_struct_elem_depth < NC_MAX_PENDING_INTRINSICS) {
-                        IRInstr instr = { .op = IR_ARRAY_ELEM_ADDR, .type = NATIVE_TYPE_PTR };
-                        instr.operand.array_elem.elem_size = (int32_t)elem_def->size;
-                        ir_emit(ir_out, current_block, &instr);
-                        nc->pending_struct_elem_stack[nc->pending_struct_elem_depth++] = elem_def;
-                    } else {
-                        nc->has_error = true;
-                        snprintf(nc->error_msg, sizeof(nc->error_msg),
-                                 "Struct array field access nested too deeply (max %d)",
-                                 NC_MAX_PENDING_INTRINSICS);
-                        return -1;
-                    }
-                } else if (nc_is_dynamic_array(lt)) {
-                    IRInstr instr = {
-                        .op = IR_ARRAY_GET,
-                        .type = nc_dynamic_elem(lt),
-                        .operand.field.field_type = nc_dynamic_elem(lt)
-                    };
-                    ir_emit(ir_out, current_block, &instr);
-                } else {
-                    IRInstr instr = { .op = IR_LOAD_ARRAY, .type = NATIVE_TYPE_UNKNOWN };
-                    ir_emit(ir_out, current_block, &instr);
-                }
-                break;
-            }
-
+            case OP_get_array_el:
             case OP_get_array_el2: {
-                NativeType lt = nc_get_local_type(ir_out, nc->last_loaded_local);
-                struct NativeStructDef *elem_def =
-                    (nc->last_loaded_local >= 0 && nc->last_loaded_local < NC_MAX_LOCALS)
-                    ? nc->local_struct_defs[nc->last_loaded_local] : NULL;
-                if (nc_arg_is_struct_array(ir_out, nc->last_loaded_local) && elem_def) {
-                    if (nc->pending_struct_elem_depth < NC_MAX_PENDING_INTRINSICS) {
-                        IRInstr instr = { .op = IR_ARRAY_ELEM_ADDR, .type = NATIVE_TYPE_PTR };
-                        instr.operand.array_elem.elem_size = (int32_t)elem_def->size;
-                        ir_emit(ir_out, current_block, &instr);
-                        nc->pending_struct_elem_stack[nc->pending_struct_elem_depth++] = elem_def;
-                    } else {
-                        nc->has_error = true;
-                        snprintf(nc->error_msg, sizeof(nc->error_msg),
-                                 "Struct array field access nested too deeply (max %d)",
-                                 NC_MAX_PENDING_INTRINSICS);
-                        return -1;
-                    }
-                } else if (nc_is_dynamic_array(lt)) {
+                if (object.type == NATIVE_TYPE_STRUCT_ARRAY && object.def) {
+                    IRInstr instr = { .op = IR_ARRAY_ELEM_ADDR, .type = NATIVE_TYPE_PTR };
+                    instr.operand.array_elem.elem_size = (int32_t)object.def->size;
+                    ir_emit(ir_out, current_block, &instr);
+                } else if (nc_is_dynamic_array(object.type)) {
                     IRInstr instr = {
                         .op = IR_ARRAY_GET,
-                        .type = nc_dynamic_elem(lt),
-                        .operand.field.field_type = nc_dynamic_elem(lt)
+                        .type = nc_dynamic_elem(object.type),
+                        .operand.field.field_type = nc_dynamic_elem(object.type)
                     };
                     ir_emit(ir_out, current_block, &instr);
                 } else {
+                    if (object.type == NATIVE_TYPE_VOID) {
+                        nc->has_error = true;
+                        snprintf(nc->error_msg, sizeof(nc->error_msg),
+                                 "Ambiguous array type at pc=%zu", current_pc);
+                        return -1;
+                    }
                     IRInstr instr = { .op = IR_LOAD_ARRAY, .type = NATIVE_TYPE_UNKNOWN };
                     ir_emit(ir_out, current_block, &instr);
                 }
@@ -2891,8 +3006,8 @@ int bytecode_to_ir(NativeCompiler *nc, const uint8_t *bytecode,
             }
 
             case OP_put_array_el: {
-                NativeType lt = nc_get_local_type(ir_out, nc->last_loaded_local);
-                if (nc_arg_is_struct_array(ir_out, nc->last_loaded_local)) {
+                NativeType lt = object.type;
+                if (object.type == NATIVE_TYPE_STRUCT_ARRAY) {
                     /* Whole-element assignment (arr[i] = someStruct) is out of
                      * scope: it would need a memcpy-shaped op. Fail the compile
                      * instead of silently falling through to the scalar
@@ -3059,147 +3174,44 @@ int bytecode_to_ir(NativeCompiler *nc, const uint8_t *bytecode,
              * OP_get_field2 - for method calls like Math.sqrt(): obj -> obj, value
              * Format: 1 byte opcode + 4 bytes atom */
             case OP_get_field: {
-                /* Read atom (4 bytes, little-endian) */
-                uint32_t atom = bytecode[pc] | (bytecode[pc+1] << 8) | 
-                                (bytecode[pc+2] << 16) | (bytecode[pc+3] << 24);
+                const uint8_t *atom_bytes = bytecode + pc;
                 pc += 4;
-                
-                /* OP_get_field: obj -> value
-                 * Use last_loaded_local to find which struct the object came from */
-                bool found_field = false;
-
-                if (nc->js_ctx && nc->pending_struct_elem_depth > 0) {
-                    /* obj on the stack is a REAL runtime pointer - the result of
-                     * IR_ARRAY_ELEM_ADDR for arr[i] on a struct array - not a
-                     * placeholder tied to a fixed local. Consume it as the base
-                     * for IR_LOAD_FIELD_DYN instead of taking the local_idx path
-                     * below (which would try to re-derive a base register from
-                     * last_loaded_local, which here refers to the ARRAY local,
-                     * not a single struct instance). Pop from the TOP of the
-                     * stack: this field access always matches the MOST
-                     * RECENTLY pushed arr[i] (LIFO, same as the real eval
-                     * stack it mirrors). */
-                    struct NativeStructDef *def =
-                        nc->pending_struct_elem_stack[nc->pending_struct_elem_depth - 1];
-                    const char *name = JS_AtomToCString(nc->js_ctx, (JSAtom)atom);
-                    if (name) {
-                        for (int f = 0; f < def->field_count; f++) {
-                            if (strcmp(def->fields[f].name, name) == 0) {
-                                /* Array-typed fields inside a struct-array element
-                                 * are out of scope for this pass (would need to
-                                 * combine a dynamic base with IR_LOAD_FIELD_ADDR's
-                                 * fixed-local assumption) - treat as not found. */
-                                if (!(def->fields[f].flags & FIELD_FLAG_ARRAY)) {
-                                    IRInstr instr = {
-                                        .op = IR_LOAD_FIELD_DYN,
-                                        .type = def->fields[f].type,
-                                        .operand.field = {
-                                            .offset = def->fields[f].offset,
-                                            .local_idx = -1,
-                                            .field_type = def->fields[f].type
-                                        }
-                                    };
-                                    ir_emit(ir_out, current_block, &instr);
-                                    found_field = true;
-                                }
-                                break;
-                            }
-                        }
-                        JS_FreeCString(nc->js_ctx, name);
+                const NativeStructField *field = nc_object_field(nc->js_ctx, object, atom_bytes);
+                if (field) {
+                    NativeType type = field->type;
+                    IROp field_op = IR_LOAD_FIELD_DYN;
+                    if (field->flags & FIELD_FLAG_ARRAY) {
+                        field_op = IR_LOAD_FIELD_ADDR;
+                        type = field->type == NATIVE_TYPE_FLOAT32 ? NATIVE_TYPE_FLOAT32_ARRAY :
+                            field->type == NATIVE_TYPE_UINT32 ? NATIVE_TYPE_UINT32_ARRAY : NATIVE_TYPE_INT32_ARRAY;
                     }
-                    nc->pending_struct_elem_depth--;
-                } else if (nc->js_ctx && nc->last_loaded_local >= 0 && nc->last_loaded_local < NC_MAX_LOCALS) {
-                    const char *name = JS_AtomToCString(nc->js_ctx, (JSAtom)atom);
-                    if (name) {
-                        if (strcmp(name, "length") == 0) {
-                            NativeType lt = nc_get_local_type(ir_out, nc->last_loaded_local);
-                            IRInstr drop = { .op = IR_DROP, .type = NATIVE_TYPE_VOID };
-                            ir_emit(ir_out, current_block, &drop);
-                            ir_emit_load_local(ir_out, current_block, nc->last_loaded_local, lt);
-                            if (lt == NATIVE_TYPE_STRING) {
-                                IRInstr len = { .op = IR_STRING_LENGTH, .type = NATIVE_TYPE_INT32 };
-                                ir_emit(ir_out, current_block, &len);
-                            } else if (nc_is_dynamic_array(lt)) {
-                                IRInstr len = { .op = IR_ARRAY_LENGTH, .type = NATIVE_TYPE_INT32 };
-                                ir_emit(ir_out, current_block, &len);
-                            } else {
-                                ir_emit_const_i32(ir_out, current_block, 0);
-                            }
-                            found_field = true;
-                        } else {
-                        /* Get struct def for the last loaded local */
-                        struct NativeStructDef *def = nc->local_struct_defs[nc->last_loaded_local];
-                        if (def) {
-                            /* Find the field */
-                            for (int f = 0; f < def->field_count; f++) {
-                                if (strcmp(def->fields[f].name, name) == 0) {
-                                    /* Found the field! 
-                                     * QuickJS bytecode pushed object pointer before OP_get_field
-                                     * Stack has: ptr to struct instance
-                                     * We need: value of field (or address if array)
-                                     * 
-                                     * 1. Emit IR_DROP to discard the pushed pointer (we'll use local_idx instead)
-                                     * 2. Emit IR_LOAD_FIELD (for values) or IR_LOAD_FIELD_ADDR (for arrays) */
-                                    
-                                    /* First drop the pushed pointer from stack */
-                                    IRInstr drop = { .op = IR_DROP, .type = NATIVE_TYPE_VOID };
-                                    ir_emit(ir_out, current_block, &drop);
-                                    
-                                    /* Check if field is an array */
-                                    if (def->fields[f].flags & FIELD_FLAG_ARRAY) {
-                                        /* Array field: push base address for IR_LOAD_ARRAY 
-                                         * Use the array type, not just PTR, so IR_LOAD_ARRAY knows element type */
-                                        NativeType array_type;
-                                        switch (def->fields[f].type) {
-                                            case NATIVE_TYPE_FLOAT32: array_type = NATIVE_TYPE_FLOAT32_ARRAY; break;
-                                            case NATIVE_TYPE_INT32:   array_type = NATIVE_TYPE_INT32_ARRAY; break;
-                                            case NATIVE_TYPE_UINT32:  array_type = NATIVE_TYPE_UINT32_ARRAY; break;
-                                            default: array_type = NATIVE_TYPE_INT32_ARRAY; break;
-                                        }
-                                        IRInstr instr = {
-                                            .op = IR_LOAD_FIELD_ADDR,
-                                            .type = array_type,
-                                            .operand.field = {
-                                                .offset = def->fields[f].offset,
-                                                .local_idx = nc->last_loaded_local,
-                                                .field_type = def->fields[f].type
-                                            }
-                                        };
-                                        ir_emit(ir_out, current_block, &instr);
-                                    } else {
-                                        /* Normal field: load value */
-                                        IRInstr instr = {
-                                            .op = IR_LOAD_FIELD,
-                                            .type = def->fields[f].type,
-                                            .operand.field = {
-                                                .offset = def->fields[f].offset,
-                                                .local_idx = nc->last_loaded_local,
-                                                .field_type = def->fields[f].type
-                                            }
-                                        };
-                                        ir_emit(ir_out, current_block, &instr);
-                                    }
-                                    found_field = true;
-                                    break;
-                                }
-                            }
-                        }
-                        }
-                        JS_FreeCString(nc->js_ctx, name);
+                    IRInstr instr = {
+                        .op = field_op, .type = type,
+                        .operand.field = { .offset = field->offset, .local_idx = -1,
+                                           .field_type = field->type }
+                    };
+                    ir_emit(ir_out, current_block, &instr);
+                } else {
+                    JSAtom atom = (JSAtom)((uint32_t)atom_bytes[0] | ((uint32_t)atom_bytes[1] << 8) |
+                        ((uint32_t)atom_bytes[2] << 16) | ((uint32_t)atom_bytes[3] << 24));
+                    const char *name = JS_AtomToCString(nc->js_ctx, atom);
+                    bool length = name && !strcmp(name, "length");
+                    JS_FreeCString(nc->js_ctx, name);
+                    if (length && (NATIVE_TYPE_IS_ARRAY(object.type) || nc_is_dynamic_array(object.type) ||
+                                   object.type == NATIVE_TYPE_STRING || object.type == NATIVE_TYPE_STRING_VIEW)) {
+                        IRInstr instr = { .op = NATIVE_TYPE_IS_STRING(object.type) ? IR_STRING_LENGTH : IR_ARRAY_LENGTH,
+                                          .type = NATIVE_TYPE_INT32 };
+                        ir_emit(ir_out, current_block, &instr);
+                    } else {
+                        nc->has_error = true;
+                        snprintf(nc->error_msg, sizeof(nc->error_msg),
+                                 "Unknown or ambiguous native field receiver at pc=%zu", current_pc);
+                        return -1;
                     }
                 }
-                
-                if (!found_field) {
-                    /* Unknown field or no struct - DROP obj, PUSH 0 */
-                    IRInstr drop = { .op = IR_DROP, .type = NATIVE_TYPE_VOID };
-                    ir_emit(ir_out, current_block, &drop);
-                    ir_emit_const_i32(ir_out, current_block, 0);
-                }
-                
-                /* Don't reset last_loaded_local - it's needed for OP_put_field */
                 break;
             }
-            
+
             case OP_get_field2: {
                 /* Read atom (4 bytes, little-endian) */
                 uint32_t atom = bytecode[pc] | (bytecode[pc+1] << 8) | 
@@ -3216,7 +3228,6 @@ int bytecode_to_ir(NativeCompiler *nc, const uint8_t *bytecode,
                  * (arr[i].method()) are out of scope for this pass - pop
                  * rather than leave it pushed, so a later, unrelated
                  * OP_get_field/OP_put_field doesn't consume a stale entry. */
-                if (nc->pending_struct_elem_depth > 0) nc->pending_struct_elem_depth--;
 
                 if (nc->js_ctx) {
                     const char *name = JS_AtomToCString(nc->js_ctx, (JSAtom)atom);
@@ -3322,149 +3333,25 @@ int bytecode_to_ir(NativeCompiler *nc, const uint8_t *bytecode,
             }
             
             case OP_put_field: {
-                /* Store to struct field: obj, value -> (sets obj.fieldname = value)
-                 * Stack order: ... obj value (value is on top)
-                 * Format: 1 byte opcode + 4 bytes atom
-                 * 
-                 * Use last_loaded_local to find which struct the object came from */
-                uint32_t atom = bytecode[pc] | (bytecode[pc+1] << 8) | 
-                               (bytecode[pc+2] << 16) | (bytecode[pc+3] << 24);
+                const NativeStructField *field = nc_object_field(nc->js_ctx, object, bytecode + pc);
                 pc += 4;
-                
-                bool found_field = false;
-
-                if (nc->js_ctx && nc->pending_struct_elem_depth > 0) {
-                    /* arr[i].field = value, where arr[i] came from
-                     * IR_ARRAY_ELEM_ADDR. Unlike the fixed-argument case below,
-                     * there is no local register to re-derive the base pointer
-                     * from - the element address only exists as a runtime value
-                     * that IR_ARRAY_ELEM_ADDR pushed onto the eval stack earlier
-                     * in this same expression. IR_STORE_FIELD_DYN pops BOTH the
-                     * value and that base pointer (unlike IR_STORE_FIELD, which
-                     * pops only the value and resolves base via local_idx).
-                     * Pop the TOP of the stack: any RHS-side arr[j].field reads
-                     * nested inside the value expression already pushed AND
-                     * popped their own entries by the time this runs (see the
-                     * struct comment on pending_struct_elem_stack), so what's
-                     * left on top is this statement's own LHS target. */
-                    struct NativeStructDef *def =
-                        nc->pending_struct_elem_stack[nc->pending_struct_elem_depth - 1];
-                    const char *name = JS_AtomToCString(nc->js_ctx, (JSAtom)atom);
-                    if (name) {
-                        for (int f = 0; f < def->field_count; f++) {
-                            if (strcmp(def->fields[f].name, name) == 0) {
-                                if (!(def->fields[f].flags & FIELD_FLAG_ARRAY)) {
-                                    IRInstr instr = {
-                                        .op = IR_STORE_FIELD_DYN,
-                                        .type = NATIVE_TYPE_VOID,
-                                        .operand.field = {
-                                            .offset = def->fields[f].offset,
-                                            .local_idx = -1,
-                                            .field_type = def->fields[f].type
-                                        }
-                                    };
-                                    ir_emit(ir_out, current_block, &instr);
-                                    found_field = true;
-                                }
-                                break;
-                            }
-                        }
-                        JS_FreeCString(nc->js_ctx, name);
-                    }
-                    nc->pending_struct_elem_depth--;
-
-                    if (!found_field) {
-                        /* Unknown/array field - DROP value, DROP base ptr */
-                        IRInstr drop1 = { .op = IR_DROP, .type = NATIVE_TYPE_VOID };
-                        ir_emit(ir_out, current_block, &drop1);
-                        IRInstr drop2 = { .op = IR_DROP, .type = NATIVE_TYPE_VOID };
-                        ir_emit(ir_out, current_block, &drop2);
-                    }
-
-                    nc->last_loaded_local = -1;
-                    break;
+                if (!field || (field->flags & FIELD_FLAG_ARRAY)) {
+                    nc->has_error = true;
+                    snprintf(nc->error_msg, sizeof(nc->error_msg),
+                             "Unknown or ambiguous native field store at pc=%zu", current_pc);
+                    return -1;
                 }
-
-                /* QuickJS doesn't load target before OP_put_field in bytecode!
-                 * Use heuristic: scan all struct locals, prefer LAST match (output convention) */
-                int base_local = -1;
-
-                if (nc->js_ctx) {
-                    const char *field_name = JS_AtomToCString(nc->js_ctx, (JSAtom)atom);
-                    if (field_name) {
-                        /* CRITICAL FIX: Only scan FUNCTION ARGUMENTS for the struct base.
-                         * The old code scanned ALL locals (0 to NC_MAX_LOCALS-1), which could
-                         * match uninitialized struct defs in high local indices.
-                         * In struct methods, 'self' is always arg 0 (local 0). */
-                        int arg_count = ir_out->sig.arg_count;
-                        
-                        /* Scan backwards through arguments to find last struct with this field */
-                        for (int local_idx = arg_count - 1; local_idx >= 0; local_idx--) {
-                            struct NativeStructDef *def = nc->local_struct_defs[local_idx];
-                            if (def) {
-                                /* Check if this struct has the field */
-                                for (int f = 0; f < def->field_count; f++) {
-                                    if (strcmp(def->fields[f].name, field_name) == 0) {
-                                        base_local = local_idx;
-                                        goto found_base;  /* Use FIRST match when scanning backwards = LAST arg */
-                                    }
-                                }
-                            }
-                        }
-found_base:
-                        JS_FreeCString(nc->js_ctx, field_name);
-                    }
-                }
-                
-                if (nc->js_ctx && base_local >= 0 && base_local < NC_MAX_LOCALS) {
-                    const char *name = JS_AtomToCString(nc->js_ctx, (JSAtom)atom);
-                    if (name) {
-                        /* Get struct def for the base local */
-                        struct NativeStructDef *def = nc->local_struct_defs[base_local];
-                        if (def) {
-                            /* Find the field */
-                            for (int f = 0; f < def->field_count; f++) {
-                                if (strcmp(def->fields[f].name, name) == 0) {
-                                    /* Found the field!
-                                     * Try WITHOUT IR_DROP - maybe QuickJS doesn't push object? */
-                                    
-                                    /* Drop the object pointer pushed by QuickJS */
-                                    //IRInstr drop = { .op = IR_DROP, .type = NATIVE_TYPE_VOID };
-                                    //ir_emit(ir_out, current_block, &drop);
-                                    
-                                    /* Store field value - type handled by SW/LW instructions */
-                                    IRInstr instr = {
-                                        .op = IR_STORE_FIELD,
-                                        .type = NATIVE_TYPE_VOID,
-                                        .operand.field = {
-                                            .offset = def->fields[f].offset,
-                                            .local_idx = base_local,
-                                            .field_type = def->fields[f].type
-                                        }
-                                    };
-                                    ir_emit(ir_out, current_block, &instr);
-                                    found_field = true;
-                                    break;
-                                }
-                            }
-                        }
-                        JS_FreeCString(nc->js_ctx, name);
-                    }
-                }
-                
-                if (!found_field) {
-                    /* Unknown field or no struct - DROP value, DROP obj */
-                    IRInstr drop1 = { .op = IR_DROP, .type = NATIVE_TYPE_VOID };
-                    ir_emit(ir_out, current_block, &drop1);
-                    IRInstr drop2 = { .op = IR_DROP, .type = NATIVE_TYPE_VOID };
-                    ir_emit(ir_out, current_block, &drop2);
-                }
-                
-                /* Reset tracking after field access */
-                nc->last_loaded_local = -1;
+                /* Consume the actual LHS pointer, which remains below the RHS
+                 * on the operand stack even if the RHS calls native/C code. */
+                IRInstr instr = {
+                    .op = IR_STORE_FIELD_DYN, .type = NATIVE_TYPE_VOID,
+                    .operand.field = { .offset = field->offset, .local_idx = -1,
+                                       .field_type = field->type }
+                };
+                ir_emit(ir_out, current_block, &instr);
                 break;
             }
-            
+
             /* OP_call_method - call a method with nargs
              * Format: 1 byte opcode + 2 bytes nargs */
             case OP_call_method: {
@@ -3890,6 +3777,18 @@ found_base:
     return 0;
 }
 
+int bytecode_to_ir(NativeCompiler *nc, const uint8_t *bytecode,
+                   size_t bytecode_len, IRFunction *ir_out) {
+    if (!nc || !bytecode || !bytecode_len || !ir_out) return -1;
+    NCObjectFlow objects = {0};
+    int status = nc_analyze_objects(nc, bytecode, bytecode_len, &ir_out->sig, &objects);
+    if (status == 0)
+        status = bytecode_to_ir_impl(nc, bytecode, bytecode_len, ir_out, &objects);
+    free(objects.values);
+    free(objects.offsets);
+    return status;
+}
+
 /* ============================================
  * IR to Native Code Generation
  * ============================================ */
@@ -3925,8 +3824,13 @@ static bool detect_loops(const IRFunction *ir) {
  * clobbering its own locals. Returns the number of bytes to reserve (0 if
  * this function makes no such call).
  */
+static bool detect_leaf_function(const IRFunction *ir);
+
 static int compute_max_outgoing_arg_bytes(const IRFunction *ir) {
-    int max_bytes = 0;
+    /* O32 callees may spill their register arguments into the caller's
+     * 16-byte home area, even with only one argument. Keep it separate from
+     * our spilled pointers and locals for every function that emits calls. */
+    int max_bytes = detect_leaf_function(ir) ? 0 : 16;
     for (int b = 0; b < ir->block_count; b++) {
         const IRBasicBlock *block = &ir->blocks[b];
         for (int i = 0; i < block->instr_count; i++) {
@@ -4810,21 +4714,10 @@ static int emit_ir_instruction(NativeCompiler *nc, const IRInstr *instr, const i
              * of the array (struct_ptr + field_offset) for subsequent
              * IR_LOAD_ARRAY or IR_STORE_ARRAY operations.
              */
-            int local_idx = instr->operand.field.local_idx;
             int16_t offset = instr->operand.field.offset;
-            
-            /* Get struct base pointer */
-            MipsReg base_reg;
-            if (local_idx >= 0 && local_idx < 4) {
-                const MipsReg arg_regs[] = { REG_A0, REG_A1, REG_A2, REG_A3 };
-                base_reg = arg_regs[local_idx];
-            } else if (nc->local_regs[local_idx] >= 0) {
-                base_reg = nc->local_regs[local_idx];
-            } else {
-                base_reg = REG_AT;
-                mips_lw(em, base_reg, nc->local_stack_offs[local_idx], REG_FP);
-            }
-            
+            MipsReg base_reg = POP_REG();
+            (void)POP_TYPE();
+
             /* Push (base + offset) as the array base address */
             MipsReg dst = PUSH_REG();
             if (offset == 0) {
@@ -5710,16 +5603,6 @@ static int emit_ir_instruction(NativeCompiler *nc, const IRInstr *instr, const i
             MipsReg base_reg = mips_alloc_gpr(em);
             int base_src_reg = (int)nc->local_regs[base_local];
            
-            /* CRITICAL FIX: Arguments (locals 0-3) are ALWAYS allocated to $a0-$a3 registers.
-             * The allocate_locals function guarantees nc->local_regs[i] = arg_regs[i] for i<4.
-             * However, in some edge cases base_src_reg may be read as -1 due to uninitialized
-             * memory or struct method compilation quirks. Force using registers for args. */
-            if (base_local < 4 && base_local < nc->ir_func.sig.arg_count) {
-                /* This is a function argument - MUST be in argument register */
-                const MipsReg arg_regs[] = { REG_A0, REG_A1, REG_A2, REG_A3 };
-                base_src_reg = (int)arg_regs[base_local];
-            }
-           
             if (base_src_reg >= 0) {
                 mips_move(em, base_reg, (MipsReg)base_src_reg);
             } else {
@@ -5790,14 +5673,6 @@ static int emit_ir_instruction(NativeCompiler *nc, const IRInstr *instr, const i
             bool need_free = false;
             int base_src_reg = (int)nc->local_regs[base_local];
            
-            /* CRITICAL FIX: Arguments (locals 0-3) are ALWAYS allocated to $a0-$a3 registers.
-             * Force using registers for args to avoid loading from uninitialized stack offsets. */
-            if (base_local < 4 && base_local < nc->ir_func.sig.arg_count) {
-                /* This is a function argument - MUST be in argument register */
-                const MipsReg arg_regs[] = { REG_A0, REG_A1, REG_A2, REG_A3 };
-                base_src_reg = (int)arg_regs[base_local];
-            }
-            
             if (base_src_reg >= 0) {
                 /* Base is already in a register - use it directly! */
                 base_reg = (MipsReg)base_src_reg;
@@ -6548,70 +6423,60 @@ static int emit_ir_instruction(NativeCompiler *nc, const IRInstr *instr, const i
             mips_jalr(em, REG_RA, REG_T9);
             mips_nop(em);  /* Delay slot */
             
-            /* Result is in $f0, copy to integer stack */
+            /* Normal JS calls retain a result slot even for void callees. */
             MipsReg dst = PUSH_REG();
-            mips_mfc1(em, dst, FPU_F0);
-            
-            PUSH_TYPE(instr->operand.call.ret_type);
+            NativeType ret_type = instr->operand.call.ret_type;
+            if (ret_type == NATIVE_TYPE_VOID) mips_li(em, dst, 0);
+            else if (ret_type == NATIVE_TYPE_FLOAT32) mips_mfc1(em, dst, FPU_F0);
+            else mips_move(em, dst, REG_V0);
+            PUSH_TYPE(ret_type == NATIVE_TYPE_VOID ? NATIVE_TYPE_INT32 : ret_type);
             break;
         }
         
-        /* Bitwise */
-        case IR_AND: {
-            MipsReg r2 = POP_REG();
-            MipsReg r1 = POP_REG();
+        /* Bitwise operations consume numeric values, not float bit patterns.
+         * Keep the type stack in sync with the GPR stack as for arithmetic. */
+        case IR_AND: case IR_OR: case IR_XOR:
+        case IR_SHL: case IR_SHR: case IR_SAR: {
+            MipsReg r2 = POP_REG(); NativeType t2 = POP_TYPE();
+            MipsReg r1 = POP_REG(); NativeType t1 = POP_TYPE();
+            MipsReg operands[2] = {r1, r2};
+            NativeType types[2] = {t1, t2};
+            for (int i = 0; i < 2; i++) {
+                if (types[i] == NATIVE_TYPE_FLOAT32) {
+                    MipsFpuReg f = mips_alloc_fpr(em);
+                    mips_mtc1(em, operands[i], f);
+                    mips_cvt_w_s(em, f, f);
+                    mips_mfc1(em, operands[i], f);
+                    mips_free_fpr(em, f);
+                }
+            }
             MipsReg dst = PUSH_REG();
-            mips_and(em, dst, r1, r2);
+            switch (instr->op) {
+                case IR_AND: mips_and(em, dst, r1, r2); break;
+                case IR_OR: mips_or(em, dst, r1, r2); break;
+                case IR_XOR: mips_xor(em, dst, r1, r2); break;
+                case IR_SHL: mips_sllv(em, dst, r1, r2); break;
+                case IR_SHR: mips_srlv(em, dst, r1, r2); break;
+                default: mips_srav(em, dst, r1, r2); break;
+            }
+            PUSH_TYPE(instr->op == IR_SHR ? NATIVE_TYPE_UINT32 : NATIVE_TYPE_INT32);
             break;
         }
-        
-        case IR_OR: {
-            MipsReg r2 = POP_REG();
-            MipsReg r1 = POP_REG();
-            MipsReg dst = PUSH_REG();
-            mips_or(em, dst, r1, r2);
-            break;
-        }
-        
-        case IR_XOR: {
-            MipsReg r2 = POP_REG();
-            MipsReg r1 = POP_REG();
-            MipsReg dst = PUSH_REG();
-            mips_xor(em, dst, r1, r2);
-            break;
-        }
-        
         case IR_NOT: {
-            MipsReg r1 = POP_REG();
+            MipsReg src = POP_REG(); NativeType type = POP_TYPE();
+            if (type == NATIVE_TYPE_FLOAT32) {
+                MipsFpuReg f = mips_alloc_fpr(em);
+                mips_mtc1(em, src, f);
+                mips_cvt_w_s(em, f, f);
+                mips_mfc1(em, src, f);
+                mips_free_fpr(em, f);
+            }
             MipsReg dst = PUSH_REG();
-            mips_nor(em, dst, r1, REG_ZERO);
+            mips_nor(em, dst, src, REG_ZERO);
+            PUSH_TYPE(NATIVE_TYPE_INT32);
             break;
         }
-        
-        case IR_SHL: {
-            MipsReg r2 = POP_REG();
-            MipsReg r1 = POP_REG();
-            MipsReg dst = PUSH_REG();
-            mips_sllv(em, dst, r1, r2);
-            break;
-        }
-        
-        case IR_SHR: {
-            MipsReg r2 = POP_REG();
-            MipsReg r1 = POP_REG();
-            MipsReg dst = PUSH_REG();
-            mips_srlv(em, dst, r1, r2);
-            break;
-        }
-        
-        case IR_SAR: {
-            MipsReg r2 = POP_REG();
-            MipsReg r1 = POP_REG();
-            MipsReg dst = PUSH_REG();
-            mips_srav(em, dst, r1, r2);
-            break;
-        }
-        
+
         /* Comparisons */
         case IR_LT_I32: {
             MipsReg r2 = POP_REG();  /* Top of stack (second operand) */
@@ -6964,7 +6829,9 @@ static int emit_ir_instruction(NativeCompiler *nc, const IRInstr *instr, const i
             
             /* Push result - floats in $f0, ints in $v0 */
             MipsReg result = PUSH_REG();
-            if (instr->type == NATIVE_TYPE_FLOAT32) {
+            if (instr->operand.call.ret_type == NATIVE_TYPE_VOID) {
+                mips_li(em, result, 0);
+            } else if (instr->type == NATIVE_TYPE_FLOAT32) {
                 /* Float return is in $f0 - move to GPR */
                 mips_mfc1(em, result, FPU_F0);
             } else {
@@ -7151,7 +7018,12 @@ static int emit_ir_instruction(NativeCompiler *nc, const IRInstr *instr, const i
 
         
         case IR_RETURN_VOID:
-            /* Just fall through to epilogue */
+            /* Other branch arms may be laid out after this return. Falling
+             * through into them can repeat side effects or loop forever. */
+            if (!nc->skip_epilogue_jump) {
+                mips_j(em, nc->epilogue_label);
+                mips_nop(em);
+            }
             break;
         
         /* Stack ops */
@@ -7235,20 +7107,16 @@ static int ir_op_stack_delta(const IRInstr *instr) {
         case IR_STRING_NEW:
         case IR_ARRAY_NEW:
         case IR_DUP:
-        case IR_LOAD_FIELD_ADDR:
             return 1;
 
         /* Pop 1, push nothing */
         case IR_STORE_LOCAL:
+        case IR_STORE_FIELD:
         case IR_DROP:
         case IR_JUMP_IF_TRUE:
         case IR_JUMP_IF_FALSE:
         case IR_RETURN:
             return -1;
-
-        /* Pop 2, push nothing */
-        case IR_STORE_FIELD:
-            return -2;
 
         /* Pop 3, push nothing */
         case IR_STORE_ARRAY:
@@ -7280,7 +7148,13 @@ static int ir_op_stack_delta(const IRInstr *instr) {
         case IR_I32_TO_F32: case IR_F32_TO_I32:
         case IR_I32_TO_I64: case IR_I64_TO_I32:
         case IR_I64_TO_F32: case IR_F32_TO_I64:
+            return 0;
+
+        /* Legacy local-based load pushes a value; dynamic field addresses
+         * replace their runtime base pointer with the resulting address. */
         case IR_LOAD_FIELD:
+            return 1;
+        case IR_LOAD_FIELD_ADDR:
             return 0;
 
         /* Pop 3, push 1 */
@@ -7308,7 +7182,7 @@ static int ir_op_stack_delta(const IRInstr *instr) {
              * any IR_CALL/IR_TAIL_CALL with a known func_ptr) don't. */
             int n = instr->operand.call.arg_count;
             int callee_pop = (instr->op != IR_CALL_C_FUNC && instr->operand.call.func_ptr == NULL) ? 1 : 0;
-            int pushes = (instr->operand.call.ret_type == NATIVE_TYPE_VOID) ? 0 : 1;
+            int pushes = instr->op == IR_TAIL_CALL ? 0 : 1;
             return pushes - n - callee_pop;
         }
 
@@ -7367,6 +7241,30 @@ static void compute_block_entry_depths(const IRFunction *ir, int *entry_depth) {
 
     for (int b = 0; b < ir->block_count; b++) {
         if (entry_depth[b] < 0) entry_depth[b] = 0;
+    }
+}
+
+static bool nc_edge_needs_conversion(const NativeCompiler *nc,
+                                     const IRBasicBlock *target, int depth) {
+    for (int i = 0; i < depth && i < target->entry_stack_depth; i++) {
+        if (target->entry_stack_types[i] == NATIVE_TYPE_FLOAT32 &&
+            NATIVE_TYPE_IS_INT(nc->stack_types[i])) return true;
+    }
+    return false;
+}
+
+static void nc_emit_edge_conversions(NativeCompiler *nc, const IRBasicBlock *target) {
+    for (int i = 0; i < nc->stack_depth && i < target->entry_stack_depth && i < 8; i++) {
+        if (target->entry_stack_types[i] == NATIVE_TYPE_FLOAT32 &&
+            NATIVE_TYPE_IS_INT(nc->stack_types[i])) {
+            MipsEmitter *em = &nc->emitter;
+            MipsFpuReg f = mips_alloc_fpr(em);
+            MipsReg value = (MipsReg)(REG_S0 + i);
+            mips_mtc1(em, value, f);
+            mips_cvt_s_w(em, f, f);
+            mips_mfc1(em, value, f);
+            mips_free_fpr(em, f);
+        }
     }
 }
 
@@ -7474,12 +7372,15 @@ int ir_to_native(NativeCompiler *nc, const IRFunction *ir) {
 
         /* Reset type stack when entering a branch target, to whatever
          * depth is actually guaranteed to be present there. */
-        if (is_branch_target[b] && b > 0) {
+        {
             int depth = block_entry_depth[b];
             if (depth < 0) depth = 0;
             if (depth > 8) depth = 8;  /* $s0-$s7 physical register cap, see nc_push_reg */
             nc->stack_top = depth;
             nc->stack_depth = depth;
+            for (int i = 0; i < depth; i++)
+                nc->stack_types[i] = i < block->entry_stack_depth ?
+                    block->entry_stack_types[i] : NATIVE_TYPE_UNKNOWN;
         }
         
         /* If block is empty and is a branch target, we need to handle it carefully.
@@ -7553,11 +7454,12 @@ int ir_to_native(NativeCompiler *nc, const IRFunction *ir) {
                 bool value_targeting_applied = false;
                 bool is_last_block = (b == ir->block_count - 1);
                 
-                if (is_last_block && i + 1 < block->instr_count) {
+                if (is_last_block && ir->sig.return_type == NATIVE_TYPE_INT32 &&
+                    i + 1 < block->instr_count) {
                     IROp next_op = block->instrs[i + 1].op;
                     if (next_op == IR_RETURN) {
                         /* This value will be returned - emit directly to $v0 */
-                        if (temp_instr.op == IR_CONST_I32 || temp_instr.op == IR_CONST_F32) {
+                        if (temp_instr.op == IR_CONST_I32) {
                             /* Load constant directly into $v0 instead of temp reg */
                             MipsEmitter *em = &nc->emitter;
                             if (temp_instr.op == IR_CONST_I32) {
@@ -7611,6 +7513,27 @@ int ir_to_native(NativeCompiler *nc, const IRFunction *ir) {
                         temp_instr.operand.label_id = mapped_label;
                     }
                 }
+
+                if (original_block_id >= 0 && original_block_id < ir->block_count) {
+                    const IRBasicBlock *target = &ir->blocks[original_block_id];
+                    if (temp_instr.op == IR_JUMP) {
+                        nc_emit_edge_conversions(nc, target);
+                    } else if (nc_edge_needs_conversion(nc, target, nc->stack_depth - 1)) {
+                        /* Conversions on the taken edge must not alter values
+                         * on the other edge. Keep the condition's delay slot
+                         * empty, then emit a small edge adapter. */
+                        int adapter = mips_label_create(em), after = mips_label_create(em);
+                        int destination = temp_instr.operand.label_id;
+                        temp_instr.operand.label_id = adapter;
+                        if (emit_ir_instruction(nc, &temp_instr, NULL) < 0) return -1;
+                        mips_j(em, after); mips_nop(em);
+                        mips_label_bind(em, adapter);
+                        nc_emit_edge_conversions(nc, target);
+                        mips_j(em, destination); mips_nop(em);
+                        mips_label_bind(em, after);
+                        continue;
+                    }
+                }
                 
                 /* CRITICAL FIX REVISED: 
                  * Only skip the explicit jump if it targets the IMMEDIATELY FOLLOWING physical block.
@@ -7662,6 +7585,8 @@ int ir_to_native(NativeCompiler *nc, const IRFunction *ir) {
                 if (!already_terminates) {
                     int semantic_fallthrough = block->successors[1];
                     int physical_next = b + 1;
+                    if (semantic_fallthrough >= 0 && semantic_fallthrough < ir->block_count)
+                        nc_emit_edge_conversions(nc, &ir->blocks[semantic_fallthrough]);
                     if (semantic_fallthrough >= 0 &&
                         semantic_fallthrough < ir->block_count &&
                         semantic_fallthrough != physical_next) {
@@ -7678,16 +7603,8 @@ int ir_to_native(NativeCompiler *nc, const IRFunction *ir) {
     /* Bind the special epilogue label */
     mips_label_bind(em, nc->epilogue_label);
     
-    /* CRITICAL FIX: Move return value to $v0 before epilogue.
-     * For functions with return types != void, the result should be in $v0.
-     * The stack top holds the final computed value - move it to $v0. */
-    if (ir->sig.return_type != NATIVE_TYPE_VOID && nc->stack_top > 0) {
-        /* Stack registers are $s0-$s7, indexed by stack_top */
-        MipsReg result_reg = (MipsReg)(REG_S0 + (nc->stack_top - 1));
-        if (result_reg != REG_V0) {
-            mips_move(em, REG_V0, result_reg);
-        }
-    }
+    /* Each IR_RETURN writes the ABI result before jumping here. The stack
+     * left by the last emitted block may belong to a different runtime path. */
     
     /* Emit function epilogue */
     emit_function_epilogue(nc, &ir->sig);

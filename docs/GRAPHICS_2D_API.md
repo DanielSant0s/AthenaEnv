@@ -4,6 +4,8 @@
 
 For the tilemap renderer, see [TileMap](TILEMAP.md). For packed color values, see [`Color` in the Math API](MATH_API.md#color-module).
 
+For native pooled particles, screen effects and world billboards, see [Particles and 2D FX](PARTICLES.md).
+
 P.S.: *Italic* parameters refer to optional parameters.
 
 ## Image Module

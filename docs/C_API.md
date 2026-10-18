@@ -40,6 +40,7 @@ int main(void) {
 | Matrix | `athena/matrix.h` | `AthenaMatrix4` | `athena_matrix4_create`, `athena_matrix4_multiply` |
 | Screen | `athena/screen.h` | — | `athena_screen_flip`, `athena_screen_clear` |
 | Sprite | `athena/sprite.h` | `AthenaTilemapDescriptor` | tilemap/sprite batch APIs |
+| Particles | `particles.h`, `athena/particles.h` | `AthenaParticles`, `AthenaParticleEffect`, `AthenaParticleRenderer` | `particles_create`, `particles_burst`, `particles_update`, `athena_particles_draw` |
 | Font | `athena/font.h` | `AthenaFont` | `athena_font_load`, `athena_font_print` |
 | Camera3D | `athena/camera3d.h` | `AthenaCamera3dState` | `athena_camera3d_position`, `athena_camera3d_orbit` |
 | Lights | `athena/lights.h` | — | `athena_lights_new`, `athena_lights_set` |

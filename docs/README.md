@@ -19,6 +19,7 @@ See the [project README](../README.md) for a quick overview and Hello World.
 * [Math](MATH_API.md) — `Vector4`, `Matrix4`, `Color`
 * [2D Graphics](GRAPHICS_2D_API.md) — `Image`, `ImageList`, `Draw`, `Screen`, `Font`
 * [TileMap](TILEMAP.md) — high-throughput 2D tilemap renderer
+* [Particles and 2D FX](PARTICLES.md) — native pooled emitters, screen sprites and world billboards through VU1/GS
 * [3D Rendering](RENDER_3D_API.md) — `Render`, `RenderData`, `RenderObject`, `Batch`, `SceneNode`, `AsyncLoader`, `AnimCollection`, `Camera`, `Lights`, `Shadows`
 * [Input](INPUT_API.md) — `Pads`, `Keyboard`, `Mouse`
 * [Audio](AUDIO_API.md) — `Sound`

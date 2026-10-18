@@ -210,6 +210,10 @@ void render_begin() {
 	render_sync_static_lights();
 }
 
+void render_restore_vu_lighting(void) {
+	render_sync_static_lights();
+}
+
 static float g_render_near = 1.0f;
 static float g_render_far  = 4000.0f;
 

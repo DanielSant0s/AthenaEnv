@@ -125,6 +125,7 @@ void owl_set_pre_kick_hook(void (*hook)(void));
 owl_controller *owl_get_controller();
 
 void vu1_set_double_buffer_settings(uint32_t base, uint32_t offset);
+void vu1_get_double_buffer_settings(uint32_t *base, uint32_t *offset);
 
 inline void owl_add_uint(owl_packet *packet, uint32_t a1) {
     uint32_t* tmp = (uint32_t*)packet->ptr;

@@ -35,6 +35,7 @@
 /// <reference path="./math.d.ts" />
 /// <reference path="./input.d.ts" />
 /// <reference path="./graphics2d.d.ts" />
+/// <reference path="./particles.d.ts" />
 /// <reference path="./render3d.d.ts" />
 /// <reference path="./audio.d.ts" />
 /// <reference path="./network.d.ts" />

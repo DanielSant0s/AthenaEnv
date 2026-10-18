@@ -83,6 +83,7 @@ The full API reference and guides live in [`docs/`](docs/README.md):
 * [Math API](docs/MATH_API.md) — `Vector4`, `Matrix4`, `Color`
 * [2D Graphics API](docs/GRAPHICS_2D_API.md) — `Image`, `ImageList`, `Draw`, `Screen`, `Font`
 * [TileMap](docs/TILEMAP.md)
+* [Particles and 2D FX](docs/PARTICLES.md) — native pooled emitters and VU1/GS sprites
 * [3D Rendering API](docs/RENDER_3D_API.md) — `Render`, `RenderData`, `RenderObject`, `Batch`, `SceneNode`, `AsyncLoader`, `AnimCollection`, `Camera`, `Lights`, `Shadows`
 * [Input API](docs/INPUT_API.md) — `Pads`, `Keyboard`, `Mouse`
 * [Audio API](docs/AUDIO_API.md) — `Sound`

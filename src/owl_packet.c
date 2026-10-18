@@ -151,8 +151,13 @@ owl_controller *owl_get_controller() {
     return &controller;
 }
 
+static uint32_t vu1_buffer_base, vu1_buffer_offset;
+void vu1_get_double_buffer_settings(uint32_t *base, uint32_t *offset) {
+    *base = vu1_buffer_base; *offset = vu1_buffer_offset;
+}
 void vu1_set_double_buffer_settings(uint32_t base, uint32_t offset)
 {
+	vu1_buffer_base = base; vu1_buffer_offset = offset;
 	owl_packet *internal_packet = owl_query_packet(CHANNEL_VIF1, 1);
 
     owl_add_tag(internal_packet, (VIF_CODE(base, 0, VIF_BASE, 0) | (uint64_t)VIF_CODE(offset, 0, VIF_OFFSET, 0) << 32), 

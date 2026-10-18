@@ -121,8 +121,10 @@ init:
 
         ftoi4       inPos, inPos
         add.z  inPos, inPos, zindex
+        ftoi0.z     inPos, inPos ; GS XYZ2 needs integer depth, not float bits
         ftoi4       midSize, midSize
         add.z  midSize, midSize, zindex
+        ftoi0.z     midSize, midSize
 
         sq inColor,      RGBA(destAddress)      
         sq inUVs,       UV1(destAddress)   

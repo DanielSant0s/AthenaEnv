@@ -46,6 +46,7 @@ JSModuleDef *athena_image_init(JSContext *ctx);
 JSModuleDef *athena_imagelist_init(JSContext *ctx);
 JSModuleDef *athena_shadows_init(JSContext *ctx);
 JSModuleDef *athena_tilemap_init(JSContext *ctx);
+JSModuleDef *athena_particles_init(JSContext *ctx);
 JSModuleDef *athena_webview_init(JSContext *ctx);
 #endif
 

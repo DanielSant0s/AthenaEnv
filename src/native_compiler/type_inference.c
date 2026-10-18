@@ -242,6 +242,7 @@ static int infer_block_types(IRBasicBlock *block, NativeType *local_types,
                 break;
                 
             case IR_LOAD_FIELD_ADDR:
+                type_stack_pop(stack); /* runtime struct pointer */
                 /* Push array base address with array type */
                 /* The instr->type should be FLOAT32_ARRAY, INT32_ARRAY, etc. */
                 type_stack_push(stack, instr->type);
@@ -461,15 +462,15 @@ static int infer_block_types(IRBasicBlock *block, NativeType *local_types,
             case IR_SAR:
                 t2 = type_stack_pop(stack);
                 t1 = type_stack_pop(stack);
-                result = binary_result_type(t1, t2, instr->op);
+                result = instr->op == IR_SHR ? NATIVE_TYPE_UINT32 : NATIVE_TYPE_INT32;
                 type_stack_push(stack, result);
                 instr->type = result;
                 break;
                 
             case IR_NOT:
-                t1 = type_stack_pop(stack);
-                type_stack_push(stack, t1);
-                instr->type = t1;
+                type_stack_pop(stack);
+                type_stack_push(stack, NATIVE_TYPE_INT32);
+                instr->type = NATIVE_TYPE_INT32;
                 break;
                 
             /* Comparison operations */
@@ -638,10 +639,15 @@ static int infer_block_types(IRBasicBlock *block, NativeType *local_types,
                 for (int j = 0; j < instr->operand.call.arg_count; j++) {
                     type_stack_pop(stack);
                 }
+                if (instr->op != IR_CALL_C_FUNC && !instr->operand.call.func_ptr)
+                    type_stack_pop(stack); /* indirect callee below its arguments */
                 NativeType rt = instr->operand.call.ret_type;
                 if (rt == NATIVE_TYPE_UNKNOWN) rt = NATIVE_TYPE_INT32;
-                type_stack_push(stack, rt);
-                instr->type = rt;
+                /* A JS call to a void callee still produces undefined. In
+                 * the numeric native subset its placeholder is zero; the
+                 * following OP_drop must consume that slot. */
+                instr->type = rt == NATIVE_TYPE_VOID ? NATIVE_TYPE_INT32 : rt;
+                if (instr->op != IR_TAIL_CALL) type_stack_push(stack, instr->type);
                 break;
             }
                 
@@ -793,54 +799,23 @@ int infer_types(IRFunction *ir, const NativeFuncSignature *sig) {
         }
     }
     
-    /* Re-run the full block-by-block pass below until local_types[]
-     * stabilizes. A single pass processes blocks in index order
-     * (0,1,2,...), which doesn't match control-flow order: a local whose
-     * true type is only discovered via a promotion in a LATER block (e.g.
-     * a loop's else-branch storing a float result - see the promotion
-     * rule in IR_STORE_LOCAL below) leaves EARLIER blocks that already
-     * loaded that local - e.g. the same loop's body reading it a few
-     * instructions up to pass to a nested call - permanently stuck with
-     * whatever type was current when THEY were processed (usually the
-     * INT32 default), since nothing revisits an already-processed
-     * instruction. Repeating the whole pass lets a promotion found late
-     * apply everywhere on the next round. This can only take at most
-     * local_count passes: each pass can only promote previously-int
-     * locals to float (never the reverse), so it's bounded and always
-     * terminates. */
+    /* Iterate until both local types and CFG entry stacks stabilize. Block
+     * order need not match runtime order, and ternary results remain live
+     * across edges. Persist the joined types for codegen's edge conversions. */
     NativeType prev_local_types[NC_MAX_LOCALS];
+    for (int b = 0; b < ir->block_count; b++) ir->blocks[b].entry_stack_depth = -1;
+    if (ir->block_count) ir->blocks[0].entry_stack_depth = 0;
 
-    /* Per-block entry type stack, mirroring ir_to_native's block_entry_depth
-     * fix in native_compiler.c: a branch-target block isn't necessarily
-     * entered with an empty stack - e.g. a ternary merge point receives
-     * whatever type its arms pushed (a float, if both arms produce floats).
-     * Without this, every block used to start from a hard-reset empty
-     * stack, so a STORE_LOCAL sitting right at a merge point always popped
-     * NATIVE_TYPE_UNKNOWN and silently fell back to the local's existing
-     * (default INT32) type instead of ever seeing - and promoting to - the
-     * real incoming float type. Persisted across outer passes and refreshed
-     * every pass so a promotion discovered on one pass's block reaches its
-     * successors on the same or next pass, same convergence argument as the
-     * local_types stabilization loop below. */
-    NativeType block_entry_types[NC_MAX_BASIC_BLOCKS][NC_MAX_STACK_DEPTH];
-    int block_entry_depth[NC_MAX_BASIC_BLOCKS];
-    for (int b = 0; b < ir->block_count; b++) block_entry_depth[b] = -1;
-
-    for (int pass = 0; pass <= ir->local_count; pass++) {
+    for (int pass = 0; pass <= ir->local_count + ir->block_count; pass++) {
+        bool flow_changed = false;
         memcpy(prev_local_types, ir->local_types, sizeof(NativeType) * ir->local_count);
 
     /* Process each basic block with its own stack state */
     for (int b = 0; b < ir->block_count; b++) {
+        if (ir->blocks[b].entry_stack_depth < 0) continue;
         TypeStack stack;
-        if (block_entry_depth[b] >= 0) {
-            stack.depth = block_entry_depth[b];
-            memcpy(stack.types, block_entry_types[b], sizeof(NativeType) * stack.depth);
-        } else {
-            /* Not yet reached by a predecessor this pass (e.g. a loop
-             * header on the first pass, before its back-edge has been
-             * processed) - empty stack is the safe default. */
-            type_stack_init(&stack);
-        }
+        stack.depth = ir->blocks[b].entry_stack_depth;
+        memcpy(stack.types, ir->blocks[b].entry_stack_types, sizeof(NativeType) * stack.depth);
 
         int result = infer_block_types(&ir->blocks[b], ir->local_types,
                                        ir->local_count, &stack);
@@ -894,8 +869,11 @@ int infer_types(IRFunction *ir, const NativeFuncSignature *sig) {
                             instr->type = elem;
                         }
                         break;
-                    case IR_LOAD_FIELD:
                     case IR_LOAD_FIELD_ADDR:
+                        if (stack.depth > 0) type_stack_pop(&stack);
+                        type_stack_push(&stack, instr->type);
+                        break;
+                    case IR_LOAD_FIELD:
                         /* [reg] these two fell through to `default` below,
                          * which stomped the already-correct type (computed at
                          * IR-construction time from the struct field's
@@ -1008,10 +986,12 @@ int infer_types(IRFunction *ir, const NativeFuncSignature *sig) {
                         for (int a = 0; a < instr->operand.call.arg_count; a++) {
                             if (stack.depth > 0) type_stack_pop(&stack);
                         }
+                        if (instr->op != IR_CALL_C_FUNC && !instr->operand.call.func_ptr && stack.depth > 0)
+                            type_stack_pop(&stack);
                         NativeType rt = instr->operand.call.ret_type;
                         if (rt == NATIVE_TYPE_UNKNOWN) rt = NATIVE_TYPE_INT32;
-                        if (rt != NATIVE_TYPE_VOID) type_stack_push(&stack, rt);
-                        instr->type = rt;
+                        instr->type = rt == NATIVE_TYPE_VOID ? NATIVE_TYPE_INT32 : rt;
+                        if (instr->op != IR_TAIL_CALL) type_stack_push(&stack, instr->type);
                         break;
                     }
                     default:
@@ -1022,30 +1002,37 @@ int infer_types(IRFunction *ir, const NativeFuncSignature *sig) {
             }
         }
 
-        /* Propagate this block's final stack state to whichever successors
-         * haven't been reached yet this pass, so they don't fall back to an
-         * empty stack when their turn comes later in this same loop (the
-         * common forward-jump case) or on the next outer pass (the backward
-         * / loop-header case). */
-        {
-            int depth = stack.depth;
-            if (depth > NC_MAX_STACK_DEPTH) depth = NC_MAX_STACK_DEPTH;
-            for (int s = 0; s < 2; s++) {
-                int succ = ir->blocks[b].successors[s];
-                if (succ >= 0 && succ < ir->block_count) {
-                    block_entry_depth[succ] = depth;
-                    memcpy(block_entry_types[succ], stack.types, sizeof(NativeType) * depth);
+        /* Join operand representations, not just depths. Integer literals in
+         * one ternary arm must become floats when the other arm yields float;
+         * codegen normalizes that predecessor's live registers on the edge. */
+        for (int edge = 0; edge < 2; edge++) {
+            int target = ir->blocks[b].successors[edge];
+            if (target < 0 || target >= ir->block_count) continue;
+            IRBasicBlock *succ = &ir->blocks[target];
+            if (succ->entry_stack_depth < 0) {
+                succ->entry_stack_depth = stack.depth;
+                memcpy(succ->entry_stack_types, stack.types, sizeof(NativeType) * stack.depth);
+                flow_changed = true;
+            } else if (succ->entry_stack_depth == stack.depth) {
+                for (int i = 0; i < stack.depth; i++) {
+                    NativeType old = succ->entry_stack_types[i], incoming = stack.types[i], joined = old;
+                    if (old == NATIVE_TYPE_UNKNOWN) joined = incoming;
+                    else if (NATIVE_TYPE_IS_INT(old) && incoming == NATIVE_TYPE_FLOAT32) joined = incoming;
+                    else if (NATIVE_TYPE_IS_INT(old) && NATIVE_TYPE_IS_INT(incoming) && old != incoming)
+                        joined = NATIVE_TYPE_INT32;
+                    if (joined != old) { succ->entry_stack_types[i] = joined; flow_changed = true; }
                 }
+            } else {
+                return -1; /* malformed IR: different operand depths at a join */
             }
         }
     }
 
-        if (memcmp(prev_local_types, ir->local_types, sizeof(NativeType) * ir->local_count) == 0) {
-            break;  /* No local was promoted this pass - types have stabilized */
-        }
+        if (!flow_changed && memcmp(prev_local_types, ir->local_types, sizeof(NativeType) * ir->local_count) == 0)
+            return 0;
     }
 
-    return 0;
+    return -1; /* type flow did not converge */
 }
 
 /*
