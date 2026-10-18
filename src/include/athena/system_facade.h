@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <lz4_ps2.h>
 
 typedef struct AthenaDirEntry {
     char name[256];
@@ -26,6 +27,18 @@ typedef struct AthenaMemoryStats {
     uint32_t native_stack;
     uint32_t allocs;
     uint32_t used;
+    uint32_t compressed_bytes;
+    uint32_t uncompressed_bytes;
+    uint32_t saved_bytes;
+    uint32_t compressed_textures;
+    uint32_t tracked_textures;
+    uint32_t compressed_meshes;
+    uint32_t tracked_meshes;
+    uint32_t compress_count;
+    uint32_t decompress_count;
+    uint32_t oom_rescues;
+    bool compression_enabled;
+    uint32_t frame_budget_us;
 } AthenaMemoryStats;
 
 typedef struct AthenaThreadInfo {

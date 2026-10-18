@@ -85,7 +85,7 @@ VU1_MPGS = draw_3D_colors.o \
 
 # VU0_MPGS = matrix_multiply.o
 
-APP_CORE = main.o athena_core.o bootlogo.o texture_manager.o owl_packet.o profiler.o vif.o athena_math.o memory.o ee_tools.o module_system.o iop_manager.o taskman.o lockman.o pad.o system.o strUtils.o mpg_manager.o matrix.o vector.o excepHandler.o exceptions.o athena/system_facade.o athena/iop_facade.o athena/archive.o athena/pad.o athena/timer.o athena/mutex.o athena/task.o
+APP_CORE = main.o athena_core.o bootlogo.o texture_manager.o owl_packet.o profiler.o vif.o athena_math.o memory.o lz4_ps2.o ee_tools.o module_system.o iop_manager.o taskman.o lockman.o pad.o system.o strUtils.o mpg_manager.o matrix.o vector.o excepHandler.o exceptions.o athena/system_facade.o athena/iop_facade.o athena/archive.o athena/pad.o athena/timer.o athena/mutex.o athena/task.o
 
 INI_READER = readini/src/readini.o
 
@@ -279,6 +279,8 @@ else
 MAIN_BUILD_STAMP := $(EE_OBJ_DIR).main_build_js
 endif
 
+.DEFAULT_GOAL := all
+
 $(MAIN_BUILD_STAMP): | $(EE_OBJ_DIR)
 	@for s in $(EE_OBJ_DIR).main_build_js $(EE_OBJ_DIR).main_build_capp; do \
 		if [ -f "$$s" ] && [ "$$s" != "$(MAIN_BUILD_STAMP)" ]; then \
@@ -286,6 +288,8 @@ $(MAIN_BUILD_STAMP): | $(EE_OBJ_DIR)
 		fi; \
 	done
 	@touch $@
+
+$(EE_OBJ_DIR)main.o: $(MAIN_BUILD_STAMP)
 
 include Makefile.lib
 
@@ -307,7 +311,7 @@ endif
 
 #-------------------------- App Content ---------------------------#
 
-all: $(DIR_GUARD) $(EXT_LIBS) $(EE_OBJS) libs
+all: $(MAIN_BUILD_STAMP) $(DIR_GUARD) $(EXT_LIBS) $(EE_OBJS) libs
 	$(MAKE) -f Makefile.dl KEYBOARD=$(DYNAMIC_KEYBOARD)
 	$(MAKE) -f Makefile.dl MOUSE=$(DYNAMIC_MOUSE)
 

@@ -31,7 +31,7 @@ AthenaEnv is a complete JavaScript Runtime Environment for the PlayStation 2. It
 
 | Module | Highlights |
 |---|---|
-| **System** | File/folder ops, mass device control, machine info (CPU/GPU/memory/temperature), native function calls, dynamic libraries |
+| **System** | File/folder ops, mass device control, machine info (CPU/GPU/memory/temperature), automatic LZ4 compaction of idle textures and mesh buffers, native function calls, dynamic libraries |
 | **Render** | VU1/VU0 3D pipeline, lighting, clipping, culling, skinning, materials, batching (`Batch`), scene graph (`SceneNode`), streaming (`AsyncLoader`) |
 | **Screen** | Vsync/FPS control, alpha/scissor/depth render params, off-screen rendering, video modes |
 | **Image** | PNG/BMP/JPEG, nearest/bilinear filters, off-screen surfaces, async loading |
@@ -79,7 +79,7 @@ The full API reference and guides live in [`docs/`](docs/README.md):
 
 * [Getting Started](docs/GETTING_STARTED.md) — prerequisites, quick start, language features, error reporting
 * [Module System](docs/MODULE_SYSTEM.md) — JavaScript and native modules
-* [Core API](docs/CORE_API.md) — `std`, `os`, `System`, `IOP`, `Archive`, `Mutex`, `Thread`, `Timer`
+* [Core API](docs/CORE_API.md) — `std`, `os`, `System`, `IOP`, `Archive`, `Mutex`, `Thread`, `Timer`, automatic LZ4 EE RAM compaction
 * [Math API](docs/MATH_API.md) — `Vector4`, `Matrix4`, `Color`
 * [2D Graphics API](docs/GRAPHICS_2D_API.md) — `Image`, `ImageList`, `Draw`, `Screen`, `Font`
 * [TileMap](docs/TILEMAP.md)

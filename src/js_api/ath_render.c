@@ -15,6 +15,7 @@
 #include <athena/image.h>
 #include <ath_bindings.h>
 #include <athena/render_facade.h>
+#include <lz4_ps2.h>
 #include <kernel.h>
 
 static JSClassID js_render_data_class_id;
@@ -860,19 +861,20 @@ static JSValue js_render_data_get(JSContext *ctx, JSValueConst this_val, int mag
 	switch (magic) {
 		case 0:
 			{
+				athena_mesh_pin(&ro->native.m);
 				JSValue obj = JS_NewObject(ctx);
 
 				if (ro->native.m.positions)
-					JS_DefinePropertyValueStr(ctx, obj, "positions", JS_NewArrayBuffer(ctx, ro->native.m.positions, ro->native.m.index_count*sizeof(VECTOR), NULL, NULL, false), JS_PROP_C_W_E);
+					JS_DefinePropertyValueStr(ctx, obj, "positions", JS_NewArrayBuffer(ctx, (uint8_t *)ro->native.m.positions, ro->native.m.index_count*sizeof(VECTOR), NULL, NULL, false), JS_PROP_C_W_E);
 
 				if (ro->native.m.normals)
-					JS_DefinePropertyValueStr(ctx, obj, "normals",   JS_NewArrayBuffer(ctx, ro->native.m.normals, ro->native.m.index_count*sizeof(VECTOR), NULL, NULL, false), JS_PROP_C_W_E);
+					JS_DefinePropertyValueStr(ctx, obj, "normals",   JS_NewArrayBuffer(ctx, (uint8_t *)ro->native.m.normals, ro->native.m.index_count*sizeof(VECTOR), NULL, NULL, false), JS_PROP_C_W_E);
 
 				if (ro->native.m.texcoords)
-					JS_DefinePropertyValueStr(ctx, obj, "texcoords", JS_NewArrayBuffer(ctx, ro->native.m.texcoords, ro->native.m.index_count*sizeof(VECTOR), NULL, NULL, false), JS_PROP_C_W_E);
+					JS_DefinePropertyValueStr(ctx, obj, "texcoords", JS_NewArrayBuffer(ctx, (uint8_t *)ro->native.m.texcoords, ro->native.m.index_count*sizeof(VECTOR), NULL, NULL, false), JS_PROP_C_W_E);
 
 				if (ro->native.m.colours)
-					JS_DefinePropertyValueStr(ctx, obj, "colors",    JS_NewArrayBuffer(ctx, ro->native.m.colours, ro->native.m.index_count*sizeof(VECTOR), NULL, NULL, false), JS_PROP_C_W_E);
+					JS_DefinePropertyValueStr(ctx, obj, "colors",    JS_NewArrayBuffer(ctx, (uint8_t *)ro->native.m.colours, ro->native.m.index_count*sizeof(VECTOR), NULL, NULL, false), JS_PROP_C_W_E);
 
 				return obj;
 			}
@@ -968,6 +970,8 @@ static JSValue js_render_data_set(JSContext *ctx, JSValueConst this_val, JSValue
 					&ro->native.m.colours
 				};
 
+				athena_mem_unregister_mesh(&ro->native.m);
+
 				for (int i = 0; i < 4; i++) {
 					// Only free what this object actually owns -- a
 					// shared-buffer clone (see .clone()) points these at
@@ -986,13 +990,14 @@ static JSValue js_render_data_set(JSContext *ctx, JSValueConst this_val, JSValue
 						ro->native.m.index_count = size/sizeof(VECTOR);
 
 					if (tmp_vert_ptr) {
-						*attributes_ptr[i] = malloc(size);
+						*attributes_ptr[i] = memalign(16, size);
 						memcpy(*attributes_ptr[i], tmp_vert_ptr, size);
 						ro->native.owns_vertices[i] = true;
 					}
 				}
 
 				ro->native.m.frozen = false;
+				athena_mem_register_mesh(&ro->native.m);
 				athena_render_data_invalidate_compact_cache(&ro->native);
 				athena_render_data_invalidate_chain_cache(&ro->native);
 
@@ -1195,6 +1200,7 @@ static JSValue athena_renderdata_clone(JSContext *ctx, JSValue this_val, int arg
 	ro->native.m.tristrip = src->native.m.tristrip;
 
 	if (deep) {
+		athena_mesh_ensure_uncompressed(&src->native.m);
 		uint32_t n = ro->native.m.index_count;
 
 		VECTOR** src_attrs[] = { &src->native.m.positions, &src->native.m.normals, &src->native.m.texcoords, &src->native.m.colours };
@@ -1218,7 +1224,9 @@ static JSValue athena_renderdata_clone(JSContext *ctx, JSValue this_val, int arg
 			ro->native.m.skin_data = memalign(16, sizeof(vertex_skin_data) * n);
 			memcpy(ro->native.m.skin_data, src->native.m.skin_data, sizeof(vertex_skin_data) * n);
 		}
+		athena_mem_register_mesh(&ro->native.m);
 	} else {
+		athena_mesh_pin(&src->native.m);
 		// Share geometry buffers (reference same memory)
 		ro->native.m.indices = src->native.m.indices; // shared
 		ro->native.m.positions = src->native.m.positions; // shared

@@ -193,7 +193,11 @@ declare class RenderData {
     /** Merges partial fields into `materials[index]`. */
     updateMaterial(index: number, props: RenderDataMaterialPatch): number;
     /**
-     * Locks in the current vertex buffers for zero-copy rendering.
+     * Drops the CPU float vertex source after the VU1 compact buffers are
+     * cooked. Safe when those arrays will never be read back (skinned meshes
+     * that only move through bone matrices, static props that are not physics
+     * trimeshes). Leaving the mesh unfrozen lets automatic LZ4 compaction
+     * reclaim the same RAM and restore the arrays on demand.
      * @returns false if any buffer isn't uniquely owned (e.g. after a
      * shallow {@link clone} or when constructed with `shareBuffers`).
      */

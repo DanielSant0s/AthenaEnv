@@ -143,6 +143,40 @@ The OS functions usually return 0 if OK or an OS-specific negative error code.
   * `ram_usage.nativeStack` - Kernel + Native stack size
   * `ram_usage.allocs` - Dynamic allocated memory tracking
   * `ram_usage.used` - All above, but combined
+  * `ram_usage.savedBytes` - Net EE RAM currently saved by smart LZ4 compression (`uncompressedBytes - compressedBytes`)
+  * `ram_usage.compressedBytes` - Current EE RAM used by compressed LZ4 asset payloads
+  * `ram_usage.uncompressedBytes` - Original size of currently compressed assets
+  * `ram_usage.compressedTextures` / `ram_usage.trackedTextures` - Compressed vs. total tracked textures
+  * `ram_usage.compressedMeshes` / `ram_usage.trackedMeshes` - Compressed vs. total tracked 3D meshes
+  * `ram_usage.compressCount` / `ram_usage.decompressCount` - Total compressions and on-demand decompressions since boot
+  * `ram_usage.oomRescues` - Times an out-of-memory allocation was rescued by automatic compaction
+  * `ram_usage.compressionEnabled` - Whether the VBlank compactor daemon is active
+  * `ram_usage.frameBudgetUs` - Per-frame compaction CPU budget in microseconds
+* `let cfg = System.setMemoryCompression(enable, *options*)` — Configures automatic LZ4 memory compaction (`{ enabled, frameBudgetUs, textureVramFrames, textureIdleFrames, meshIdleFrames }`).
+* `let freed_bytes = System.compactMemory(*targetBytesToFree*)` — Synchronously compacts cold textures and 3D mesh buffers immediately, returning net bytes freed.
+* `let compressed_ab = System.lz4Compress(buffer)` — Compresses an `ArrayBuffer` or `TypedArray` using the R5900 Scratchpad-accelerated LZ4 codec.
+* `let decompressed_ab = System.lz4Decompress(compressed_ab, uncompressedSize)` — Decompresses an LZ4 block into a new `ArrayBuffer`.
+
+### Automatic EE RAM compaction
+
+Compression is on by default. A background pass runs at the end of every `Screen.flip()`, spending at most `frameBudgetUs` microseconds (default 350) so it stays inside a 60 FPS frame. `malloc`, `realloc`, `calloc` and `memalign` also call `System.compactMemory()` once and retry when an allocation fails.
+
+What gets compressed:
+
+* **Textures.** After a surface larger than 2 KB has been uploaded to GS VRAM and left alone for `textureVramFrames` (default 15), its EE pixel copy is replaced by an LZ4 block. Drawing it while it is still resident in VRAM does not decompress anything. A texture that never reaches VRAM is compressed after `textureIdleFrames` (default 60) of not being bound. Page-aligned uploads, MPEG macroblocks, and pinned surfaces are skipped.
+* **Meshes.** After VU1 compact buffers are cooked and the float source (`positions`, `normals`, `texcoords`, `colours`, `skin_data`) sits idle for `meshIdleFrames` (default 30), those arrays are compressed. VU1 keeps rendering from the compact buffers. Reading `RenderData.vertices`, building a physics trimesh, cloning, or recooking restores them. `RenderData.freeze()` is the permanent version of this: it drops the float source instead of keeping a compressed copy, so it is only safe when nothing will read those arrays again (a skinned mesh that only moves through bone matrices, for example).
+
+Reading pixels, re-uploading a texture that was evicted from VRAM, or touching a mesh from script or physics decompresses that asset on the spot. The HUD fields on `System.getMemoryStats()` (`savedBytes`, `compressedTextures` / `trackedTextures`, `compressedMeshes` / `trackedMeshes`, `compressCount` / `decompressCount`, `oomRescues`) are the live counters.
+
+```js
+const mem = System.getMemoryStats();
+font.print(10, 10, `RAM ${(mem.used / 1024).toFixed(0)} KB | LZ4 saved ${(mem.savedBytes / 1024).toFixed(1)} KB`);
+
+System.setMemoryCompression(true, { frameBudgetUs: 200, meshIdleFrames: 45 });
+const freed = System.compactMemory(); // 0 = compact everything eligible right now
+```
+
+`System.lz4Compress` / `System.lz4Decompress` are the same codec, exposed for your own `ArrayBuffer`s. The block format is standard LZ4; `lz4Decompress` needs the original size because the block itself does not store it.
 
 **Asynchronous functions:**
 

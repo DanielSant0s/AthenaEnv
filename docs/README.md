@@ -15,7 +15,7 @@ See the [project README](../README.md) for a quick overview and Hello World.
 
 ## API Reference
 
-* [Core](CORE_API.md) — `std`, `os`, `System`, `IOP`, `Archive`, `Mutex`, `Thread`, `Timer`
+* [Core](CORE_API.md) — `std`, `os`, `System`, `IOP`, `Archive`, `Mutex`, `Thread`, `Timer`, automatic LZ4 EE RAM compaction
 * [Math](MATH_API.md) — `Vector4`, `Matrix4`, `Color`
 * [2D Graphics](GRAPHICS_2D_API.md) — `Image`, `ImageList`, `Draw`, `Screen`, `Font`
 * [TileMap](TILEMAP.md) — high-throughput 2D tilemap renderer

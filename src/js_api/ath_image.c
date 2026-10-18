@@ -7,6 +7,7 @@
 #include <texture_manager.h>
 #include <athena/image_list.h>
 #include <ath_bindings.h>
+#include <lz4_ps2.h>
 
 static JSClassID js_image_class_id;
 
@@ -155,8 +156,9 @@ static JSValue js_image_get_uint(JSContext *ctx, JSValueConst this_val, int magi
             break;
         case 4: return JS_NewBool(ctx, s->delayed);
         case 5:
+            athena_texture_pin(s->tex);
             if (s->tex->Mem)
-                return JS_NewArrayBuffer(ctx, s->tex->Mem,
+                return JS_NewArrayBuffer(ctx, (uint8_t *)s->tex->Mem,
                     athena_surface_size(s->tex->Width, s->tex->Height, s->tex->PSM),
                     NULL, NULL, 1);
             break;
@@ -196,6 +198,7 @@ static JSValue js_image_set_uint(JSContext *ctx, JSValueConst this_val, JSValue 
         case 5:
             if (s->tex->Delayed) {
                 void *pixels = JS_GetArrayBuffer(ctx, &arr_size, val);
+                athena_mem_unregister_texture(s->tex);
                 if (pixels != s->tex->Mem) {
                     if (s->tex->Mem)
                         free(s->tex->Mem);

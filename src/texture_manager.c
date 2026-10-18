@@ -21,6 +21,8 @@
 #include <debug.h>
 
 #include <texture_manager.h>
+#include <render.h>
+#include <lz4_ps2.h>
 
 #define VIF1_MARK_CLEAN 65535
 
@@ -521,6 +523,8 @@ int texture_manager_bind(GSCONTEXT *gsGlobal, GSSURFACE *tex, bool async) {
 	unsigned int cwidth = 16;
 	unsigned int cheight = 16;
 
+	athena_texture_mark_bound(tex);
+
 	for (block = __head; block != NULL; block = block->pNext) {
 		if(block->tex == tex)
 			break;
@@ -565,8 +569,10 @@ int texture_manager_bind(GSCONTEXT *gsGlobal, GSSURFACE *tex, bool async) {
 		}
 		
 		athena_calculate_tbw(tex);
+		athena_texture_ensure_uncompressed(tex);
 
 		if (tex->Mem) {
+			athena_texture_mark_uploaded(tex);
 			SyncDCache(tex->Mem, (u8 *)(tex->Mem) + tsize);
 
 			if (async) {
@@ -724,6 +730,7 @@ unsigned int texture_manager_used_memory()
 
 void texture_manager_invalidate(GSSURFACE *tex)
 {
+	athena_texture_ensure_uncompressed(tex);
 	tex->Vram = 0;
 	tex->VramClut = 0;
 }
@@ -732,6 +739,8 @@ void texture_manager_invalidate(GSSURFACE *tex)
 void texture_manager_free(GSSURFACE * tex)
 {
 	struct SVramBlock * block;
+
+	athena_mem_unregister_texture(tex);
 
 	// Locate texture
 	for (block = __head; block != NULL; block = block->pNext) {
@@ -759,4 +768,7 @@ void texture_manager_nextFrame(GSCONTEXT * gsGlobal)
 			block->iUseCount = 0;
 		}
 	}
+
+	render_next_frame();
+	athena_mem_compress_tick();
 }

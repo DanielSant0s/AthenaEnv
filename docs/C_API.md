@@ -47,7 +47,8 @@ int main(void) {
 | Render | `athena/render_facade.h` | `AthenaRenderObject` etc. | render data/object/batch/scene/async |
 | Sound | `athena/sound.h` | `AthenaSound`, `AthenaSfx` | `athena_sound_load`, `athena_sfx_play` |
 | Video | `athena/video.h` | `AthenaVideo` | `athena_video_open`, `athena_video_update` |
-| System | `athena/system_facade.h` | `AthenaDirEntry` | `athena_system_list_dir`, `athena_system_sleep` |
+| System | `athena/system_facade.h` | `AthenaDirEntry`, `AthenaMemoryStats` | `athena_system_list_dir`, `athena_system_sleep`, `athena_system_get_memory_stats` |
+| LZ4 / EE compaction | `lz4_ps2.h` | `AthenaMemCompressConfig`, `AthenaMemCompressStats` | `athena_lz4_compress`, `athena_lz4_decompress`, `athena_mem_compress_tick`, `athena_mem_compact_now`, `athena_mem_compress_set_config` |
 | IOP | `athena/iop_facade.h` | — | `athena_iop_load_module`, `athena_iop_reset` |
 | Archive | `athena/archive.h` | `AthenaArchive` | `athena_archive_open`, `athena_archive_extract` |
 | Network | `athena/net.h` | — | `athena_net_init_dhcp`, `athena_net_set_config` |
@@ -56,6 +57,14 @@ int main(void) {
 | WebSocket | `athena/websocket.h` | `AthenaWebSocket` | `athena_websocket_connect`, `athena_websocket_send` |
 | Native | `athena/native_facade.h` | — | native compiler AOT APIs |
 | Physics | `physics.h`, `athena/physics_facade.h` | `AthenaPhysicsWorld`, `AthenaPhysicsSpace`, `AthenaPhysicsBody`, `AthenaPhysicsGeom`, `AthenaPhysicsJoint` | VU0/MMI rigid-body dynamics, BVH collision, raycasting, and joints |
+
+## EE RAM compaction
+
+`lz4_ps2.h` is the R5900 LZ4 block codec and the automatic compactor. It is on by default: `athena_mem_compress_tick()` runs from `texture_manager_nextFrame()` with a 350 µs budget, and `malloc` / `realloc` / `calloc` / `memalign` call `athena_mem_compact_now()` and retry when an allocation returns `NULL`.
+
+`athena_system_get_memory_stats()` copies the live counters into `AthenaMemoryStats` (`saved_bytes`, `compressed_textures`, `tracked_textures`, `compressed_meshes`, `tracked_meshes`, `oom_rescues`, …). `athena_mem_compress_set_config()` changes the budget and the idle-frame thresholds. `athena_lz4_compress()` / `athena_lz4_decompress()` are the raw codec; the hash table lives in scratchpad `0x70003000`–`0x70003FFF`.
+
+Textures and meshes register themselves. A GS-resident texture's EE pixel copy, and a mesh's float attributes after the VU1 compact buffers are cooked, are the buffers that get replaced. `athena_texture_ensure_uncompressed()` and `athena_mesh_ensure_uncompressed()` put the raw bytes back. The JavaScript side of the same system is [Automatic EE RAM compaction](CORE_API.md#automatic-ee-ram-compaction).
 
 ## Build modes
 

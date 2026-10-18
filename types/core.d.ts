@@ -388,6 +388,43 @@ interface MemoryStats {
     allocs: number;
     /** Sum of the above. */
     used: number;
+    /** Current bytes used in EE RAM by LZ4-compressed asset payloads. */
+    compressedBytes: number;
+    /** Original uncompressed byte size of currently compressed assets. */
+    uncompressedBytes: number;
+    /** Net EE RAM currently saved by smart LZ4 compression (`uncompressedBytes - compressedBytes`). */
+    savedBytes: number;
+    /** Number of textures currently compressed in EE RAM. */
+    compressedTextures: number;
+    /** Total number of compressible textures tracked by the compactor. */
+    trackedTextures: number;
+    /** Number of 3D meshes whose float vertex attributes are currently compressed in EE RAM. */
+    compressedMeshes: number;
+    /** Total number of compressible 3D meshes tracked by the compactor. */
+    trackedMeshes: number;
+    /** Total asset compressions performed since boot. */
+    compressCount: number;
+    /** Total on-demand asset decompressions performed since boot. */
+    decompressCount: number;
+    /** Number of out-of-memory allocations rescued by emergency compaction. */
+    oomRescues: number;
+    /** Whether automatic VBlank memory compression is enabled. */
+    compressionEnabled: boolean;
+    /** Maximum CPU time budget per frame (in microseconds) for background compaction. */
+    frameBudgetUs: number;
+}
+
+interface MemoryCompressionConfig {
+    /** Enable or disable automatic VBlank background compression (default: `true`). */
+    enabled?: boolean;
+    /** Max microseconds spent per frame in the VBlank compactor tick (default: `350`). */
+    frameBudgetUs?: number;
+    /** Grace frames after a texture is uploaded to GS VRAM before compressing its EE RAM copy (default: `15`). */
+    textureVramFrames?: number;
+    /** Idle frames before compressing a non-VRAM texture in EE RAM (default: `60`). */
+    textureIdleFrames?: number;
+    /** Idle frames after VU1 compact vertex cooking before compressing float vertex buffers (default: `30`). */
+    meshIdleFrames?: number;
 }
 
 interface FileProgress {
@@ -476,6 +513,31 @@ declare namespace System {
     function getCPUInfo(): CPUInfo;
     function getGPUInfo(): GPUInfo;
     function getMemoryStats(): MemoryStats;
+
+    /**
+     * Configure or toggle the automatic R5900 LZ4 Smart Memory Compactor.
+     * Can be called as `System.setMemoryCompression(true/false, options)` or `System.setMemoryCompression(options)`.
+     */
+    function setMemoryCompression(enableOrOptions?: boolean | MemoryCompressionConfig, options?: MemoryCompressionConfig): Required<MemoryCompressionConfig>;
+
+    /**
+     * Immediately compacts cold textures and 3D mesh buffers in EE RAM, bypassing the per-frame time budget.
+     * @param targetBytesToFree Optional target bytes to free before stopping early (`0` or omitted = compact all eligible assets).
+     * @returns Total net bytes freed in EE RAM during this call.
+     */
+    function compactMemory(targetBytesToFree?: number): number;
+
+    /**
+     * Compress a raw `ArrayBuffer` or `TypedArray` using the R5900 Scratchpad-accelerated LZ4 block codec.
+     * @returns New `ArrayBuffer` containing the LZ4 block, or `null` if incompressible.
+     */
+    function lz4Compress(input: ArrayBuffer | ArrayBufferView): ArrayBuffer | null;
+
+    /**
+     * Decompress an LZ4 block produced by {@link lz4Compress} into a new `ArrayBuffer` of `uncompressedSize` bytes.
+     * @returns New `ArrayBuffer` with the decompressed bytes, or `null` if the stream is invalid.
+     */
+    function lz4Decompress(compressed: ArrayBuffer | ArrayBufferView, uncompressedSize: number): ArrayBuffer | null;
 
     // -- asynchronous -------------------------------------------------------
     /** Copy `source` to `dest` on a background thread; poll with {@link getFileProgress}. */

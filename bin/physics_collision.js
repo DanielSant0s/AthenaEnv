@@ -89,7 +89,6 @@ for (let i = 0; i < 8; i++) {
     const tex = scene.getTexture(i);
     if (tex) tex.filter = LINEAR;
 }
-scene.freeze();
 
 const scene_object = new RenderObject(scene);
 
@@ -177,7 +176,6 @@ gltf_skin.face_culling = Render.CULL_FACE_BACK;
 // dense meshes where the highlights read well. The Sponza stays diffuse -- its
 // huge low-poly triangles only turn per-vertex highlights into stray bright faces.
 gltf_skin.pipeline = Render.PL_SPECULAR;
-gltf_skin.freeze();
 
 const skin_object = new RenderObject(gltf_skin);
 
@@ -217,7 +215,6 @@ skin_object.playAnim(skin_anims["idle"] || skin_anims["twerk"], true);
 const box = new RenderData("box_bump.gltf");
 box.face_culling = Render.CULL_FACE_BACK;
 box.pipeline = Render.PL_SPECULAR;
-box.freeze();
 
 const CRATE_HALF = 0.38f;
 const CRATE_SIZE = CRATE_HALF * 2.0f;
@@ -262,7 +259,6 @@ const monkeyTex = new Image("monkey.png");
 const monkeyData = new RenderData("monkey_strip.gltf", monkeyTex);
 monkeyData.face_culling = Render.CULL_FACE_BACK;
 monkeyData.pipeline = Render.PL_SPECULAR;
-monkeyData.freeze();
 
 const BALL_RADIUS = 0.45f;
 const ballSpawns = [
@@ -704,11 +700,14 @@ function benchTick() {
     if (elapsed < BENCH_PHASE_MS || benchSamples === 0) return;
     const avg = {};
     for (const k of BENCH_KEYS) avg[k] = benchSum[k] / benchSamples;
+    const mem = System.getMemoryStats();
     console.log(
         `[bench] ${BENCH_PHASES[benchPhase].name} | ${(1000 / avg.frame).toFixed(1)} fps | ` +
         `frame ${avg.frame.toFixed(1)} | script ${avg.script.toFixed(1)} | render ${avg.render.toFixed(1)} | ` +
         `anim ${avg.anim.toFixed(1)} | phys ${avg.physics.toFixed(1)} | gpu wait ${avg.gpuWait.toFixed(1)} | ` +
-        `vsync ${avg.vsync.toFixed(1)} (ms) | fast clip groups ${(benchFastClip / benchSamples).toFixed(1)}`);
+        `vsync ${avg.vsync.toFixed(1)} (ms) | fast clip groups ${(benchFastClip / benchSamples).toFixed(1)} | ` +
+        `RAM ${(mem.used / 1024).toFixed(0)} KB | LZ4 saved ${(mem.savedBytes / 1024).toFixed(1)} KB ` +
+        `(tex ${mem.compressedTextures}/${mem.trackedTextures}, mesh ${mem.compressedMeshes}/${mem.trackedMeshes})`);
     benchPhase = (benchPhase + 1) % BENCH_PHASES.length;
     benchApply();
 }
@@ -1270,6 +1269,15 @@ while (true) {
     font.print(10, 42, "SQUARE: Kick | CIRCLE: Throw | L1: Dance | SELECT: Fog | START: Reset");
 
     const prof = Screen.getProfile();
+    const mem = System.getMemoryStats();
+    const savedKB = (mem.savedBytes / 1024).toFixed(1);
+    const usedKB = (mem.used / 1024).toFixed(0);
+    const compRatio = mem.compressedBytes > 0
+        ? (mem.uncompressedBytes / mem.compressedBytes).toFixed(2) + "x"
+        : "1.00x";
+
+    font.print(10, 368, `RAM: ${usedKB} KB used | LZ4 saved: ${savedKB} KB (${compRatio}) | OOM rescues: ${mem.oomRescues}`);
+    font.print(10, 384, `LZ4 Assets: Tex ${mem.compressedTextures}/${mem.trackedTextures} | Mesh ${mem.compressedMeshes}/${mem.trackedMeshes} | Ops +${mem.compressCount}/-${mem.decompressCount}`);
     font.print(10, 400, `frame ${prof.frame.toFixed(1)} | script ${prof.script.toFixed(1)} | render ${prof.render.toFixed(1)} | anim ${prof.anim.toFixed(1)} | phys ${prof.physics.toFixed(1)}`);
     font.print(10, 416, `gpu wait ${prof.gpuWait.toFixed(1)} | vsync ${prof.vsync.toFixed(1)} (ms)`);
     const fxStats = fxSystem.stats();

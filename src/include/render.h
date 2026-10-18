@@ -324,6 +324,13 @@ typedef struct athena_render_data {
 	RenderAttributes attributes;
 
 	bool tristrip;
+
+    /* Smart LZ4 compressed float vertex backing (0:pos, 1:norm, 2:uv, 3:col, 4:skin) */
+    void    *compressed_attribs[5];
+    uint32_t compressed_sizes[5];
+    uint32_t uncompressed_sizes[5];
+    uint32_t last_cpu_access_frame;
+    uint8_t  compress_flags;
 } athena_render_data;
 
 typedef struct athena_object_data {
@@ -415,6 +422,7 @@ void LookAtCameraMatrix(MATRIX m, VECTOR position, VECTOR target, VECTOR up);
 void render_init();
 
 void render_begin();
+void render_next_frame(void);
 
 // Marks the VU1 static view block (screen_scale at 0, world_screen at 1..4,
 // camera position at 9) stale, so the next draw re-uploads it. Call from any

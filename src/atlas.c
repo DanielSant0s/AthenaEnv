@@ -84,7 +84,7 @@ static inline struct atlas_allocation_t *allocPlace(struct atlas_allocation_t *a
 
 atlas_t *atlasNew(size_t width, size_t height, u8 psm)
 {
-    atlas_t *atlas = (atlas_t *)malloc(sizeof(atlas_t));
+    atlas_t *atlas = (atlas_t *)calloc(1, sizeof(atlas_t));
 
     atlas->allocation = allocNew(0, 0, width, height);
 

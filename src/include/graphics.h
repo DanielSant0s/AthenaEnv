@@ -125,6 +125,12 @@ struct gsSurface
 	uint8_t PageAligned;
 	uint8_t Macroblock;	///< Data is in 16x16 macroblock format (for MPEG)
 	uint32_t Mask;      ///< Framebuffer Mask
+	void *CompressedMem;       ///< LZ4 compressed backing buffer in EE RAM (when Mem is freed)
+	uint32_t CompressedSize;   ///< Size in bytes of CompressedMem
+	uint32_t UncompressedSize; ///< Original byte size of Mem
+	uint32_t LastBoundFrame;   ///< Last frame this surface was bound
+	uint32_t LastUploadFrame;  ///< Last frame this surface was queued/uploaded to GS VRAM
+	uint8_t CompressFlags;     ///< ATHENA_TEX_* flags (lz4_ps2.h)
 };
 typedef struct gsSurface GSSURFACE;
 

@@ -6,6 +6,7 @@
 #include <owl_packet.h>
 
 #include <athena/render_facade.h>
+#include <lz4_ps2.h>
 
 static inline void *render_calloc_aligned(size_t size)
 {
@@ -80,6 +81,8 @@ void athena_render_data_destroy(AthenaRenderData *rd)
     // Everything freed below may be DMA_REF'd by a chain still in flight.
     owl_wait_inflight();
 
+    athena_mem_unregister_mesh(&rd->m);
+
     if (rd->m.indices)
         free(rd->m.indices);
 
@@ -151,6 +154,8 @@ AthenaRenderData *athena_render_data_clone(const AthenaRenderData *src)
 
     if (!src)
         return NULL;
+
+    athena_mesh_pin((athena_render_data *)&src->m);
 
     rd = render_calloc_aligned(sizeof(*rd));
     if (!rd)

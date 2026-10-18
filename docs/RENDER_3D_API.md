@@ -15,7 +15,7 @@ Screen.setMode(canvas);
 ## Render module
 
 * `Render.init()` – Initializes internal renderer state (GS/VU microprograms, materials cache). Call once during boot.
-* `Render.begin()` – Starts a render pass and resets batched state. Call once per frame before issuing draw calls.
+* `Render.begin()` – Starts a render pass: resets `Render.stats()`, marks the VU1 view block stale, and re-uploads static lighting. Call it once per frame before the first 3D draw. Skeletal animation does not depend on it — a pose advances once per `Screen.flip()`, and every camera pass in that frame (the main view and a shadow view) shares that pose.
 * `Render.setView(fov = 60, nearClip = 1.0, farClip = 2000.0, width = 0.0, height = 0.0)` – Configures the default projection matrix. Width/height override the auto-derived aspect ratio when non-zero.
 * `Render.materialColor(r, g, b, alpha = 1.0)` – Convenience helper that returns a `{r,g,b,a}` color object for materials.
 * `Render.material(ambient, diffuse, specular, emission, transmittance, shininess, refraction, transmission_filter, disolve, texture_id, bump_texture_id, ref_texture_id, decal_texture_id)` – Builds a material descriptor used by RenderData/RenderObject. Texture ids accept `-1` to disable a layer.
@@ -41,6 +41,7 @@ just pass the image as a second argument if you want to use it. */
 * `getTexture(id)` - Gets the nth texture object from the model.
 * `setTexture(id, texture)` - Changes or sets the nth texture on models.
 * `free()` - Free asset content immediately. This is a way to quickly free stuff from memory, but you can also wait for the garbage collector, so it's not mandatory.
+* `freeze()` - Drops the CPU float vertex source after the VU1 compact buffers are cooked. Returns `false` when a buffer is shared (a shallow `clone()`, or `shareBuffers`) and cannot be released. Use it for meshes that will never be read back and are not collision trimeshes. Skinned meshes are a normal case: they animate through bone matrices, not by rewriting `positions`. Leaving a mesh unfrozen is also fine — the automatic compactor LZ4-compresses those same arrays after they go idle and restores them if script or physics needs them. See [Automatic EE RAM compaction](CORE_API.md#automatic-ee-ram-compaction).
 
 **Properties:**
 
@@ -97,8 +98,8 @@ and the individual object matrices */
 
 **Methods (skinned):**
 
-* `playAnim(anim, loop)` - Play animation on a skinned RenderObject.
-* `isPlayingAnim(anim)` - Returns true if anim is being played.
+* `playAnim(anim, loop)` - Play animation on a skinned RenderObject. The clip advances on the EE clock, once per displayed frame, the first time the object is drawn after `Screen.flip()`. Extra draws in the same frame reuse the bone palette.
+* `isPlayingAnim(anim)` - Returns true if anim is being played. Omit `anim` to test whether any clip is current.
 
 **Properties:**
 

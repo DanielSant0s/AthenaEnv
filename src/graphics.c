@@ -9,6 +9,7 @@
 #include <time.h>
 
 #include <graphics.h>
+#include <lz4_ps2.h>
 #include <render.h>
 #include <athena_math.h>
 #include <dbgprintf.h>
@@ -128,6 +129,10 @@ void athena_texture_optimize(GSSURFACE *Texture)
 	if (Texture->PSM != GS_PSM_CT24)
 		return;
 
+	athena_texture_ensure_uncompressed(Texture);
+	if (!Texture->Mem)
+		return;
+
 	size = Texture->Width * Texture->Height * 2;
 	pixels16 = (uint16_t*)memalign(128, size);
 	pixels24 = (uint8_t *)Texture->Mem;
@@ -143,6 +148,7 @@ void athena_texture_optimize(GSSURFACE *Texture)
 	free(Texture->Mem);
 	Texture->Mem = (void*)pixels16;
 	Texture->PSM = GS_PSM_CT16S;
+	Texture->UncompressedSize = (uint32_t)size;
 }
 
 uint32_t athena_surface_size(int width, int height, int psm)

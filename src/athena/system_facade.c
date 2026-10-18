@@ -276,8 +276,23 @@ void athena_system_get_memory_stats(AthenaMemoryStats *stats)
     if (!stats)
         return;
 
+    AthenaMemCompressStats cstats;
+    athena_mem_compress_get_stats(&cstats);
+
     stats->core = (uint32_t)get_binary_size();
     stats->native_stack = (uint32_t)get_stack_size();
     stats->allocs = (uint32_t)get_allocs_size();
     stats->used = (uint32_t)get_used_memory();
+    stats->compressed_bytes = (uint32_t)cstats.compressed_bytes;
+    stats->uncompressed_bytes = (uint32_t)cstats.uncompressed_bytes;
+    stats->saved_bytes = (uint32_t)cstats.saved_bytes;
+    stats->compressed_textures = cstats.compressed_textures;
+    stats->tracked_textures = cstats.tracked_textures;
+    stats->compressed_meshes = cstats.compressed_meshes;
+    stats->tracked_meshes = cstats.tracked_meshes;
+    stats->compress_count = cstats.compress_count;
+    stats->decompress_count = cstats.decompress_count;
+    stats->oom_rescues = cstats.oom_rescues;
+    stats->compression_enabled = cstats.enabled;
+    stats->frame_budget_us = cstats.frame_budget_us;
 }

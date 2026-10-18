@@ -10,6 +10,7 @@
 #include "cgltf/cgltf.h"
 
 #include <render.h>
+#include <lz4_ps2.h>
 #include <dbgprintf.h>
 
 #include <owl_packet.h>
@@ -18,6 +19,9 @@
 
 void calculate_bbox(athena_render_data* res_m) {
 	float lowX, lowY, lowZ, hiX, hiY, hiZ;
+
+    if (res_m)
+        athena_mesh_ensure_uncompressed(res_m);
 
     // Callers outside the loaders (the JS RenderData constructor and its
     // "vertices" setter) can reach here with nothing to measure. Leave the box
@@ -101,7 +105,7 @@ void loadOBJ(athena_render_data* res_m, const char* path, GSSURFACE* text) {
 
 				if (!prev_loaded) {
 					res_m->materials[i].texture_id = res_m->texture_count;
-					GSSURFACE* tex = malloc(sizeof(GSSURFACE));
+					GSSURFACE* tex = calloc(1, sizeof(GSSURFACE));
 					load_image(tex, m->materials[i].map_Kd.name, true);
 
 					append_texture(res_m, tex);
@@ -252,7 +256,7 @@ void load_gltf_material(ath_mat* mat, const cgltf_material* gltf_mat, athena_ren
             const cgltf_texture* tex = pbr->base_color_texture.texture;
             if (tex->image && tex->image->uri) {
                 mat->texture_id = res_m->texture_count;
-                GSSURFACE* texture = malloc(sizeof(GSSURFACE));
+                GSSURFACE* texture = calloc(1, sizeof(GSSURFACE));
                 load_image(texture, tex->image->uri, true);
                 append_texture(res_m, texture);
             }
@@ -326,7 +330,7 @@ void load_bump_texture_by_index(ath_mat* mat, int texture_index, athena_render_d
         
         if (bump_tex->image && bump_tex->image->uri) {
             mat->bump_texture_id = res_m->texture_count;
-            GSSURFACE* bump_texture = malloc(sizeof(GSSURFACE));
+            GSSURFACE* bump_texture = calloc(1, sizeof(GSSURFACE));
 
             load_image(bump_texture, bump_tex->image->uri, true);
 
@@ -964,8 +968,10 @@ void loadModel(athena_render_data* res_m, const char* path, GSSURFACE* text) {
     
     if (strcmp(ext, ".gltf") == 0 || strcmp(ext, ".glb") == 0) {
         loadGLTF(res_m, path, text);
+        athena_mem_register_mesh(res_m);
     } else if (strcmp(ext, ".obj") == 0 || strcmp(ext, ".objf") == 0) {
         loadOBJ(res_m, path, text);
+        athena_mem_register_mesh(res_m);
     } else {
         printf("Unsupported file format: %s\n", ext);
     }

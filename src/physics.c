@@ -5,6 +5,7 @@
 #include <float.h>
 
 #include <physics.h>
+#include <lz4_ps2.h>
 #include <profiler.h>
 #include <vector.h>
 #include <matrix.h>
@@ -2543,6 +2544,8 @@ static void euler_to_rot_matrix(const VECTOR rot_euler, MATRIX out_rot) {
 }
 
 AthenaPhysicsGeom *athena_physics_geom_create_from_render_object(AthenaPhysicsSpace *space, athena_object_data *obj) {
+    if (obj && obj->data)
+        athena_mesh_ensure_uncompressed(obj->data);
     if (!obj || !obj->data || !obj->data->positions || obj->data->index_count < 3)
         return NULL;
 

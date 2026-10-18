@@ -10,6 +10,7 @@
 #include <png.h>
 
 #include <graphics.h>
+#include <lz4_ps2.h>
 
 
 struct gsBitMapFileHeader
@@ -629,7 +630,10 @@ static void  _ps2_load_JPEG_generic(GSSURFACE *Texture, struct jpeg_decompress_s
 	#ifdef DEBUG
 	dbgprintf("Texture Size = %i\n",textureSize);
 	#endif
-	Texture->Mem = (u32*)memalign(128, textureSize);
+	uint32_t allocSize = athena_surface_size(Texture->Width, Texture->Height, Texture->PSM);
+	if (allocSize < (uint32_t)textureSize)
+		allocSize = (uint32_t)textureSize;
+	Texture->Mem = (u32*)memalign(128, allocSize);
 
 	unsigned int row_stride = textureSize/Texture->Height;
 	unsigned char *row_pointer = (unsigned char *)Texture->Mem;
@@ -691,14 +695,26 @@ int load_image(GSSURFACE* image, const char* path, bool delayed) {
 	image->Delayed = true;
 	image->PageAligned = false;
 	image->Macroblock = false;
+	image->CompressedMem = NULL;
+	image->CompressedSize = 0;
+	image->UncompressedSize = 0;
+	image->LastBoundFrame = 0;
+	image->LastUploadFrame = 0;
+	image->CompressFlags = 0;
 
 	FILE* file = fopen(path, "rb");
-	uint16_t magic;
+	if (!file)
+		return -1;
+	uint16_t magic = 0;
 	fread(&magic, 1, 2, file);
 	fseek(file, 0, SEEK_SET);
 	if (magic == 0x4D42) athena_load_bmp(image, file, delayed);
 	else if (magic == 0xD8FF) athena_load_jpeg(image, file, false, delayed);
 	else if (magic == 0x5089) athena_load_png(image, file, delayed);
+	else fclose(file);
+
+	if (image->Mem)
+		athena_mem_register_texture(image);
 
 	return 0;
 }

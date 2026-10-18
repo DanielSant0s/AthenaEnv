@@ -9,6 +9,7 @@
 #include <string.h>
 #include <matrix.h>
 #include <render.h>
+#include <lz4_ps2.h>
 #include <dbgprintf.h>
 
 #include <owl_packet.h>
@@ -203,8 +204,12 @@ static void render_sync_static_lights(void) {
 		owl_add_uquad_ptr(packet, p_spec[i]);
 }
 
-void render_begin() {
+void render_next_frame(void) {
 	if (++g_render_frame == 0) g_render_frame = 1;
+}
+
+void render_begin() {
+	render_next_frame();
 	vu1_set_double_buffer_settings(141, 342);
 
 	render_reset_stats();
@@ -503,7 +508,7 @@ void new_render_object(athena_object_data *obj, athena_render_data *data) {
 	// (still-NULL) float source -- e.g. wrapping an already-frozen
 	// RenderData in a second RenderObject, or freezing before the first
 	// `new RenderObject(...)` call finishes constructing it.
-	if (!data->frozen) {
+	if (!data->frozen && !(data->compress_flags & ATHENA_MESH_COMPRESSED)) {
 		free(data->compact_positions);
 		free(data->compact_normals);
 		free(data->compact_colors);
@@ -1043,6 +1048,9 @@ static void render_cook_compact_vertices(athena_render_data *data) {
 		padded_total = data->index_count;
 	}
 
+	if (data->compact_capacity < padded_total || data->compact_dirty)
+		athena_mesh_ensure_uncompressed(data);
+
 	if (data->compact_capacity < padded_total) {
 		uint32_t new_capacity = padded_total + 4;
 
@@ -1180,6 +1188,7 @@ void render_freeze_compact_vertices(athena_render_data *data) {
 	// Make sure the compact cache reflects the latest data before the float
 	// source it was cooked from goes away for good.
 	render_cook_compact_vertices(data);
+	athena_mem_unregister_mesh(data);
 
 	free(data->positions);
 	free(data->normals);

@@ -33,7 +33,7 @@ let test = new Image("owl.png");
 * `filter` - Choose between `LINEAR` or `NEAREST`, default value is `NEAREST`.
 * `size` - Returns image real size occupied in memory.
 * `bpp` - Bits per-pixel quantity.
-* `pixels` - The image pixel ArrayBuffer.
+* `pixels` - The image pixel ArrayBuffer. Reading or writing it brings a compressed EE copy back to raw pixels. See [Automatic EE RAM compaction](CORE_API.md#automatic-ee-ram-compaction): once a texture larger than 2 KB is resident in GS VRAM and left alone, its EE copy is LZ4-compressed in the background. Drawing it from VRAM does not decompress it.
 * `palette` - If it's a palette image, it has a palette ArrayBuffer right here.
 * `texWidth`, `texHeight` - The real texture area in memory.
 * `renderable` - Set if the texture can be used as a rendering buffer.

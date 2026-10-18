@@ -476,12 +476,186 @@ static JSValue js_geteememory(JSContext *ctx, JSValue this_val, int argc, JSValu
 	athena_system_get_memory_stats(&stats);
 
 	JSValue obj = JS_NewObject(ctx);
-    JS_DefinePropertyValueStr(ctx, obj, "core", JS_NewUint32(ctx, stats.core), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "core", JS_NewUint32(ctx, stats.core), JS_PROP_C_W_E);
 	JS_DefinePropertyValueStr(ctx, obj, "nativeStack", JS_NewUint32(ctx, stats.native_stack), JS_PROP_C_W_E);
 	JS_DefinePropertyValueStr(ctx, obj, "allocs", JS_NewUint32(ctx, stats.allocs), JS_PROP_C_W_E);
 	JS_DefinePropertyValueStr(ctx, obj, "used", JS_NewUint32(ctx, stats.used), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "compressedBytes", JS_NewUint32(ctx, stats.compressed_bytes), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "uncompressedBytes", JS_NewUint32(ctx, stats.uncompressed_bytes), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "savedBytes", JS_NewUint32(ctx, stats.saved_bytes), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "compressedTextures", JS_NewUint32(ctx, stats.compressed_textures), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "trackedTextures", JS_NewUint32(ctx, stats.tracked_textures), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "compressedMeshes", JS_NewUint32(ctx, stats.compressed_meshes), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "trackedMeshes", JS_NewUint32(ctx, stats.tracked_meshes), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "compressCount", JS_NewUint32(ctx, stats.compress_count), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "decompressCount", JS_NewUint32(ctx, stats.decompress_count), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "oomRescues", JS_NewUint32(ctx, stats.oom_rescues), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "compressionEnabled", JS_NewBool(ctx, stats.compression_enabled), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "frameBudgetUs", JS_NewUint32(ctx, stats.frame_budget_us), JS_PROP_C_W_E);
 
 	return obj;
+}
+
+static JSValue js_set_mem_compression(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
+	AthenaMemCompressConfig cfg;
+	athena_mem_compress_get_config(&cfg);
+
+	if (argc >= 1) {
+		if (JS_IsObject(argv[0])) {
+			JSValue v;
+			v = JS_GetPropertyStr(ctx, argv[0], "enabled");
+			if (!JS_IsUndefined(v)) cfg.enabled = JS_ToBool(ctx, v);
+			JS_FreeValue(ctx, v);
+
+			v = JS_GetPropertyStr(ctx, argv[0], "frameBudgetUs");
+			if (!JS_IsUndefined(v)) JS_ToUint32(ctx, &cfg.frame_budget_us, v);
+			JS_FreeValue(ctx, v);
+
+			v = JS_GetPropertyStr(ctx, argv[0], "textureVramFrames");
+			if (!JS_IsUndefined(v)) JS_ToUint32(ctx, &cfg.texture_vram_frames, v);
+			JS_FreeValue(ctx, v);
+
+			v = JS_GetPropertyStr(ctx, argv[0], "textureIdleFrames");
+			if (!JS_IsUndefined(v)) JS_ToUint32(ctx, &cfg.texture_idle_frames, v);
+			JS_FreeValue(ctx, v);
+
+			v = JS_GetPropertyStr(ctx, argv[0], "meshIdleFrames");
+			if (!JS_IsUndefined(v)) JS_ToUint32(ctx, &cfg.mesh_idle_frames, v);
+			JS_FreeValue(ctx, v);
+		} else {
+			cfg.enabled = JS_ToBool(ctx, argv[0]);
+		}
+	}
+
+	if (argc >= 2 && JS_IsObject(argv[1])) {
+		JSValue v;
+		v = JS_GetPropertyStr(ctx, argv[1], "frameBudgetUs");
+		if (!JS_IsUndefined(v)) JS_ToUint32(ctx, &cfg.frame_budget_us, v);
+		JS_FreeValue(ctx, v);
+
+		v = JS_GetPropertyStr(ctx, argv[1], "textureVramFrames");
+		if (!JS_IsUndefined(v)) JS_ToUint32(ctx, &cfg.texture_vram_frames, v);
+		JS_FreeValue(ctx, v);
+
+		v = JS_GetPropertyStr(ctx, argv[1], "textureIdleFrames");
+		if (!JS_IsUndefined(v)) JS_ToUint32(ctx, &cfg.texture_idle_frames, v);
+		JS_FreeValue(ctx, v);
+
+		v = JS_GetPropertyStr(ctx, argv[1], "meshIdleFrames");
+		if (!JS_IsUndefined(v)) JS_ToUint32(ctx, &cfg.mesh_idle_frames, v);
+		JS_FreeValue(ctx, v);
+	}
+
+	athena_mem_compress_set_config(&cfg);
+
+	JSValue obj = JS_NewObject(ctx);
+	JS_DefinePropertyValueStr(ctx, obj, "enabled", JS_NewBool(ctx, cfg.enabled), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "frameBudgetUs", JS_NewUint32(ctx, cfg.frame_budget_us), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "textureVramFrames", JS_NewUint32(ctx, cfg.texture_vram_frames), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "textureIdleFrames", JS_NewUint32(ctx, cfg.texture_idle_frames), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "meshIdleFrames", JS_NewUint32(ctx, cfg.mesh_idle_frames), JS_PROP_C_W_E);
+	return obj;
+}
+
+static JSValue js_compact_memory(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
+	uint32_t target_bytes = 0;
+	if (argc >= 1 && !JS_IsUndefined(argv[0]))
+		JS_ToUint32(ctx, &target_bytes, argv[0]);
+
+	size_t freed = athena_mem_compact_now((size_t)target_bytes);
+	return JS_NewUint32(ctx, (uint32_t)freed);
+}
+
+static void js_free_malloc_buf(JSRuntime *rt, void *opaque, void *ptr) {
+	free(ptr);
+}
+
+static JSValue js_lz4_compress(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
+	if (argc < 1)
+		return JS_ThrowSyntaxError(ctx, "Expected ArrayBuffer or TypedArray");
+
+	size_t byte_offset = 0, byte_len = 0;
+	JSValue ab = JS_GetTypedArrayBuffer(ctx, argv[0], &byte_offset, &byte_len, NULL);
+	uint8_t *src = NULL;
+	size_t src_len = 0;
+
+	if (!JS_IsException(ab)) {
+		size_t total_len = 0;
+		uint8_t *base = JS_GetArrayBuffer(ctx, &total_len, ab);
+		JS_FreeValue(ctx, ab);
+		if (base && byte_offset + byte_len <= total_len) {
+			src = base + byte_offset;
+			src_len = byte_len;
+		}
+	} else {
+		JS_FreeValue(ctx, JS_GetException(ctx));
+		src = JS_GetArrayBuffer(ctx, &src_len, argv[0]);
+	}
+
+	if (!src || src_len == 0)
+		return JS_ThrowTypeError(ctx, "Invalid input buffer");
+
+	size_t bound = athena_lz4_compress_bound(src_len);
+	if (bound == 0)
+		return JS_ThrowRangeError(ctx, "Buffer too large for LZ4");
+
+	uint8_t *dst = (uint8_t *)malloc(bound);
+	if (!dst)
+		return JS_ThrowOutOfMemory(ctx);
+
+	int csize = athena_lz4_compress(src, dst, (int)src_len, (int)bound);
+	if (csize <= 0) {
+		free(dst);
+		return JS_NULL;
+	}
+
+	uint8_t *shrunk = (uint8_t *)realloc(dst, (size_t)csize);
+	if (shrunk)
+		dst = shrunk;
+
+	return JS_NewArrayBuffer(ctx, dst, (size_t)csize, js_free_malloc_buf, NULL, false);
+}
+
+static JSValue js_lz4_decompress(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
+	if (argc < 2)
+		return JS_ThrowSyntaxError(ctx, "Expected (compressedBuffer, uncompressedSize)");
+
+	uint32_t uncompressed_size = 0;
+	if (JS_ToUint32(ctx, &uncompressed_size, argv[1]) || uncompressed_size == 0)
+		return JS_ThrowRangeError(ctx, "Invalid uncompressedSize");
+
+	size_t byte_offset = 0, byte_len = 0;
+	JSValue ab = JS_GetTypedArrayBuffer(ctx, argv[0], &byte_offset, &byte_len, NULL);
+	uint8_t *src = NULL;
+	size_t src_len = 0;
+
+	if (!JS_IsException(ab)) {
+		size_t total_len = 0;
+		uint8_t *base = JS_GetArrayBuffer(ctx, &total_len, ab);
+		JS_FreeValue(ctx, ab);
+		if (base && byte_offset + byte_len <= total_len) {
+			src = base + byte_offset;
+			src_len = byte_len;
+		}
+	} else {
+		JS_FreeValue(ctx, JS_GetException(ctx));
+		src = JS_GetArrayBuffer(ctx, &src_len, argv[0]);
+	}
+
+	if (!src || src_len == 0)
+		return JS_ThrowTypeError(ctx, "Invalid compressed buffer");
+
+	uint8_t *dst = (uint8_t *)malloc(uncompressed_size);
+	if (!dst)
+		return JS_ThrowOutOfMemory(ctx);
+
+	int dsize = athena_lz4_decompress(src, dst, (int)src_len, (int)uncompressed_size);
+	if (dsize < 0) {
+		free(dst);
+		return JS_NULL;
+	}
+
+	return JS_NewArrayBuffer(ctx, dst, (size_t)dsize, js_free_malloc_buf, NULL, false);
 }
 
 static JSValue js_gettemps(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
@@ -708,6 +882,10 @@ static const JSCFunctionListEntry system_funcs[] = {
 	JS_CFUNC_DEF( "getCPUInfo",      		  0,   		js_getcpuinfo	 		 ),
 	JS_CFUNC_DEF( "getGPUInfo",      		  0,   		js_getgpuinfo	 		 ),
 	JS_CFUNC_DEF( "getMemoryStats",      	  0,   		js_geteememory	 		 ),
+	JS_CFUNC_DEF( "setMemoryCompression",     2,        js_set_mem_compression   ),
+	JS_CFUNC_DEF( "compactMemory",            1,        js_compact_memory        ),
+	JS_CFUNC_DEF( "lz4Compress",              1,        js_lz4_compress          ),
+	JS_CFUNC_DEF( "lz4Decompress",            2,        js_lz4_decompress        ),
 	JS_CFUNC_DEF( "getTemperature",      	  0,   		js_gettemps	 			 ),
 
 	JS_CFUNC_DEF( "nativeCall",      	      3, 		js_call_native		 	 ),
