@@ -51,16 +51,30 @@ AUDIO ?= 1
 # Module linking control
 STATIC_KEYBOARD ?= 1
 STATIC_MOUSE ?= 1
-STATIC_NETWORK ?= 1
+STATIC_NETWORK ?= 0
 STATIC_CAMERA ?= 0
 STATIC_REMOTE ?= 1
+STATIC_NATIVE_COMPILER ?= 0
+STATIC_ARCHIVE ?= 0
+STATIC_MPEG_VIDEO ?= 0
 
 DYNAMIC_KEYBOARD ?= 0
 DYNAMIC_MOUSE ?= 0
-DYNAMIC_NETWORK ?= 0
+DYNAMIC_NETWORK ?= 1
 DYNAMIC_CAMERA ?= 0
+DYNAMIC_NATIVE_COMPILER ?= 1
+DYNAMIC_ARCHIVE ?= 1
+DYNAMIC_MPEG_VIDEO ?= 1
 
-EE_LIBS = -L$(PS2SDK)/ports/lib -lmc -lpad -lmtap -lpatches -lz -llzma -lzip -lfileXio -lelf-loader-nocolour -lerl -ldebug
+EE_LIBS = -L$(PS2SDK)/ports/lib -lmc -lpad -lmtap -lpatches -lz -lfileXio -lelf-loader-nocolour -ldebug
+
+ifneq (,$(wildcard $(EE_SRC_DIR)liberl/include/erl.h))
+  EE_INCS += -I$(EE_SRC_DIR)liberl/include
+  EE_LIBS += ee_modules/erl/lib/liberl.a
+  EXT_LIBS += ee_modules/erl/lib/liberl.a
+else
+  EE_LIBS += -lerl
+endif
 
 EE_INCS += -I$(PS2SDK)/ports/include -I$(PS2SDK)/ports/include/zlib -Isrc/readini/include -Isrc/include -Isrc/include/athena -Isrc/js_api
 
@@ -85,11 +99,11 @@ VU1_MPGS = draw_3D_colors.o \
 
 # VU0_MPGS = matrix_multiply.o
 
-APP_CORE = main.o athena_core.o bootlogo.o texture_manager.o owl_packet.o profiler.o vif.o athena_math.o memory.o lz4_ps2.o ee_tools.o module_system.o iop_manager.o taskman.o lockman.o pad.o system.o strUtils.o mpg_manager.o matrix.o vector.o excepHandler.o exceptions.o athena/system_facade.o athena/iop_facade.o athena/archive.o athena/pad.o athena/timer.o athena/mutex.o athena/task.o
+APP_CORE = main.o athena_core.o bootlogo.o texture_manager.o owl_packet.o profiler.o vif.o athena_math.o memory.o lz4_ps2.o ee_tools.o module_system.o iop_manager.o taskman.o lockman.o pad.o system.o strUtils.o mpg_manager.o matrix.o vector.o excepHandler.o exceptions.o athena/system_facade.o athena/iop_facade.o athena/pad.o athena/timer.o athena/mutex.o athena/task.o
 
 INI_READER = readini/src/readini.o
 
-ATHENA_MODULES = ath_env.o ath_module_registry.o ath_vector.o ath_vector4.o ath_matrix.o ath_pads.o ath_system.o ath_iop.o ath_archive.o ath_timer.o ath_task.o ath_mutex.o
+ATHENA_MODULES = ath_env.o ath_module_registry.o ath_vector.o ath_vector4.o ath_matrix.o ath_pads.o ath_system.o ath_iop.o ath_timer.o ath_task.o ath_mutex.o
 
 IOP_MODULES = iomanx.o filexio.o sio2man.o mcman.o mcserv.o padman.o  \
 			  usbd.o bdm.o bdmfs_fatfs.o usbmass_bd.o cdfs.o \
@@ -151,10 +165,17 @@ ifeq ($(AUDIO),1)
   EE_LIBS += -laudsrv -lvorbisfile -lvorbis -logg
 endif
 
-# MPEG Video support (requires PS2SDK libmpeg)
-MPEG_VIDEO ?= 1
+# Archive support (ZIP/GZ/TAR via libzip + liblzma)
+ifeq ($(STATIC_ARCHIVE),1)
+  EE_CFLAGS += -DATHENA_ARCHIVE
+  APP_CORE += athena/archive.o
+  ATHENA_MODULES += ath_archive.o
+  EE_LIBS += -llzma -lzip
+  DYNAMIC_ARCHIVE = 0
+endif
 
-ifeq ($(MPEG_VIDEO),1)
+# MPEG Video support (requires PS2SDK libmpeg)
+ifeq ($(STATIC_MPEG_VIDEO),1)
   EE_CFLAGS += -DATHENA_MPEG_VIDEO
   APP_CORE += mpeg_player.o athena/video.o
   ATHENA_MODULES += ath_mpeg.o
@@ -164,11 +185,12 @@ ifeq ($(MPEG_VIDEO),1)
   # build; fall back to it if the vendored sources aren't present.
   ifneq (,$(wildcard $(EE_SRC_DIR)libmpeg/include/libmpeg.h))
     EE_INCS += -I$(EE_SRC_DIR)libmpeg/include
-    EE_LIBS += -Lee_modules/mpeg/lib -lmpeg
+    EE_LIBS += ee_modules/mpeg/lib/libmpeg.a
     EXT_LIBS += ee_modules/mpeg/lib/libmpeg.a
   else
     EE_LIBS += -lmpeg
   endif
+  DYNAMIC_MPEG_VIDEO = 0
 endif
 
 ifneq ($(EE_SIO), 0)
@@ -242,15 +264,15 @@ ifeq ($(STATIC_CAMERA),1)
 endif
 
 # Native compiler (AOT JS to MIPS R5900) — requires QuickJS
-NATIVE_COMPILER ?= 1
 NATIVE_COMPILER_OBJS :=
 
-ifeq ($(NATIVE_COMPILER),1)
+ifeq ($(STATIC_NATIVE_COMPILER),1)
 ifeq ($(ATHENA_JS),1)
   EE_CFLAGS += -DATHENA_NATIVE_COMPILER
   EE_INCS += -Isrc/native_compiler -Isrc
   ATHENA_MODULES += ath_native.o
   NATIVE_COMPILER_OBJS = native_compiler/native_compiler.o native_compiler/mips_emitter.o native_compiler/type_inference.o native_compiler/native_struct.o native_compiler/int64_runtime.o native_compiler/native_string.o native_compiler/native_array.o athena/native_facade.o
+  DYNAMIC_NATIVE_COMPILER = 0
 endif
 endif
 
@@ -314,10 +336,14 @@ endif
 all: $(MAIN_BUILD_STAMP) $(DIR_GUARD) $(EXT_LIBS) $(EE_OBJS) libs
 	$(MAKE) -f Makefile.dl KEYBOARD=$(DYNAMIC_KEYBOARD)
 	$(MAKE) -f Makefile.dl MOUSE=$(DYNAMIC_MOUSE)
+	$(MAKE) -f Makefile.dl NETWORK=$(DYNAMIC_NETWORK)
+	$(MAKE) -f Makefile.dl NATIVE_COMPILER=$(DYNAMIC_NATIVE_COMPILER)
+	$(MAKE) -f Makefile.dl ARCHIVE=$(DYNAMIC_ARCHIVE)
+	$(MAKE) -f Makefile.dl MPEG_VIDEO=$(DYNAMIC_MPEG_VIDEO)
 
-	$(EE_CXX) -T$(EE_LINKFILE) $(EE_OPTFLAGS) -o $(EE_BIN_DIR)tmp.elf $(EE_OBJS) $(EE_LDFLAGS) $(EXTRA_LDFLAGS) -Wno-write-strings $(EE_LIBS) $(EE_SRC_DIR)dummy-exports.c
+	$(EE_CXX) -T$(EE_LINKFILE) $(EE_OPTFLAGS) -o $(EE_BIN_DIR)tmp.elf $(EE_OBJS) $(EE_SRC_DIR)dummy-exports.c $(EE_LDFLAGS) $(EXTRA_LDFLAGS) -Wno-write-strings $(EE_LIBS)
 	./build-exports.sh
-	$(EE_CXX) -T$(EE_LINKFILE) $(EE_OPTFLAGS) -o $(EE_BIN) $(EE_OBJS) $(EE_LDFLAGS) $(EXTRA_LDFLAGS) -fpermissive -Wno-write-strings $(EE_LIBS) $(EE_SRC_DIR)exports.c
+	$(EE_CXX) -T$(EE_LINKFILE) $(EE_OPTFLAGS) -o $(EE_BIN) $(EE_OBJS) $(EE_SRC_DIR)exports.c $(EE_LDFLAGS) $(EXTRA_LDFLAGS) -fpermissive -Wno-write-strings $(EE_LIBS)
 	rm $(EE_BIN_DIR)tmp.elf
 	@echo "$$HEADER"
 	
@@ -332,10 +358,14 @@ all: $(MAIN_BUILD_STAMP) $(DIR_GUARD) $(EXT_LIBS) $(EE_OBJS) libs
 debug: $(DIR_GUARD) $(EXT_LIBS) $(EE_OBJS) 
 	$(MAKE) -f Makefile.dl KEYBOARD=$(DYNAMIC_KEYBOARD)
 	$(MAKE) -f Makefile.dl MOUSE=$(DYNAMIC_MOUSE)
+	$(MAKE) -f Makefile.dl NETWORK=$(DYNAMIC_NETWORK)
+	$(MAKE) -f Makefile.dl NATIVE_COMPILER=$(DYNAMIC_NATIVE_COMPILER)
+	$(MAKE) -f Makefile.dl ARCHIVE=$(DYNAMIC_ARCHIVE)
+	$(MAKE) -f Makefile.dl MPEG_VIDEO=$(DYNAMIC_MPEG_VIDEO)
 
-	$(EE_CXX) -T$(EE_LINKFILE) $(EE_OPTFLAGS) -o $(EE_BIN_DIR)tmp.elf $(EE_OBJS) $(EE_LDFLAGS) $(EXTRA_LDFLAGS) -Wno-write-strings $(EE_LIBS) $(EE_SRC_DIR)dummy-exports.c
+	$(EE_CXX) -T$(EE_LINKFILE) $(EE_OPTFLAGS) -o $(EE_BIN_DIR)tmp.elf $(EE_OBJS) $(EE_SRC_DIR)dummy-exports.c $(EE_LDFLAGS) $(EXTRA_LDFLAGS) -Wno-write-strings $(EE_LIBS)
 	./build-exports.sh
-	$(EE_CXX) -T$(EE_LINKFILE) $(EE_OPTFLAGS) -o bin/athena_debug.elf $(EE_OBJS) $(EE_LDFLAGS) $(EXTRA_LDFLAGS) -fpermissive -Wno-write-strings $(EE_LIBS) $(EE_SRC_DIR)exports.c
+	$(EE_CXX) -T$(EE_LINKFILE) $(EE_OPTFLAGS) -o bin/athena_debug.elf $(EE_OBJS) $(EE_SRC_DIR)exports.c $(EE_LDFLAGS) $(EXTRA_LDFLAGS) -fpermissive -Wno-write-strings $(EE_LIBS)
 	rm $(EE_BIN_DIR)tmp.elf
 
 	echo "Building bin/athena_debug.elf with debug symbols..."
@@ -350,9 +380,14 @@ clean:
 	$(MAKE) -C ee_modules/loader clean
 	$(MAKE) -C ee_modules/bearssl clean
 	$(MAKE) -C ee_modules/mpeg clean
+	$(MAKE) -C ee_modules/erl clean
 
-	$(MAKE) -f Makefile.dl KEYBOARD=$(DYNAMIC_KEYBOARD) clean
-	$(MAKE) -f Makefile.dl MOUSE=$(DYNAMIC_MOUSE) clean
+	$(MAKE) -f Makefile.dl KEYBOARD=1 clean
+	$(MAKE) -f Makefile.dl MOUSE=1 clean
+	$(MAKE) -f Makefile.dl NETWORK=1 clean
+	$(MAKE) -f Makefile.dl NATIVE_COMPILER=1 clean
+	$(MAKE) -f Makefile.dl ARCHIVE=1 clean
+	$(MAKE) -f Makefile.dl MPEG_VIDEO=1 clean
 
 rebuild: clean all
 
@@ -367,6 +402,10 @@ ee_modules/bearssl/lib/libbearssl.a:
 # Build vendored libmpeg static library when present
 ee_modules/mpeg/lib/libmpeg.a:
 	$(MAKE) -C ee_modules/mpeg
+
+# Build vendored liberl static library when present
+ee_modules/erl/lib/liberl.a:
+	$(MAKE) -C ee_modules/erl
 
 $(EE_EMBED_DIR):
 	@mkdir -p $@

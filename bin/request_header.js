@@ -1,5 +1,6 @@
 // {"name": "Header request", "author": "Daniel Santos", "version": "05112023", "file": "request_header.js"}
 
+import { Network, Request } from 'athena_network.erl';
 
 Screen.log("Athena network system\n");
 

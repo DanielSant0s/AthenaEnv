@@ -1,5 +1,7 @@
 // {"name": "Sockets demo", "author": "Daniel Santos", "version": "04072023","file": "sockets.js"}
 
+import { Network, Socket } from 'athena_network.erl';
+
 IOP.reset();
 
 IOP.loadModule("padman");

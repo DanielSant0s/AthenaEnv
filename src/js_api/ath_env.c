@@ -7,6 +7,7 @@
 #include <ath_env.h>
 
 #include <memory.h>
+#include <erl.h>
 
 #define TRUE 1
 
@@ -165,6 +166,13 @@ void destroy_vm(JSContext* ctx) {
 
 	#ifdef ATHENA_NATIVE_COMPILER
 	athena_native_cleanup();
+	#else
+	{
+		struct symbol_t *sym = erl_find_symbol("athena_native_cleanup");
+		if (sym && sym->address) {
+			((void (*)(void))sym->address)();
+		}
+	}
 	#endif
 
 	js_std_free_handlers(rt);

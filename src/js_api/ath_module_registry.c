@@ -9,7 +9,9 @@ typedef struct {
 static const athena_js_module_entry_t athena_js_modules[] = {
     { athena_system_init },
     { athena_iop_init },
+#ifdef ATHENA_ARCHIVE
     { athena_archive_init },
+#endif
     { athena_timer_init },
     { athena_task_init },
     { athena_mutex_init },
@@ -157,7 +159,9 @@ const char *athena_js_globals_prelude(void) {
         "import * as Pads from 'Pads';\n"
         "import * as System from 'System';\n"
         "import * as IOP from 'IOP';\n"
+#ifdef ATHENA_ARCHIVE
         "import * as Archive from 'Archive';\n"
+#endif
         "import * as Vector2 from 'Vector2';\n"
         "import * as Vector3 from 'Vector3';\n"
         "import * as Vector4 from 'Vector4';\n"
@@ -167,7 +171,9 @@ const char *athena_js_globals_prelude(void) {
         "globalThis.Timer = Timer;\n"
         "globalThis.Pads = Pads;\n"
         "globalThis.System = System;\n"
+#ifdef ATHENA_ARCHIVE
         "globalThis.Archive = Archive;\n"
+#endif
         "globalThis.IOP = IOP;\n"
         "globalThis.Vector2 = Vector2.Vector2;\n"
         "globalThis.Vector3 = Vector3.Vector3;\n"

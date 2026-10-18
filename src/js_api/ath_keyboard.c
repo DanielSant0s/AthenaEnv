@@ -109,6 +109,7 @@ static int module_init(JSContext *ctx, JSModuleDef *m)
 }
 
 #ifdef DYNAMIC_ATHENA_KEYBOARD
+char *erl_id = "athena_keyboard";
 char *erl_dependancies[] = {
     "libkbd",
     0

@@ -1369,3 +1369,29 @@ void athena_native_cleanup(void) {
     athena_native_compiler_cleanup();
 }
 
+#ifdef DYNAMIC_ATHENA_NATIVE
+char *erl_id = "athena_native";
+
+static int erl_module_init(JSContext *ctx, JSModuleDef *m) {
+    if (JS_SetModuleExportList(ctx, m, module_funcs, countof(module_funcs)) != 0)
+        return -1;
+
+    JSValue native_obj = JS_NewObject(ctx);
+    JS_SetPropertyFunctionList(ctx, native_obj, module_funcs, countof(module_funcs));
+
+    JSValue global_obj = JS_GetGlobalObject(ctx);
+    JS_SetPropertyStr(ctx, global_obj, "Native", JS_DupValue(ctx, native_obj));
+    JS_FreeValue(ctx, global_obj);
+
+    JS_SetModuleExport(ctx, m, "Native", native_obj);
+    return 0;
+}
+
+JSModuleDef *js_init_module(JSContext *ctx) {
+    JSModuleDef *m = athena_push_module(ctx, erl_module_init, module_funcs, countof(module_funcs), "Native");
+    if (m)
+        JS_AddModuleExport(ctx, m, "Native");
+    return m;
+}
+#endif
+

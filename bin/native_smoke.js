@@ -15,6 +15,8 @@
 // Deliberately NOT covered: a JS-vs-native timing benchmark. It has no
 // pass/fail, and wall-clock numbers make a regression suite flaky.
 
+import * as Native from 'athena_native.erl';
+
 let passed = 0;
 const failures = [];
 

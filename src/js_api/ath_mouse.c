@@ -152,10 +152,12 @@ static int module_init(JSContext *ctx, JSModuleDef *m)
 }
 
 #ifdef DYNAMIC_ATHENA_MOUSE
+char *erl_id = "athena_mouse";
 char *erl_dependancies[] = {
     "libmouse",
     0
 };
+
 JSModuleDef *js_init_module(JSContext *ctx)
 #else
 JSModuleDef *athena_mouse_init(JSContext *ctx)

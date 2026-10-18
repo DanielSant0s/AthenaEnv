@@ -149,12 +149,17 @@ static JSValue js_request_download(JSContext *ctx, JSValue this_val, int argc, J
 static JSValue js_request_async_dl(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)
 {
 	AthenaRequest *req = JS_GetOpaque2(ctx, this_val, js_request_class_id);
+	const char *path;
+
 	req->url = JS_ToCString(ctx, argv[0]);
+	path = JS_ToCString(ctx, argv[1]);
 	req->method = ATHENA_REQUEST_GET;
 	req->save = true;
 	req->chunk.timer = 0;
 	req->chunk.transferring = false;
-	req->chunk.fp = fopen(JS_ToCString(ctx, argv[1]), "wb");
+	req->chunk.size = 0;
+	req->chunk.fp = path ? fopen(path, "wb") : NULL;
+	JS_FreeCString(ctx, path);
 
 	if (!req->chunk.fp)
 		return JS_ThrowInternalError(ctx, "asyncDownload: Error creating file\n");
@@ -315,11 +320,12 @@ static const JSCFunctionListEntry js_request_funcs[] = {
 	JS_CFUNC_DEF("ready", 2, js_request_ready),
 };
 
-static int request_init(JSContext *ctx, JSModuleDef *m)
+JSValue athena_request_create_class(JSContext *ctx)
 {
 	JSValue request_proto, request_class;
 
-	JS_NewClassID(&js_request_class_id);
+	if (!js_request_class_id)
+		JS_NewClassID(&js_request_class_id);
 	JS_NewClass(JS_GetRuntime(ctx), js_request_class_id, &js_request_class);
 
 	request_proto = JS_NewObject(ctx);
@@ -329,6 +335,12 @@ static int request_init(JSContext *ctx, JSModuleDef *m)
 	JS_SetConstructor(ctx, request_class, request_proto);
 	JS_SetClassProto(ctx, js_request_class_id, request_proto);
 
+	return request_class;
+}
+
+static int request_init(JSContext *ctx, JSModuleDef *m)
+{
+	JSValue request_class = athena_request_create_class(ctx);
 	JS_SetModuleExport(ctx, m, "Request", request_class);
 	return 0;
 }

@@ -10,6 +10,8 @@
  * Place a video.m2v file in the same directory as this script.
  */
 
+import { Video } from 'athena_mpeg.erl';
+
 // Load the video
 const video = new Video("video.m2v");
 video.loop = true;

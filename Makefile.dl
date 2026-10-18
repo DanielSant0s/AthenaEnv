@@ -1,9 +1,10 @@
 include Makefile.const
 
 EE_EXT = .erl
+EE_OBJ_DIR = obj/dl/
 
-EE_CFLAGS += -Wno-sign-compare -fno-strict-aliasing -fno-exceptions -fpermissive 
-EE_INCS += -I$(PS2SDK)/ports/include -I$(PS2SDK)/ports/include/zlib -I$(ATHENAENV_SRC)/include -I$(ATHENAENV_SRC)/quickjs
+EE_CFLAGS += -Wno-sign-compare -fno-strict-aliasing -fno-exceptions -fpermissive -DCONFIG_VERSION=\"$(shell cat VERSION)\" -D__TM_GMTOFF=tm_gmtoff -DPATH_MAX=256 -DPS2 -DATHENA_JS -DATHENA_GRAPHICS
+EE_INCS += -I$(PS2SDK)/ports/include -I$(PS2SDK)/ports/include/zlib -I$(PS2DEV)/gsKit/include -I$(PS2SDK)/ports/include/freetype2 -I$(EE_SRC_DIR)readini/include -I$(EE_SRC_DIR)include -I$(EE_SRC_DIR)include/athena -I$(EE_SRC_DIR)js_api -I$(EE_SRC_DIR)quickjs
 
 PS2SDK_IOP_MODULES_DIR = $(PS2SDK)/iop/irx/
 PS2SDK_EE_MODULES_DIR = $(PS2SDK)/ee/lib/
@@ -11,59 +12,125 @@ PS2SDK_EE_MODULES_DIR = $(PS2SDK)/ee/lib/
 IOP_MODULES_DIR = $(EE_BIN_DIR)iop/
 EE_MODULES_DIR = $(EE_BIN_DIR)
 
+EXT_LIBS :=
+ERL_LIBS :=
+
 ifeq ($(KEYBOARD),1)
   EE_CFLAGS += -DDYNAMIC_ATHENA_KEYBOARD
-	EE_TARGET_ERL = $(EE_BIN_DIR)athena_keyboard.erl
-  EE_OBJS = $(JS_API_DIR)ath_keyboard.o
+  EE_TARGET_ERL = $(EE_BIN_DIR)athena_keyboard.erl
+  EE_OBJS = athena/keyboard.o $(JS_API_DIR)ath_keyboard.o
   IOP_MODULES = ps2kbd.irx
-	EE_MODULES = libkbd.erl
+  EE_MODULES = libkbd.erl
 endif
 
 ifeq ($(MOUSE),1)
   EE_CFLAGS += -DDYNAMIC_ATHENA_MOUSE
-	EE_TARGET_ERL = $(EE_BIN_DIR)athena_mouse.erl
-  EE_OBJS = $(JS_API_DIR)ath_mouse.o
+  EE_TARGET_ERL = $(EE_BIN_DIR)athena_mouse.erl
+  EE_OBJS = athena/mouse.o $(JS_API_DIR)ath_mouse.o
   IOP_MODULES = ps2mouse.irx
-	EE_MODULES = libmouse.erl
+  EE_MODULES = libmouse.erl
 endif
 
-EE_OBJS := $(EE_OBJS:%=$(EE_OBJ_DIR)%) #prepend the object folder
+ifeq ($(NETWORK),1)
+  EE_CFLAGS += -DDYNAMIC_ATHENA_NETWORK -DATHENA_NETWORK -DATHENA_HAS_BEARSSL=1
+  EE_TARGET_ERL = $(EE_BIN_DIR)athena_network.erl
+  EE_OBJS = network.o athena/net_facade.o athena/request.o athena/socket_facade.o athena/websocket.o \
+            net/ath_http.o net/ath_tls.o net/ath_ws.o \
+            $(JS_API_DIR)ath_network.o $(JS_API_DIR)ath_request.o $(JS_API_DIR)ath_socket.o $(JS_API_DIR)ath_websocket.o \
+            NETMAN.o SMAP.o
+  ifneq (,$(wildcard $(EE_SRC_DIR)BearSSL/inc/bearssl.h))
+    EE_INCS += -I$(EE_SRC_DIR)BearSSL/inc
+    EXT_LIBS += ee_modules/bearssl/lib/libbearssl.a
+    ERL_LIBS += -Lee_modules/bearssl/lib -lbearssl
+  else
+    ERL_LIBS += -lbearssl
+  endif
+  ERL_LIBS += -L$(PS2SDK)/ee/lib -lps2ip -lnetman
+endif
+
+ifeq ($(NATIVE_COMPILER),1)
+  EE_CFLAGS += -DDYNAMIC_ATHENA_NATIVE -DATHENA_NATIVE_COMPILER
+  EE_INCS += -I$(EE_SRC_DIR)native_compiler -I$(EE_SRC_DIR)
+  EE_TARGET_ERL = $(EE_BIN_DIR)athena_native.erl
+  EE_OBJS = native_compiler/native_compiler.o native_compiler/mips_emitter.o \
+            native_compiler/type_inference.o native_compiler/native_struct.o \
+            native_compiler/int64_runtime.o native_compiler/native_string.o \
+            native_compiler/native_array.o athena/native_facade.o \
+            $(JS_API_DIR)ath_native.o
+endif
+
+ifeq ($(ARCHIVE),1)
+  EE_CFLAGS += -DDYNAMIC_ATHENA_ARCHIVE -DATHENA_ARCHIVE
+  EE_TARGET_ERL = $(EE_BIN_DIR)athena_archive.erl
+  EE_OBJS = athena/archive.o $(JS_API_DIR)ath_archive.o
+  ERL_LIBS += -L$(PS2SDK)/ports/lib -lzip -llzma
+endif
+
+ifeq ($(MPEG_VIDEO),1)
+  EE_CFLAGS += -DDYNAMIC_ATHENA_MPEG -DATHENA_MPEG_VIDEO
+  EE_TARGET_ERL = $(EE_BIN_DIR)athena_mpeg.erl
+  EE_OBJS = mpeg_player.o athena/video.o $(JS_API_DIR)ath_mpeg.o
+  ifneq (,$(wildcard $(EE_SRC_DIR)libmpeg/include/libmpeg.h))
+    EE_INCS += -I$(EE_SRC_DIR)libmpeg/include
+    EXT_LIBS += ee_modules/mpeg/lib/libmpeg.a
+    ERL_LIBS += ee_modules/mpeg/lib/libmpeg.a
+  else
+    ERL_LIBS += -lmpeg
+  endif
+endif
+
+EE_OBJS := $(EE_OBJS:%=$(EE_OBJ_DIR)%)
 
 EE_MODULES := $(EE_MODULES:%=$(EE_MODULES_DIR)%)
 IOP_MODULES := $(IOP_MODULES:%=$(IOP_MODULES_DIR)%)
 
-all: $(EE_OBJS) $(EE_TARGET_ERL) $(EE_MODULES_DIR) $(EE_MODULES) $(IOP_MODULES_DIR) $(IOP_MODULES)
+all: $(EXT_LIBS) $(EE_OBJS) $(EE_TARGET_ERL) $(EE_MODULES) $(IOP_MODULES)
 
 clean:
 	rm -rf $(IOP_MODULES_DIR)
 	rm -f $(EE_TARGET_ERL) $(EE_OBJS) $(EE_MODULES)
 
+ee_modules/bearssl/lib/libbearssl.a:
+	$(MAKE) -C ee_modules/bearssl
+
+ee_modules/mpeg/lib/libmpeg.a:
+	$(MAKE) -C ee_modules/mpeg
+
+$(EE_EMBED_DIR):
+	@mkdir -p $@
+
 $(EE_OBJ_DIR):
 	@mkdir -p $@
-	
+
 $(EE_MODULES_DIR):
 	@mkdir -p $@
 
 $(IOP_MODULES_DIR):
 	@mkdir -p $@
 
-$(IOP_MODULES_DIR)%.irx: $(PS2SDK_IOP_MODULES_DIR)%.irx
+$(IOP_MODULES_DIR)%.irx: $(PS2SDK_IOP_MODULES_DIR)%.irx | $(IOP_MODULES_DIR)
 	@echo COPY IOP MODULE - $<
 	cp $< $@
 
-$(EE_MODULES_DIR)%.erl: $(PS2SDK_EE_MODULES_DIR)%.erl
+$(EE_MODULES_DIR)%.erl: $(PS2SDK_EE_MODULES_DIR)%.erl | $(EE_MODULES_DIR)
 	@echo COPY EE MODULE - $<
 	cp $< $@
 
-$(EE_BIN_DIR)%.erl:
-	@echo CC - $@
-	$(EE_CC) -nostartfiles -nostdlib $(EE_OPTFLAGS) -o $@ $(EE_OBJS) $(EE_LDFLAGS) $(EXTRA_LDFLAGS) -Wl,-r -Wl,-d
-	$(EE_STRIP) --strip-unneeded -R .mdebug.eabi64 -R .reginfo -R .comment $@
+$(EE_TARGET_ERL): $(EXT_LIBS) $(EE_OBJS) | $(EE_MODULES_DIR)
+	@echo LD - $@
+	$(EE_CC) -nostartfiles -nostdlib $(EE_OPTFLAGS) -fno-lto -o $@ $(EE_OBJS) $(ERL_LIBS) -Wl,-r -Wl,-d
+	$(EE_STRIP) --wildcard --strip-unneeded -R '.mdebug.*' -R .reginfo -R .comment -R .pdr -R .gnu.attributes -R .gnu_object_only -R '.gnu.lto_*' -R '.gnu.debuglto_*' -R .MIPS.abiflags $@
 
 $(EE_OBJ_DIR)%.o: $(EE_SRC_DIR)%.c | $(EE_OBJ_DIR)
 	@echo CC - $<
 	$(DIR_GUARD)
-	$(EE_CC) $(EE_CFLAGS) $(EE_INCS) -c $< -o $@ -Wl,-r -Wl,-d
+	$(EE_CC) $(EE_CFLAGS) $(EE_INCS) -c $< -o $@
+
+$(EE_OBJ_DIR)%.o: $(EE_EMBED_DIR)%.c | $(EE_OBJ_DIR)
+	@echo BIN2C - $<
+	$(DIR_GUARD)
+	$(EE_CC) $(EE_CFLAGS) $(EE_INCS) -c $< -o $@
 
 include $(PS2SDK)/samples/Makefile.pref
 include $(PS2SDK)/samples/Makefile.eeglobal
+include Makefile.embed

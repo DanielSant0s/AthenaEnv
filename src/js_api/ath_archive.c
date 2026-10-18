@@ -89,3 +89,31 @@ JSModuleDef *athena_archive_init(JSContext *ctx)
 {
 	return athena_push_module(ctx, module_init, module_funcs, countof(module_funcs), "Archive");
 }
+
+#ifdef DYNAMIC_ATHENA_ARCHIVE
+char *erl_id = "athena_archive";
+
+static int erl_module_init(JSContext *ctx, JSModuleDef *m)
+{
+	if (JS_SetModuleExportList(ctx, m, module_funcs, countof(module_funcs)) != 0)
+		return -1;
+
+	JSValue archive_obj = JS_NewObject(ctx);
+	JS_SetPropertyFunctionList(ctx, archive_obj, module_funcs, countof(module_funcs));
+
+	JSValue global_obj = JS_GetGlobalObject(ctx);
+	JS_SetPropertyStr(ctx, global_obj, "Archive", JS_DupValue(ctx, archive_obj));
+	JS_FreeValue(ctx, global_obj);
+
+	JS_SetModuleExport(ctx, m, "Archive", archive_obj);
+	return 0;
+}
+
+JSModuleDef *js_init_module(JSContext *ctx)
+{
+	JSModuleDef *m = athena_push_module(ctx, erl_module_init, module_funcs, countof(module_funcs), "Archive");
+	if (m)
+		JS_AddModuleExport(ctx, m, "Archive");
+	return m;
+}
+#endif

@@ -1,5 +1,7 @@
 // {"name": "Websockets", "author": "Daniel Santos", "version": "05112023", "file": "websockets.js"}
 
+import { Network, Request, WebSocket } from 'athena_network.erl';
+
 function ab2str(ab) {
     return String.fromCharCode.apply(null, new Uint8Array(ab));
 }

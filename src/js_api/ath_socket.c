@@ -134,11 +134,12 @@ static const JSCFunctionListEntry js_socket_consts[] = {
 	JS_PROP_INT32_DEF("SOCK_RAW", SOCK_RAW, JS_PROP_CONFIGURABLE),
 };
 
-static int js_socket_init(JSContext *ctx, JSModuleDef *m)
+JSValue athena_socket_create_class(JSContext *ctx)
 {
 	JSValue socket_proto, socket_class;
 
-	JS_NewClassID(&js_socket_class_id);
+	if (!js_socket_class_id)
+		JS_NewClassID(&js_socket_class_id);
 	JS_NewClass(JS_GetRuntime(ctx), js_socket_class_id, &js_socket_class);
 
 	socket_proto = JS_NewObject(ctx);
@@ -149,6 +150,12 @@ static int js_socket_init(JSContext *ctx, JSModuleDef *m)
 	JS_SetClassProto(ctx, js_socket_class_id, socket_proto);
 	JS_SetPropertyFunctionList(ctx, socket_class, js_socket_consts, countof(js_socket_consts));
 
+	return socket_class;
+}
+
+static int js_socket_init(JSContext *ctx, JSModuleDef *m)
+{
+	JSValue socket_class = athena_socket_create_class(ctx);
 	JS_SetModuleExport(ctx, m, "Socket", socket_class);
 	return 0;
 }

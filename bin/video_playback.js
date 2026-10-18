@@ -12,6 +12,7 @@
  *   ffmpeg -i input.mp4 -vf scale=320:240 -c:v mpeg2video -b:v 2000k video.m2v
  */
 
+import { Video } from 'athena_mpeg.erl';
 
 // Load the video file
 const video = new Video("video.m2v");

@@ -71,8 +71,10 @@ static void athena_request_thread(void *data)
         free(http_resp.headers);
     }
 
-    if (req->save && req->chunk.fp)
+    if (req->save && req->chunk.fp) {
         fclose(req->chunk.fp);
+        req->chunk.fp = NULL;
+    }
 
     req->ready = true;
 }
@@ -176,17 +178,16 @@ bool athena_request_poll(AthenaRequest *req, int timeout_ms, int transfer_timeou
     if (!req)
         return false;
 
-    if (timeout_ms >= 0 && transfer_timeout_ms >= 0) {
-        if ((clock() - req->chunk.timer) / 1000 > timeout_ms && req->chunk.transferring)
-            req->ready = true;
-        else if ((clock() - req->chunk.timer) / 1000 > transfer_timeout_ms &&
-                 !req->chunk.transferring && req->chunk.timer > 0)
+    /* Only the worker thread closes the save FILE* and sets ready.
+     * Forcing ready here raced with fwrite() and double-closed the FILE,
+     * which corrupted malloc metadata (TLB miss inside unlink). */
+    if (timeout_ms >= 0 && transfer_timeout_ms >= 0 && !req->ready && !req->error) {
+        if ((clock() - req->chunk.timer) / 1000 > transfer_timeout_ms &&
+            !req->chunk.transferring && req->chunk.timer > 0)
             req->error = "Network: Asynchronous operation timeout.\n";
     }
 
     if (req->save && (req->ready || req->error)) {
-        if (req->chunk.fp)
-            fclose(req->chunk.fp);
         req->url = NULL;
         req->chunk.memory = NULL;
         req->chunk.fp = NULL;

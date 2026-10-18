@@ -21,7 +21,9 @@ jmp_buf *get_reset_buf(void);
 
 JSModuleDef *athena_system_init(JSContext *ctx);
 JSModuleDef *athena_iop_init(JSContext *ctx);
+#ifdef ATHENA_ARCHIVE
 JSModuleDef *athena_archive_init(JSContext *ctx);
+#endif
 JSModuleDef *athena_timer_init(JSContext *ctx);
 JSModuleDef *athena_task_init(JSContext *ctx);
 JSModuleDef *athena_pads_init(JSContext *ctx);

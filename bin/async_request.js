@@ -1,5 +1,7 @@
 // {"name": "Async Network", "author": "Daniel Santos", "version": "04072023", "file": "async_request.js"}
 
+import { Network, Request } from 'athena_network.erl';
+
 IOP.reset();
 
 IOP.loadModule("SMAP");

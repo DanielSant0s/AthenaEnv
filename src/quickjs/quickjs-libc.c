@@ -466,29 +466,53 @@ typedef JSModuleDef *(JSInitModuleFunc)(JSContext *ctx,
 
 typedef JSModuleDef *(*extern_loader_function)(JSContext* ctx);
 
+static void extract_erl_id(const char *module_name, char *erl_id_buf, size_t buf_size)
+{
+    const char *base = module_name;
+    const char *p;
+    for (p = module_name; *p; p++) {
+        if (*p == '/' || *p == '\\' || *p == ':')
+            base = p + 1;
+    }
+    pstrcpy(erl_id_buf, buf_size, base);
+    size_t len = strlen(erl_id_buf);
+    if (len > 4 && strcmp(erl_id_buf + len - 4, ".erl") == 0) {
+        erl_id_buf[len - 4] = '\0';
+    }
+}
+
 static JSModuleDef *js_module_loader_erl(JSContext *ctx, const char *module_name)
 {
-  	struct erl_record_t *erl = _init_load_erl_from_file(module_name, 0);
-    
+    char erl_id_buf[64];
+    extract_erl_id(module_name, erl_id_buf, sizeof(erl_id_buf));
 
-	if (erl) {
-        struct symbol_t *symbol = erl_find_local_symbol("js_init_module", erl);
-		if (symbol) {
-            extern_loader_function load_extern_module = symbol->address;
-
-            JSModuleDef *m = load_extern_module(ctx);
-
-            if (!m) {
-                JS_ThrowReferenceError(ctx, "could not load module filename '%s': initialization error",
-                                       module_name);
-
-                return NULL;
-            }
-
-            return m;
-        }
+    struct erl_record_t *erl = find_erl(erl_id_buf);
+    if (!erl) {
+        erl = _init_load_erl_from_file((char *)module_name, erl_id_buf);
     }
-    
+    if (!erl && !strchr(module_name, ':') && module_name[0] != '/' && boot_path[0] != '\0') {
+        char full_path[512];
+        size_t bp_len = strlen(boot_path);
+        int has_sep = (bp_len > 0 && (boot_path[bp_len - 1] == '/' || boot_path[bp_len - 1] == ':' || boot_path[bp_len - 1] == '\\'));
+        snprintf(full_path, sizeof(full_path), "%s%s%s", boot_path, has_sep ? "" : "/", module_name);
+        erl = _init_load_erl_from_file(full_path, erl_id_buf);
+    }
+
+    if (erl) {
+        struct symbol_t *symbol = erl_find_local_symbol("js_init_module", erl);
+        if (symbol) {
+            extern_loader_function load_extern_module = symbol->address;
+            JSModuleDef *m = load_extern_module(ctx);
+            if (m)
+                return m;
+        }
+        JS_ThrowReferenceError(ctx, "could not load module filename '%s': initialization error",
+                               module_name);
+        return NULL;
+    }
+
+    JS_ThrowReferenceError(ctx, "could not load module filename '%s'",
+                           module_name);
     return NULL;
 }
 

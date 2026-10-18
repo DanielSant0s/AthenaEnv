@@ -126,11 +126,12 @@ static const JSCFunctionListEntry athena_ws_funcs[] = {
 	JS_CFUNC_DEF("close", 0, js_ws_close),
 };
 
-static int ws_init(JSContext *ctx, JSModuleDef *m)
+JSValue athena_ws_create_class(JSContext *ctx)
 {
 	JSValue ws_proto, ws_class;
 
-	JS_NewClassID(&js_ws_class_id);
+	if (!js_ws_class_id)
+		JS_NewClassID(&js_ws_class_id);
 	JS_NewClass(JS_GetRuntime(ctx), js_ws_class_id, &js_ws_class);
 
 	ws_proto = JS_NewObject(ctx);
@@ -140,6 +141,12 @@ static int ws_init(JSContext *ctx, JSModuleDef *m)
 	JS_SetConstructor(ctx, ws_class, ws_proto);
 	JS_SetClassProto(ctx, js_ws_class_id, ws_proto);
 
+	return ws_class;
+}
+
+static int ws_init(JSContext *ctx, JSModuleDef *m)
+{
+	JSValue ws_class = athena_ws_create_class(ctx);
 	JS_SetModuleExport(ctx, m, "WebSocket", ws_class);
 	return 0;
 }

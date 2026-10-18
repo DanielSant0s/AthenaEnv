@@ -29,3 +29,15 @@ Native module importing is pretty simple:
 ```js
 import * as CustomModule from 'sample_module.erl' //the "as" thing is actually important here
 ```
+
+## Built-in Relocatable Subsystems (`.erl`)
+
+To keep base EE RAM footprint low (~3.8 MB), large optional AthenaEnv subsystems are built as relocatable `.erl` modules in `bin/` by default and loaded on demand via ES `import`:
+
+| `.erl` Module | Subsystems Included | Example Import |
+|---|---|---|
+| `athena_network.erl` | `Network`, `Request`, `Socket`, `WebSocket` (lwIP + BearSSL + `NETMAN`/`SMAP`) | `import { Network, Request, Socket, WebSocket } from 'athena_network.erl';` |
+| `athena_native.erl` | `Native` (R5900 AOT compiler, `Native.struct`, dynamic arrays) | `import * as Native from 'athena_native.erl';` |
+| `athena_archive.erl` | `Archive` (`libzip` + `liblzma` + tar/gz extraction) | `import * as Archive from 'athena_archive.erl';` |
+| `athena_mpeg.erl` | `Video` (`libmpeg` MPEG1/2 video decoder) | `import { Video } from 'athena_mpeg.erl';` |
+

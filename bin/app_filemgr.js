@@ -1,5 +1,7 @@
 // {"name": "File manager", "author": "Daniel Santos", "version": "04072023", "icon": "lfm_icon.png", "file": "app_filemgr.js"}
 
+import * as Archive from 'athena_archive.erl';
+
 var font = new Font("default");
 
 font.scale = 0.55f;

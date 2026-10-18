@@ -1,5 +1,8 @@
 // {"name": "App store", "author": "Daniel Santos", "version": "04102023", "file": "app_store.js"}
 
+import { Network, Request } from 'athena_network.erl';
+import * as Archive from 'athena_archive.erl';
+
 function load_app_db(fname) {
     let list_file = std.open(fname, "r");
     let app_list = JSON.parse(list_file.getline());
@@ -436,16 +439,18 @@ while(true) {
                         dl_state = EXTRACTED;
                     }
                     break;
-                case EXTRACTING:
+                case EXTRACTING: {
+                    let pkg_path = System.boot_path + "/" + app_list[explore_menu.num].fname;
                     if (app_list[explore_menu.num].fname.endsWith(".tar.gz")) {
-                        Archive.untar(app_list[explore_menu.num].fname);
+                        Archive.untar(pkg_path);
                     } else if (app_list[explore_menu.num].fname.endsWith(".zip")) {
-                        let arc = Archive.open(app_list[explore_menu.num].fname);
+                        let arc = Archive.open(pkg_path);
                         Archive.extractAll(arc);
                         Archive.close(arc);
                     }
                     dl_state++;
                     break;
+                }
                 case EXTRACTED:
                     app_state = MAIN_MENU;
                     dl_state = DETAILS;

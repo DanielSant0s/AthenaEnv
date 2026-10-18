@@ -13,27 +13,49 @@
 .set noat
 
 .globl _MPEG_put_block_fr
+.type  _MPEG_put_block_fr, @function
 .globl _MPEG_put_block_fl
+.type  _MPEG_put_block_fl, @function
 .globl _MPEG_put_block_il
+.type  _MPEG_put_block_il, @function
 .globl _MPEG_add_block_frfr
+.type  _MPEG_add_block_frfr, @function
 .globl _MPEG_add_block_ilfl
+.type  _MPEG_add_block_ilfl, @function
 .globl _MPEG_add_block_frfl
+.type  _MPEG_add_block_frfl, @function
 .globl _MPEG_put_luma
+.type  _MPEG_put_luma, @function
 .globl _MPEG_put_chroma
+.type  _MPEG_put_chroma, @function
 .globl _MPEG_put_luma_X
+.type  _MPEG_put_luma_X, @function
 .globl _MPEG_put_chroma_X
+.type  _MPEG_put_chroma_X, @function
 .globl _MPEG_put_luma_Y
+.type  _MPEG_put_luma_Y, @function
 .globl _MPEG_put_chroma_Y
+.type  _MPEG_put_chroma_Y, @function
 .globl _MPEG_put_luma_XY
+.type  _MPEG_put_luma_XY, @function
 .globl _MPEG_put_chroma_XY
+.type  _MPEG_put_chroma_XY, @function
 .globl _MPEG_avg_luma
+.type  _MPEG_avg_luma, @function
 .globl _MPEG_avg_chroma
+.type  _MPEG_avg_chroma, @function
 .globl _MPEG_avg_luma_X
+.type  _MPEG_avg_luma_X, @function
 .globl _MPEG_avg_chroma_X
+.type  _MPEG_avg_chroma_X, @function
 .globl _MPEG_avg_luma_Y
+.type  _MPEG_avg_luma_Y, @function
 .globl _MPEG_avg_chroma_Y
+.type  _MPEG_avg_chroma_Y, @function
 .globl _MPEG_avg_luma_XY
+.type  _MPEG_avg_luma_XY, @function
 .globl _MPEG_avg_chroma_XY
+.type  _MPEG_avg_chroma_XY, @function
 
 _MPEG_put_block_fr:
     lw      $a2, 0($a0)
@@ -1403,6 +1425,7 @@ _MPEG_avg_chroma_XY:
     nop
 
     .globl _MPEG_do_mc
+    .type  _MPEG_do_mc, @function
 _MPEG_do_mc:
     addiu   $v0, $zero, 16
     lw      $a1,  0($a0)

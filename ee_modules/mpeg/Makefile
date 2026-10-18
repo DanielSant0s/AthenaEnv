@@ -31,7 +31,7 @@ $(OBJDIR)/%.o: $(SRC_ROOT)/%.c
 
 $(OBJDIR)/%.o: $(SRC_ROOT)/%.s
 	@echo AS - $<
-	$(EE_AS) $(EE_ASFLAGS) $< -o $@
+	$(EE_CC) $(EE_CFLAGS) -c $< -o $@
 
 $(TARGET): $(OBJS)
 	@echo AR - $@

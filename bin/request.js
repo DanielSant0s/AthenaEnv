@@ -1,5 +1,7 @@
 // {"name": "Network demo", "author": "Daniel Santos", "version": "04072023", "file": "request.js"}
 
+import { Network, Request } from 'athena_network.erl';
+
 //Screen.log("Athena network system\n");
 
 IOP.reset();

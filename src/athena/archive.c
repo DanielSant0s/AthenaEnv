@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include <zip.h>
@@ -40,9 +41,14 @@ static void archive_create_dir(char *pathname, int mode)
 {
     char *p;
     int r;
+    size_t n;
 
-    if (pathname[strlen(pathname) - 1] == '/')
-        pathname[strlen(pathname) - 1] = '\0';
+    if (!pathname || !pathname[0])
+        return;
+
+    n = strlen(pathname);
+    if (pathname[n - 1] == '/')
+        pathname[n - 1] = '\0';
 
     r = mkdir(pathname, mode);
     if (r != 0) {
@@ -86,6 +92,48 @@ static int archive_verify_checksum(const char *p)
     return (u == archive_parse_oct(p + 148, 8));
 }
 
+static int archive_join_path(char *dst, size_t dst_size, const char *base, const char *name)
+{
+    size_t base_len;
+    size_t name_len;
+    int need_sep;
+
+    if (!dst || dst_size == 0)
+        return -1;
+    if (!base)
+        base = "";
+    if (!name)
+        name = "";
+
+    base_len = strlen(base);
+    name_len = strlen(name);
+    need_sep = (base_len > 0 && name_len > 0 &&
+                base[base_len - 1] != '/' && base[base_len - 1] != ':' &&
+                name[0] != '/');
+
+    if (base_len + name_len + (need_sep ? 1 : 0) >= dst_size)
+        return -1;
+
+    memcpy(dst, base, base_len);
+    if (need_sep)
+        dst[base_len++] = '/';
+    memcpy(dst + base_len, name, name_len + 1);
+    return 0;
+}
+
+static int archive_resolve_path(char *dst, size_t dst_size, const char *path)
+{
+    if (!path || !path[0])
+        return -1;
+    if (strchr(path, ':') || path[0] == '/') {
+        if (strlen(path) >= dst_size)
+            return -1;
+        strcpy(dst, path);
+        return 0;
+    }
+    return archive_join_path(dst, dst_size, boot_path, path);
+}
+
 static void archive_untar(FILE *a, const char *path)
 {
     char buff[512];
@@ -118,16 +166,16 @@ static void archive_untar(FILE *a, const char *path)
             break;
         case '5':
             dbgprintf(" Extracting dir %s\n", buff);
-            strcpy(out_buff, path);
-            strcat(out_buff, buff);
-            archive_create_dir(out_buff, archive_parse_oct(buff + 100, 8));
+            if (archive_join_path(out_buff, sizeof(out_buff), path, buff) == 0)
+                archive_create_dir(out_buff, archive_parse_oct(buff + 100, 8));
             filesize = 0;
             break;
         case '6':
             break;
         default:
             dbgprintf(" Extracting file %s\n", buff);
-            f = archive_create_file(buff, archive_parse_oct(buff + 100, 8));
+            if (archive_join_path(out_buff, sizeof(out_buff), path, buff) == 0)
+                f = archive_create_file(out_buff, archive_parse_oct(buff + 100, 8));
             break;
         }
         while (filesize > 0) {
@@ -180,9 +228,10 @@ AthenaArchive *athena_archive_open(const char *path)
     fclose(fp);
 
     if (magic == 0x04034b50) {
-        strcpy(path_buf, boot_path);
-        strcat(path_buf, "/");
-        strcat(path_buf, path);
+        if (archive_resolve_path(path_buf, sizeof(path_buf), path) != 0) {
+            free(archive);
+            return NULL;
+        }
         archive->handle = zip_open(path_buf, 0, &err);
         if (!archive->handle) {
             zip_error_to_str(buf, sizeof(buf), err, errno);
@@ -294,9 +343,8 @@ int athena_archive_extract_all(AthenaArchive *archive, void **out_data, size_t *
             size_t name_len = strlen(sb.name);
             if (name_len > 0 && sb.name[name_len - 1] == '/') {
                 char outbuff[512];
-                strcpy(outbuff, boot_path);
-                strcat(outbuff, "/");
-                strcat(outbuff, sb.name);
+                if (archive_join_path(outbuff, sizeof(outbuff), boot_path, sb.name) != 0)
+                    continue;
                 mkdir(outbuff, 0755);
             } else {
                 struct zip_file *zf = zip_fopen_index(zip, i, 0);
@@ -360,13 +408,13 @@ int athena_archive_untar(const char *path)
 {
     FILE *fp;
     gzFile gz_fp;
-    char buf[256];
     char tar_path[512];
+    char tmp_path[512];
     unsigned char f_buf[8192];
-    unsigned char *out = NULL;
-    size_t total_bytes = 0;
-    size_t bytes_read;
     uint32_t magic;
+    int is_gz = 0;
+    int n;
+    size_t len;
 
     if (!path)
         return -1;
@@ -375,44 +423,56 @@ int athena_archive_untar(const char *path)
     if (!fp)
         return -1;
 
-    fread(&magic, 1, 4, fp);
+    if (fread(&magic, 1, 4, fp) != 4) {
+        fclose(fp);
+        return -1;
+    }
     fseek(fp, 0, SEEK_SET);
 
     if ((magic & 0x0000FFFF) == 0x8b1f) {
+        fclose(fp);
+        fp = NULL;
+
         gz_fp = gzopen(path, "rb");
-        while (1) {
-            bytes_read = gzread(gz_fp, f_buf, sizeof(f_buf));
-            if (bytes_read <= 0)
-                break;
-            total_bytes += bytes_read;
-            out = realloc(out, total_bytes);
-            if (!out)
-                break;
-            memcpy(out + total_bytes - bytes_read, f_buf, bytes_read);
-            if (bytes_read < sizeof(f_buf) && gzeof(gz_fp)) {
+        if (!gz_fp)
+            return -1;
+
+        if (snprintf(tmp_path, sizeof(tmp_path), "%s.untar", path) >= (int)sizeof(tmp_path)) {
+            gzclose(gz_fp);
+            return -1;
+        }
+
+        fp = fopen(tmp_path, "wb+");
+        if (!fp) {
+            gzclose(gz_fp);
+            return -1;
+        }
+
+        while ((n = gzread(gz_fp, f_buf, sizeof(f_buf))) > 0) {
+            if (fwrite(f_buf, 1, (size_t)n, fp) != (size_t)n) {
                 fclose(fp);
-                size_t tar_name = strrchr(path, '.') - path;
-                memcpy(buf, path, tar_name);
-                buf[tar_name] = '\0';
-                fp = fopen(buf, "wb+");
-                if (fp) {
-                    fwrite(out, 1, total_bytes, fp);
-                    fclose(fp);
-                    fp = fopen(buf, "rb");
-                }
-                break;
+                gzclose(gz_fp);
+                remove(tmp_path);
+                return -1;
             }
         }
         gzclose(gz_fp);
-        free(out);
+        fseek(fp, 0, SEEK_SET);
+        is_gz = 1;
     }
 
-    if (!fp)
-        return -1;
+    if (!getcwd(tar_path, sizeof(tar_path)))
+        tar_path[0] = '\0';
+    len = strlen(tar_path);
+    if (len > 0 && tar_path[len - 1] != '/' && tar_path[len - 1] != ':' &&
+        len + 1 < sizeof(tar_path)) {
+        tar_path[len] = '/';
+        tar_path[len + 1] = '\0';
+    }
 
-    getcwd(tar_path, sizeof(tar_path));
-    strcat(tar_path, "/");
     archive_untar(fp, tar_path);
     fclose(fp);
+    if (is_gz)
+        remove(tmp_path);
     return 0;
 }

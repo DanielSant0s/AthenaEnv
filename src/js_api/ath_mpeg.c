@@ -236,7 +236,8 @@ static const JSCFunctionListEntry js_video_proto_funcs[] = {
 static int js_video_init(JSContext *ctx, JSModuleDef *m) {
     JSValue proto, class_obj;
 
-    JS_NewClassID(&js_video_class_id);
+    if (!js_video_class_id)
+        JS_NewClassID(&js_video_class_id);
     JS_NewClass(JS_GetRuntime(ctx), js_video_class_id, &js_video_class);
 
     proto = JS_NewObject(ctx);
@@ -248,7 +249,15 @@ static int js_video_init(JSContext *ctx, JSModuleDef *m) {
     JS_SetConstructor(ctx, class_obj, proto);
     JS_SetClassProto(ctx, js_video_class_id, proto);
 
+#ifdef DYNAMIC_ATHENA_MPEG
+    JS_SetModuleExport(ctx, m, "Video", JS_DupValue(ctx, class_obj));
+    JS_SetModuleExport(ctx, m, "default", JS_DupValue(ctx, class_obj));
+    JSValue global_obj = JS_GetGlobalObject(ctx);
+    JS_SetPropertyStr(ctx, global_obj, "Video", class_obj);
+    JS_FreeValue(ctx, global_obj);
+#else
     JS_SetModuleExport(ctx, m, "Video", class_obj);
+#endif
     return 0;
 }
 
@@ -258,3 +267,15 @@ JSModuleDef* athena_mpeg_init(JSContext* ctx) {
     JS_AddModuleExport(ctx, m, "Video");
     return m;
 }
+
+#ifdef DYNAMIC_ATHENA_MPEG
+char *erl_id = "athena_mpeg";
+
+JSModuleDef *js_init_module(JSContext *ctx) {
+    JSModuleDef *m = JS_NewCModule(ctx, "Video", js_video_init);
+    if (!m) return NULL;
+    JS_AddModuleExport(ctx, m, "Video");
+    JS_AddModuleExport(ctx, m, "default");
+    return m;
+}
+#endif
