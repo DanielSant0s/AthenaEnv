@@ -88,6 +88,7 @@ async_list.process();
 * `Screen.resetBuffers()` – Restores the buffers created by `initBuffers()`.
 * `Screen.getBuffer(bufferId)` – Returns the GS surface bound to `DRAW_BUFFER`, `DISPLAY_BUFFER`, or `DEPTH_BUFFER`.
 * `Screen.setBuffer(bufferId, image[, mask = 0])` – Replaces a buffer with a renderable `Image`. Call `Screen.initBuffers()` before using this function.
+* `Screen.channelShuffle(source, lut, inChannel, options)` – Remaps a channel through a LUT. `options.rawSource` / `rawDestination` use CT32 views of the physical bytes without allocating or changing the images; masked alpha writes can reuse the unused Z24 byte while preserving depth. A raw Z source bypasses Morton unswizzling.
 * `Screen.switchContext()` – Toggles between the two GS drawing contexts and returns the active context id.
 * `Screen.flush()` – Forces pending GIF packets to be flushed immediately.
 * `Screen.getParam(param)` / `Screen.setParam(param, value)` – Low-level access to GS render state (alpha/depth/scissor/etc.). Pass either raw integers or helper objects (see below).

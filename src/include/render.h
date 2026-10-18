@@ -245,7 +245,8 @@ typedef struct {
     // same object with a different texture, or a rebuild triggered mid-frame)
     // would retroactively change what the first draw renders with.
     uint32_t queued_gen;
-    int      has_queued;
+    bool     has_queued;
+    bool     texture_mapping; // UV layout baked for this slot, not a global invalidation
 } athena_chain_cache;
 
 typedef struct athena_render_data {
@@ -293,7 +294,9 @@ typedef struct athena_render_data {
     // unflushed ring, and a script can flip data->pipeline between passes of the
     // same frame (shadows.js does). Rebuilding a slot in place while a queued
     // DMA_CALL still points at it desyncs the VIF stream.
-    // Rebuilt when built_version != chain_version or mpg_addr goes stale.
+    // Rebuilt when built_version != chain_version, mpg_addr goes stale, or
+    // this slot's texture_mapping changes. Toggling texturing in another
+    // pipeline/pass leaves this slot intact.
     athena_chain_cache chain[3][3];
 
     // The reflection pass runs IN ADDITION to the pipeline above, so it cannot
@@ -339,6 +342,8 @@ typedef struct athena_object_data {
     // still be reading it. Same scheme as athena_chain_cache.queued_gen.
     uint32_t bones_queued_gen;
     int      bones_queued;
+    // One pose per render_begin(), shared by main and shadow camera draws.
+    uint32_t bones_updated_frame;
 
     // Frustum-cull bounds for skinned meshes, rebuilt from the live bone
     // palette every render_object() -- see render_update_skinned_bounds().
@@ -471,7 +476,7 @@ void render_invalidate_compact_positions(athena_render_data *data);
 void render_freeze_compact_vertices(athena_render_data *data);
 
 // Bumps chain_version, so every pass_state slot rebuilds on its next draw.
-// Needed after changing materials/material_indices/texture_mapping/vertices,
+// Needed after changing materials/material_indices/vertices,
 // or reallocating the compact_* buffers the chains' DMA_REFs point at.
 void render_invalidate_chain_cache(athena_render_data *data);
 

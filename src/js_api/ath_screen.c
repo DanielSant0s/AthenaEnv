@@ -538,6 +538,7 @@ static JSValue js_screen_channel_shuffle(JSContext *ctx, JSValue this_val, int a
 	}
 
 	GSSURFACE *dst_surf = main_screen_buffer[DRAW_BUFFER];
+	GSSURFACE raw_source, raw_destination;
 	JSValueConst opts = JS_UNDEFINED;
 	if (argc >= 3 && JS_IsObject(argv[2])) {
 		opts = argv[2];
@@ -625,6 +626,25 @@ static JSValue js_screen_channel_shuffle(JSContext *ctx, JSValue this_val, int a
 		v = JS_GetPropertyStr(ctx, opts, "height");
 		if (!JS_IsUndefined(v)) {
 			JS_ToUint32(ctx, &cfg.height, v);
+		}
+		JS_FreeValue(ctx, v);
+
+		// Stack-only views: reinterpret physical bytes without changing the
+		// Image or allocating VRAM. In particular, CT32 aliases can access the
+		// unused alpha byte of Z24 while leaving its depth bits intact.
+		v = JS_GetPropertyStr(ctx, opts, "rawSource");
+		if (JS_ToBool(ctx, v)) {
+			raw_source = *src_surf;
+			raw_source.PSM = GS_PSM_CT32;
+			src_surf = &raw_source;
+		}
+		JS_FreeValue(ctx, v);
+
+		v = JS_GetPropertyStr(ctx, opts, "rawDestination");
+		if (JS_ToBool(ctx, v)) {
+			raw_destination = *dst_surf;
+			raw_destination.PSM = GS_PSM_CT32;
+			dst_surf = &raw_destination;
 		}
 		JS_FreeValue(ctx, v);
 	}

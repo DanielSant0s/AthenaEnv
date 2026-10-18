@@ -73,6 +73,7 @@ static void render_sum_ambient(void) {
 	}
 }
 static render_stats_t g_render_stats = { 0 };
+static uint32_t g_render_frame = 1;
 
 // View block: screen_scale (0), world_screen (1..4). Lives
 // outside the double-buffered window (use_top=0), so VU1 keeps it across draws
@@ -203,6 +204,7 @@ static void render_sync_static_lights(void) {
 }
 
 void render_begin() {
+	if (++g_render_frame == 0) g_render_frame = 1;
 	vu1_set_double_buffer_settings(141, 342);
 
 	render_reset_stats();
@@ -418,16 +420,16 @@ static void render_object_impl(athena_object_data *obj) {
 	// to live inside every draw_vu1_* function, which meant an object drawn in
 	// several passes -- base, then decal, then reflection, then bump twice --
 	// re-evaluated its animation and rebuilt every bone matrix once per pass.
-	// Now it happens once per frame per object, and a culled object skips it
-	// entirely (process_animation() is driven by wall clock, so it picks up
-	// again correctly whenever the object comes back into view).
-	if (obj->data->skeleton && obj->bone_matrices) {
+	// Multiple cameras in one frame reuse the same palette. Rewriting it for
+	// the shadow pass would force a DMA wait on the main pass's bone REF.
+	if (obj->data->skeleton && obj->bone_matrices && obj->bones_updated_frame != g_render_frame) {
 		prof_push(PROF_ANIM);
 		process_animation(obj);
 		if (obj->bones_queued && !owl_generation_read(obj->bones_queued_gen))
 			owl_wait_generation(obj->bones_queued_gen);
 		update_bone_transforms(obj);
 		render_update_skinned_bounds(obj);
+		obj->bones_updated_frame = g_render_frame;
 		prof_pop();
 	}
 
@@ -444,17 +446,17 @@ static void render_object_impl(athena_object_data *obj) {
 
 	render_funcs[obj->data->pipeline](obj, 0);
 
-	if (obj->data->attributes.has_decal) {
+	if (obj->data->attributes.texture_mapping && obj->data->attributes.has_decal) {
 		render_funcs[obj->data->pipeline](obj, 2);
 	}
 	
-	if (obj->data->attributes.has_refmap) {
+	if (obj->data->attributes.texture_mapping && obj->data->attributes.has_refmap) {
 		set_screen_param(ALPHA_BLEND_EQUATION, ALPHA_EQUATION(SRC_RGB, ZERO_RGB, ALPHA_FIX, DST_RGB, 0x40));
 
 		draw_vu1_with_lights_ref(obj, 0);
 	}
 
-	if (obj->data->attributes.has_bumpmap) {
+	if (obj->data->attributes.texture_mapping && obj->data->attributes.has_bumpmap) {
     	VECTOR light_dir;
 
 		matrix_functions->apply(light_dir, obj->transform, scene_lights.direction[0]);
@@ -567,6 +569,7 @@ void new_render_object(athena_object_data *obj, athena_render_data *data) {
 	// memset in shadow_projector_init -- so this is free(NULL) on a fresh one.
 	free(obj->skinned_bounds);
 	obj->skinned_bounds = NULL;
+	obj->bones_updated_frame = 0;
 
 	if (data->skeleton) {
 		memset(&obj->anim_controller, 0, sizeof(obj->anim_controller));
@@ -942,9 +945,13 @@ void render_invalidate_compact_cache(athena_render_data *data) {
 		data->compact_dirty |= RENDER_DIRTY_ALL;
 }
 
+static void render_refit_cached_bounds(athena_render_data *data);
 void render_invalidate_compact_positions(athena_render_data *data) {
-	if (data)
-		data->compact_dirty |= RENDER_DIRTY_POSITIONS;
+    if (data) {
+        data->compact_dirty |= RENDER_DIRTY_POSITIONS;
+        calculate_bbox(data);
+        render_refit_cached_bounds(data);
+    }
 }
 
 void render_invalidate_chain_cache(athena_render_data *data) {
@@ -1195,6 +1202,40 @@ void render_freeze_compact_vertices(athena_render_data *data) {
 
 #define MAT_GIFTAG_STRIDE 13
 
+// Only the CPU reads these cull boxes; DMA_REF consumes giftag slots 0..4.
+// Moving a shadow grid changes its bounds, not its topology or DMA commands.
+static void render_refit_cached_bounds(athena_render_data *data) {
+	if (!data->positions) return;
+	uint32_t first = 0;
+	for (int g = 0; g < data->material_index_count; g++) {
+		uint32_t end = data->material_indices[g].end;
+		if (first >= data->index_count) break;
+		if (end >= data->index_count) end = data->index_count - 1;
+		if (end < first) continue;
+		float lo[3], hi[3];
+		for (int k = 0; k < 3; k++) lo[k] = hi[k] = data->positions[first][k];
+		for (uint32_t v = first + 1; v <= end; v++) {
+			for (int k = 0; k < 3; k++) {
+				float p = data->positions[v][k];
+				if (p < lo[k]) lo[k] = p;
+				if (p > hi[k]) hi[k] = p;
+			}
+		}
+		for (int c = 0; c < 10; c++) {
+			athena_chain_cache *chain = c == 9 ? &data->ref_chain : &data->chain[c / 3][c % 3];
+			if (!chain->tex_giftag || chain->built_version != data->chain_version) continue;
+			VECTOR *bounds = (VECTOR *)&chain->tex_giftag[g * MAT_GIFTAG_STRIDE + 5];
+			for (int corner = 0; corner < 8; corner++) {
+				bounds[corner][0] = (corner & 1) ? hi[0] : lo[0];
+				bounds[corner][1] = (corner & 2) ? hi[1] : lo[1];
+				bounds[corner][2] = (corner & 4) ? hi[2] : lo[2];
+				bounds[corner][3] = 1;
+			}
+		}
+		first = end + 1;
+	}
+}
+
 // Bakes a material's 13-QW slot:
 //   slot[0]    : AD header (2 registers, EOP=1)
 //   slot[1]    : GS_TEX0 (or GIF_NOP if untextured)
@@ -1280,6 +1321,7 @@ static void render_build_chain(athena_object_data *obj, athena_chain_cache *chai
 
 	chain->mpg_addr = mpg_addr;
 	chain->built_version = data->chain_version;
+	chain->texture_mapping = data->attributes.texture_mapping;
 
 	if (chunk_count == 0) {
 		free(chain->buffer);
@@ -1332,15 +1374,13 @@ static void render_build_chain(athena_object_data *obj, athena_chain_cache *chai
 		}
 
 		const ath_mat *mat = &data->materials[data->material_indices[i].index];
-		bool texture_mapping = is_ref
-			? true
-			: (((mat->texture_id != -1) && data->attributes.texture_mapping) || pass_state);
-
+		bool texture_mapping = !is_ref &&
+			(((mat->texture_id != -1) && data->attributes.texture_mapping) || pass_state);
 		uint32_t base = render_compact_base(data, i, last_index);
 		athena_compact_position*     positions    = &data->compact_positions[base];
 		athena_compact_normal*       normals      = &data->compact_normals[base];
 		athena_compact_color*        colours      = &data->compact_colors[base];
-		athena_compact_uv*           texcoords    = (texture_mapping && !is_ref) ? &data->compact_uvs[base] : NULL;
+		athena_compact_uv*           texcoords    = (texture_mapping && data->compact_uvs) ? &data->compact_uvs[base] : NULL;
 		athena_compact_skin_indices* skin_indices = skinned ? &data->compact_skin_indices[base] : NULL;
 		athena_compact_skin_weights* skin_weights = skinned ? &data->compact_skin_weights[base] : NULL;
 
@@ -1747,7 +1787,9 @@ static void draw_vu1_pass(athena_object_data *obj, int pass_state,
 	bool is_ref = (kind == CHAIN_REF);
 	athena_chain_cache *chain = is_ref ? &data->ref_chain : &data->chain[pipeline][pass_state];
 	if (!chain->buffer || chain->built_version != data->chain_version
-	    || chain->mpg_addr != mpg_addr) {
+	    || chain->mpg_addr != mpg_addr
+	    || (!is_ref && pass_state == 0
+	        && chain->texture_mapping != data->attributes.texture_mapping)) {
 		render_build_chain(obj, chain, pass_state, batch_size, mpg_addr, kind);
 	}
 

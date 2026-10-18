@@ -321,6 +321,10 @@ declare namespace Screen {
     interface ChannelShuffleOptions {
         /** Destination surface (`Image` or buffer id like `Screen.DRAW_BUFFER`). Defaults to `Screen.DRAW_BUFFER`. */
         dst?: Image | number;
+        /** Read a CT32 view of the source's physical bytes, bypassing Z unswizzling; no copy or format mutation. */
+        rawSource?: boolean;
+        /** Write a CT32 view of the destination's physical bytes; useful for masked writes to the unused Z24 alpha byte. */
+        rawDestination?: boolean;
         /** Input channel mask (`Screen.CHANNEL_RED` | `GREEN` | `BLUE` | `ALPHA`). */
         inChannel?: number;
         /** Output channel write mask (`Screen.CHANNEL_RGB`, `Screen.CHANNEL_ALL`, etc.). Defaults to `Screen.CHANNEL_RGB`. */

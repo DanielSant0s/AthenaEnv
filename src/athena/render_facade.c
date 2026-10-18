@@ -353,6 +353,8 @@ void athena_render_object_play_anim_blend(AthenaRenderObject *ro, athena_animati
     if (!ro)
         return;
 
+    ro->obj.bones_updated_frame = 0;
+
     athena_animation_controller *ctrl = &ro->obj.anim_controller;
     if (ctrl->current && ctrl->current != anim && blend_time > 0.0f) {
         ctrl->prev = ctrl->current;

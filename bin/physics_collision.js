@@ -75,6 +75,8 @@ function fxRender() {
 const world = Physics.World();
 const jgroup = Physics.JointGroup();
 const space = Physics.Space();
+// Static receivers only: a caster must not raycast onto its own collider.
+const shadowSpace = Physics.Space();
 
 world.setGravity(0.0f, -18.0f, 0.0f);
 
@@ -95,11 +97,15 @@ const scene_object = new RenderObject(scene);
 // Every geom must stay referenced. The JS finalizer destroys the native geom,
 // so a temporary that nobody holds is removed from the space on the next GC.
 const staticGeoms = [];
+const shadowReceivers = [];
 
 function addStaticBox(x0, y0, z0, x1, y1, z1) {
     const g = Physics.GeomBox(space, x1 - x0, y1 - y0, z1 - z0);
     g.setPosition(0.5f * (x0 + x1), 0.5f * (y0 + y1), 0.5f * (z0 + z1));
     staticGeoms.push(g);
+    const receiver = Physics.GeomBox(shadowSpace, x1 - x0, y1 - y0, z1 - z0);
+    receiver.setPosition(0.5f * (x0 + x1), 0.5f * (y0 + y1), 0.5f * (z0 + z1));
+    shadowReceivers.push(receiver);
     return g;
 }
 
@@ -359,8 +365,9 @@ let camTargetY = PLAYER_START.y + 0.8f;
 let camTargetZ = PLAYER_START.z;
 
 // --- Architectural Atrium Lighting (Sunlight + Warm Colonnade Fill) ---
+const SUN_DIR = { x: 0.35f, y: 0.90f, z: 0.45f };
 const light = Lights.new();
-Lights.set(light, Lights.DIRECTION, 0.35f, 0.90f, 0.45f);
+Lights.set(light, Lights.DIRECTION, SUN_DIR.x, SUN_DIR.y, SUN_DIR.z);
 Lights.set(light, Lights.AMBIENT,   0.26f, 0.27f, 0.30f);
 Lights.set(light, Lights.DIFFUSE,   0.78f, 0.74f, 0.66f);
 Lights.set(light, Lights.SPECULAR,  1.00f, 1.00f, 1.00f); // white sun highlight
@@ -370,6 +377,227 @@ Lights.set(fillLight, Lights.DIRECTION, -0.45f, 0.55f, -0.70f);
 Lights.set(fillLight, Lights.AMBIENT,    0.05f, 0.04f, 0.03f);
 Lights.set(fillLight, Lights.DIFFUSE,    0.34f, 0.27f, 0.20f);
 Lights.set(fillLight, Lights.SPECULAR,   0.70f, 0.50f, 0.30f); // warm second highlight
+
+// --- Dynamic Silhouette Shadows (L3 to toggle) ---
+// One 128x128 target is consumed immediately after each light-camera draw.
+// Reuse framebuffer red for coverage and the unused Z24 byte to save scene red.
+// Coverage and the final darkening both stay at framebuffer resolution.
+// Only the player and six nearest props cast shadows; no per-caster VRAM atlas.
+const SHADOW_PROP_LIMIT = 6;
+const SHADOW_DISTANCE = 20;
+const SHADOW_RAY_LENGTH = 12;
+const SHADOW_CAMERA_DISTANCE = 32;
+const SHADOW_OPACITY = 0.42;
+const shadowRT = new Image();
+shadowRT.renderable = true;
+shadowRT.bpp = 32;
+shadowRT.texWidth = shadowRT.texHeight = 128;
+shadowRT.width = shadowRT.height = 128;
+shadowRT.endx = shadowRT.endy = 128;
+shadowRT.filter = LINEAR;
+if (!shadowRT.lock()) throw new Error("Unable to reserve the shadow render target");
+// Constant RGB makes additive coverage linear in filtered texture alpha.
+const shadowClear = Color.new(128, 128, 128, 0);
+const shadowCoverageClear = Color.new(127, 127, 127, 128);
+const shadowCopyBlend = Screen.alphaEquation(
+    Screen.SRC_RGB, Screen.ZERO_RGB, Screen.ALPHA_FIX, Screen.ZERO_RGB, 128);
+const shadowSilhouetteBlend = Screen.alphaEquation(
+    Screen.ZERO_RGB, Screen.ZERO_RGB, Screen.ALPHA_FIX, Screen.DST_RGB, 0);
+const shadowSceneBlend = Screen.alphaEquation(
+    Screen.SRC_RGB, Screen.ZERO_RGB, Screen.DST_ALPHA, Screen.ZERO_RGB, 0);
+const shadowDarkenBlend = Screen.alphaEquation(
+    Screen.DST_RGB, Screen.ZERO_RGB, Screen.DST_ALPHA, Screen.ZERO_RGB, 0);
+const shadowIdentityLUT = Screen.createShuffleLUT((value) => Color.new(value, value, value, value));
+// RGB coverage saturates at 255: 127 + 128 * min(sum(coverage), 1).
+// Convert it to light transmittance in alpha without resampling any pixels.
+const shadowMaskLUT = Screen.createShuffleLUT((value) => {
+    const coverage = Math.max(0, Math.min(1, (value - 127) / 128));
+    return Color.new(0, 0, 0, Math.round(128 * (1 - SHADOW_OPACITY * coverage)));
+});
+const sunLength = Math.sqrt(SUN_DIR.x * SUN_DIR.x + SUN_DIR.y * SUN_DIR.y + SUN_DIR.z * SUN_DIR.z);
+const shadowLight = { x: SUN_DIR.x / sunLength, y: SUN_DIR.y / sunLength, z: SUN_DIR.z / sunLength };
+const shadowHorizontal = Math.sqrt(shadowLight.x * shadowLight.x + shadowLight.z * shadowLight.z);
+// The projector's X/Z axes match the light camera's right/down axes.
+// Compensate the existing projector's -lightDir.y placement convention.
+const shadowTransform = [
+    shadowLight.z / shadowHorizontal, 0, -shadowLight.x / shadowHorizontal, 0,
+    shadowLight.x, shadowLight.y, shadowLight.z, 0,
+    shadowLight.x * shadowLight.y / shadowHorizontal, -shadowHorizontal,
+    shadowLight.z * shadowLight.y / shadowHorizontal, 0,
+    0, 0, 0, 1
+];
+function createShadowProjector(size, grid) {
+    const projector = new Shadows.Projector(shadowRT);
+    projector.setLightDir(shadowLight.x, shadowLight.y, shadowLight.z);
+    projector.setLightOffset(0);
+    // The projector applies -lightDir*bias: negative lifts toward the sun.
+    projector.setBias(-0.018);
+    projector.setSlopeLimit(0.45);
+    projector.setBlend(Shadows.SHADOW_BLEND_ADD);
+    projector.setColor(1, 1, 1, 1);
+    projector.setSize(size, size);
+    // Color is baked when geometry is built, so set it before setGrid().
+    projector.setGrid(grid, grid);
+    projector.enableRaycast(shadowSpace, true, SHADOW_RAY_LENGTH);
+    return projector;
+}
+const playerShadow = createShadowProjector(3.2, 6);
+const propShadow = createShadowProjector(1.65, 4);
+const shadowCandidates = allProps.map((prop, i) => ({
+    prop, data: i < crates.length ? box : monkeyData, x: 0, y: 0, z: 0, distance: 0
+}));
+function shadowDistanceOrder(a, b) { return a.distance - b.distance; }
+const shadowView = Camera.save();
+let shadowsEnabled = true;
+let shadowDraws = 0;
+
+// Reserve context 2 for silhouette generation; its Z writes stay masked.
+Screen.switchContext();
+Screen.setBuffer(Screen.DRAW_BUFFER, shadowRT);
+Screen.setBuffer(Screen.DEPTH_BUFFER, zbuf, 1);
+Screen.setParam(Screen.DEPTH_TEST_ENABLE, false);
+Screen.setParam(Screen.ALPHA_TEST_ENABLE, false);
+Screen.setParam(Screen.SCISSOR_BOUNDS, { x1: 0, y1: 0, x2: 127, y2: 127 });
+// Overwrite RGB and alpha, including a transparent clear, instead of blending
+// new silhouettes into the previous caster's target contents.
+Screen.setParam(Screen.ALPHA_BLEND_EQUATION, shadowCopyBlend);
+Screen.switchContext();
+Screen.setBuffer(Screen.DEPTH_BUFFER, zbuf, 0);
+
+function renderCasterShadow(obj, data, projector, size, x, y, z) {
+    Screen.switchContext();
+    Draw.rect(0, 0, 128, 128, shadowClear);
+    // Preserve the constant white RGB; the mesh only supplies silhouette alpha.
+    Screen.setParam(Screen.ALPHA_BLEND_EQUATION, shadowSilhouetteBlend);
+    // A distant narrow-FOV light camera approximates directional projection.
+    Render.setView(2 * Math.atan(size / (2 * SHADOW_CAMERA_DISTANCE)) * 180 / Math.PI, 1, 64, 128, 128);
+    Camera.position(x + shadowLight.x * SHADOW_CAMERA_DISTANCE,
+        y + shadowLight.y * SHADOW_CAMERA_DISTANCE, z + shadowLight.z * SHADOW_CAMERA_DISTANCE);
+    Camera.target(x, y, z);
+    Camera.update();
+    // Reuse the scene object/mesh for the light pass, as in shadows.js.
+    const textureMapping = data.texture_mapping;
+    const shadeModel = data.shade_model;
+    const pipeline = data.pipeline;
+    try {
+        data.texture_mapping = false;
+        data.shade_model = 0;
+        data.pipeline = Render.PL_NO_LIGHTS;
+        obj.render();
+    } finally {
+        data.texture_mapping = textureMapping;
+        data.shade_model = shadeModel;
+        data.pipeline = pipeline;
+        Screen.setParam(Screen.ALPHA_BLEND_EQUATION, shadowCopyBlend);
+    }
+    Screen.switchContext();
+    Render.setView(60, 2, 250);
+    Camera.restore(shadowView);
+    Camera.update();
+    // Start just above the whole caster, including the grid's lower corners.
+    const rayOffset = (SHADOW_RAY_LENGTH - size) * 0.5;
+    shadowTransform[12] = x - shadowLight.x * rayOffset;
+    shadowTransform[13] = y - shadowLight.y * rayOffset + shadowLight.y;
+    shadowTransform[14] = z - shadowLight.z * rayOffset;
+    projector.setTransform(shadowTransform);
+    projector.render();
+    shadowDraws++;
+}
+
+function renderDynamicShadows(px, py, pz, camX, camY, camZ) {
+    shadowDraws = 0;
+    if (!shadowsEnabled) return;
+    // Reuse the state object: the follow camera has the standard world-up.
+    shadowView.position.x = camX; shadowView.position.y = camY; shadowView.position.z = camZ;
+    shadowView.target.x = camTargetX; shadowView.target.y = camTargetY; shadowView.target.z = camTargetZ;
+    const alphaTest = Screen.getParam(Screen.ALPHA_TEST_ENABLE);
+    const alphaMethod = Screen.getParam(Screen.ALPHA_TEST_METHOD);
+    const alphaRef = Screen.getParam(Screen.ALPHA_TEST_REF);
+    const alphaFail = Screen.getParam(Screen.ALPHA_TEST_FAIL);
+    const destinationTest = Screen.getParam(Screen.DST_ALPHA_TEST_ENABLE);
+    const destinationMethod = Screen.getParam(Screen.DST_ALPHA_TEST_METHOD);
+    const depthTest = Screen.getParam(Screen.DEPTH_TEST_ENABLE);
+    const depthMethod = Screen.getParam(Screen.DEPTH_TEST_METHOD);
+    const blend = Screen.getParam(Screen.ALPHA_BLEND_EQUATION);
+    const clamp = Screen.getParam(Screen.COLOR_CLAMP_MODE);
+    const pixelBlend = Screen.getParam(Screen.PIXEL_ALPHA_BLEND_ENABLE);
+    Screen.setBuffer(Screen.DEPTH_BUFFER, zbuf, 1);
+    try {
+        // The scene has already been shaded once. Save red in the unused Z24
+        // alpha byte using a CT32 physical view: depth's low 24 bits stay intact.
+        Screen.setParam(Screen.DST_ALPHA_TEST_ENABLE, false);
+        Screen.setParam(Screen.ALPHA_TEST_ENABLE, false);
+        Screen.channelShuffle(fbuf, shadowIdentityLUT, Screen.CHANNEL_RED, {
+            dst: zbuf, rawDestination: true, outMask: Screen.CHANNEL_ALPHA,
+            alphaBlend: false, alphaTest: false
+        });
+        Screen.setParam(Screen.DEPTH_TEST_ENABLE, false);
+        Screen.setParam(Screen.ALPHA_BLEND_EQUATION, shadowCopyBlend);
+        Screen.setParam(Screen.COLOR_CLAMP_MODE, 1);
+        Screen.setParam(Screen.PIXEL_ALPHA_BLEND_ENABLE, false);
+        Screen.setBuffer(Screen.DRAW_BUFFER, fbuf, 0xFFFFFF00);
+        Draw.rect(0, 0, canvas.width, canvas.height, shadowCoverageClear);
+        Screen.setParam(Screen.DEPTH_TEST_ENABLE, depthTest);
+        Screen.setParam(Screen.DEPTH_TEST_METHOD, depthMethod);
+
+        // Red += filtered coverage, clamped to 255. Solid overlap is already
+        // saturated, while partial edges remain continuous and order independent.
+        Screen.setParam(Screen.ALPHA_TEST_ENABLE, true);
+        Screen.setParam(Screen.ALPHA_TEST_METHOD, Screen.ALPHA_GREATER);
+        Screen.setParam(Screen.ALPHA_TEST_REF, 0);
+        Screen.setParam(Screen.ALPHA_TEST_FAIL, Screen.ALPHA_FAIL_NO_UPDATE);
+
+        renderCasterShadow(skin_object, gltf_skin, playerShadow, 3.2, px, py - PLAYER_RADIUS + 0.9, pz);
+        for (let i = 0; i < shadowCandidates.length; i++) {
+            const candidate = shadowCandidates[i], p = candidate.prop.body.getPosition();
+            candidate.x = p[0]; candidate.y = p[1]; candidate.z = p[2];
+            const dx = p[0] - px, dz = p[2] - pz;
+            candidate.distance = dx * dx + dz * dz;
+        }
+        shadowCandidates.sort(shadowDistanceOrder);
+        for (let i = 0; i < SHADOW_PROP_LIMIT; i++) {
+            const candidate = shadowCandidates[i];
+            if (candidate.distance > SHADOW_DISTANCE * SHADOW_DISTANCE) break;
+            renderCasterShadow(candidate.prop.obj, candidate.data, propShadow, 1.65,
+                candidate.x, candidate.y, candidate.z);
+        }
+        Screen.channelShuffle(Screen.DRAW_BUFFER, shadowMaskLUT, Screen.CHANNEL_RED, {
+            outMask: Screen.CHANNEL_ALPHA, alphaBlend: false, alphaTest: false
+        });
+        // Restore saved red multiplied by transmittance. Read exactly the same
+        // physical layout used above; a normal Z read would permute the blocks.
+        Screen.channelShuffle(zbuf, shadowIdentityLUT, Screen.CHANNEL_ALPHA, {
+            rawSource: true, outMask: Screen.CHANNEL_RED, alphaBlend: true,
+            blendEquation: shadowSceneBlend, alphaTest: false
+        });
+        Screen.setParam(Screen.ALPHA_TEST_ENABLE, false);
+        Screen.setParam(Screen.DEPTH_TEST_ENABLE, false);
+        Screen.setBuffer(Screen.DRAW_BUFFER, fbuf, 0xFF0000FF);
+        Screen.setParam(Screen.ALPHA_BLEND_EQUATION, shadowDarkenBlend);
+        Draw.rect(0, 0, canvas.width, canvas.height, shadowCoverageClear);
+    } finally {
+        Screen.setParam(Screen.DST_ALPHA_TEST_ENABLE, destinationTest);
+        Screen.setParam(Screen.DST_ALPHA_TEST_METHOD, destinationMethod);
+        Screen.setParam(Screen.ALPHA_TEST_ENABLE, alphaTest);
+        Screen.setParam(Screen.ALPHA_TEST_METHOD, alphaMethod);
+        Screen.setParam(Screen.ALPHA_TEST_REF, alphaRef);
+        Screen.setParam(Screen.ALPHA_TEST_FAIL, alphaFail);
+        Screen.setParam(Screen.DEPTH_TEST_ENABLE, depthTest);
+        Screen.setParam(Screen.DEPTH_TEST_METHOD, depthMethod);
+        Screen.setParam(Screen.ALPHA_BLEND_EQUATION, blend);
+        Screen.setParam(Screen.COLOR_CLAMP_MODE, clamp);
+        Screen.setParam(Screen.PIXEL_ALPHA_BLEND_ENABLE, pixelBlend);
+        Screen.setBuffer(Screen.DRAW_BUFFER, fbuf, 0);
+        Screen.setBuffer(Screen.DEPTH_BUFFER, zbuf, 0);
+    }
+}
+
+function renderOpaqueScene() {
+    scene_object.render();
+    for (let i = 0; i < crates.length; i++) crates[i].obj.render();
+    for (let i = 0; i < balls.length; i++) balls[i].obj.render();
+    skin_object.render();
+}
 
 const pad = Pads.get();
 const gray = Color.new(180, 180, 220, 128);
@@ -381,7 +609,7 @@ const FOG_PRESETS = [
     {
         name: "MIST FOG (LINEAR)",
         type: "fog",
-        color: Color.new(182, 198, 225, 112),
+        color: Color.new(170, 125, 100, 110),
         start: 8.5f,
         end: 36.0f,
         opts: { curve: Screen.FOG_LINEAR, skyFog: 0.35f, shift: 4 }
@@ -631,11 +859,16 @@ while (true) {
 
     if (pad.justPressed(Pads.TRIANGLE)) {
         fxSystem.dispose();
+        shadowRT.unlock();
+        shadowRT.free();
+        shadowMaskLUT.free();
+        shadowIdentityLUT.free();
         os.chdir("..");
         std.reload("main.js");
     }
 
     if (!BENCHMARK && pad.justPressed(Pads.R3)) fxReset((fxLevel + 1) % FX_LEVELS.length);
+    if (pad.justPressed(Pads.L3)) shadowsEnabled = !shadowsEnabled;
 
     if (pad.justPressed(Pads.START)) {
         resetSandbox();
@@ -984,24 +1217,12 @@ while (true) {
 
     // --- 6. Render Pass ---
     Render.begin();
-
     Screen.setParam(Screen.DEPTH_TEST_ENABLE, false);
     sky.draw(0, 0);
-
     Screen.setParam(Screen.DEPTH_TEST_ENABLE, true);
     Screen.setParam(Screen.DEPTH_TEST_METHOD, Screen.DEPTH_GEQUAL);
-
-    scene_object.render();
-
-    for (let i = 0; i < crates.length; i++) {
-        crates[i].obj.render();
-    }
-
-    for (let i = 0; i < balls.length; i++) {
-        balls[i].obj.render();
-    }
-
-    skin_object.render();
+    renderOpaqueScene();
+    renderDynamicShadows(px, py, pz, camX, camY, camZ);
     // World-space billboards use scene depth, then receive the same fog/DOF.
     fxRender();
 
@@ -1054,6 +1275,7 @@ while (true) {
     const fxStats = fxSystem.stats();
     font.print(10, 78, `Native particles: ${fxStats.active} active | ${fxStats.visible} visible | ${fxStats.batches} VU batches`);
     font.print(10, 94, `R3: FX density OFF/128/256/512/1024 | current ${FX_LEVELS[fxLevel]}`);
+    font.print(10, 110, `L3: Dynamic shadows ${shadowsEnabled ? "ON" : "OFF"} | ${shadowDraws} casters`);
 
     if (statusTimer > 0) {
         font.print(10, 62, `>> ${statusText}`);

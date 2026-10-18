@@ -1049,7 +1049,7 @@ static JSValue js_render_data_set(JSContext *ctx, JSValueConst this_val, JSValue
 			break;
 		case 5:
 			ro->native.m.attributes.texture_mapping = JS_ToBool(ctx, val);
-			athena_render_data_invalidate_chain_cache(&ro->native);
+			// Each pipeline/pass validates its own UV layout at draw time.
 			break;
 		case 6:
 			{

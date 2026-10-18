@@ -213,6 +213,12 @@ static const JSCFunctionListEntry js_shadow_projector_proto_funcs[] = {
 	JS_CFUNC_DEF("render", 0, js_shadow_render),
 };
 
+static const JSCFunctionListEntry js_shadows_consts[] = {
+    JS_PROP_INT32_DEF("SHADOW_BLEND_DARKEN", SHADOW_BLEND_DARKEN, JS_PROP_CONFIGURABLE),
+    JS_PROP_INT32_DEF("SHADOW_BLEND_ALPHA", SHADOW_BLEND_ALPHA, JS_PROP_CONFIGURABLE),
+    JS_PROP_INT32_DEF("SHADOW_BLEND_ADD", SHADOW_BLEND_ADD, JS_PROP_CONFIGURABLE),
+};
+
 static int js_shadows_init(JSContext *ctx, JSModuleDef *m) {
 	JSValue proto, cls;
 	JS_NewClassID(&js_shadow_projector_class_id);
@@ -224,18 +230,13 @@ static int js_shadows_init(JSContext *ctx, JSModuleDef *m) {
 	JS_SetConstructor(ctx, cls, proto);
 	JS_SetClassProto(ctx, js_shadow_projector_class_id, proto);
 	JS_SetModuleExport(ctx, m, "Projector", cls);
-    static const JSCFunctionListEntry js_shadows_consts[] = {
-        JS_PROP_INT32_DEF("SHADOW_BLEND_DARKEN", 0, JS_PROP_CONFIGURABLE),
-        JS_PROP_INT32_DEF("SHADOW_BLEND_ALPHA", 1, JS_PROP_CONFIGURABLE),
-        JS_PROP_INT32_DEF("SHADOW_BLEND_ADD", 2, JS_PROP_CONFIGURABLE),
-    };
-    JS_SetModuleExportList(ctx, m, js_shadows_consts, countof(js_shadows_consts));
-	return 0;
+    return JS_SetModuleExportList(ctx, m, js_shadows_consts, countof(js_shadows_consts));
 }
 
 JSModuleDef *athena_shadows_init(JSContext *ctx) {
 	JSModuleDef *m = JS_NewCModule(ctx, "Shadows", js_shadows_init);
 	if (!m) return NULL;
 	JS_AddModuleExport(ctx, m, "Projector");
+	JS_AddModuleExportList(ctx, m, js_shadows_consts, countof(js_shadows_consts));
 	return m;
 }

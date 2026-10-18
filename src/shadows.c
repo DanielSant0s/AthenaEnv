@@ -487,7 +487,22 @@ void shadow_projector_render(ath_shadow_projector *p) {
             break;
     }
 
+    // Render-to-texture silhouettes can have been written by VU1 immediately
+    // before this draw. Drain the paths and invalidate cached GS texels before
+    // sampling; flushing a DMA chain alone does not invalidate the texture cache.
+    if (p->texture) {
+        owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 1);
+        owl_add_cnt_tag(packet, 0, owl_vif_code_double(
+            VIF_CODE(0, 0, VIF_FLUSHA, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
+        flush_gs_texcache();
+    }
     draw_vu1_with_colors(&p->obj, 0);
+
+    // Keep a later render-target clear (PATH2) behind this projector's PATH1
+    // primitives, and restore blending only once its draw has been issued.
+    owl_packet *finish = owl_query_packet(CHANNEL_VIF1, 1);
+    owl_add_cnt_tag(finish, 0, owl_vif_code_double(
+        VIF_CODE(0, 0, VIF_FLUSHA, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
 
     // Taken AFTER the draw: it may have flushed the ring mid-chunk, so the last
     // chain referencing this grid is the current one, not the one we started in.
@@ -528,7 +543,7 @@ static void shadow_slot_build(ath_shadow_projector *p, shadow_draw_slot *slot) {
     // One group per grid row -- see the topology loop below.
     data->material_indices = (material_index*)malloc((gz - 1) * sizeof(material_index));
     data->material_index_count = gz - 1;
-    data->attributes.accurate_clipping = 0;
+    data->attributes.accurate_clipping = 1;
     data->attributes.face_culling = CULL_FACE_NONE;
     data->attributes.texture_mapping = 1;
     data->attributes.shade_model = SHADE_GOURAUD;
