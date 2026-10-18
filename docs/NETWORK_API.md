@@ -2,6 +2,12 @@
 
 `Network`, `Request`, `Socket`, `WebSocket`.
 
+By default these live in `athena_network.erl`. Importing the module also installs the four names as globals.
+
+```js
+import { Network, Request, Socket, WebSocket } from 'athena_network.erl';
+```
+
 P.S.: *Italic* parameters refer to optional parameters.
 
 ## Network module
@@ -26,21 +32,23 @@ let r = new Request();
 * `keepalive` - bool
 * `useragent` - string
 * `userpwd` - string
-* `headers` - string array
+* `timeout` - number, milliseconds
+* `verifyTLS` - bool
+* `followRedirects` - bool
+* `headers` - string array, 16 entries maximum
 
 **Methods:**
 
-* `get(url)`
-* `head(url)`
-* `post(url, data)`
-* `download(url, fname)`
+* `get(url)`, `head(url)`, `post(url, data)` — return `{ text, status_code, headers }`.
+* `download(url, fname)` — writes the body to `fname` on the calling thread.
 
 **Asynchronous methods:**
 * `asyncGet(url)`
-* `asyncDownload(url, fname)`
-* `ready(*timeout*, *conn_timeout*)`
-* `getAsyncData()`
-* `getAsyncSize()`
+* `asyncPost(url, data)`
+* `asyncDownload(url, fname)` — opens `fname` for writing and downloads on a background thread. The path is used as given.
+* `ready(*unused*, *stall_ms*)` — returns `true` once that thread has finished. `stall_ms` defaults to `3000`. If no bytes have arrived within that window, `ready` throws. The first argument is accepted and ignored, so `ready(30)` does not cap the transfer.
+* `getAsyncData()` — body of a finished in-memory request, as a string.
+* `getAsyncSize()` — bytes received so far.
 
 ## Socket module
 

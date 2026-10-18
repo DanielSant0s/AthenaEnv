@@ -18,8 +18,17 @@ _P.S.: Install and usage instructions are inside their pages._
 Once you have PS2DEV environment working on your computer, you can compile AthenaEnv.  
   
 AthenaEnv is easily compilable with a single command ```make```. Two AthenaEnv binary variants will be generated at bin folder.  
-* **athena.elf** - Athena _default_ binary, with all specified functions
-* **athena_pkd.elf** - Athena binary _compressed_ variant. Proper to be used inside Memory Card or other low storage devices. 
+* **athena.elf** - Athena _default_ binary
+* **athena_pkd.elf** - Athena binary _compressed_ variant. Proper to be used inside Memory Card or other low storage devices.
+
+`make` also builds the optional subsystems that stay out of the ELF by default, as relocatable modules in `bin/`:
+
+* **athena_network.erl** — `Network`, `Request`, `Socket`, `WebSocket`
+* **athena_native.erl** — `Native`
+* **athena_archive.erl** — `Archive`
+* **athena_mpeg.erl** — `Video`
+
+A script loads one with `import` (see [Module System](MODULE_SYSTEM.md)). Setting the matching `STATIC_*` flag to `1` links that subsystem into the ELF instead and turns its `DYNAMIC_*` flag off.
   
 In addition, you can just type ```make clean``` to remove compilation cache resources.
 
@@ -33,17 +42,29 @@ AthenaEnv has some flags and variables that can be change when compiling as comm
 * GRAPHICS - Enable graphics and include its resources. Default: 1
 * PHYSICS - Enable VU0/MMI hardware-accelerated physics and collision engine. Default: 1
 * AUDIO - Enable audio and include its resources. Default: 1
-* STATIC_KEYBOARD - Enable keyboard and include its resources inside the binary file, also disables DYNAMIC_KEYBOARD. Default: 1
-* STATIC_MOUSE - Enable mouse and include its resources inside the binary file, also disables DYNAMIC_MOUSE. Default: 1
-* STATIC_NETWORK - Enable network and include its resources. Default: 1
+* STATIC_KEYBOARD - Link keyboard into the ELF. Also disables DYNAMIC_KEYBOARD. Default: 1
+* STATIC_MOUSE - Link mouse into the ELF. Also disables DYNAMIC_MOUSE. Default: 1
+* STATIC_NETWORK - Link network into the ELF. Also disables DYNAMIC_NETWORK. Default: 0
+* STATIC_ARCHIVE - Link archive (zip/gz/tar) into the ELF. Also disables DYNAMIC_ARCHIVE. Default: 0
+* STATIC_NATIVE_COMPILER - Link the AOT compiler into the ELF. Also disables DYNAMIC_NATIVE_COMPILER. Default: 0
+* STATIC_MPEG_VIDEO - Link MPEG video into the ELF. Also disables DYNAMIC_MPEG_VIDEO. Default: 0
 * STATIC_CAMERA - Enable EyeToy and include its resources. Default: 0
-* DYNAMIC_KEYBOARD - Enable keyboard and include its resources outside the binary file. Default: 0
-* DYNAMIC_MOUSE - Enable mouse and include its resources outside the binary file. Default: 0
+* DYNAMIC_KEYBOARD - Build `athena_keyboard.erl` instead of linking keyboard into the ELF. Default: 0
+* DYNAMIC_MOUSE - Build `athena_mouse.erl` instead of linking mouse into the ELF. Default: 0
+* DYNAMIC_NETWORK - Build `athena_network.erl`. Default: 1
+* DYNAMIC_ARCHIVE - Build `athena_archive.erl`. Default: 1
+* DYNAMIC_NATIVE_COMPILER - Build `athena_native.erl`. Default: 1
+* DYNAMIC_MPEG_VIDEO - Build `athena_mpeg.erl`. Default: 1
+
+`liberl` and `libmpeg` are vendored under `src/liberl` and `src/libmpeg` and built into `ee_modules/` when those trees are present. The host ELF exports the symbols those `.erl` files import. A new libc or zlib call inside an `.erl` has to be a symbol the host already exports, or the reloc stays `0` and the EE jumps to a null address.
 
 ### Usage
 
-Let's get some example. I want to debug on EE serial, disable network and pademu to decrease RAM usage:
+Debug on the EE serial port, leave network out of the image, and drop DualShock 3/4 support:
 ```shell
-make STATIC_NETWORK=0 EE_SIO=1 PADEMU=0
+make DYNAMIC_NETWORK=0 EE_SIO=1 PADEMU=0
 ```
-That's it!
+Link network into the ELF instead of shipping `athena_network.erl`:
+```shell
+make STATIC_NETWORK=1
+```

@@ -46,13 +46,13 @@ int main(void) {
 | Lights | `athena/lights.h` | — | `athena_lights_new`, `athena_lights_set` |
 | Render | `athena/render_facade.h` | `AthenaRenderObject` etc. | render data/object/batch/scene/async |
 | Sound | `athena/sound.h` | `AthenaSound`, `AthenaSfx` | `athena_sound_load`, `athena_sfx_play` |
-| Video | `athena/video.h` | `AthenaVideo` | `athena_video_open`, `athena_video_update` |
+| Video | `athena/video.h` | `AthenaVideo` | `athena_video_create`, `athena_video_update`, `athena_video_draw` |
 | System | `athena/system_facade.h` | `AthenaDirEntry`, `AthenaMemoryStats` | `athena_system_list_dir`, `athena_system_sleep`, `athena_system_get_memory_stats` |
 | LZ4 / EE compaction | `lz4_ps2.h` | `AthenaMemCompressConfig`, `AthenaMemCompressStats` | `athena_lz4_compress`, `athena_lz4_decompress`, `athena_lz4_unpack_blob`, `athena_mem_compress_tick`, `athena_mem_compact_now`, `athena_mem_compress_set_config` |
 | IOP | `athena/iop_facade.h` | — | `athena_iop_load_module`, `athena_iop_reset` |
-| Archive | `athena/archive.h` | `AthenaArchive` | `athena_archive_open`, `athena_archive_extract` |
-| Network | `athena/net.h` | — | `athena_net_init_dhcp`, `athena_net_set_config` |
-| Request | `athena/request.h` | `AthenaRequest` | `athena_request_create`, `athena_request_perform` |
+| Archive | `athena/archive.h` | `AthenaArchive` | `athena_archive_open`, `athena_archive_list`, `athena_archive_extract_all`, `athena_archive_untar`, `athena_archive_close` |
+| Network | `athena/net.h` | `AthenaNetConfig` | `athena_net_init`, `athena_net_init_dhcp`, `athena_net_get_config`, `athena_net_deinit` |
+| Request | `athena/request.h` | `AthenaRequest` | `athena_request_create`, `athena_request_get`, `athena_request_post`, `athena_request_download`, `athena_request_run_async`, `athena_request_poll` |
 | Socket | `athena/socket.h` | `AthenaSocket` | `athena_socket_create`, `athena_socket_connect` |
 | WebSocket | `athena/websocket.h` | `AthenaWebSocket` | `athena_websocket_connect`, `athena_websocket_send` |
 | Native | `athena/native_facade.h` | — | native compiler AOT APIs |

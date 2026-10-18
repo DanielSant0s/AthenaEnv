@@ -1,8 +1,11 @@
 # Video playback
 
-AthenaEnv can decode MPEG-1/2 video through the `Video` class, backed by PS2SDK's
-`libmpeg` and the IPU (Image Processing Unit) hardware decoder. This document
-covers what kind of file to feed it and how to use the JS API.
+AthenaEnv can decode MPEG-1/2 video through the `Video` class, backed by the
+vendored `libmpeg` (`src/libmpeg`) and the IPU (Image Processing Unit) hardware
+decoder. This document covers what kind of file to feed it and how to use the
+JS API.
+
+By default `Video` lives in `athena_mpeg.erl`. Importing it also installs the global, so `new Video(...)` works after the import.
 
 ## Source format requirements
 
@@ -35,6 +38,8 @@ texture each frame, on top of running your script.
 ## JS API
 
 ```js
+import { Video } from 'athena_mpeg.erl';
+
 const video = new Video("video.m2v");
 
 video.loop = false;   // restart automatically on end

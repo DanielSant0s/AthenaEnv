@@ -185,11 +185,17 @@ const freed = System.compactMemory(); // 0 = compact everything eligible right n
 
 ## Archive module
 
-* `let zip = Archive.open(fname)`
-* `let list = Archive.list(zip)`
-* `Archive.extractAll(zip)`
+By default `Archive` lives in `athena_archive.erl`. Importing it also installs the global.
+
+```js
+import * as Archive from 'athena_archive.erl';
+```
+
+* `let zip = Archive.open(fname)` — opens a `.zip` or `.gz`. A relative `.zip` path (no `:` and not starting with `/`) is resolved against `System.boot_path`. Returns `undefined` if the file is missing or the format is neither.
+* `let list = Archive.list(zip)` — zip entries only. Each item is `{ name, size, mtime }`.
+* `Archive.extractAll(zip)` — a `.zip` is written into the current directory, using each entry's name as the output path. A `.gz` is inflated in memory and returned as an `ArrayBuffer`.
 * `Archive.close(zip)`
-* `Archive.untar(fname)`
+* `Archive.untar(fname)` — if `fname` is gzip, it is streamed to a temporary `<fname>.untar` file and that file is removed after extraction. The tar is extracted into the current working directory. Pass the same path the file was saved to (`System.boot_path + "/" + name` when the download used that path). The path is not prefixed for you.
 
 ## IOP module
 
