@@ -38,7 +38,7 @@ static SoundStream *cur_snd = NULL;
  * audsrv RPC call, to avoid deadlocking against it. */
 static int stream_sema = -1;
 
-static StreamSlot prefetch_slots[STREAM_PREFETCH_SLOTS];
+static StreamSlot *prefetch_slots = NULL;
 static int slot_free_sema = -1;
 static int slot_filled_sema = -1;
 static int prefetch_stopped_sema = -1;
@@ -180,7 +180,13 @@ static void sound_stream_stop_prefetch(void) {
     wait_semaphore(prefetch_stopped_sema);
 }
 
-static void sound_stream_reset_prefetch_ring(void) {
+static bool sound_stream_reset_prefetch_ring(void) {
+    if (!prefetch_slots) {
+        prefetch_slots = (StreamSlot *)malloc(sizeof(StreamSlot) * STREAM_PREFETCH_SLOTS);
+        if (!prefetch_slots)
+            return false;
+    }
+
     if (slot_free_sema >= 0)
         delete_semaphore(slot_free_sema);
     if (slot_filled_sema >= 0)
@@ -200,6 +206,7 @@ static void sound_stream_reset_prefetch_ring(void) {
         prefetch_slots[i].size = 0;
         prefetch_slots[i].ended = false;
     }
+    return true;
 }
 
 /* --- audsrv-facing callback ---------------------------------------------
@@ -355,7 +362,12 @@ void sound_play(SoundStream *snd) {
 
     audsrv_set_format(&(cur_snd->fmt));
 
-    sound_stream_reset_prefetch_ring();
+    if (!sound_stream_reset_prefetch_ring()) {
+        stream_playing = false;
+        cur_snd = NULL;
+        stream_unlock();
+        return;
+    }
 
     stream_unlock();
 

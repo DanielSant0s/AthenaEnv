@@ -7,6 +7,7 @@
 #include <malloc.h>
 
 #include <system.h>
+#include <lz4_ps2.h>
 
 #include <dbgprintf.h>
 
@@ -80,11 +81,15 @@ int LoadELFFromFileNoReset(const char *path, int argc, char *argv[]) {
 		new_argv[i + 1] = argv[i];
 	}
 
+	uint32_t raw_size = 0;
+	boot_elf = (uint8_t *)athena_lz4_unpack_blob(loader_elf, (uint32_t)size_loader_elf, &raw_size, 16);
+	if (!boot_elf)
+		return -1;
+
 	// Wipe memory region where the ELF loader is going to be loaded (see
 	// loader/linkfile)
 	memset((void *)0x00084000, 0, 0x00100000 - 0x00084000);
 
-	boot_elf = (uint8_t *)loader_elf;
 	eh = (elf_header_t *)boot_elf;
 	if (_lw((uint32_t)&eh->ident) != ELF_MAGIC)
 		__builtin_trap();
@@ -100,9 +105,12 @@ int LoadELFFromFileNoReset(const char *path, int argc, char *argv[]) {
 		memcpy(eph[i].vaddr, pdata, eph[i].filesz);
 	}
 
+	void *entry_point = (void *)eh->entry;
+	free(boot_elf);
+
 	SifExitRpc();
 	FlushCache(0);
 	FlushCache(2);
 
-	return ExecPS2((void *)eh->entry, NULL, argc + 1, new_argv);
+	return ExecPS2(entry_point, NULL, argc + 1, new_argv);
 }

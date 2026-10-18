@@ -2,8 +2,9 @@
 #include <athena/websocket.h>
 #include <macros.h>
 
+#define WS_RECV_BUF_SIZE 16000
+
 static JSClassID js_ws_class_id;
-static uint8_t ws_buf[16000];
 
 static JSValue js_ws_get(JSContext *ctx, JSValueConst this_val, int magic)
 {
@@ -77,9 +78,16 @@ static JSValue js_ws_recv(JSContext *ctx, JSValue this_val, int argc, JSValueCon
 	AthenaWebSocket *ws = JS_GetOpaque2(ctx, this_val, js_ws_class_id);
 	size_t rlen = 0;
 
-	if (athena_websocket_recv(ws, ws_buf, sizeof(ws_buf), &rlen) == 0)
-		return JS_NewArrayBufferCopy(ctx, ws_buf, rlen);
-	return JS_UNDEFINED;
+	uint8_t *ws_buf = js_malloc(ctx, WS_RECV_BUF_SIZE);
+	if (!ws_buf)
+		return JS_EXCEPTION;
+
+	JSValue ret = JS_UNDEFINED;
+	if (athena_websocket_recv(ws, ws_buf, WS_RECV_BUF_SIZE, &rlen) == 0)
+		ret = JS_NewArrayBufferCopy(ctx, ws_buf, rlen);
+
+	js_free(ctx, ws_buf);
+	return ret;
 }
 
 static JSValue js_ws_send(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv)

@@ -1,6 +1,8 @@
 #include <time.h>
 
 #include <graphics.h>
+#include <lz4_ps2.h>
+#include <stdlib.h>
 #include <taskman.h>
 #include <athena_core.h>
 
@@ -36,9 +38,19 @@ void bootlogoThread(void* data) {
     bootlogo.Vram = NULL;
     bootlogo.VramClut = NULL;
 
-	bootlogo.Mem = owl_indices;
+    uint32_t indices_size = 0, palette_size = 0;
+    void *unpacked_indices = athena_lz4_unpack_blob(owl_indices, size_owl_indices, &indices_size, 128);
+    void *unpacked_palette = athena_lz4_unpack_blob(owl_palette, (uint32_t)size_owl_palette, &palette_size, 128);
+    if (!unpacked_indices || !unpacked_palette) {
+        if (unpacked_indices) free(unpacked_indices);
+        if (unpacked_palette) free(unpacked_palette);
+        boot_state = BOOT_FINISH;
+        exit_kill_task();
+        return;
+    }
 
-    bootlogo.Clut = owl_palette;
+    bootlogo.Mem = unpacked_indices;
+    bootlogo.Clut = unpacked_palette;
 
     bootlogo.Filter = GS_FILTER_NEAREST;
 
@@ -92,6 +104,8 @@ void bootlogoThread(void* data) {
     }
 
     texture_manager_free(&bootlogo);
+    free(unpacked_indices);
+    free(unpacked_palette);
 
     exit_kill_task();
 }

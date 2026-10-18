@@ -10,6 +10,7 @@
 #include <unistd.h>
 #include <sys/fcntl.h>
 #include <fntsys.h>
+#include <lz4_ps2.h>
 #include <utf8.h>
 #include <atlas.h>
 #include <graphics.h>
@@ -281,8 +282,14 @@ static int fntLoadSlot(font_t *font, const char* path)
         }
         font->dataPtr = buffer;
     } else {
-        buffer = quicksand_regular;
-        bufferSize = size_quicksand_regular;
+        uint32_t raw_size = 0;
+        buffer = athena_lz4_unpack_blob(quicksand_regular, (uint32_t)size_quicksand_regular, &raw_size, 16);
+        if (!buffer) {
+            dbgprintf("FNTSYS Default font unpack failed!\n");
+            return FNT_ERROR;
+        }
+        bufferSize = (int)raw_size;
+        font->dataPtr = buffer;
     }
 
     // load the font via memory handle

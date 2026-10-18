@@ -7,7 +7,7 @@ JS_API_DIR = js_api/
 VU1_MPGS_DIR = vu1/
 VU0_MPGS_DIR = vu0/
 
-BIN2S = $(PS2SDK)/bin/bin2c
+BIN2S = python3 $(CURDIR)/scripts/bin2c_lz4.py
 EE_DVP = dvp-as
 EE_VCL = vcl
 EE_VCLPP = vclpp

@@ -1,4 +1,6 @@
 #include <iop_manager.h>
+#include <lz4_ps2.h>
+#include <kernel.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -102,7 +104,13 @@ int iopman_load_module(module_entry *module, int arglen, char *args) {
         char *file_path = module->data;
         id = SifExecModuleFile(file_path, arg_length, arg_data, &ret);
     } else {
-        id = SifExecModuleBuffer(module->data, module->size, arg_length, arg_data, &ret);
+        uint32_t raw_size = 0;
+        void *raw_buf = athena_lz4_unpack_blob(module->data, module->size, &raw_size, 16);
+        if (!raw_buf)
+            return MODULE_STATUS_ERROR;
+        FlushCache(0);
+        id = SifExecModuleBuffer(raw_buf, raw_size, arg_length, arg_data, &ret);
+        free(raw_buf);
     }
 
     module->started = (id > 0 && ret != 1);

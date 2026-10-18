@@ -114,7 +114,7 @@ static inline void lz4_clear_table_128(uint32_t *table) {
 }
 
 static volatile int s_spad_lock = 0;
-static uint32_t s_fallback_hash_table[LZ4_HASHTABLESIZE] __attribute__((aligned(16)));
+static uint32_t *s_fallback_hash_table = NULL;
 
 size_t athena_lz4_compress_bound(size_t input_size) {
     return ATHENA_LZ4_COMPRESS_BOUND(input_size);
@@ -151,6 +151,11 @@ int athena_lz4_compress(const void *src, void *dst, int src_size, int dst_capaci
     if (using_spad) {
         hash_table = (uint32_t *)(uintptr_t)PS2_SPAD_HASH_ADDR;
     } else {
+        if (!s_fallback_hash_table) {
+            s_fallback_hash_table = (uint32_t *)memalign(16, LZ4_HASHTABLESIZE * sizeof(uint32_t));
+            if (!s_fallback_hash_table)
+                return 0;
+        }
         hash_table = s_fallback_hash_table;
     }
 
@@ -418,6 +423,40 @@ int athena_lz4_decompress(const void *src, void *dst, int compressed_size, int d
     return (int)(op - (uint8_t *)dst);
 }
 
+void *athena_lz4_unpack_blob(const void *blob, uint32_t blob_size, uint32_t *out_size, size_t align) {
+    if (!blob || blob_size == 0)
+        return NULL;
+
+    const uint8_t *bytes = (const uint8_t *)blob;
+    if (blob_size >= 12 && lz4_read32(bytes) == ATHENA_LZ4_BLOB_MAGIC) {
+        uint32_t raw_size  = lz4_read32(bytes + 4);
+        uint32_t comp_size = lz4_read32(bytes + 8);
+        if (raw_size == 0 || comp_size == 0 || (12u + comp_size) > blob_size)
+            return NULL;
+
+        void *dst = (align > 0) ? memalign(align, raw_size) : malloc(raw_size);
+        if (!dst)
+            return NULL;
+
+        int dec = athena_lz4_decompress(bytes + 12, dst, (int)comp_size, (int)raw_size);
+        if (dec != (int)raw_size) {
+            free(dst);
+            return NULL;
+        }
+        if (out_size)
+            *out_size = raw_size;
+        return dst;
+    }
+
+    void *dst = (align > 0) ? memalign(align, blob_size) : malloc(blob_size);
+    if (!dst)
+        return NULL;
+    memcpy(dst, blob, blob_size);
+    if (out_size)
+        *out_size = blob_size;
+    return dst;
+}
+
 /* =========================================================================
  * Part 2: Smart Memory Compactor Daemon (Textures + 3D Meshes + OOM Rescue)
  * ========================================================================= */
@@ -428,7 +467,7 @@ int athena_lz4_decompress(const void *src, void *dst, int compressed_size, int d
 
 #define MAX_TRACKED_TEXTURES     512
 #define MAX_TRACKED_MESHES       256
-#define SCRATCH_BUFFER_SIZE      (64 * 1024) /* 64 KB static BSS staging buffer (zero heap frag) */
+#define SCRATCH_BUFFER_SIZE      (32 * 1024) /* 32 KB static BSS staging buffer (zero heap frag) */
 
 static GSSURFACE          *s_textures[MAX_TRACKED_TEXTURES];
 static uint32_t            s_texture_count = 0;
