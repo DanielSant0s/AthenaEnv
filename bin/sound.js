@@ -1,56 +1,33 @@
-// {"name": "Audio player", "author": "Daniel Santos", "version": "04072023", "icon": "sap_icon.png", "file": "sound.js"}
+// {"name": "Audio player", "author": "Daniel Santos", "version": "04072023", "icon": "sap_icon.png", "file": "sound.js", "category": "media", "blurb": "Stream OGG and WAV tracks with seek and playlist.", "exit": "TRIANGLE"}
 
-const segoe_ui = new Font("fonts/Segoe UI.ttf");
+import { AppUI, COLORS, rgba, exitToShell } from 'athenaos/app.js';
 
-const purple = Color.new(64, 0, 128);
+const ui = new AppUI({ title: "Audio player", category: "media",
+                       hints: [["START", "Play/Pause"], ["L1", "Prev"], ["R1", "Next"], ["D-pad", "Seek"], ["square", "Rewind"]] });
 
-const gray = Color.new(28, 28, 28);
+Screen.setParam(Screen.DEPTH_TEST_ENABLE, false);
 
 Sound.setVolume(100);
 
-const sound_table = System.listDir("/sounds").map(file => file.name).filter(str => str.endsWith(".ogg") || str.endsWith(".wav") );
+const sounds = System.listDir("/sounds").map(file => file.name)
+    .filter(str => str.endsWith(".ogg") || str.endsWith(".wav"))
+    .map(file => ({ name: file.replace(".ogg", "").replace(".wav", ""), file }));
 
-console.log(JSON.stringify(System.listDir("/sounds")));
-
-const sounds = Array();
-
-sound_table.forEach(name => {
-    let sound_name = name.replace(".ogg", "").replace(".wav", "");
-    sounds.push({name:sound_name, file:name, size:segoe_ui.getTextSize(sound_name)});
-});
-
-let track = Sound.Stream("sounds/" + sounds[0].file);
-
+let current = 0;
+let track = Sound.Stream("sounds/" + sounds[current].file);
 let duration = track.length;
-
-let position = track.position;
 
 track.play();
 
-let repeat = false;
-
 let pad = Pads.get();
 
-const icons = {play:new Image("amp/play.png"), pause:new Image("amp/pause.png"), next:new Image("amp/next.png"), back:new Image("amp/back.png")};
-icons.play.color = purple;
-icons.play.width /= 3;
-icons.play.height /= 3;
-
-icons.pause.color = purple;
-icons.pause.width /= 3;
-icons.pause.height /= 3;
-
-icons.next.color = purple;
-icons.next.width /= 3;
-icons.next.height /= 3;
-
-icons.back.color = purple;
-icons.back.width /= 3;
-icons.back.height /= 3;
-
-let cur_duration = 0.0f;
-
-let text_size = null;
+const icons = { play: new Image("amp/play.png"), pause: new Image("amp/pause.png"),
+                next: new Image("amp/next.png"), back: new Image("amp/back.png") };
+for (const k in icons) {
+    icons[k].width /= 4;
+    icons[k].height /= 4;
+    icons[k].filter = LINEAR;
+}
 
 function msToSecondMin(ms) {
     let minutes = Math.floor(ms / 60000)
@@ -65,11 +42,28 @@ function msToSecondMin(ms) {
     }
 }
 
+function switchTrack(index) {
+    track.pause();
+    current = (index + sounds.length) % sounds.length;
+    let new_track = Sound.Stream("sounds/" + sounds[current].file);
+    duration = new_track.length;
+    new_track.play();
+    let old_track = track;
+    track = new_track;
+    old_track.free();
+}
+
+function drawIcon(img, cx, cy, color) {
+    img.color = color;
+    img.draw(cx - img.width / 2, cy - img.height / 2);
+}
+
 while(true){
-
-    Screen.clear(gray);
-
     pad.update();
+
+    if(ui.homeRequested(pad)) {
+        break;
+    }
 
     if(pad.justPressed(Pads.START)) {
         if(track.playing()) {
@@ -79,31 +73,8 @@ while(true){
         }
     }
 
-    if(pad.justPressed(Pads.L1)) {
-        cur_duration = 0;
-        track.pause();
-        sounds.unshift(sounds.pop());
-        let new_track = Sound.Stream("sounds/" + sounds[0].file);
-        duration = new_track.length;
-        new_track.play();
-        let old_track = track;
-        track = new_track;
-        old_track.free();
-    }
-
-    if(pad.justPressed(Pads.R1)) {
-        cur_duration = 0;
-        track.pause();
-        sounds.push(sounds.shift());
-        let new_track = Sound.Stream("sounds/" + sounds[0].file);
-        duration = new_track.length;
-        new_track.play();
-        let old_track = track;
-        track = new_track;
-        old_track.free();
-    }
-
-    position = track.position;
+    if(pad.justPressed(Pads.L1)) switchTrack(current - 1);
+    if(pad.justPressed(Pads.R1)) switchTrack(current + 1);
 
     if(pad.justPressed(Pads.RIGHT) && track.playing()) {
         track.position = track.position + 5000;
@@ -111,28 +82,51 @@ while(true){
         track.position = track.position - 5000;
     }
 
-    if(pad.justPressed(Pads.TRIANGLE)) {
+    if(pad.justPressed(Pads.SQUARE)) {
         track.rewind();
     }
-    
-    if(track.playing()) {
-        icons.pause.draw(320 - icons.play.width/2, 224 - icons.play.height/2 + 100);
-    } else {
-        icons.play.draw(320 - icons.play.width/2, 224 - icons.play.height/2 + 100);
-    }
 
-    cur_duration = position/duration;
-    
-    segoe_ui.print(320 - sounds[0].size.width/2, 180 - sounds[0].size.height/2, sounds[0].name);
+    ui.background();
+    const { x, y, w, h } = ui.content;
 
-    segoe_ui.print(260, 220, msToSecondMin(track.position) + "/" + msToSecondMin(duration));
+    // Playlist
+    const listW = 200;
+    ui.panel(x, y, listW, h);
+    ui.heading(x + 16, y + 20, `Playlist - ${sounds.length} tracks`);
+    sounds.forEach((s, i) => {
+        const ry = y + 40 + i * 30;
+        if (i === current) {
+            Draw.rect(x + 8, ry, listW - 16, 26, rgba(255, 255, 255, 0.10));
+            Draw.rect(x + 8, ry, 3, 26, ui.accent());
+        }
+        ui.textV(x + 20, ry + 13, ui.fit(s.name, 0.46, listW - 40), 0.46, i === current ? COLORS.text : COLORS.textDim);
+    });
 
-    Draw.rect(120, 260, 400, 8, purple);
-    Draw.rect(120, 260, 400 * cur_duration, 8, Color.new(127, 0, 255));
-    Draw.circle(120 + 400 * cur_duration, 264, 8, Color.new(127, 0, 255))
+    // Now playing
+    const px = x + listW + 16, pw = w - listW - 16, cx = Math.round(px + pw / 2);
+    ui.panel(px, y, pw, h);
+    ui.heading(px + 20, y + 20, track.playing() ? "Now playing" : "Paused");
+    ui.textV(cx, y + 110, ui.fit(sounds[current].name, 0.8, pw - 40), 0.8, COLORS.text, Font.ALIGN_HCENTER);
 
-    icons.next.draw(320 - icons.next.width/2 + 150, 224 - icons.next.height/2 + 100);
-    icons.back.draw(320 - icons.back.width/2 - 150, 224 - icons.back.height/2 + 100);
+    const position = track.position;
+    const t = duration ? Math.min(position / duration, 1) : 0;
+    const bx = px + 30, bw = pw - 60, by = y + 170;
+    Draw.rect(bx, by, bw, 6, rgba(255, 255, 255, 0.15));
+    Draw.rect(bx, by, bw * t, 6, ui.accent());
+    Draw.circle(bx + bw * t, by + 3, 7, COLORS.text, true);
+    ui.textV(bx, by + 24, msToSecondMin(position), 0.44, COLORS.textDim);
+    ui.textV(bx + bw, by + 24, msToSecondMin(duration), 0.44, COLORS.textDim, Font.ALIGN_RIGHT);
 
+    const iy = y + 260;
+    drawIcon(icons.back, cx - 90, iy, rgba(255, 255, 255, 0.8));
+    Draw.circle(cx, iy, 30, ui.accent(), true);
+    drawIcon(track.playing() ? icons.pause : icons.play, cx, iy, COLORS.text);
+    drawIcon(icons.next, cx + 90, iy, rgba(255, 255, 255, 0.8));
+
+    ui.chrome();
     Screen.flip();
 }
+
+track.pause();
+track.free();
+exitToShell();

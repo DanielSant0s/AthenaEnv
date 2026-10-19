@@ -1,4 +1,10 @@
-// {"name": "Cell.io", "author": "Daniel Santos", "version": "04072023", "icon": "cell_icon.png", "file": "cell.js"}
+// {"name": "Cell.io", "author": "Daniel Santos", "version": "04072023", "icon": "cell_icon.png", "file": "cell.js", "category": "games", "blurb": "Eat smaller cells, avoid bigger ones. Agar.io style arcade.", "exit": "TRIANGLE"}
+
+import { AppUI, COLORS, rgba, exitToShell } from 'athenaos/app.js';
+
+// Menus use the standard chrome; gameplay owns the screen.
+const ui = new AppUI({ title: "Cell.io", category: "games" });
+const MENU = ["Play", "Options", "Quit"];
 
 Screen.setFrameCounter(true);
 Screen.setVSync(false);
@@ -51,6 +57,10 @@ Screen.clearColor(purple);
 pad.setEventHandler();
 
 Screen.display(() => {
+    if(ui.homeRequested(pad)){
+        exitToShell();
+    }
+
     if(game_state == MAIN_MENU){
         if(pad.justPressed(Pads.UP)){
             if(main_menu_ptr > 0){
@@ -100,19 +110,30 @@ Screen.display(() => {
 
                     break;
                 case 2:
-                    std.reload("main.js");
+                    exitToShell();
                     break;
             }
         }
 
-        font.color = Color.new(128, 128, 128, (main_menu_ptr == 0? 128 : 64));
-        font.print(50, 120, "Play");
+        if (game_state == MAIN_MENU) {
+            ui.background();
+            const { x, y } = ui.content;
 
-        font.color = Color.new(128, 128, 128, (main_menu_ptr == 1? 128 : 64));
-        font.print(50, 190, "Options");
+            font.scale = (1.6);
+            font.color = player.color;
+            font.print(x, y + 10, "Cell.io");
 
-        font.color = Color.new(128, 128, 128, (main_menu_ptr == 2? 128 : 64));
-        font.print(50, 260, "Quit");
+            MENU.forEach((label, i) => {
+                const cy = y + 130 + i * 44;
+                if (i === main_menu_ptr) {
+                    Draw.rect(x, cy - 18, 260, 36, rgba(255, 255, 255, 0.10));
+                    Draw.rect(x, cy - 18, 3, 36, ui.accent());
+                }
+                ui.textV(x + 18, cy, label, 0.7, i === main_menu_ptr ? COLORS.text : COLORS.textDim);
+            });
+
+            ui.chrome([["D-pad", "Select"], ["cross", "Confirm"]]);
+        }
 
     } else if(game_state == RUN_GAME){
 
@@ -175,11 +196,15 @@ Screen.display(() => {
     
         drawCell(World2Screen(player, camera), player.r, player.color, true);
 
-        font.print(10, 10, Screen.getFPS(360) + " FPS");
+        ui.hud([`${Screen.getFPS(360)} FPS`, `Size ${Math.round(player.r)}  |  ${enemies.length} cells left`]);
 
     } else if(game_state == GAME_OVER){
+        font.scale = (2);
         font.color = Color.new(128, 128, 128);
-        font.print(150, 200, ((!enemies.length)? "VICTORY!" : "GAME OVER"));
+        font.align = Font.ALIGN_HCENTER;
+        font.print(ui.W / 2, 190, ((!enemies.length)? "VICTORY!" : "GAME OVER"));
+        font.align = Font.ALIGN_NONE;
+        ui.chrome([["cross", "Menu"]]);
 
         if(pad.justPressed(Pads.CROSS)){
             game_state = MAIN_MENU;

@@ -1,4 +1,4 @@
-// {"name": "Native compiler smoke test", "author": "Daniel Santos", "file": "native_smoke.js"}
+// {"name": "Native compiler smoke test", "author": "Daniel Santos", "file": "native_smoke.js", "category": "system", "blurb": "Regression suite for the AOT native JS compiler.", "exit": "TRIANGLE"}
 //
 // Regression suite for the AOT native compiler (src/native_compiler) and the
 // float32 extensions in the QuickJS fork. Every case runs the same computation
@@ -16,6 +16,7 @@
 // pass/fail, and wall-clock numbers make a regression suite flaky.
 
 import * as Native from 'athena_native.erl';
+import { Terminal, exitToShell } from 'athenaos/app.js';
 
 let passed = 0;
 const failures = [];
@@ -1275,6 +1276,7 @@ const dbl = compile("helper double", { args: ["int"], returns: "int" }, function
 // ---------------------------------------------------------------------------
 console.log("");
 console.log("========================================");
+
 if (failures.length === 0) {
     console.log(`[smoke] ${passed} passed, 0 failed  -- OK`);
 } else {
@@ -1282,3 +1284,16 @@ if (failures.length === 0) {
     for (let i = 0; i < failures.length; i++) console.log(`[smoke]   FAIL ${failures[i]}`);
 }
 console.log("========================================");
+
+// Show the result on screen too, so the suite can be run from the shell.
+const term = new Terminal({ title: "Native compiler smoke test", category: "system",
+                            subtitle: failures.length ? `${failures.length} FAILED` : "All cases passed" });
+term.log(`${passed} passed, ${failures.length} failed`);
+failures.forEach(f => term.log(`FAIL ${f}`));
+const pad = Pads.get();
+while (true) {
+    pad.update();
+    if (term.homeRequested(pad)) break;
+    term.draw();
+}
+exitToShell();

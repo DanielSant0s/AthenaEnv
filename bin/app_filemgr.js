@@ -1,304 +1,174 @@
-// {"name": "File manager", "author": "Daniel Santos", "version": "04072023", "icon": "lfm_icon.png", "file": "app_filemgr.js"}
+// {"name": "File manager", "author": "Daniel Santos", "version": "04072023", "icon": "lfm_icon.png", "file": "app_filemgr.js", "category": "system", "blurb": "Browse memory cards, USB and HDD; copy, move and extract archives.", "exit": "TRIANGLE"}
 
 import * as Archive from 'athena_archive.erl';
+import { AppUI, COLORS, rgba, exitToShell } from 'athenaos/app.js';
 
-var font = new Font("default");
+const ui = new AppUI({ title: "File manager", category: "system",
+                       hints: [["cross", "Open"], ["circle", "Up"], ["R1", "Actions"]] });
 
-font.scale = 0.55f;
+Screen.setParam(Screen.DEPTH_TEST_ENABLE, false);
 
-function getStringSize(string, scale){
-    return string.length * (scale*15);
-};
+const root = [{name:"cdfs:/", size:0, dir:true},
+              {name:"host:/", size:0, dir:true},
+              {name:"mass:/", size:0, dir:true},
+              {name:"mc0:/", size:0, dir:true},
+              {name:"mc1:/", size:0, dir:true}];
 
-function range(end) {
-    var arr = [];
-    for (var i = 0; i < end; i++) {
-      arr.push(i);
-    }
-    return arr;
-};
+const ACTIONS = ["Copy", "Move", "Paste", "Rename", "Delete"];
 
-function printCentered(x, y, scale, string){
-    //font.scale = scale;
-    font.print(x-(getStringSize(string, scale)/2), y-12, string);
-};
+let path = "";
+let file = root;
+let sel = 0;          // selected entry
+let top = 0;          // first visible entry
+let menu = false;     // actions menu open
+let action = 0;
 
+// Clipboard for copy/move -> paste
+let src = "";
+let srcfile = "";
+let fileop = 0;       // 0 = copy, 1 = move
 
-function process_list_commands(control_var, list){
-    if (control_var >= list.length){
-        control_var = 0;
-    }
-    if (control_var < 0){
-        control_var = list.length-1;
-    }
-    if (pad.justPressed(Pads.DOWN)){
-        control_var++;
-    }
-    if (pad.justPressed(Pads.UP)){
-        control_var--;
-    }
-    return control_var;
-};
+const ROW_H = 24;
 
-function process_matrix_commands(x_var, y_var, x_limit, y_limit){
-    if ((x_var*y_var) >= (x_limit*y_limit)){
-        x_var = 0;
-        y_var = 0;
-    };
-    if (x_var >= x_limit){
-        x_var = 0;
-        y_var++;
-    };
-    if (y_var >= y_limit){
-        y_var = 0;
-    };
-    if (x_var < 0){
-        x_var = x_limit-1;
-        y_var--;
-    }
-    if (y_var < 0){
-        y_var = y_limit-1;
-    }
-    if ((x_var*y_var) < 0){
-        x_var = x_limit-1;
-        y_var = y_limit-1;
-    }
-    if (pad.justPressed(Pads.RIGHT)){
-        x_var++;
-    }
-    if (pad.justPressed(Pads.LEFT)){
-        x_var--;
-    }
-    if (pad.justPressed(Pads.DOWN)){
-        y_var++;
-    }
-    if (pad.justPressed(Pads.UP)){
-        y_var--;
-    }
-    return [x_var, y_var];
-};
-
-var registered_apps = 0;
-var act_app = 0;
-
-function Window(x, y, w, h, t) {
-    x === undefined? this.x = 0 : this.x = x;
-    y === undefined? this.y = 0 : this.y = y;
-    w === undefined? this.w = 640 : this.w = w;
-    h === undefined? this.h = 448 : this.h = h;
-    t === undefined? this.t = "Title" : this.t = t;
-
-    this.elm_list = [];
-
-    this.add = function(func) { this.elm_list.push(func) };
-
-    this.del = function(func) { 
-        idx = this.elm_list.indexOf(func);
-        if (idx > -1) {
-            this.elm_list = this.elm_list.splice(idx, 1);
-          }
-    };
-
-    this.draw = function() {
-        Draw.rect(this.x, this.y, this.w, 20, Color.new(64, 0, 128, 128));
-        Draw.rect(this.x, this.y+20, this.w, this.h, Color.new(40, 40, 40, 128));
-        printCentered(this.x+(this.w/2), this.y+5, 0.5, this.t);
-        for (var i = 0; i < this.elm_list.length; i++){
-            this.elm_list[i]();
-        }
-    };
-};
-
-function App(){
-    this.init = function() { return; };
-    this.process = function() { return; };
-    this.gfx = new Window();
-    this.minimized = false;
-    this.started = false;
-    this.data = null;
-
-    this.id = registered_apps;
-    registered_apps++;
-
-    this.run = function() {
-        if (!this.started){
-            this.init();
-            this.started = true;
-        };
-
-        if(this.id == act_app){
-            this.process();
-        };
-
-        if(!this.minimized){
-            this.gfx.draw();
-        };
-    };
+function list(newPath) {
+    path = newPath;
+    file = path === "" ? root : System.listDir(path);
+    sel = Math.min(sel, Math.max(0, file.length - 1));
 }
 
-var file_manager = new App();
-file_manager.data = [0, 0, 0, 1];
-file_manager.comp = 0;
-
-var root = [{name:"cdfs:/", size:0, dir:true}, 
-            {name:"host:/", size:0, dir:true}, 
-            {name:"mass:/", size:0, dir:true}, 
-            {name:"mc0:/", size:0, dir:true},
-            {name:"mc1:/", size:0, dir:true}];
-
-var path = "";
-var file = root;
-
-var src = "";
-var srcfile = "";
-var dst = "";
-var fileop = 0;
-
-file_manager.process = function() {
-    if(file_manager.data[2] == 1){
-        file_manager.data[1] = process_list_commands(file_manager.data[1], range(5));
+function goUp() {
+    var idxof = path.lastIndexOf("/");
+    if(path[idxof-1] != ":" && idxof != -1){
+        path = path.slice(0, idxof);
+        idxof = path.lastIndexOf("/");
+        list(path.slice(0, idxof+1));
+    } else {
+        list("");
     }
+    sel = 0;
+}
 
-    if(file_manager.data[3] == 1){
-        file_manager.data[0] = process_list_commands(file_manager.data[0], file);
-        if(file_manager.data[0] > 20){
-            file_manager.comp = -(file_manager.data[0]-20)
-        } else {
-            file_manager.comp = 0;
-        }
-    }
-
-    if ((pad.justPressed(Pads.TRIANGLE))){
-        var idxof = path.lastIndexOf("/");
-        if(path[idxof-1] != ":" && idxof != -1){
-            path = path.slice(0, idxof);
-            idxof = path.lastIndexOf("/");
-            path = path.slice(0, idxof+1);
-            file = System.listDir(path);
-        } else {
-            path = "";
-            file = root;
-        }
-    }
-
-    if ((pad.justPressed(Pads.CROSS))){
-        if(file_manager.data[3] == 1){
-            if(file[file_manager.data[0]].dir){
-                if(path == ""){
-                    path = file[file_manager.data[0]].name;
-                } else {
-                    path = path + file[file_manager.data[0]].name + "/";
-                }
-                file = System.listDir(path);
-
-            } else if(file[file_manager.data[0]].name.endsWith(".js")){
-                System.loadELF(System.boot_path + "/athena.elf", [path + "/" + file[file_manager.data[0]].name]);
-            } else if(file[file_manager.data[0]].name.endsWith(".elf") || file[file_manager.data[0]].name.endsWith(".ELF")){
-                System.loadELF(path + "/"+ file[file_manager.data[0]].name);
-            } else if(file[file_manager.data[0]].name.endsWith(".zip")){
-                Archive.extractAll(path + "/"+ file[file_manager.data[0]].name);
-                file = System.listDir(path); // Update file list
-            } else if(file[file_manager.data[0]].name.endsWith(".tar.gz")){
-                Archive.untar(path + "/"+ file[file_manager.data[0]].name);
-                file = System.listDir(path); // Update file list
-            }
-        }
-
-        if(file_manager.data[2] == 1){
-            switch (file_manager.data[1]) {
-                case 0:
-                    fileop = 0;
-                    src = path + "/" + file[file_manager.data[0]].name;
-                    srcfile = file[file_manager.data[0]].name;
-                    file_manager.data[2] ^= 1;
-                    file_manager.data[3] ^= 1;
-                    file = System.listDir(path);
-                    break;
-                case 1:
-                    fileop = 1;
-                    src = path + "/" + file[file_manager.data[0]].name;
-                    srcfile = file[file_manager.data[0]].name;
-                    file_manager.data[2] ^= 1;
-                    file_manager.data[3] ^= 1;
-                    file = System.listDir(path);
-                    break;
-                case 2:
-                    dst = path + "/" + srcfile;
-                    switch (fileop){
-                        case 0:
-                            System.copyFile(src, dst);
-                            break;
-                        case 1:
-                            System.moveFile(src, dst);
-                            break;
-                    };
-                    file_manager.data[2] ^= 1;
-                    file_manager.data[3] ^= 1;
-                    file = System.listDir(path);
-                    break;
-                case 3:
-                    break;
-                case 4:
-                    System.removeFile(path + "/" + file[file_manager.data[0]].name);
-                    file_manager.data[2] ^= 1;
-                    file_manager.data[3] ^= 1;
-                    file = System.listDir(path);
-                    break;
-            }
-        }
-    }
-
-    if (pad.justPressed(Pads.R1)){
-        file_manager.data[2] ^= 1;
-        file_manager.data[3] ^= 1;
+function open(entry) {
+    if(entry.dir){
+        sel = 0;
+        list(path == "" ? entry.name : path + entry.name + "/");
+    } else if(entry.name.endsWith(".js")){
+        System.loadELF(System.boot_path + "/athena.elf", [path + "/" + entry.name]);
+    } else if(entry.name.endsWith(".elf") || entry.name.endsWith(".ELF")){
+        System.loadELF(path + "/"+ entry.name);
+    } else if(entry.name.endsWith(".zip")){
+        Archive.extractAll(path + "/"+ entry.name);
+        list(path); // Update file list
+    } else if(entry.name.endsWith(".tar.gz")){
+        Archive.untar(path + "/"+ entry.name);
+        list(path); // Update file list
     }
 }
 
-file_manager.gfx = new Window();
-file_manager.gfx.t = "File Manager"
-
-let render_filelist = function() {
-    Draw.rect(file_manager.gfx.x, file_manager.gfx.y+(20*(file_manager.data[0]+2+file_manager.comp)), file_manager.gfx.w, 20, Color.new(64, 0, 128, 64));
-    Draw.rect(file_manager.gfx.x, file_manager.gfx.y+(20), file_manager.gfx.w, 20, Color.new(64, 64, 64, 64));
-    printCentered(file_manager.gfx.x+(file_manager.gfx.w/2), file_manager.gfx.y+(3+(20)), 0.55f, path);
-    for (var i = 0; i < file.length; i++) {
-        if(i+file_manager.comp < 20 && i+file_manager.comp >= 0){
-            //font.scale = 0.55f;
-            font.print(file_manager.gfx.x+10, file_manager.gfx.y+(3+(19*(i+2+file_manager.comp)))-12,
-            file[i].name);
-            if(!file[i].dir){
-                font.print(file_manager.gfx.x+200, file_manager.gfx.y+(3+(19*(i+2+file_manager.comp)))-12,
-                String(file[i].size));
-            }
+function runAction(entry) {
+    switch (action) {
+        case 0:
+        case 1:
+            if (!entry) return;
+            fileop = action;
+            src = path + "/" + entry.name;
+            srcfile = entry.name;
+            break;
+        case 2: {
+            if (!srcfile) return;
+            const dst = path + "/" + srcfile;
+            if (fileop === 0) System.copyFile(src, dst);
+            else System.moveFile(src, dst);
+            break;
         }
-    };
-    if(file_manager.data[2] == 1) {
-        //font.scale = 0.55f;
-        Draw.rect(file_manager.gfx.x+file_manager.gfx.w-75, file_manager.gfx.y+40, 75, 20*5, Color.new(0, 0, 0, 100));
-        Draw.rect(file_manager.gfx.x+file_manager.gfx.w-75, file_manager.gfx.y+20+20*(file_manager.data[1]+1), 75, 20, Color.new(64, 0, 128, 64));
-        font.print(file_manager.gfx.x+file_manager.gfx.w-75+5, file_manager.gfx.y+(23+(20*(1)))-12, "Copy");
-        font.print(file_manager.gfx.x+file_manager.gfx.w-75+5, file_manager.gfx.y+(23+(20*(2)))-12, "Move");
-        font.print(file_manager.gfx.x+file_manager.gfx.w-75+5, file_manager.gfx.y+(23+(20*(3)))-12, "Paste");
-        font.print(file_manager.gfx.x+file_manager.gfx.w-75+5, file_manager.gfx.y+(23+(20*(4)))-12, "Rename");
-        font.print(file_manager.gfx.x+file_manager.gfx.w-75+5, file_manager.gfx.y+(23+(20*(5)))-12, "Delete");
-    };
-};
+        case 3:
+            break;
+        case 4:
+            if (!entry) return;
+            System.removeFile(path + "/" + entry.name);
+            break;
+    }
+    menu = false;
+    list(path);
+}
 
-file_manager.gfx.add(render_filelist);
+function formatSize(bytes) {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / 1048576).toFixed(1)} MB`;
+}
 
-var pad = Pads.get();
+const pad = Pads.get();
 
 while(true){
     pad.update();
-    Screen.clear(Color.new(0, 0, 0));
 
-    file_manager.run();
-
-    if(pad.justPressed(Pads.CIRCLE)) {
+    if(ui.homeRequested(pad)) {
         break;
     }
-    
+
+    if (pad.justPressed(Pads.R1)) {
+        menu = !menu;
+        action = 0;
+    }
+
+    if (menu) {
+        if (pad.justPressed(Pads.DOWN)) action = (action + 1) % ACTIONS.length;
+        if (pad.justPressed(Pads.UP)) action = (action + ACTIONS.length - 1) % ACTIONS.length;
+        if (pad.justPressed(Pads.CROSS)) runAction(file[sel]);
+        if (pad.justPressed(Pads.CIRCLE)) menu = false;
+    } else {
+        if (pad.justPressed(Pads.DOWN) && file.length) sel = (sel + 1) % file.length;
+        if (pad.justPressed(Pads.UP) && file.length) sel = (sel + file.length - 1) % file.length;
+        if (pad.justPressed(Pads.CROSS) && file[sel]) open(file[sel]);
+        if (pad.justPressed(Pads.CIRCLE)) goUp();
+    }
+
+    ui.background();
+    const { x, y, w, h } = ui.content;
+
+    // Location bar
+    ui.heading(x, y + 6, "Location");
+    ui.textV(x + 72, y + 6, ui.fit(path || "Devices", 0.5, w - 72), 0.5, COLORS.text);
+
+    // File list
+    const ly = y + 20, lh = h - 20;
+    const rows = Math.floor((lh - 12) / ROW_H);
+    if (sel < top) top = sel;
+    if (sel >= top + rows) top = sel - rows + 1;
+    ui.panel(x, ly, w, lh);
+
+    if (!file.length) ui.textV(x + w / 2, ly + lh / 2, "Empty folder", 0.5, COLORS.textDim, Font.ALIGN_HCENTER);
+
+    for (let i = top; i < Math.min(file.length, top + rows); i++) {
+        const entry = file[i];
+        const cy = ly + 6 + (i - top) * ROW_H + ROW_H / 2;
+        if (i === sel) {
+            Draw.rect(x + 6, cy - ROW_H / 2, w - 12, ROW_H, rgba(255, 255, 255, menu ? 0.06 : 0.10));
+            Draw.rect(x + 6, cy - ROW_H / 2, 3, ROW_H, ui.accent());
+        }
+        // Folder / file marker
+        if (entry.dir) Draw.rect(x + 18, cy - 5, 14, 10, ui.accent(0.85));
+        else Draw.rect(x + 20, cy - 6, 10, 12, rgba(255, 255, 255, 0.45));
+        ui.textV(x + 42, cy, ui.fit(entry.name, 0.46, w - 160), 0.46, i === sel ? COLORS.text : COLORS.textDim);
+        ui.textV(x + w - 16, cy, entry.dir ? "Folder" : formatSize(entry.size), 0.42, COLORS.textFaint, Font.ALIGN_RIGHT);
+    }
+
+    // Actions menu
+    if (menu) {
+        const mw = 150, mh = ACTIONS.length * 30 + 16, mx = x + w - mw - 12, my = ly + 12;
+        ui.panel(mx, my, mw, mh);
+        ACTIONS.forEach((label, i) => {
+            const cy = my + 8 + i * 30 + 15;
+            const disabled = (i === 2 && !srcfile) || i === 3;
+            if (i === action) Draw.rect(mx + 6, cy - 13, mw - 12, 26, ui.accent(0.85));
+            ui.textV(mx + 18, cy, label, 0.48, disabled ? COLORS.textFaint : COLORS.text);
+        });
+    }
+
+    ui.status = srcfile ? `${fileop === 0 ? "Copy" : "Move"}: ${ui.fit(srcfile, 0.44, 140)}` : "";
+    ui.chrome(menu ? [["cross", "Run"], ["circle", "Close"]] : ui.hintList, `${file.length} items`);
     Screen.flip();
 };
 
-std.reload("main.js");
+exitToShell();

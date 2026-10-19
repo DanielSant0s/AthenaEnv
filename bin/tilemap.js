@@ -1,6 +1,13 @@
-// {"name": "Tilemap", "author": "Daniel Santos", "version": "07112026", "icon": "render_icon.png", "file": "tilemap.js"}
+// {"name": "Tilemap", "author": "Daniel Santos", "version": "07112026", "file": "tilemap.js", "category": "2d", "blurb": "High-throughput VU1 tilemap renderer.", "exit": "TRIANGLE"}
+
+import { AppUI, exitToShell } from 'athenaos/app.js';
+
+const ui = new AppUI({ title: "Tilemap", category: "2d",
+                       hints: [] });
 
 const pad = Pads.get();
+
+Screen.setFrameCounter(true);
 
 const tilesX = 6;
 const tilesY = 4;
@@ -86,14 +93,18 @@ while (true) {
 
     TileMap.begin();
 
-    if (pad.justPressed(Pads.TRIANGLE)) {
-        std.reload("main.js");
+    if (ui.homeRequested(pad)) {
+        exitToShell();
     }
 
     time += 0.05;
     updateBuffer(time);
 
     tileMap.render(80, 60);
+
+    ui.status = `${Screen.getFPS(60)} FPS`;
+    ui.hud([`${spriteDefs.length} sprites, one VU1 draw`]);
+    ui.chrome();
 
     Screen.flip();
 }

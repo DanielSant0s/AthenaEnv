@@ -1,59 +1,58 @@
-// {"name": "Playground", "author": "Daniel Santos", "version": "06022024", "file": "playground.js"}
+// {"name": "Playground", "author": "Daniel Santos", "version": "06022024", "file": "playground.js", "category": "system", "blurb": "Vector and matrix math API checks.", "exit": "TRIANGLE"}
+
+import { Terminal, exitToShell } from 'athenaos/app.js';
+
+const term = new Terminal({ title: "Playground", category: "system", subtitle: "Vector2, Vector3, Matrix4 and native calls",
+                            hints: [["D-pad", "Log input"]] });
 
 let v3 = new Vector3(15.0f, 15.0f, 15.0f);
 let v4 = new Vector3(30.0f, 30.0f, 30.0f);
 
-console.log(`Vector3 ${v3.add(v4)}`);
-console.log(`Vector3 dist ${v3.dist(v4)}`);
+term.log(`Vector3 ${v3.add(v4)}`);
+term.log(`Vector3 dist ${v3.dist(v4)}`);
 
 let v1 = new Vector2(15.0f, 15.0f);
 let v2 = new Vector2(30.0f, 30.0f);
 
-console.log(`Vectors distance is ${v1.dist(v2)}`);
-console.log(`Vectors add is ${v1.add(v2)}`);
-console.log(`Vectors sub is ${v1.sub(v2)}`);
-console.log(`Vectors mul is ${v1.mul(v2)}`);
-console.log(`Vectors div is ${v1.div(v2)}`);
+term.log(`Vectors distance is ${v1.dist(v2)}`);
+term.log(`Vectors add is ${v1.add(v2)}`);
+term.log(`Vectors sub is ${v1.sub(v2)}`);
+term.log(`Vectors mul is ${v1.mul(v2)}`);
+term.log(`Vectors div is ${v1.div(v2)}`);
 
 const test_matrix = new Matrix4();
-console.log(`Matrix4 ${test_matrix}`);
-for (let i = 0; i < test_matrix.length; i++) {
-    console.log(`m[${i}] = ${test_matrix[i]}`);
-}
-
-let pad = Pads.get();
+term.log(`Matrix4 ${test_matrix}`);
 
 const m1 = new Matrix4();
 
 if (m1.equals(test_matrix)) {
-    console.log("Matrix equal check for equal matrix values");
+    term.log("Matrix equal check for equal matrix values");
 }
 
 for (let i = 0; i < test_matrix.length; i++) {
     test_matrix[i] = Math.randomf(0.0f, 1.0f);
 }
-console.log(`Matrix4 ${test_matrix}`);
+term.log(`Matrix4 ${test_matrix}`);
 
 if (!m1.equals(test_matrix)) {
-    console.log("Matrix equal check for different matrix values");
+    term.log("Matrix equal check for different matrix values");
 }
 
 const OsdConfigParam = new ArrayBuffer(4);
 System.nativeCall(System.findRelocObject("GetOsdConfigParam"), [{type: System.JS_BUFFER, value: OsdConfigParam}]);
 
-console.log((new Uint32Array(OsdConfigParam))[0].toString());
+term.log(`GetOsdConfigParam: ${(new Uint32Array(OsdConfigParam))[0].toString()}`);
 
-pad.setEventHandler();
+const pad = Pads.get();
 
-Pads.newEvent(Pads.LEFT, Pads.JUST_PRESSED, () => { 
-    console.log(`DPad Left button was just pressed`); 
-});
+while (true) {
+    pad.update();
+    if (term.homeRequested(pad)) break;
 
-Pads.newEvent(Pads.RIGHT, Pads.JUST_PRESSED, () => { 
-    console.log(`DPad Right button was just pressed`); 
-});
+    if (pad.justPressed(Pads.LEFT)) term.log("DPad Left button was just pressed");
+    if (pad.justPressed(Pads.RIGHT)) term.log("DPad Right button was just pressed");
 
-Pads.newEvent(Pads.START, Pads.JUST_PRESSED, () => { 
-    std.reload("main.js");
-});
+    term.draw();
+}
 
+exitToShell();

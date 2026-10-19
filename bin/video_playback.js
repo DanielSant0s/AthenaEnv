@@ -1,4 +1,4 @@
-// {"name": "Video Playback", "author": "Daniel Santos", "version": "08022026", "file": "video_playback.js"}
+// {"name": "Video Playback", "author": "Daniel Santos", "version": "08022026", "file": "video_playback.js", "category": "media", "blurb": "Fullscreen MPEG-1/2 playback.", "exit": "TRIANGLE"}
 
 /**
  * MPEG Video Playback Sample
@@ -13,6 +13,9 @@
  */
 
 import { Video } from 'athena_mpeg.erl';
+import { AppUI, exitToShell } from 'athenaos/app.js';
+
+const ui = new AppUI({ title: "Video Playback", category: "media", hints: [["square", "Loop"]] });
 
 // Load the video file
 const video = new Video("video.m2v");
@@ -37,7 +40,7 @@ const pad = Pads.get();
 while (!video.ended && !should_finish) {
     pad.update();
 
-    if (pad.justPressed(Pads.TRIANGLE)) {
+    if (ui.homeRequested(pad)) {
         should_finish = true;
     } else if (pad.justPressed(Pads.SQUARE)) {
         video.loop ^= 1;
@@ -52,8 +55,9 @@ while (!video.ended && !should_finish) {
     // Draw video fullscreen
     video.draw(0, 0, video.width, video.height);
 
-    // Optional: Display some info
-    // Font.print(font, 10, 10, "Frame: " + video.currentFrame);
+    // Chrome hides itself after a few idle seconds; any button brings it back.
+    ui.status = video.loop ? "Loop ON" : "";
+    ui.autoChrome(pad);
 
     Screen.flip();
 }
@@ -62,4 +66,4 @@ while (!video.ended && !should_finish) {
 video.free();
 console.log("Video playback finished!");
 
-std.reload("main.js");
+exitToShell();

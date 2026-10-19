@@ -1,8 +1,12 @@
-// {"name": "Header request", "author": "Daniel Santos", "version": "05112023", "file": "request_header.js"}
+// {"name": "Header request", "author": "Daniel Santos", "version": "05112023", "file": "request_header.js", "category": "network", "blurb": "HTTP HEAD request and response headers.", "exit": "TRIANGLE"}
 
 import { Network, Request } from 'athena_network.erl';
+import { Terminal, exitToShell } from 'athenaos/app.js';
 
-Screen.log("Athena network system\n");
+const term = new Terminal({ title: "Header request", category: "network", subtitle: "HTTP HEAD request" });
+
+term.log("Resetting IOP and loading the network driver...");
+term.draw();
 
 IOP.reset();
 
@@ -11,7 +15,9 @@ IOP.loadModule("SMAP");
 
 Network.init();
 
-Screen.log(JSON.stringify(Network.getConfig()));
+term.log(JSON.stringify(Network.getConfig()));
+term.log("HEAD https://raw.githubusercontent.com/DanielSant0s/brewstore-db/main/brew_data.json");
+term.draw();
 
 let req = new Request();
 req.followlocation = true;
@@ -20,10 +26,15 @@ req.headers = ["upgrade-insecure-requests: 1",
                "sec-fetch-mode: navigate"];
 
 
-Screen.log(req.head("https://raw.githubusercontent.com/DanielSant0s/brewstore-db/main/brew_data.json").text);
+term.log(req.head("https://raw.githubusercontent.com/DanielSant0s/brewstore-db/main/brew_data.json").text);
 
 Network.deinit();
 
-System.sleep(300);
+const pad = Pads.get();
+while (true) {
+    pad.update();
+    if (term.homeRequested(pad)) break;
+    term.draw();
+}
 
-std.reload("main.js");
+exitToShell();

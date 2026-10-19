@@ -1,44 +1,65 @@
-// {"name": "2D Draw", "author": "Daniel Santos", "version": "02282025", "icon": "render_icon.png", "file": "prim_draw.js"}
+// {"name": "2D Draw", "author": "Daniel Santos", "version": "02282025", "file": "prim_draw.js", "category": "2d", "blurb": "MMI accelerated points, lines, rects, circles and quads.", "exit": "TRIANGLE"}
+
+import { AppUI, exitToShell } from 'athenaos/app.js';
 
 let pad = Pads.get();
 
-const pixelArray = [
-    {x: 10, y: 10, color: Color.new(255, 0, 0)},
-    {x: 11, y: 10, color: Color.new(255, 165, 0)},
-    {x: 12, y: 10, color: Color.new(255, 255, 0)},
-    {x: 13, y: 10, color: Color.new(0, 255, 0)},
-    {x: 14, y: 10, color: Color.new(0, 255, 165)},
-    {x: 15, y: 10, color: Color.new(0, 255, 255)},
-    {x: 16, y: 10, color: Color.new(0, 0, 255)},
-    {x: 17, y: 10, color: Color.new(128, 0, 255)},
-    {x: 18, y: 10, color: Color.new(255, 0, 255)},
+const ui = new AppUI({ title: "2D Draw", category: "2d" });
+
+Screen.setParam(Screen.DEPTH_TEST_ENABLE, false);
+
+const pixelColors = [
+    Color.new(255, 0, 0), Color.new(255, 165, 0), Color.new(255, 255, 0),
+    Color.new(0, 255, 0), Color.new(0, 255, 165), Color.new(0, 255, 255),
+    Color.new(0, 0, 255), Color.new(128, 0, 255), Color.new(255, 0, 255),
 ];
 
+// Each sample draws centered on (cx, cy) inside its card.
+const samples = [
+    ["Draw.point", (cx, cy) => {
+        for (let row = -4; row <= 4; row++)
+            pixelColors.forEach((c, i) => Draw.point(cx - 16 + i * 4, cy + row * 4, c));
+    }],
+    ["Draw.line", (cx, cy) => {
+        for (let i = 0; i < 6; i++) Draw.line(cx - 30, cy + 25, cx - 30 + i * 12, cy - 25, pixelColors[i]);
+    }],
+    ["Draw.rect", (cx, cy) => Draw.rect(cx - 20, cy - 20, 40, 40, Color.new(255, 0, 0))],
+    ["Draw.circle", (cx, cy) => {
+        Draw.circle(cx, cy, 26, Color.new(64, 64, 64), true);
+        Draw.circle(cx, cy, 26, Color.new(255, 0, 0), false);
+    }],
+    ["Flat triangle", (cx, cy) => Draw.triangle(cx - 22, cy + 20, cx - 22, cy - 20, cx + 22, cy + 20, Color.new(0, 0, 255))],
+    ["Gouraud triangle", (cx, cy) => Draw.triangle(cx - 22, cy + 20, cx - 22, cy - 20, cx + 22, cy + 20,
+                                                  Color.new(255, 0, 0), Color.new(0, 255, 0), Color.new(0, 0, 255))],
+    ["Flat quad", (cx, cy) => Draw.quad(cx - 20, cy - 20, cx - 20, cy + 20, cx + 20, cy - 20, cx + 20, cy + 20, Color.new(128, 0, 255))],
+    ["Gouraud quad", (cx, cy) => Draw.quad(cx - 20, cy - 20, cx - 20, cy + 20, cx + 20, cy - 20, cx + 20, cy + 20,
+                                          Color.new(255, 0, 0), Color.new(0, 255, 0), Color.new(0, 0, 255), Color.new(255, 255, 0))],
+];
+
+const COLS = 4, GAP = 12;
+
 while(true) {
-    Screen.clear(Color.new(255, 255, 255));
     pad.update();
 
-    if(pad.justPressed(Pads.TRIANGLE)) {
-        std.reload("main.js");
+    if(ui.homeRequested(pad)) {
+        break;
     }
 
-    pixelArray.forEach(point => Draw.point(point.x, point.y, point.color));
+    ui.background();
 
-    Draw.line(220, 200, 270, 250, Color.new(0, 255, 0));
+    const { x, y, w, h } = ui.content;
+    const cw = (w - GAP * (COLS - 1)) / COLS;
+    const ch = (h - GAP) / 2;
 
-    Draw.rect(300, 204, 40, 40, Color.new(255, 0, 0));
+    samples.forEach(([label, draw], i) => {
+        const cx = x + (i % COLS) * (cw + GAP), cy = y + Math.floor(i / COLS) * (ch + GAP);
+        ui.panel(cx, cy, cw, ch);
+        ui.heading(cx + 14, cy + 18, label);
+        draw(Math.round(cx + cw / 2), Math.round(cy + ch / 2 + 10));
+    });
 
-    Draw.triangle(400, 400, 400, 430, 430, 400, Color.new(0, 0, 255)); // flat triangle
-
-    Draw.triangle(400, 300, 400, 330, 430, 300, Color.new(255, 0, 0), Color.new(0, 255, 0), Color.new(0, 0, 255)); // gouraud triangle
-
-    Draw.quad(450, 200, 450, 230, 480, 200, 480, 230, Color.new(128, 0, 255)); 
-
-    Draw.quad(450, 300, 450, 330, 480, 300, 480, 330, Color.new(255, 0, 0), Color.new(0, 255, 0), Color.new(0, 0, 255), Color.new(255, 255, 0));  // gouraud quad
-
-    Draw.circle(100, 100, 50, Color.new(64, 64, 64), true);
-
-    Draw.circle(100, 100, 50, Color.new(255, 0, 0), false);
-
+    ui.chrome();
     Screen.flip();
 }
+
+exitToShell();

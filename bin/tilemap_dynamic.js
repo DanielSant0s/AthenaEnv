@@ -1,6 +1,13 @@
-// {"name": "Tilemap Dynamic", "author": "Daniel Santos", "version": "07112026", "icon": "render_icon.png", "file": "tilemap_dynamic.js"}
+// {"name": "Tilemap Dynamic", "author": "Daniel Santos", "version": "07112026", "file": "tilemap_dynamic.js", "category": "2d", "blurb": "Tilemap sprites updated every frame from an ArrayBuffer.", "exit": "TRIANGLE"}
+
+import { AppUI, exitToShell } from 'athenaos/app.js';
+
+const ui = new AppUI({ title: "Tilemap Dynamic", category: "2d",
+                       hints: [["cross", "Spawn"], ["circle", "Remove"], ["SELECT", "Restart"]] });
 
 const pad = Pads.get();
+
+Screen.setFrameCounter(true);
 
 const TILE_SIZE = 16;
 const MAX_SPRITES = 1024;
@@ -105,7 +112,11 @@ while (true) {
 
     TileMap.begin();
 
-    if (pad.justPressed(Pads.TRIANGLE)) {
+    if (ui.homeRequested(pad)) {
+        exitToShell();
+    }
+
+    if (pad.justPressed(Pads.SELECT)) {
         std.reload("tilemap_dynamic.js");
     }
 
@@ -150,6 +161,10 @@ while (true) {
     }
 
     tileMap.render(20, 20);
+
+    ui.status = `${Screen.getFPS(60)} FPS`;
+    ui.hud([`${slots.filter(slot => slot.alive).length} / ${slots.length} sprites alive`]);
+    ui.chrome();
 
     Screen.flip();
 }

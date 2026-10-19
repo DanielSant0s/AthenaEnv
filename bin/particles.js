@@ -1,5 +1,9 @@
-// {"name": "Native 2D particles", "author": "Daniel Santos", "file": "particles.js"}
+// {"name": "Native 2D particles", "author": "Daniel Santos", "file": "particles.js", "category": "2d", "blurb": "VU1 pooled particles: smoke trails and additive sparks.", "exit": "TRIANGLE"}
 // Move the emitter with the left stick/D-pad. Cross: burst. Circle: toggle smoke.
+import { AppUI, exitToShell } from 'athenaos/app.js';
+
+const ui = new AppUI({ title: "Native 2D particles", category: "2d",
+                       hints: [["L-stick", "Move"], ["cross", "Sparks"], ["circle", "Smoke"], ["R3", "Clear"]] });
 const atlas = new Image("render/fx_atlas.png");
 atlas.filter = LINEAR;
 const smoke = new Particles.System({ texture: atlas, capacity: 512 });
@@ -14,7 +18,6 @@ const burst = sparks.createEmitter({
     velocityMin: [-180, -230, 0], velocityMax: [180, 50, 0], acceleration: [0, 320, 0],
     color: [180, 90, 20, 128], colorEnd: [128, 20, 4, 0]
 });
-const font = new Font("default"); font.scale = 0.6;
 const pad = Pads.get(0), mode = Screen.getMode(), timer = Timer.new();
 let x = mode.width / 2, y = mode.height * 0.65, running = true;
 dust.setPosition(x, y); dust.start();
@@ -22,7 +25,7 @@ Screen.setFrameCounter(true);
 while (true) {
     const dt = Math.min(Timer.getTime(timer) / 1000000, 0.05);
     Timer.reset(timer); pad.update();
-    if (pad.justPressed(Pads.TRIANGLE)) break;
+    if (ui.homeRequested(pad)) break;
     let dx = pad.lx / 128, dy = pad.ly / 128;
     if (Math.abs(dx) < 0.15) dx = 0;
     if (Math.abs(dy) < 0.15) dy = 0;
@@ -41,8 +44,10 @@ while (true) {
     smoke.draw(); sparks.draw();
     Draw.line(x - 5, y, x + 5, y, Color.new(128, 128, 128));
     Draw.line(x, y - 5, x, y + 5, Color.new(128, 128, 128));
-    font.print(10, 10, "Native particles | Left stick: move | X: sparks | O: smoke | R3: clear");
-    font.print(10, 30, `${Screen.getFPS(60)} FPS | ${smoke.activeCount + sparks.activeCount} particles | Triangle: exit`);
+    ui.status = `${Screen.getFPS(60)} FPS`;
+    ui.hud([`${smoke.activeCount + sparks.activeCount} particles`, `Smoke ${running ? "ON" : "OFF"}`]);
+    ui.chrome();
     Screen.flip();
 }
 smoke.dispose(); sparks.dispose();
+exitToShell();

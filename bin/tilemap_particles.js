@@ -1,6 +1,13 @@
-// {"name": "Tilemap Particles", "author": "Daniel Santos", "version": "07112026", "icon": "render_icon.png", "file": "tilemap_particles.js"}
+// {"name": "Tilemap Particles", "author": "Daniel Santos", "version": "07112026", "file": "tilemap_particles.js", "category": "2d", "blurb": "Thousands of tilemap-driven particles.", "exit": "TRIANGLE"}
+
+import { AppUI, exitToShell } from 'athenaos/app.js';
+
+const ui = new AppUI({ title: "Tilemap Particles", category: "2d",
+                       hints: [["cross", "Burst"], ["square", "More"], ["circle", "Fewer"], ["SELECT", "Restart"]] });
 
 const pad = Pads.get();
+
+Screen.setFrameCounter(true);
 
 const MAX_PARTICLES = 256;
 const INITIAL_PARTICLES = 32;
@@ -127,7 +134,11 @@ while (true) {
 
     TileMap.begin();
 
-    if (pad.justPressed(Pads.TRIANGLE)) {
+    if (ui.homeRequested(pad)) {
+        exitToShell();
+    }
+
+    if (pad.justPressed(Pads.SELECT)) {
         std.reload("tilemap_particles.js");
     }
 
@@ -171,5 +182,9 @@ while (true) {
     }
 
     tileMap.render(0, 0);
+
+    ui.status = `${Screen.getFPS(60)} FPS`;
+    ui.hud([`${activeCount} particle slots active`]);
+    ui.chrome();
     Screen.flip();
 }

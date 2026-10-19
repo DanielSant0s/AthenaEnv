@@ -1,6 +1,11 @@
-// {"name": "Task sample", "author": "Daniel Santos", "version": "04232025", "icon": "render_icon.png", "file": "task.js"}
+// {"name": "Task sample", "author": "Daniel Santos", "version": "04232025", "file": "task.js", "category": "system", "blurb": "Threads, mutexes and timers running beside the main loop.", "exit": "TRIANGLE"}
+
+import { AppUI, COLORS } from 'athenaos/app.js';
 
 Screen.setParam(Screen.DEPTH_TEST_ENABLE, false);
+
+const ui = new AppUI({ title: "Task sample", category: "system",
+                       hints: [["cross", "Pause counters"], ["square", "Drop objects"]] });
 
 const timerMutex = new Mutex();
 
@@ -50,8 +55,14 @@ Pads.newEvent(Pads.CROSS, Pads.JUST_PRESSED, () => {
     counting ^= 1;
 });
 
-Pads.newEvent(Pads.TRIANGLE, Pads.JUST_PRESSED, () => { 
+Pads.newEvent(Pads.SQUARE, Pads.JUST_PRESSED, () => { 
     globalThis.activeObjects = null;
+});
+
+let exit_requested = false;
+
+Pads.newEvent(Pads.TRIANGLE, Pads.JUST_PRESSED, () => { 
+    exit_requested = true;
 });
 
 os.setInterval(() => {
@@ -61,8 +72,21 @@ os.setInterval(() => {
 console.log(JSON.stringify(Thread.list()));
 
 Screen.display(() => {
-    font.print(0, 0, `Hello from main thread! Counter from aux thread: ${counter}`);
-    font.print(0, 100, `Pulse counter: ${pulse_counter}`);
+    ui.background();
+    const { x, y, w } = ui.content;
+    ui.panel(x, y, w, 150);
+    ui.heading(x + 20, y + 22, "Main thread");
+    ui.textV(x + 20, y + 46, "Hello from main thread!", 0.56);
+    ui.heading(x + 20, y + 78, "Aux threads");
+    ui.textV(x + 20, y + 102, `Loop counter (every 2 s): ${counter}`, 0.5);
+    ui.textV(x + 20, y + 124, `Pulse counter (os.setInterval): ${pulse_counter}`, 0.5);
+    ui.textV(x + w - 20, y + 22, counting ? "RUNNING" : "PAUSED", 0.42, counting ? COLORS.ok : COLORS.warn, Font.ALIGN_RIGHT);
+    ui.chrome();
 
     timerMutex.unlock();
+
+    if (exit_requested) {
+        thread.stop();
+        std.reload("main.js");
+    }
 });

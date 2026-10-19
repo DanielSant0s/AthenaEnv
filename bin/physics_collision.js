@@ -1,9 +1,10 @@
-// {"name": "Physics demo", "author": "Daniel Santos", "version": "04072023", "icon": "render_icon.png", "file": "physics_collision.js"}
+// {"name": "Physics demo", "author": "Daniel Santos", "version": "04072023", "file": "physics_collision.js", "category": "3d", "blurb": "Rigid bodies, BVH trimesh, joints and shadows in a courtyard.", "exit": "TRIANGLE"}
 
-const font = new Font("default");
-font.scale = 0.55f;
-font.outline = 1.0f;
-font.outline_color = Color.new(0, 0, 0);
+import { AppUI, exitToShell } from 'athenaos/app.js';
+
+// Before os.chdir("render"): the UI font and settings live in the boot folder.
+const ui = new AppUI({ title: "Physics demo", category: "3d",
+                       hints: [["L-stick", "Walk"], ["R1", "Run"], ["cross", "Jump"], ["square", "Kick"], ["circle", "Throw"], ["L1", "Dance"]] });
 
 Screen.setFrameCounter(true);
 
@@ -856,14 +857,14 @@ while (true) {
     Screen.clear(gray);
     pad.update();
 
-    if (pad.justPressed(Pads.TRIANGLE)) {
+    if (ui.homeRequested(pad)) {
         fxSystem.dispose();
         shadowRT.unlock();
         shadowRT.free();
         shadowMaskLUT.free();
         shadowIdentityLUT.free();
         os.chdir("..");
-        std.reload("main.js");
+        exitToShell();
     }
 
     if (!BENCHMARK && pad.justPressed(Pads.R3)) fxReset((fxLevel + 1) % FX_LEVELS.length);
@@ -1264,9 +1265,7 @@ while (true) {
                     ? (isSprinting ? "SPRINTING" : "WALKING")
                     : (emoteActive ? "DANCING" : "IDLE"))));
     const renderStats = Render.stats();
-    font.print(10, 10, `${Screen.getFPS(360)} FPS | ${stateLabel} (${currentAnim.toUpperCase()}) | Fog: ${activeFog.name} | Fast clip: ${renderStats.fastClip}`);
-    font.print(10, 26, "L-Stick/DPad: Walk (+R1 Run) | R-Stick: Camera | X: Jump");
-    font.print(10, 42, "SQUARE: Kick | CIRCLE: Throw | L1: Dance | SELECT: Fog | START: Reset");
+    ui.status = `${Screen.getFPS(360)} FPS`;
 
     const prof = Screen.getProfile();
     const mem = System.getMemoryStats();
@@ -1276,18 +1275,30 @@ while (true) {
         ? (mem.uncompressedBytes / mem.compressedBytes).toFixed(2) + "x"
         : "1.00x";
 
-    font.print(10, 368, `RAM: ${usedKB} KB used | LZ4 saved: ${savedKB} KB (${compRatio}) | OOM rescues: ${mem.oomRescues}`);
-    font.print(10, 384, `LZ4 Assets: Tex ${mem.compressedTextures}/${mem.trackedTextures} | Mesh ${mem.compressedMeshes}/${mem.trackedMeshes} | Ops +${mem.compressCount}/-${mem.decompressCount}`);
-    font.print(10, 400, `frame ${prof.frame.toFixed(1)} | script ${prof.script.toFixed(1)} | render ${prof.render.toFixed(1)} | anim ${prof.anim.toFixed(1)} | phys ${prof.physics.toFixed(1)}`);
-    font.print(10, 416, `gpu wait ${prof.gpuWait.toFixed(1)} | vsync ${prof.vsync.toFixed(1)} (ms)`);
     const fxStats = fxSystem.stats();
-    font.print(10, 78, `Native particles: ${fxStats.active} active | ${fxStats.visible} visible | ${fxStats.batches} VU batches`);
-    font.print(10, 94, `R3: FX density OFF/128/256/512/1024 | current ${FX_LEVELS[fxLevel]}`);
-    font.print(10, 110, `L3: Dynamic shadows ${shadowsEnabled ? "ON" : "OFF"} | ${shadowDraws} casters`);
 
-    if (statusTimer > 0) {
-        font.print(10, 62, `>> ${statusText}`);
-    }
+    // Left card: what the player is doing and the world toggles.
+    const worldLines = [
+        `${stateLabel} (${currentAnim.toUpperCase()})`,
+        `SELECT  Fog: ${activeFog.name}`,
+        `R3  FX density: ${FX_LEVELS[fxLevel]}  (${fxStats.active} active, ${fxStats.visible} visible, ${fxStats.batches} batches)`,
+        `L3  Shadows: ${shadowsEnabled ? "ON" : "OFF"}  (${shadowDraws} casters)`,
+        `START  Reset sandbox  |  Fast clip: ${renderStats.fastClip}`,
+    ];
+    if (statusTimer > 0) worldLines.push(`>> ${statusText}`);
+    ui.hud(worldLines);
+
+    // Right card: frame profile and memory compaction.
+    ui.hud([
+        `frame ${prof.frame.toFixed(1)} ms`,
+        `script ${prof.script.toFixed(1)}  render ${prof.render.toFixed(1)}`,
+        `anim ${prof.anim.toFixed(1)}  phys ${prof.physics.toFixed(1)}`,
+        `gpu ${prof.gpuWait.toFixed(1)}  vsync ${prof.vsync.toFixed(1)}`,
+        `RAM ${usedKB} KB  LZ4 -${savedKB} KB (${compRatio})`,
+        `Tex ${mem.compressedTextures}/${mem.trackedTextures}  Mesh ${mem.compressedMeshes}/${mem.trackedMeshes}  OOM ${mem.oomRescues}`,
+    ], { right: true, bottom: true });
+
+    ui.chrome();
 
     if (BENCHMARK) benchTick();
     Screen.flip();

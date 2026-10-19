@@ -1,4 +1,6 @@
-// {"name": "Gamepad tester", "author": "Daniel Santos", "version": "08122024", "icon": "pads_icon.png", "file": "pads.js"}
+// {"name": "Gamepad tester", "author": "Daniel Santos", "version": "08122024", "icon": "pads_icon.png", "file": "pads.js", "category": "input", "blurb": "Every button, pressure level, stick and rumble of your gamepad.", "exit": "START+R3+UP"}
+
+import { AppUI, COLORS, exitToShell } from 'athenaos/app.js';
 
 const canvas = Screen.getMode();
 
@@ -7,17 +9,18 @@ canvas.zbuffering = true;
 canvas.double_buffering = true;
 
 Screen.setMode(canvas);
+Screen.setParam(Screen.DEPTH_TEST_ENABLE, false);
 
 Screen.setVSync(false);
 Screen.setFrameCounter(true);
 
+// Every button is under test here, so Home is a combo instead of Triangle.
+const ui = new AppUI({ title: "Gamepad tester", category: "input",
+                       hints: [["L2+R2", "Rumble"]], home: ["START+R3+UP", "Home"] });
+
 const dark_gray = Color.new(128, 128, 128, 32);
 const opaque = Color.new(128, 128, 128, 128);
 const translucent = Color.new(128, 128, 128, 60);
-
-const font = new Font("fonts/minecraft.ttf");
-font.color = Color.new(128, 0, 255);
-font.scale = Math.fround(0.4);
 
 const circle = new Image("pads/circle.png");
 const cross = new Image("pads/cross.png");
@@ -29,18 +32,31 @@ const left = new Image("pads/left.png");
 const right = new Image("pads/right.png");
 const start = new Image("pads/start.png");
 const pad_select = new Image("pads/select.png");
-const r1 = new Image("pads/r1.png");
-const r2 = new Image("pads/r2.png");
-const l1 = new Image("pads/l1.png");
-const l2 = new Image("pads/l2.png");
-const l3 = new Image("pads/l3.png");
-const r3 = new Image("pads/r3.png");
+const r1 = new Image("pads/R1.png");
+const r2 = new Image("pads/R2.png");
+const l1 = new Image("pads/L1.png");
+const l2 = new Image("pads/L2.png");
+const l3 = new Image("pads/L3.png");
+const r3 = new Image("pads/R3.png");
+
+// Controller layout is shifted down to clear the info card under the top bar.
+const OY = 24;
 
 var rumble = false;
 var pad = Pads.get(0);
 
+// Pressure-sensitive buttons fade in with the pressure applied.
+function pressure(img, btn, x, y) {
+    img.color = Color.new(128, 128, 128, ((pad.btns & btn)? Pads.getPressure(btn) : 60));
+    img.draw(x, y + OY);
+}
+
+function digital(img, btn, x, y) {
+    img.color = ((pad.btns & btn)? opaque : translucent);
+    img.draw(x, y + OY);
+}
+
 while(true) {
-    Screen.clear();
     const connectedCount = Pads.getConnectedCount();
     const connectedPorts = Pads.getConnected();
     const isActivePort0 = Pads.isActive(0);
@@ -48,78 +64,55 @@ while(true) {
 
     pad.update();
 
-    font.print(220, 25, "\nAthena project: Controls demo\n");
-    
-    font.print(10, 40, "Connected pads: " + connectedCount);
-    font.print(10, 55, "Active ports: [" + connectedPorts.join(', ') + "]");
-    font.print(10, 70, "Port 0 status: " + (isActivePort0 ? "ACTIVE" : "INACTIVE"));
-    font.print(10, 85, "Port 1 status: " + (isActivePort1 ? "ACTIVE" : "INACTIVE"));
-    
-    font.print(100, 370, "\nTips:\n");
-    font.print(100, 390, "\nPress R2+L2 to start rumble and press again to stop it.\n");
-    font.print(100, 405, "\nButtons transparency varies with the pressure applied to them.\n");
-    font.print(100, 420, "\nPress Start+R3+Pad-Up to exit this demo.\n");
+    if((pad.btns & Pads.START) && (pad.btns & Pads.R3) && (pad.btns & Pads.UP)){
+        break;
+    }
 
-    pad_select.color = ((pad.btns & Pads.SELECT)? opaque : translucent);
-    pad_select.draw(260.0f, 190.0f);
+    ui.background();
 
-    start.color = ((pad.btns & Pads.START)? opaque : translucent);
-    start.draw(380.0f, 190.0f);
-    
-    up.color = Color.new(128, 128, 128, ((pad.btns & Pads.UP)? Pads.getPressure(Pads.UP) : 60));
-    up.draw(120.0f, 155.0f);
+    ui.hud([
+        `Connected pads: ${connectedCount}`,
+        `Active ports: [${connectedPorts.join(', ')}]`,
+        `Port 0: ${isActivePort0 ? "ACTIVE" : "INACTIVE"}  |  Port 1: ${isActivePort1 ? "ACTIVE" : "INACTIVE"}`,
+        `Rumble: ${rumble ? "ON" : "OFF"}`,
+    ]);
 
-    down.color = Color.new(128, 128, 128, ((pad.btns & Pads.DOWN)? Pads.getPressure(Pads.DOWN) : 60));
-    down.draw(120.0f, 225.0f);
+    digital(pad_select, Pads.SELECT, 260, 190);
+    digital(start, Pads.START, 380, 190);
 
-    left.color = Color.new(128, 128, 128, ((pad.btns & Pads.LEFT)? Pads.getPressure(Pads.LEFT) : 60));
-    left.draw(85.0f, 190.0f);
+    pressure(up, Pads.UP, 120, 155);
+    pressure(down, Pads.DOWN, 120, 225);
+    pressure(left, Pads.LEFT, 85, 190);
+    pressure(right, Pads.RIGHT, 155, 190);
 
-    right.color = Color.new(128, 128, 128, ((pad.btns & Pads.RIGHT)? Pads.getPressure(Pads.RIGHT) : 60));
-    right.draw(155.0f, 190.0f);
+    pressure(triangle, Pads.TRIANGLE, 520, 155);
+    pressure(cross, Pads.CROSS, 520, 225);
+    pressure(square, Pads.SQUARE, 485, 190);
+    pressure(circle, Pads.CIRCLE, 555, 190);
 
-    triangle.color = Color.new(128, 128, 128, ((pad.btns & Pads.TRIANGLE)? Pads.getPressure(Pads.TRIANGLE) : 60));
-    triangle.draw(520.0f, 155.0f);
+    pressure(l1, Pads.L1, 102, 100);
+    pressure(r1, Pads.R1, 502, 100);
+    pressure(l2, Pads.L2, 137, 100);
+    pressure(r2, Pads.R2, 537, 100);
 
-    cross.color = Color.new(128, 128, 128, ((pad.btns & Pads.CROSS)? Pads.getPressure(Pads.CROSS) : 60));
-    cross.draw(520.0f, 225.0f);
+    Draw.rect(220, 280 + OY, 75, 75, dark_gray);
+    Draw.rect(380, 280 + OY, 75, 75, dark_gray);
 
-    square.color = Color.new(128, 128, 128, ((pad.btns & Pads.SQUARE)? Pads.getPressure(Pads.SQUARE) : 60));
-    square.draw(485.0f, 190.0f);
-
-    circle.color = Color.new(128, 128, 128, ((pad.btns & Pads.CIRCLE)? Pads.getPressure(Pads.CIRCLE) : 60));
-    circle.draw(555.0f, 190.0f);
-
-    l1.color = Color.new(128, 128, 128, ((pad.btns & Pads.L1)? Pads.getPressure(Pads.L1) : 60));
-    l1.draw(102.0f, 100.0f);
-
-    r1.color = Color.new(128, 128, 128, ((pad.btns & Pads.R1)? Pads.getPressure(Pads.R1) : 60));
-    r1.draw(502.0f, 100.0f);
-
-    l2.color = Color.new(128, 128, 128, ((pad.btns & Pads.L2)? Pads.getPressure(Pads.L2) : 60));
-    l2.draw(137.0f, 100.0f);
-
-    r2.color = Color.new(128, 128, 128, ((pad.btns & Pads.R2)? Pads.getPressure(Pads.R2) : 60));
-    r2.draw(537.0f, 100.0f);
-    
     l3.color = ((pad.btns & Pads.L3)? opaque : translucent);
-    l3.draw(pad.lx/4.0f+242.0f, pad.ly/4.0f+300.0f);
+    l3.draw(pad.lx/4.0f+242.0f, pad.ly/4.0f+300.0f+OY);
 
     r3.color = ((pad.btns & Pads.R3)? opaque : translucent);
-    r3.draw(pad.rx/4.0f+402.0f, pad.ry/4.0f+300.0f);
-
-    Draw.rect(220.0f, 280.0f, 75, 75, dark_gray);
-    Draw.rect(380.0f, 280.0f, 75, 75, dark_gray);
+    r3.draw(pad.rx/4.0f+402.0f, pad.ry/4.0f+300.0f+OY);
 
     if(((pad.btns & Pads.R2) && (pad.btns & Pads.L2)) && ((pad.old_btns & Pads.R2) && !(pad.old_btns & Pads.L2))){
         rumble? Pads.rumble(0 ,0) : Pads.rumble(1 ,255);
         rumble ^= 1;
     }
 
-    if((pad.btns & Pads.START) && (pad.btns & Pads.R3) && (pad.btns & Pads.UP)){
-        std.reload("main.js");
-    }
-
-    font.print(10, 10, Screen.getFPS(360) + " FPS");
+    ui.status = `${Screen.getFPS(360)} FPS`;
+    ui.chrome([["L2+R2", "Rumble"]], "Buttons fade in with pressure");
     Screen.flip();
 }
+
+Pads.rumble(0, 0);
+exitToShell();

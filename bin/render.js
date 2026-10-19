@@ -1,7 +1,13 @@
-// {"name": "Render demo", "author": "Daniel Santos", "version": "04072023", "icon": "render_icon.png", "file": "render.js"}
+// {"name": "Render demo", "author": "Daniel Santos", "version": "04072023", "file": "render.js", "category": "3d", "blurb": "VU1 3D pipeline: lighting, materials, glTF and OBJ models.", "exit": "TRIANGLE"}
 import { Batch } from 'RenderBatch';
 import { SceneNode } from 'RenderSceneNode';
 import { AsyncLoader } from 'RenderAsyncLoader';
+import { AppUI, exitToShell } from 'athenaos/app.js';
+
+// Before os.chdir("render"): the UI font and settings live in the boot folder.
+const ui = new AppUI({ title: "Render demo", category: "3d",
+                       hints: [["L-stick", "Rotate"], ["D-pad", "Model/Pipeline"], ["cross", "Clip"], ["square", "Shade"], ["circle", "Texture"], ["R1", "BBox"]] });
+
 
 const pipelines = [
     "NO_LIGHTS",
@@ -9,11 +15,6 @@ const pipelines = [
     "SPECULAR"
 ];
 
-const font = new Font("default");
-font.scale = 0.6f;
-
-font.outline = 1.0f;
-font.outline_color = Color.new(0, 0, 0);
 
 Screen.setFrameCounter(true);
 Screen.setVSync(true);
@@ -55,9 +56,7 @@ Screen.setParam(Screen.DEPTH_TEST_ENABLE, false);
 
 Screen.switchContext();
 
-Screen.clear();
-font.print(0, 0, "Loading assets...");
-Screen.flip();
+ui.loading("Loading assets...", "Meshes, textures and materials");
 
 Render.init();
 
@@ -323,11 +322,11 @@ while (true) {
         render_data[modeltodisplay].pipeline = render_data[modeltodisplay].pipeline + 1;
     }
 
-    if (pad.justPressed(Pads.TRIANGLE)) {
+    if (ui.homeRequested(pad)) {
         asyncLoader.clear();
         asyncLoader.destroy();
         os.chdir("..");
-        std.reload("main.js");
+        exitToShell();
     }
 
     if (pad.justPressed(Pads.R1)) {
@@ -393,9 +392,14 @@ while (true) {
     //
 
     const renderStats = Render.stats();
-    font.print(10, 10, Screen.getFPS(360) + " FPS | " + free_mem + " | Static VRAM: " + Screen.getMemoryStats(Screen.VRAM_USED_STATIC) / 1024 + "KB" + " | Dynamic VRAM: " + Screen.getMemoryStats(Screen.VRAM_USED_DYNAMIC) / 1024 + "KB");
-    font.print(10, 25, render_data[modeltodisplay].size + " Vertices | " + "Pipeline: " + pipelines[render_data[modeltodisplay].pipeline] + " | Draws: " + renderStats.drawCalls + " | Tris: " + renderStats.triangles);
-    font.print(10, 40, `Batch: ${sceneBatch.size} objects | Loader queue: ${asyncLoader.size()} | Streamed: ${streamedObjects.length}`);
+    ui.status = `${Screen.getFPS(360)} FPS`;
+    ui.hud([
+        `Model ${modeltodisplay + 1}/${render_data.length}  -  ${render_data[modeltodisplay].size} vertices`,
+        `Pipeline: ${pipelines[render_data[modeltodisplay].pipeline]}  |  Draws: ${renderStats.drawCalls}  |  Tris: ${renderStats.triangles}`,
+        `${free_mem}  |  VRAM static ${Math.floor(Screen.getMemoryStats(Screen.VRAM_USED_STATIC) / 1024)} KB  dynamic ${Math.floor(Screen.getMemoryStats(Screen.VRAM_USED_DYNAMIC) / 1024)} KB`,
+        `Batch: ${sceneBatch.size} objects  |  Loader queue: ${asyncLoader.size()}  |  Streamed: ${streamedObjects.length}`,
+    ]);
+    ui.chrome();
 
     Screen.flip();
 }

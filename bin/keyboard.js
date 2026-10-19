@@ -1,4 +1,10 @@
-// {"name": "Keyboard demo", "author": "Daniel Santos", "version": "04102023", "file": "keyboard.js"}
+// {"name": "Keyboard demo", "author": "Daniel Santos", "version": "04102023", "file": "keyboard.js", "category": "input", "blurb": "Live USB keyboard events with a custom keymap.", "exit": "TRIANGLE"}
+
+import { Terminal, exitToShell } from 'athenaos/app.js';
+
+const term = new Terminal({ title: "Keyboard demo", category: "input",
+                            subtitle: "Plug a USB keyboard and press keys -- modifiers and arrows included" });
+const pad = Pads.get();
 
 IOP.loadModule("ps2kbd");
 
@@ -54,7 +60,7 @@ for (const code in punctuation) {
 }
 
 Keyboard.setKeymap(keymap.buffer, shiftKeymap.buffer);
-console.log("Custom keymap applied.");
+term.log("Custom keymap applied.");
 
 // Call Keyboard.resetKeymap() to go back to the layout baked into ps2kbd.irx.
 
@@ -78,14 +84,21 @@ const modifierNames = {
 };
 
 while (true) {
-    const event = Keyboard.getRaw();
-    if (!event)
-        continue;
+    pad.update();
+    if (term.homeRequested(pad)) break;
 
-    const name = modifierNames[event.code];
-    if (name) {
-        console.log(`${name} ${event.pressed ? "pressed" : "released"}`);
-    } else if (event.pressed) {
-        console.log(`raw key 0x${event.code.toString(16)} pressed`);
+    let event;
+    while ((event = Keyboard.getRaw())) {
+        const name = modifierNames[event.code];
+        if (name) {
+            term.log(`${name} ${event.pressed ? "pressed" : "released"}`);
+        } else if (event.pressed) {
+            term.log(`raw key 0x${event.code.toString(16)} pressed`);
+        }
     }
+
+    term.draw();
 }
+
+Keyboard.deinit();
+exitToShell();

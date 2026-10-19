@@ -1,14 +1,21 @@
-// {"name": "Async Network", "author": "Daniel Santos", "version": "04072023", "file": "async_request.js"}
+// {"name": "Async Network", "author": "Daniel Santos", "version": "04072023", "file": "async_request.js", "category": "network", "blurb": "Non-blocking HTTPS download with transfer progress.", "exit": "TRIANGLE"}
 
 import { Network, Request } from 'athena_network.erl';
+import { Terminal, exitToShell } from 'athenaos/app.js';
+
+const term = new Terminal({ title: "Async Network", category: "network", subtitle: "Non-blocking HTTPS download" });
+
+term.log("Resetting IOP and loading the network driver...");
+term.draw();
 
 IOP.reset();
 
+IOP.loadModule("padman"); // as in sockets.js: keep the pad driver after the reset so Home works
 IOP.loadModule("SMAP");
 
 Network.init();
 
-console.log(JSON.stringify(Network.getConfig()));
+term.log(JSON.stringify(Network.getConfig()));
 
 let req = new Request();
 
@@ -18,20 +25,24 @@ req.headers = ["upgrade-insecure-requests: 1",
                "sec-fetch-mode: navigate"];
 
 req.asyncGet("https://raw.githubusercontent.com/DanielSant0s/brewstore-db/main/brew_data.json");
- 
+
+// The download runs in the background, so the UI keeps drawing meanwhile.
 while(!req.ready(2)) {
-    console.log("Waiting... " + req.getAsyncSize() + " bytes transfered");
-    System.sleep(1); 
+    term.status = `${req.getAsyncSize()} bytes`;
+    term.draw();
 }
 
-let result = req.getAsyncData();
-
-console.log(result);
+term.status = "";
+term.log(`Done: ${req.getAsyncSize()} bytes transferred`);
+term.log(req.getAsyncData());
 
 Network.deinit();
 
-System.sleep(300);
+const pad = Pads.get();
+while (true) {
+    pad.update();
+    if (term.homeRequested(pad)) break;
+    term.draw();
+}
 
-console.log("loading main.js");
-
-std.reload("main.js");
+exitToShell();

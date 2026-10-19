@@ -1,10 +1,10 @@
-// {"name": "Shadows demo", "author": "Daniel Santos", "version": "04072023", "icon": "render_icon.png", "file": "shadows.js"}
+// {"name": "Shadows demo", "author": "Daniel Santos", "version": "04072023", "file": "shadows.js", "category": "3d", "blurb": "Real-time projected shadows on a skinned character.", "exit": "TRIANGLE"}
 
-const font = new Font("default");
-font.scale = 0.6f;
+import { AppUI, exitToShell } from 'athenaos/app.js';
 
-font.outline = 1.0f;
-font.outline_color = Color.new(0, 0, 0);
+// Before os.chdir("render"): the UI font and settings live in the boot folder.
+const ui = new AppUI({ title: "Shadows demo", category: "3d",
+                       hints: [["L-stick", "Orbit"], ["L2/R2", "Zoom"], ["cross", "Animation"], ["square", "Cull"], ["circle", "Clip"]] });
 
 Screen.setFrameCounter(true);
 
@@ -238,9 +238,9 @@ while(true) {
         Camera.zoom(-0.2f);
     }
     
-    if(pad.justPressed(Pads.TRIANGLE)) {
+    if(ui.homeRequested(pad)) {
         os.chdir("..");
-        std.reload("main.js");
+        exitToShell();
     }
 
     if (pad.justPressed(Pads.CROSS)) {
@@ -372,11 +372,13 @@ while(true) {
 
     Screen.setParam(Screen.DEPTH_TEST_ENABLE, false);
 
-    font.print(10, 10, Screen.getFPS(360) + " FPS | " + free_mem + " | Free VRAM: " + free_vram + "KB");
-    font.print(10, 25, gltf_skin.size + " Vertices");
-    font.print(10, 40, "Tristrip ribbon: " + RIBBON_QUADS + " quads | SQUARE cull: " + (ribbon_culling? "BACK" : "NONE")
-                       + " | CIRCLE clip: " + (ribbon_clipping? "ACCURATE" : "FAST"));
-    font.print(10, 55, "solid or gone = ok, striped = wrong parity");
+    ui.status = `${Screen.getFPS(360)} FPS`;
+    ui.hud([
+        `${gltf_skin.size} vertices  |  ${free_mem}  |  VRAM ${Math.floor(free_vram / 1024)} KB`,
+        `Tristrip ribbon: ${RIBBON_QUADS} quads  |  cull ${ribbon_culling ? "BACK" : "NONE"}  |  clip ${ribbon_clipping ? "ACCURATE" : "FAST"}`,
+        "Ribbon solid or gone = ok, striped = wrong parity",
+    ]);
+    ui.chrome();
 
     Screen.flip();
 }

@@ -1,6 +1,7 @@
-// {"name": "Websockets", "author": "Daniel Santos", "version": "05112023", "file": "websockets.js"}
+// {"name": "Websockets", "author": "Daniel Santos", "version": "05112023", "file": "websockets.js", "category": "network", "blurb": "Secure WebSocket echo round-trip.", "exit": "TRIANGLE"}
 
 import { Network, Request, WebSocket } from 'athena_network.erl';
+import { Terminal, exitToShell } from 'athenaos/app.js';
 
 function ab2str(ab) {
     return String.fromCharCode.apply(null, new Uint8Array(ab));
@@ -15,21 +16,27 @@ function str2ab(str) {
     return buf;
   }
 
-console.log("Athena network system\n");
+const term = new Terminal({ title: "Websockets", category: "network", subtitle: "wss://echo.websocket.org" });
+
+term.log("Resetting IOP and loading the network driver...");
+term.draw();
 
 IOP.reset();
 
+IOP.loadModule("padman"); // as in sockets.js: keep the pad driver after the reset so Home works
 IOP.loadModule("SMAP");
 
 Network.init();
 
-console.log(JSON.stringify(Network.getConfig()));
+term.log(JSON.stringify(Network.getConfig()));
+term.log("Connecting to wss://echo.websocket.org ...");
+term.draw();
 
 let req = new Request();
 
 let ws = new WebSocket("wss://echo.websocket.org");
 
-console.log(ab2str(ws.recv()));
+term.log(ab2str(ws.recv()));
 
 ws = null;
 
@@ -37,6 +44,11 @@ std.gc();
 
 Network.deinit();
 
-System.sleep(300);
+const pad = Pads.get();
+while (true) {
+    pad.update();
+    if (term.homeRequested(pad)) break;
+    term.draw();
+}
 
-std.reload("main.js");
+exitToShell();

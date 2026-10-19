@@ -1,4 +1,9 @@
-// {"name": "Pong", "author": "Daniel Santos", "version": "04252023","file": "pong.js"}
+// {"name": "Pong", "author": "Daniel Santos", "version": "04252023", "file": "pong.js", "category": "games", "blurb": "The classic, with ADPCM sound effects.", "exit": "TRIANGLE"}
+import { AppUI, exitToShell } from 'athenaos/app.js';
+
+// Gameplay owns the screen; the standard chrome shows while paused.
+const ui = new AppUI({ title: "Pong", category: "games", hints: [["START", "Play/Pause"], ["D-pad", "Move"]] });
+
 Sound.setVolume(100);
 const main_sfx_channel = Sound.findChannel();
 
@@ -166,6 +171,10 @@ const pause = {
 while(true) {
     pad.update();
 
+    if(ui.homeRequested(pad)) {
+        exitToShell();
+    }
+
     Screen.clear(dark_gray);
 
     if(pad.justPressed(Pads.START)) {
@@ -219,6 +228,8 @@ while(true) {
     font.print(600-font.getTextSize(String(score)).width, 10, String(score));
     player.draw();
     ball.draw();
+
+    if (paused) ui.chrome();
 
     Screen.flip();
 }

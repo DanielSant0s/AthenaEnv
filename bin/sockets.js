@@ -1,6 +1,12 @@
-// {"name": "Sockets demo", "author": "Daniel Santos", "version": "04072023","file": "sockets.js"}
+// {"name": "Sockets demo", "author": "Daniel Santos", "version": "04072023", "file": "sockets.js", "category": "network", "blurb": "Raw TCP socket talking HTTP to a web server.", "exit": "TRIANGLE"}
 
 import { Network, Socket } from 'athena_network.erl';
+import { Terminal, exitToShell } from 'athenaos/app.js';
+
+const term = new Terminal({ title: "Sockets demo", category: "network", subtitle: "Raw TCP socket to www.google.com:80" });
+
+term.log("Resetting IOP and loading the network driver...");
+term.draw();
 
 IOP.reset();
 
@@ -9,35 +15,34 @@ IOP.loadModule("SMAP");
 
 Network.init();
 
-const font = new Font("default");
-font.scale = 0.7;
-
 var nw_config = Network.getConfig();
+
+term.log("IP Address: " + nw_config.ip);
+term.log("Netmask: " + nw_config.netmask);
+term.log("Gateway: " + nw_config.gateway);
+term.log("DNS: " + nw_config.dns);
+term.draw();
 
 var s = new Socket(Socket.AF_INET, Socket.SOCK_STREAM);
 
 const host = Network.getHostbyName("www.google.com");
 
-console.log(host);
+term.log("www.google.com -> " + host);
+term.draw();
 
 s.connect(host, 80);
 s.send("GET / HTTP/1.1\r\nHost:www.google.com\r\n\r\n");
 const msg = s.recv(1024);
-console.log(msg);
+term.log(msg);
 s.close();
-
-for (var i = 0; i < 1250; i++) {
-    Screen.clear();
-    font.print(5, 250, "IP Address: " + nw_config.ip);
-    font.print(5, 265, "Netmask: " + nw_config.netmask);
-    font.print(5, 280, "Gateway: " + nw_config.gateway);
-    font.print(5, 295, "DNS: " + nw_config.dns);
-
-    //font.print(5, 120, "Message: " + msg);
-
-    Screen.flip();
-}
 
 Network.deinit();
 
-std.reload("main.js");
+const pad = Pads.get();
+while (true) {
+    pad.update();
+    if (term.homeRequested(pad)) break;
+    term.draw();
+}
+
+exitToShell();

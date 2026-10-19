@@ -1,4 +1,4 @@
-// {"name": "Texture video", "author": "Daniel Santos", "version": "08022026", "file": "video_as_texture.js"}
+// {"name": "Texture video", "author": "Daniel Santos", "version": "08022026", "file": "video_as_texture.js", "category": "media", "blurb": "MPEG video decoded straight into a rotating texture.", "exit": "TRIANGLE"}
 
 /**
  * Video as Texture Sample
@@ -11,6 +11,9 @@
  */
 
 import { Video } from 'athena_mpeg.erl';
+import { AppUI, exitToShell } from 'athenaos/app.js';
+
+const ui = new AppUI({ title: "Texture video", category: "media" });
 
 // Load the video
 const video = new Video("video.m2v");
@@ -28,9 +31,14 @@ const frame = video.frame;
 
 Screen.setParam(Screen.DEPTH_TEST_ENABLE, false);
 
+const pad = Pads.get();
+
 // Main render loop
 while (true) {
-    Screen.clear(Color.new(20, 20, 40));
+    pad.update();
+    if (ui.homeRequested(pad)) break;
+
+    ui.background();
 
     // Update video frame
     video.update();
@@ -68,8 +76,11 @@ while (true) {
         scaleDir = -scaleDir;
     }
 
+    ui.autoChrome(pad);
     Screen.flip();
 }
 
 video.free();
 console.log("Demo finished!");
+
+exitToShell();

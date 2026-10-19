@@ -1,7 +1,12 @@
-// {"name": "App store", "author": "Daniel Santos", "version": "04102023", "file": "app_store.js"}
+// {"name": "App store", "author": "Daniel Santos", "version": "04102023", "file": "app_store.js", "category": "network", "blurb": "Download homebrew from the online Brew Store catalog.", "exit": "TRIANGLE"}
 
 import { Network, Request } from 'athena_network.erl';
 import * as Archive from 'athena_archive.erl';
+import { AppUI, COLORS, rgba, exitToShell } from 'athenaos/app.js';
+
+const ui = new AppUI({ title: "App store", category: "network" });
+
+Screen.setParam(Screen.DEPTH_TEST_ENABLE, false);
 
 function load_app_db(fname) {
     let list_file = std.open(fname, "r");
@@ -26,10 +31,10 @@ function load_network_driver() {
 
     IOP.loadModule("cdfs");
     IOP.loadModule("mcserv");
-    
+
     IOP.loadModule("padman");
     IOP.loadModule("SMAP");
-    
+
     Network.init();
 }
 
@@ -38,7 +43,6 @@ req.keepalive = true;
 
 const LOADING = 0;
 const MAIN_MENU = 1;
-const OPTIONS_MENU = 2;
 const DLING_MENU = 3;
 
 let app_state = LOADING;
@@ -47,245 +51,17 @@ const LD_INITIAL = 0;
 const LD_NETWORK = 1;
 const LD_PKGLIST = 2;
 const LD_PKGQNTD = 3;
-const LD_FADE = 4;
-const LD_FINAL = 5;
 
 let loading_state = LD_INITIAL;
 
-const MM_INITIAL = 0;
-const MM_FINAL = 1;
-
-let mainmenu_state = MM_INITIAL;
-
-let loading_text = "Athena package manager";
+let loading_log = ["Athena package manager"];
 
 let app_list = null;
-
-const buttons = [{inc:Pads.DOWN, dec:Pads.UP}, {inc:Pads.RIGHT, dec:Pads.LEFT}, {inc:Pads.R2, dec:Pads.L2}];
+let icons = [];
+let sel = 0;
+let top = 0;
 
 let pad = Pads.get();
-
-const FADE_IN = 0;
-const FADE_OUT = 1;
-
-class UI {
-    constructor() {
-        this.y = 0;
-        this.belt_img = new Image("store/belt.png");
-        this.belt_img.width = 750;
-        this.belt_img.height = 750;
-        this.belt_img.color = Color.new(0x80, 0x80, 0x80, 0x20);
-
-        this.font = new Font("fonts/Karla-Regular.ttf");
-        this.text_alpha = 0x80;
-
-        this.fading = false;
-        this.fade = FADE_IN;
-
-        this.timer = Timer.new();
-    }
-
-    println(str) {
-        str.split('\n').forEach(text => {
-            this.font.print(10, this.y, text);
-            this.y += 25;
-        });
-    }
-
-    fade_text(type) {
-        this.fade = type;
-        this.fading = true;
-    }
-
-    text_fade_process() {
-        if (this.fading) {
-            if (this.fade == FADE_IN && this.text_alpha > 0) {
-                this.text_alpha -= 1;
-            } else if(this.fade == FADE_OUT && this.text_alpha < 0x80){
-                this.text_alpha += 1;
-            } else {
-                this.fading = false;
-            }
-
-            this.font.color = Color.new(0x80, 0x80, 0x80, this.text_alpha);
-            
-        }
-    }
-
-    render_belt(speed) {
-        this.belt_img.angle += speed;
-        this.belt_img.draw(0, 256);
-    }
-
-    update() {
-        this.text_fade_process();
-        Screen.flip();
-        this.y = 0;
-        Screen.clear(0x80101010);
-    }
-
-}
-
-let ui = new UI();
-ui.font.color = Color.new(0x80, 0x80, 0x80, 0x0);
-ui.font.scale = 0.7f;
-ui.text_alpha = 0;
-
-class Menu {
-    num = 0;
-    num_comp = 0;
-    pad_mode = 0;
-    mode = 0;
-    padding = 4;
-    centered = false;
-    list;
-    backup_x;
-    x;
-    y;
-
-    constructor(x, y, font, list) {
-        this.x = x;
-        this.y = y;
-        this.list = list;
-        this.font = font;
-    }
-
-    process_input(pad) {
-        if(pad.justPressed(buttons[this.pad_mode].dec)) {
-            this.num--;
-        }
-    
-        if(pad.justPressed(buttons[this.pad_mode].inc)) {
-            this.num++;
-        }
-
-
-        if(this.num >= this.list.length) {
-            this.num = 0;
-        } else if (this.num < 0) {
-            this.num = this.list.length-1;
-        }
-    }
-
-    calculate_x(idx) {
-        let x = 0;
-
-        for(let j = 0; j < idx; j++) {
-            x += this.font.getTextSize(this.list[j]).width;
-            x += this.padding;
-        }
-
-        return x;
-    }
-
-    center_x() {
-        let x = 0;
-
-        for(let i = 0; i < this.list.length; i++) {
-            x += this.font.getTextSize(this.list[i]).width;
-            if(i < this.list.length-1) {
-                x += this.padding;
-            }
-        }
-
-        this.x = 320-x/2;
-        this.first = false;
-    }
-
-    draw(pad) {
-        this.process_input(pad);
-        let t_size = this.font.getTextSize(this.list[this.num]);
-
-        for(let i = 0; i < this.list.length; i++) {
-            this.font.color = Color.new(0x80, 0x80, 0x80, (i == this.num? 0x80 : 0x20));
-            if(this.mode == 0) {
-                this.font.print(this.x-(this.centered? this.font.getTextSize(this.list[i]).width/2 : 0), this.y+((t_size.height+this.padding)*i), this.list[i]);
-            } else {
-                this.font.print(this.x+this.calculate_x(i), this.y, this.list[i]);
-            }
-        }
-
-    }
-};
-
-
-class IconMenu extends Menu {
-    constructor(x, y, font, list) {
-        super(x, y, font, list)
-        
-        let icons = [];
-        for(let i = 0; i < list.length; i++) {
-            let icn = new Image("store/icons/" + list[i].icon);
-            icn.width = 40;
-            icn.height = 40;
-            icons.push(icn);
-        }
-        this.icons = icons;
-        this.icon_padding = 5;
-        this.target_size = 50;
-        this.scr_limit = 6;
-        this.font = font;
-    }
-
-    calculate_x(idx) {
-        let x = 0;
-
-        for(let j = 0; j < idx; j++) {
-            x += this.font.getTextSize(this.list[j].name).width;
-            x += this.padding;
-        }
-
-        return x;
-    }
-
-    center_x() {
-        let x = 0;
-
-        for(let i = 0; i < this.list.length; i++) {
-            x += this.font.getTextSize(this.list[i].name).width;
-            if(i < this.list.length-1) {
-                x += this.padding;
-            }
-        }
-
-        this.x = 320-x/2;
-        this.first = false;
-    }
-
-    draw(pad) {
-        this.process_input(pad);
-
-        if(this.num > this.scr_limit-1){
-            this.num_comp = -(this.num-(this.scr_limit-1));
-        } else {
-            this.num_comp = 0;
-        }
-
-        let t_size = this.font.getTextSize(this.list[this.num]);
-
-        for(let i = 0; i < this.list.length; i++) {
-            this.font.color = Color.new(0x80, 0x80, 0x80, (i == this.num? 0x80 : 0x20));
-            if(i+this.num_comp < this.scr_limit && i+this.num_comp >= 0) {
-                if(this.mode == 0) {
-                    this.icons[i].draw(this.x, this.y+((this.target_size-this.icons[i].height)/2) + ((this.target_size+this.padding)*(i+this.num_comp)));
-                    this.font.print(this.x+this.icons[i].width+this.icon_padding, this.y+(this.target_size/2-t_size.height/2)+((this.target_size+this.padding)*(i+this.num_comp)), this.list[i].name);
-                } else {
-                    this.font.print(this.x+this.calculate_x(i), this.y, this.list[i].name);
-                }
-            }
-
-        }
-    }
-};
-
-let main_menu = new Menu(320, 20, ui.font, ["Explore", "Manage", "Settings"]);
-main_menu.padding = 30;
-main_menu.pad_mode = 2;
-main_menu.mode = 1;
-main_menu.centered = true;
-main_menu.center_x();
-
-let explore_menu = undefined;
 
 const DETAILS = 0;
 const TODOWNLOAD = 1;
@@ -293,10 +69,9 @@ const DOWNLOADING = 2;
 const DOWNLOADED = 3;
 const EXTRACTING = 4;
 const EXTRACTED = 5;
-const LEAVING = 6;
 
 let dl_state = DETAILS;
-let dling_text = "";
+let dling_log = [];
 let terminate = false;
 
 let transfering = false;
@@ -306,26 +81,78 @@ const UPDATING = 1;
 const UPDATED = 2;
 let update_state = NOT_UPDATED;
 
+const ROW_H = 48;
+
+// --- Views --------------------------------------------------------------------
+
+function drawLog(lines, x, y, w, h) {
+    ui.panel(x, y, w, h);
+    lines.forEach((line, i) => ui.textV(x + 16, y + 20 + i * 20, ui.fit(line, 0.46, w - 32), 0.46, i === lines.length - 1 ? COLORS.text : COLORS.textDim));
+}
+
+function drawIcon(i, x, cy, size) {
+    const icn = icons[i];
+    icn.width = size;
+    icn.height = size;
+    icn.draw(x, cy - size / 2);
+}
+
+function drawCatalog() {
+    const { x, y, w, h } = ui.content;
+    const listW = 260;
+    const rows = Math.floor((h - 12) / ROW_H);
+    if (sel < top) top = sel;
+    if (sel >= top + rows) top = sel - rows + 1;
+
+    ui.panel(x, y, listW, h);
+    for (let i = top; i < Math.min(app_list.length, top + rows); i++) {
+        const cy = y + 6 + (i - top) * ROW_H + ROW_H / 2;
+        if (i === sel) {
+            Draw.rect(x + 6, cy - ROW_H / 2 + 2, listW - 12, ROW_H - 4, rgba(255, 255, 255, 0.10));
+            Draw.rect(x + 6, cy - ROW_H / 2 + 2, 3, ROW_H - 4, ui.accent());
+        }
+        drawIcon(i, x + 18, cy, 36);
+        ui.textV(x + 64, cy - 7, ui.fit(app_list[i].name, 0.5, listW - 80), 0.5, i === sel ? COLORS.text : COLORS.textDim);
+        ui.textV(x + 64, cy + 10, app_list[i].category, 0.38, COLORS.textFaint);
+    }
+
+    drawDetails(x + listW + 16, y, w - listW - 16, h);
+}
+
+function drawDetails(x, y, w, h) {
+    const pkg = app_list[sel];
+    ui.panel(x, y, w, h);
+    drawIcon(sel, x + 20, y + 52, 64);
+    ui.textV(x + 100, y + 38, ui.fit(pkg.name, 0.8, w - 120), 0.8, COLORS.text);
+    ui.textV(x + 100, y + 66, pkg.category, 0.46, COLORS.textDim);
+
+    ui.heading(x + 20, y + 112, "Package");
+    ui.textV(x + 20, y + 132, ui.fit(pkg.fname, 0.44, w - 40), 0.44, COLORS.text);
+    ui.heading(x + 20, y + 162, "Source");
+    ui.wrap(pkg.link, 0.40, w - 40).slice(0, 3).forEach((line, i) => ui.textV(x + 20, y + 182 + i * 16, ui.fit(line, 0.40, w - 40), 0.40, COLORS.textDim));
+
+    if (app_state === DLING_MENU) {
+        dling_log.slice(-4).forEach((line, i) => ui.textV(x + 20, y + 250 + i * 20, ui.fit(line, 0.46, w - 40), 0.46, COLORS.text));
+    }
+}
+
+// --- Main loop ----------------------------------------------------------------
+
 while(true) {
     pad.update();
+
+    let hints = [];
 
     switch (app_state) {
         case LOADING:
             switch(loading_state) {
                 case LD_INITIAL:
-                    if(!ui.fading && ui.text_alpha != 0x80) {
-                        ui.fade_text(FADE_OUT);
-                    }
-
-                    if (ui.text_alpha == 0x80) {
-                        loading_text += "\n\nLoading network driver...";
-                        loading_state++;
-                    }
-
+                    loading_log.push("Loading network driver...");
+                    loading_state++;
                     break;
                 case LD_NETWORK:
-                    loading_text += "\nLoading package list, it's gonna take a while...";
                     load_network_driver();
+                    loading_log.push("Loading package list, it's gonna take a while...");
                     loading_state++;
                     break;
                 case LD_PKGLIST:
@@ -340,76 +167,58 @@ while(true) {
                         }
                     } else {
                         app_list = load_app_db("brew_data.json");
-                        loading_text += "\n" + app_list.length + " packages found."
-                        //loading_text += "\n" + Math.floor(System.getFreeMemory()/1024) + "KB free for allocation.";
+                        loading_log.push(app_list.length + " packages found.");
                         loading_state++;
                     }
 
                     break;
                 case LD_PKGQNTD:
-                    loading_state++;
-                    explore_menu = new IconMenu(120, 110, ui.font, app_list);
-                    explore_menu.padding = -5;
-                    explore_menu.icon_padding = 20;
+                    icons = app_list.map(pkg => {
+                        const icn = new Image("store/icons/" + pkg.icon);
+                        icn.filter = LINEAR;
+                        return icn;
+                    });
+                    app_state = MAIN_MENU;
                     break;
-                case LD_FADE:
-                    ui.fade_text(FADE_IN);
-                    loading_state++;
-                    break;
-                case LD_FINAL:
-                    if (!ui.fading) {
-                        loading_state = 0;
-                        app_state = MAIN_MENU;
-                    }
             }
 
-            ui.render_belt(0.005f);
-            ui.println(loading_text);
-
+            ui.background();
+            drawLog(loading_log, ui.content.x, ui.content.y, ui.content.w, 40 + loading_log.length * 20);
             break;
         case MAIN_MENU:
-            switch (mainmenu_state) {
-                case MM_INITIAL:
-                    mainmenu_state++;
-                    break;
-                case MM_FINAL:
-                    break;
-            }
+            if(pad.justPressed(Pads.DOWN)) sel = (sel + 1) % app_list.length;
+            if(pad.justPressed(Pads.UP)) sel = (sel + app_list.length - 1) % app_list.length;
 
             if(pad.justPressed(Pads.CROSS)) {
                 app_state = DLING_MENU;
             }
 
-            if(pad.justPressed(Pads.TRIANGLE)) {
+            if(ui.homeRequested(pad)) {
                 terminate = true;
             }
 
-            ui.render_belt(0.0025f);
-            explore_menu.draw(pad);
-
-            break;
-        case OPTIONS_MENU:
+            ui.background();
+            drawCatalog();
+            hints = [["D-pad", "Browse"], ["cross", "Details"]];
             break;
         case DLING_MENU:
-            ui.font.color = 0x80808080;
-            ui.println("Name: " + app_list[explore_menu.num].name);
-            ui.println("Category: " + app_list[explore_menu.num].category);
-            ui.println("Package: " + app_list[explore_menu.num].fname);
-            ui.println("Link: " + app_list[explore_menu.num].link);
-
             switch (dl_state) {
                 case DETAILS:
                     if(pad.justPressed(Pads.CROSS)) {
-                        dling_text += "Downloading package...\n";
-                        dling_text += "This is an alpha version, it will take a long time\n";
+                        dling_log.push("Downloading package...");
+                        dling_log.push("This is an alpha version, it will take a long time");
                         dl_state++;
                     }
-                    if(pad.justPressed(Pads.TRIANGLE)) {
+                    if(pad.justPressed(Pads.CIRCLE)) {
                         app_state = MAIN_MENU;
                     }
+                    if(ui.homeRequested(pad)) {
+                        terminate = true;
+                    }
+                    hints = [["cross", "Download"], ["circle", "Back"]];
                     break;
                 case TODOWNLOAD:
-                    req.asyncDownload(app_list[explore_menu.num].link, System.boot_path + "/" + app_list[explore_menu.num].fname);
+                    req.asyncDownload(app_list[sel].link, System.boot_path + "/" + app_list[sel].fname);
                     transfering = true;
                     dl_state++;
                     break;
@@ -420,30 +229,32 @@ while(true) {
                             dl_state++;
                         }
                     } catch (ex) {
-                        dling_text += ex.message;
-                        dling_text += "Restarting application...\n"
-                        ui.println(dling_text);
-                        for (let i = 0; i < 5000; i++) {
+                        dling_log.push(ex.message);
+                        dling_log.push("Restarting application...");
+                        for (let i = 0; i < 300; i++) {
+                            ui.background();
+                            drawCatalog();
+                            ui.chrome([]);
                             Screen.flip();
-                        }   
+                        }
                         Network.deinit();
                         System.loadELF(System.loadELF(System.boot_path + "athena_pkd.elf", ["app_store.js"]) );
                     }
 
                     break;
                 case DOWNLOADED:
-                    if(!app_list[explore_menu.num].fname.endsWith(".elf") && !app_list[explore_menu.num].fname.endsWith(".ELF")) {
+                    if(!app_list[sel].fname.endsWith(".elf") && !app_list[sel].fname.endsWith(".ELF")) {
                         dl_state++;
-                        dling_text += "Extracting files...\n";
+                        dling_log.push("Extracting files...");
                     } else {
                         dl_state = EXTRACTED;
                     }
                     break;
                 case EXTRACTING: {
-                    let pkg_path = System.boot_path + "/" + app_list[explore_menu.num].fname;
-                    if (app_list[explore_menu.num].fname.endsWith(".tar.gz")) {
+                    let pkg_path = System.boot_path + "/" + app_list[sel].fname;
+                    if (app_list[sel].fname.endsWith(".tar.gz")) {
                         Archive.untar(pkg_path);
-                    } else if (app_list[explore_menu.num].fname.endsWith(".zip")) {
+                    } else if (app_list[sel].fname.endsWith(".zip")) {
                         let arc = Archive.open(pkg_path);
                         Archive.extractAll(arc);
                         Archive.close(arc);
@@ -454,29 +265,28 @@ while(true) {
                 case EXTRACTED:
                     app_state = MAIN_MENU;
                     dl_state = DETAILS;
-                    dling_text = "";
+                    dling_log = [];
                     break;
             }
 
-            ui.render_belt(0.005f);
-            ui.println(dling_text);
-
+            ui.background();
+            drawCatalog();
             break;
         default:
             break;
     }
 
-    if(transfering) {
-        ui.font.print(0, 400, req.getAsyncSize() + " bytes transfered");
-    }
-
-    ui.update();
-
     if(terminate){
         break;
     }
+
+    ui.status = transfering ? `${req.getAsyncSize()} bytes` : "";
+    // Home is only offered where leaving is safe (not mid-download).
+    ui.home = (app_state === MAIN_MENU || (app_state === DLING_MENU && dl_state === DETAILS)) ? ["triangle", "Home"] : null;
+    ui.chrome(hints);
+    Screen.flip();
 }
 
 Network.deinit();
 
-std.reload("main.js");
+exitToShell();
