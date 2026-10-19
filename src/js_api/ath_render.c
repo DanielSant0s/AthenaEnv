@@ -579,28 +579,20 @@ register_3d_render_data:
 			JS_DefinePropertyValueStr(ctx, bone, "name",      JS_NewString(ctx, ro->native.m.skeleton->bones[i].name), JS_PROP_C_W_E);
 			JS_DefinePropertyValueStr(ctx, bone, "parent_id", JS_NewInt32(ctx, ro->native.m.skeleton->bones[i].parent_id), JS_PROP_C_W_E);
 
-    		JSValue bone_matrix = JS_NewObjectClass(ctx, get_matrix4_class_id());
-
-    		JS_SetOpaque(bone_matrix, &ro->native.m.skeleton->bones[i].inverse_bind);
+    		JSValue bone_matrix = athena_js_matrix4_view(ctx, &ro->native.m.skeleton->bones[i].inverse_bind, obj);
 
 			JS_DefinePropertyValueStr(ctx, bone, "inverse_bind", bone_matrix, JS_PROP_C_W_E);
 
 
-			JSValue bone_position = JS_NewObjectClass(ctx, get_vector4_class_id());
-
-			JS_SetOpaque(bone_position, &ro->native.m.skeleton->bones[i].position);
+			JSValue bone_position = athena_js_vector4_view(ctx, &ro->native.m.skeleton->bones[i].position, obj);
 
 			JS_DefinePropertyValueStr(ctx, bone, "position", bone_position, JS_PROP_C_W_E);
 
-			JSValue bone_rotation = JS_NewObjectClass(ctx, get_vector4_class_id());
-
-			JS_SetOpaque(bone_rotation, &ro->native.m.skeleton->bones[i].rotation);
+			JSValue bone_rotation = athena_js_vector4_view(ctx, &ro->native.m.skeleton->bones[i].rotation, obj);
 
 			JS_DefinePropertyValueStr(ctx, bone, "rotation", bone_rotation, JS_PROP_C_W_E);
 
-			JSValue bone_scale = JS_NewObjectClass(ctx, get_vector4_class_id());
-
-			JS_SetOpaque(bone_scale, &ro->native.m.skeleton->bones[i].scale);
+			JSValue bone_scale = athena_js_vector4_view(ctx, &ro->native.m.skeleton->bones[i].scale, obj);
 
 			JS_DefinePropertyValueStr(ctx, bone, "scale", bone_scale, JS_PROP_C_W_E);
 
@@ -1382,14 +1374,10 @@ static JSValue athena_render_object_ctor(JSContext *ctx, JSValueConst new_target
 		return JS_EXCEPTION;
 	}
 
-    JSValue transform_matrix = JS_UNDEFINED;
-
-    transform_matrix = JS_NewObjectClass(ctx, get_matrix4_class_id());
-
-    JS_SetOpaque(transform_matrix, &js_ro_data(ro)->transform);
-
     proto = JS_GetPropertyStr(ctx, new_target, "prototype");
     obj = JS_NewObjectProtoClass(ctx, proto, js_render_object_class_id);
+
+    JSValue transform_matrix = athena_js_matrix4_view(ctx, &js_ro_data(ro)->transform, obj);
 
 	JS_DefinePropertyValueStr(ctx, obj, "transform", transform_matrix, JS_PROP_C_W_E);
 
@@ -1401,35 +1389,25 @@ static JSValue athena_render_object_ctor(JSContext *ctx, JSValueConst new_target
 		for (int i = 0; i < js_ro_data(ro)->data->skeleton->bone_count; i++) {
 			JSValue bone = JS_NewObject(ctx);
 
-			JSValue bone_transform = JS_NewObjectClass(ctx, get_matrix4_class_id());
-
-			JS_SetOpaque(bone_transform, &js_ro_data(ro)->bones[i].transform);
+			JSValue bone_transform = athena_js_matrix4_view(ctx, &js_ro_data(ro)->bones[i].transform, obj);
 
 			JS_DefinePropertyValueStr(ctx, bone, "transform", bone_transform, JS_PROP_C_W_E);
 
-			JSValue bone_position = JS_NewObjectClass(ctx, get_vector4_class_id());
-
-			JS_SetOpaque(bone_position, &js_ro_data(ro)->bones[i].position);
+			JSValue bone_position = athena_js_vector4_view(ctx, &js_ro_data(ro)->bones[i].position, obj);
 
 			JS_DefinePropertyValueStr(ctx, bone, "position", bone_position, JS_PROP_C_W_E);
 
-			JSValue bone_rotation = JS_NewObjectClass(ctx, get_vector4_class_id());
-
-			JS_SetOpaque(bone_rotation, &js_ro_data(ro)->bones[i].rotation);
+			JSValue bone_rotation = athena_js_vector4_view(ctx, &js_ro_data(ro)->bones[i].rotation, obj);
 
 			JS_DefinePropertyValueStr(ctx, bone, "rotation", bone_rotation, JS_PROP_C_W_E);
 
-			JSValue bone_scale = JS_NewObjectClass(ctx, get_vector4_class_id());
-
-			JS_SetOpaque(bone_scale, &js_ro_data(ro)->bones[i].scale);
+			JSValue bone_scale = athena_js_vector4_view(ctx, &js_ro_data(ro)->bones[i].scale, obj);
 
 			JS_DefinePropertyValueStr(ctx, bone, "scale", bone_scale, JS_PROP_C_W_E);
 
 			JS_DefinePropertyValueUint32(ctx, bone_transforms, i, bone, JS_PROP_C_W_E);
 
-    		JSValue bone_matrix = JS_NewObjectClass(ctx, get_matrix4_class_id());
-
-    		JS_SetOpaque(bone_matrix, &js_ro_data(ro)->bone_matrices[i]);
+    		JSValue bone_matrix = athena_js_matrix4_view(ctx, &js_ro_data(ro)->bone_matrices[i], obj);
 
 			JS_DefinePropertyValueUint32(ctx, bone_matrices, i, bone_matrix, JS_PROP_C_W_E);
 		}
@@ -1636,8 +1614,7 @@ static JSValue athena_ro_get_bone_transform(JSContext *ctx, JSValue this_val, in
 	JSValue result = JS_NewObject(ctx);
 
 	// World-space transform matrix
-	JSValue bone_matrix = JS_NewObjectClass(ctx, get_matrix4_class_id());
-	JS_SetOpaque(bone_matrix, &js_ro_data(ro)->bone_matrices[bone_id]);
+	JSValue bone_matrix = athena_js_matrix4_view(ctx, &js_ro_data(ro)->bone_matrices[bone_id], this_val);
 	JS_DefinePropertyValueStr(ctx, result, "matrix", bone_matrix, JS_PROP_C_W_E);
 
 	// Local-space position

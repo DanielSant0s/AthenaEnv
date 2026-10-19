@@ -16,7 +16,7 @@ const root = [{name:"cdfs:/", size:0, dir:true},
 
 const ACTIONS = ["Copy", "Move", "Paste", "Rename", "Delete"];
 
-let path = "";
+let path = "";        // "" (device list) or always ends with "/"
 let file = root;
 let sel = 0;          // selected entry
 let top = 0;          // first visible entry
@@ -53,14 +53,18 @@ function open(entry) {
         sel = 0;
         list(path == "" ? entry.name : path + entry.name + "/");
     } else if(entry.name.endsWith(".js")){
-        System.loadELF(System.boot_path + "/athena.elf", [path + "/" + entry.name]);
+        System.loadELF(System.boot_path.replace(/\/$/, "") + "/athena.elf", [path + entry.name]);
     } else if(entry.name.endsWith(".elf") || entry.name.endsWith(".ELF")){
-        System.loadELF(path + "/"+ entry.name);
+        System.loadELF(path + entry.name);
     } else if(entry.name.endsWith(".zip")){
-        Archive.extractAll(path + "/"+ entry.name);
+        const arc = Archive.open(path + entry.name);
+        if (arc) {
+            Archive.extractAll(arc);
+            Archive.close(arc);
+        }
         list(path); // Update file list
     } else if(entry.name.endsWith(".tar.gz")){
-        Archive.untar(path + "/"+ entry.name);
+        Archive.untar(path + entry.name);
         list(path); // Update file list
     }
 }
@@ -69,14 +73,14 @@ function runAction(entry) {
     switch (action) {
         case 0:
         case 1:
-            if (!entry) return;
+            if (!entry || path === "") return;
             fileop = action;
-            src = path + "/" + entry.name;
+            src = path + entry.name;
             srcfile = entry.name;
             break;
         case 2: {
-            if (!srcfile) return;
-            const dst = path + "/" + srcfile;
+            if (!srcfile || path === "") return;
+            const dst = path + srcfile;
             if (fileop === 0) System.copyFile(src, dst);
             else System.moveFile(src, dst);
             break;
@@ -84,8 +88,9 @@ function runAction(entry) {
         case 3:
             break;
         case 4:
-            if (!entry) return;
-            System.removeFile(path + "/" + entry.name);
+            if (!entry || path === "") return;
+            if (entry.dir) System.removeDirectory(path + entry.name);
+            else os.remove(path + entry.name);
             break;
     }
     menu = false;

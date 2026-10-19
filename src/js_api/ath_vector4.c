@@ -9,9 +9,30 @@ JSClassID get_vector4_class_id() {
 	return js_vector4_class_id;
 }
 
+/* Views (bone position/rotation/scale of render objects) share the Vector4
+ * prototype but point into engine memory: a class of their own whose
+ * finalizer frees nothing. */
+static JSClassID js_vector4_view_class_id;
+
 static void js_vector4_finalizer(JSRuntime *rt, JSValue val) {
     AthenaVec4 *s = JS_GetOpaque(val, js_vector4_class_id);
     athena_vec4_destroy(s);
+}
+
+static AthenaVec4 *vector4_opaque(JSContext *ctx, JSValueConst val) {
+    AthenaVec4 *v = JS_GetOpaque(val, js_vector4_class_id);
+    return v ? v : JS_GetOpaque2(ctx, val, js_vector4_view_class_id);
+}
+
+JSValue athena_js_vector4_view(JSContext *ctx, void *data, JSValueConst owner) {
+    JSValue obj = JS_NewObjectClass(ctx, js_vector4_view_class_id);
+    if (JS_IsException(obj))
+        return obj;
+    JS_SetOpaque(obj, data);
+    /* keeps the memory's owner alive as long as the view */
+    if (JS_IsObject(owner))
+        JS_DefinePropertyValueStr(ctx, obj, "__owner", JS_DupValue(ctx, owner), 0);
+    return obj;
 }
 
 static JSValue js_vector4_ctor(JSContext *ctx, JSValueConst new_target, int argc, JSValueConst *argv) {
@@ -37,7 +58,7 @@ static JSValue js_vector4_ctor(JSContext *ctx, JSValueConst new_target, int argc
 }
 
 static JSValue js_vector4_get_xyz(JSContext *ctx, JSValueConst this_val, int magic) {
-    AthenaVec4 *s = JS_GetOpaque2(ctx, this_val, js_vector4_class_id);
+    AthenaVec4 *s = vector4_opaque(ctx, this_val);
     if (!s)
         return JS_EXCEPTION;
     switch (magic) {
@@ -49,7 +70,7 @@ static JSValue js_vector4_get_xyz(JSContext *ctx, JSValueConst this_val, int mag
 }
 
 static JSValue js_vector4_set_xyz(JSContext *ctx, JSValueConst this_val, JSValue val, int magic) {
-    AthenaVec4 *s = JS_GetOpaque2(ctx, this_val, js_vector4_class_id);
+    AthenaVec4 *s = vector4_opaque(ctx, this_val);
     float v;
     if (!s || JS_ToFloat32(ctx, &v, val))
         return JS_EXCEPTION;
@@ -63,35 +84,35 @@ static JSValue js_vector4_set_xyz(JSContext *ctx, JSValueConst this_val, JSValue
 }
 
 static JSValue js_vector4_norm(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    AthenaVec4 *v = JS_GetOpaque2(ctx, this_val, js_vector4_class_id);
+    AthenaVec4 *v = vector4_opaque(ctx, this_val);
     if (!v) return JS_EXCEPTION;
     return JS_NewFloat32(ctx, athena_vec4_norm(v));
 }
 
 static JSValue js_vector4_dotproduct(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    AthenaVec4 *v1 = JS_GetOpaque2(ctx, this_val, js_vector4_class_id);
-    AthenaVec4 *v2 = JS_GetOpaque2(ctx, argv[0], js_vector4_class_id);
+    AthenaVec4 *v1 = vector4_opaque(ctx, this_val);
+    AthenaVec4 *v2 = vector4_opaque(ctx, argv[0]);
     if (!v1 || !v2) return JS_EXCEPTION;
     return JS_NewFloat32(ctx, athena_vec4_dot(v1, v2));
 }
 
 static JSValue js_vector4_dist(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    AthenaVec4 *v1 = JS_GetOpaque2(ctx, this_val, js_vector4_class_id);
-    AthenaVec4 *v2 = JS_GetOpaque2(ctx, argv[0], js_vector4_class_id);
+    AthenaVec4 *v1 = vector4_opaque(ctx, this_val);
+    AthenaVec4 *v2 = vector4_opaque(ctx, argv[0]);
     if (!v1 || !v2) return JS_EXCEPTION;
     return JS_NewFloat32(ctx, athena_vec4_distance(v1, v2));
 }
 
 static JSValue js_vector4_distsqr(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    AthenaVec4 *v1 = JS_GetOpaque2(ctx, this_val, js_vector4_class_id);
-    AthenaVec4 *v2 = JS_GetOpaque2(ctx, argv[0], js_vector4_class_id);
+    AthenaVec4 *v1 = vector4_opaque(ctx, this_val);
+    AthenaVec4 *v2 = vector4_opaque(ctx, argv[0]);
     if (!v1 || !v2) return JS_EXCEPTION;
     return JS_NewFloat32(ctx, athena_vec4_distance2(v1, v2));
 }
 
 static JSValue js_vector4_tostring(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     char str[64];
-    AthenaVec4 *v = JS_GetOpaque2(ctx, this_val, js_vector4_class_id);
+    AthenaVec4 *v = vector4_opaque(ctx, this_val);
     if (!v) return JS_EXCEPTION;
     athena_vec4_tostring(v, str, sizeof(str));
     return JS_NewString(ctx, str);
@@ -99,8 +120,8 @@ static JSValue js_vector4_tostring(JSContext *ctx, JSValueConst this_val, int ar
 
 static JSValue js_vector4_wrap_binary(JSContext *ctx, AthenaVec4 *(*op)(const AthenaVec4 *, const AthenaVec4 *),
                                       JSValueConst new_target, int argc, JSValueConst *argv) {
-    AthenaVec4 *v1 = JS_GetOpaque2(ctx, argv[0], js_vector4_class_id);
-    AthenaVec4 *v2 = JS_GetOpaque2(ctx, argv[1], js_vector4_class_id);
+    AthenaVec4 *v1 = vector4_opaque(ctx, argv[0]);
+    AthenaVec4 *v2 = vector4_opaque(ctx, argv[1]);
     AthenaVec4 *result;
     JSValue obj;
     if (!v1 || !v2) return JS_EXCEPTION;
@@ -126,8 +147,8 @@ static JSValue js_vector4_div(JSContext *ctx, JSValueConst new_target, int argc,
 }
 
 static JSValue js_vector4_cross(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    AthenaVec4 *v1 = JS_GetOpaque2(ctx, this_val, js_vector4_class_id);
-    AthenaVec4 *v2 = JS_GetOpaque2(ctx, argv[0], js_vector4_class_id);
+    AthenaVec4 *v1 = vector4_opaque(ctx, this_val);
+    AthenaVec4 *v2 = vector4_opaque(ctx, argv[0]);
     AthenaVec4 *result;
     JSValue obj;
     if (!v1 || !v2) return JS_EXCEPTION;
@@ -140,8 +161,8 @@ static JSValue js_vector4_cross(JSContext *ctx, JSValueConst this_val, int argc,
 }
 
 static JSValue js_vector4_eq(JSContext *ctx, JSValueConst new_target, int argc, JSValueConst *argv) {
-    AthenaVec4 *m1 = JS_GetOpaque2(ctx, argv[0], js_vector4_class_id);
-    AthenaVec4 *m2 = JS_GetOpaque2(ctx, argv[1], js_vector4_class_id);
+    AthenaVec4 *m1 = vector4_opaque(ctx, argv[0]);
+    AthenaVec4 *m2 = vector4_opaque(ctx, argv[1]);
     if (!m1 || !m2) return JS_EXCEPTION;
     return JS_NewBool(ctx, athena_vec4_equals(m1, m2));
 }
@@ -149,6 +170,10 @@ static JSValue js_vector4_eq(JSContext *ctx, JSValueConst new_target, int argc, 
 static JSClassDef js_vector4_class = {
     "Vector4",
     .finalizer = js_vector4_finalizer,
+};
+
+static JSClassDef js_vector4_view_class = {
+    "Vector4",
 };
 
 /* Method forms of the arithmetic helpers, matching Vector2/Vector3 (see
@@ -199,6 +224,9 @@ static int js_vector4_init(JSContext *ctx, JSModuleDef *m) {
     vector4_class = JS_NewCFunction2(ctx, js_vector4_ctor, "Vector4", 4, JS_CFUNC_constructor_or_func, 0);
     JS_SetConstructor(ctx, vector4_class, vector4_proto);
     JS_SetClassProto(ctx, js_vector4_class_id, vector4_proto);
+    JS_NewClassID(&js_vector4_view_class_id);
+    JS_NewClass(JS_GetRuntime(ctx), js_vector4_view_class_id, &js_vector4_view_class);
+    JS_SetClassProto(ctx, js_vector4_view_class_id, JS_DupValue(ctx, vector4_proto));
     return JS_SetModuleExport(ctx, m, "Vector4", vector4_class);
 }
 

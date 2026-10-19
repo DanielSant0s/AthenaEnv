@@ -53,7 +53,7 @@ static void js_world_finalizer(JSRuntime *rt, JSValue val) {
 static void js_body_finalizer(JSRuntime *rt, JSValue val) {
     JSBody *body = JS_GetOpaque(val, js_body_class_id);
     if (body) {
-        if (body->body) {
+        if (body->body && !body->borrowed) {
             athena_physics_body_destroy(body->body);
             body->body = NULL;
         }
@@ -785,6 +785,7 @@ static JSValue js_body_create(JSContext *ctx, JSValueConst this_val, int argc, J
         return JS_EXCEPTION;
 
     wrapper->parent_world = world->world;
+    wrapper->borrowed = false;
     wrapper->body = athena_physics_body_create(world->world);
     if (!wrapper->body) {
         free(wrapper);
@@ -806,7 +807,8 @@ static JSValue js_body_destroy(JSContext *ctx, JSValueConst this_val, int argc, 
     JSBody *body = JS_GetOpaque(this_val, js_body_class_id);
 
     if (body && body->body) {
-        athena_physics_body_destroy(body->body);
+        if (!body->borrowed)
+            athena_physics_body_destroy(body->body);
         body->body = NULL;
     }
     return JS_UNDEFINED;
@@ -1037,6 +1039,9 @@ static JSValue js_geom_set_body(JSContext *ctx, JSValueConst this_val, int argc,
     if (!geom || !geom->geom) return JS_EXCEPTION;
 
     athena_physics_geom_set_body(geom->geom, body ? body->body : NULL);
+    /* getBody() hands this same object back, and the geom keeps it alive */
+    JS_DefinePropertyValueStr(ctx, this_val, "__body", body ? JS_DupValue(ctx, argv[0]) : JS_NULL,
+                              JS_PROP_CONFIGURABLE | JS_PROP_WRITABLE);
     return JS_UNDEFINED;
 }
 
@@ -1049,6 +1054,13 @@ static JSValue js_geom_get_body(JSContext *ctx, JSValueConst this_val, int argc,
         return JS_NULL;
     }
 
+    JSValue stored = JS_GetPropertyStr(ctx, this_val, "__body");
+    JSBody *stored_body = JS_GetOpaque(stored, js_body_class_id);
+    if (stored_body && stored_body->body == body_id)
+        return stored;
+    JS_FreeValue(ctx, stored);
+
+    /* Attached without setBody (natively): a wrapper that never destroys it. */
     JSBody *body = malloc(sizeof(JSBody));
     if (!body) {
         return JS_EXCEPTION;
@@ -1056,6 +1068,7 @@ static JSValue js_geom_get_body(JSContext *ctx, JSValueConst this_val, int argc,
 
     body->body = body_id;
     body->parent_world = body_id->world;
+    body->borrowed = true;
 
     JSValue obj = JS_NewObjectClass(ctx, js_body_class_id);
     if (JS_IsException(obj)) {

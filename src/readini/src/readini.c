@@ -156,7 +156,7 @@ bool readini_string(IniReader* ini, const char* key, char* value_ptr) {
                 *tmp_value_ptr++ = *totally_real_str++;
             }
 
-            *totally_real_str = '\0';
+            *tmp_value_ptr = '\0';
 
         } else {
             strcpy(value_ptr, tmp_real_str);

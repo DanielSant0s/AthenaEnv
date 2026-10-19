@@ -12,6 +12,7 @@ See the [project README](../README.md) for a quick overview and Hello World.
 * [Pure-C API](C_API.md) — the `athena/*.h` layer QuickJS bindings wrap
 * [Native Compiler](NATIVE_COMPILER.md) — the AOT JS→MIPS compiler (`Native.compile`/`Native.struct`)
 * [Native Modules](NATIVE_MODULES.md) — writing your own native (`.erl`) modules
+* [Lua Runtime](LUA.md) — building with Lua 5.4 instead of QuickJS, and how the APIs differ
 
 ## API Reference
 

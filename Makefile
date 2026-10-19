@@ -38,7 +38,20 @@ UDPBD ?= 0
 ILINK ?= 0
 MX4SIO ?= 0
 
-ATHENA_JS ?= 1
+# Scripting engine: js (QuickJS), lua (Lua 5.4) or none (pure C app, see capp).
+SCRIPT_ENGINE ?= js
+
+ifeq ($(SCRIPT_ENGINE),lua)
+  ATHENA_JS := 0
+  ATHENA_LUA := 1
+  EE_BIN_PREF := athena_lua
+else ifeq ($(SCRIPT_ENGINE),none)
+  ATHENA_JS := 0
+  ATHENA_LUA := 0
+else
+  ATHENA_JS ?= 1
+  ATHENA_LUA := 0
+endif
 
 DEBUG ?= 0
 EE_SIO ?= 0
@@ -103,6 +116,15 @@ APP_CORE = main.o athena_core.o bootlogo.o texture_manager.o owl_packet.o profil
 
 INI_READER = readini/src/readini.o
 
+LUA_CORE = lua/lapi.o lua/lcode.o lua/lctype.o lua/ldebug.o lua/ldo.o lua/ldump.o lua/lfunc.o \
+           lua/lgc.o lua/llex.o lua/lmem.o lua/lobject.o lua/lopcodes.o lua/lparser.o lua/lstate.o \
+           lua/lstring.o lua/ltable.o lua/ltm.o lua/lundump.o lua/lvm.o lua/lzio.o lua/lauxlib.o \
+           lua/lbaselib.o lua/lcorolib.o lua/ldblib.o lua/liolib.o lua/lmathlib.o lua/loadlib.o \
+           lua/loslib.o lua/lstrlib.o lua/ltablib.o lua/lutf8lib.o lua/linit.o
+
+LUA_MODULES = ath_lua_core.o ath_lua_env.o ath_lua_registry.o ath_lua_system.o ath_lua_pads.o ath_lua_basic.o \
+              ath_lua_math.o ath_lua_sys.o ath_lua_input.o
+
 ATHENA_MODULES = ath_env.o ath_module_registry.o ath_vector.o ath_vector4.o ath_matrix.o ath_pads.o ath_system.o ath_iop.o ath_timer.o ath_task.o ath_mutex.o
 
 IOP_MODULES = iomanx.o filexio.o sio2man.o mcman.o mcserv.o padman.o  \
@@ -133,6 +155,7 @@ ifeq ($(PHYSICS),1)
   EE_CFLAGS += -DATHENA_PHYSICS
 
   ATHENA_MODULES += ath_physics.o
+  LUA_MODULES += ath_lua_physics.o
   APP_CORE += physics.o athena/physics_facade.o
 endif
 
@@ -143,6 +166,7 @@ ifeq ($(GRAPHICS),1)
   APP_CORE += particles.o athena/particles.o tile_render.o graphics.o image_font.o owl_draw.o image_loaders.o mesh_loaders.o atlas.o fntsys.o render.o camera.o skin_math.o calc_3d.o fast_obj/fast_obj.o athena/color.o athena/draw.o athena/vec2.o athena/vec3.o athena/vec4.o athena/matrix_facade.o athena/screen.o athena/sprite.o athena/image.o athena/image_list.o athena/font.o \
               athena/camera3d.o athena/lights.o athena/anim3d.o athena/shadows_facade.o athena/render_facade.o
 
+  LUA_MODULES += ath_lua_graphics.o ath_lua_render.o ath_lua_fx.o
   ATHENA_MODULES += ath_color.o ath_font.o ath_render.o ath_anim_3d.o ath_lights.o ath_3dcamera.o ath_screen.o ath_image.o ath_imagelist.o ath_shape.o ath_shadows.o ath_sprite.o ath_particles.o
   APP_CORE += shadows.o render_batch.o render_scene.o render_async_loader.o
   EE_OBJS += $(VU1_MPGS) $(VU0_MPGS)
@@ -170,6 +194,7 @@ ifeq ($(STATIC_ARCHIVE),1)
   EE_CFLAGS += -DATHENA_ARCHIVE
   APP_CORE += athena/archive.o
   ATHENA_MODULES += ath_archive.o
+  LUA_MODULES += ath_lua_archive.o
   EE_LIBS += -llzma -lzip
   DYNAMIC_ARCHIVE = 0
 endif
@@ -179,6 +204,7 @@ ifeq ($(STATIC_MPEG_VIDEO),1)
   EE_CFLAGS += -DATHENA_MPEG_VIDEO
   APP_CORE += mpeg_player.o athena/video.o
   ATHENA_MODULES += ath_mpeg.o
+  LUA_MODULES += ath_lua_video.o
   # Prefer the vendored libmpeg sources (src/libmpeg, from our ps2sdk fork's
   # fix-libmpeg branch -- fixes real ABI/$at register bugs in libmpeg_core.s
   # that the toolchain's prebuilt libmpeg.a doesn't have) over the toolchain
@@ -205,6 +231,7 @@ ifeq ($(STATIC_NETWORK),1)
   EE_CFLAGS += -DATHENA_NETWORK
   APP_CORE += network.o athena/net_facade.o athena/request.o athena/socket_facade.o athena/websocket.o
   ATHENA_MODULES += ath_network.o ath_socket.o ath_request.o ath_websocket.o
+  LUA_MODULES += ath_lua_network.o
   IOP_MODULES += NETMAN.o SMAP.o ps2ips.o
   # Native networking backend (lwIP + BearSSL)
   EE_LIBS += -lnetman -lps2ip
@@ -277,13 +304,18 @@ endif
 endif
 
 ATHENA_MODULES := $(ATHENA_MODULES:%=$(JS_API_DIR)%) #prepend the modules folder
+LUA_MODULES := $(LUA_MODULES:%=$(LUA_API_DIR)%)
 VU1_MPGS := $(VU1_MPGS:%=$(VU1_MPGS_DIR)%) #prepend the microprograms folder
 VU0_MPGS := $(VU0_MPGS:%=$(VU0_MPGS_DIR)%) #prepend the microprograms folder
 
 EE_OBJS = $(APP_CORE) $(INI_READER) $(JS_CORE) $(ATHENA_MODULES) $(NATIVE_COMPILER_OBJS) $(VU1_MPGS) $(VU0_MPGS) $(IOP_MODULES) $(EMBEDDED_ELFS) $(EMBEDDED_ASSETS)
 ifeq ($(ATHENA_JS),0)
 EE_OBJS := $(filter-out $(JS_CORE) $(ATHENA_MODULES) $(NATIVE_COMPILER_OBJS),$(EE_OBJS))
+ifeq ($(ATHENA_LUA),1)
+EE_OBJS += $(LUA_CORE) $(LUA_MODULES) ath_lua_embedded.o
+else
 EE_OBJS += capp_main.o
+endif
 endif
 EE_OBJS := $(EE_OBJS:%=$(EE_OBJ_DIR)%)
 
@@ -291,10 +323,26 @@ ifeq ($(ATHENA_JS),1)
   EE_CFLAGS += -DATHENA_JS
 endif
 
+ifeq ($(ATHENA_LUA),1)
+  EE_CFLAGS += -DATHENA_LUA
+  EE_INCS += -Isrc/lua -Isrc/lua_api
+  # Network, Archive and MPEG ship as <name>_lua.erl; the rest is static
+  # (or, for the native compiler, JS-only).
+  DYNAMIC_KEYBOARD := 0
+  DYNAMIC_MOUSE := 0
+  DYNAMIC_CAMERA := 0
+  DYNAMIC_NATIVE_COMPILER := 0
+  DL_ENGINE := lua
+else
+  DL_ENGINE := js
+endif
+
 # main.c is compiled differently with/without ATHENA_JS; invalidate only that
 # object when switching modes instead of wiping the whole tree on every capp.
 ifeq ($(filter capp,$(MAKECMDGOALS)),capp)
 MAIN_BUILD_STAMP := $(EE_OBJ_DIR).main_build_capp
+else ifeq ($(ATHENA_LUA),1)
+MAIN_BUILD_STAMP := $(EE_OBJ_DIR).main_build_lua
 else ifeq ($(ATHENA_JS),0)
 MAIN_BUILD_STAMP := $(EE_OBJ_DIR).main_build_capp
 else
@@ -303,8 +351,14 @@ endif
 
 .DEFAULT_GOAL := all
 
+# Lua-side runtime sources (JSON, prelude) embedded as C strings.
+LUA_EMBED_SRCS := $(wildcard $(EE_SRC_DIR)lua_api/lua/*.lua)
+$(EE_EMBED_DIR)ath_lua_embedded.c: $(LUA_EMBED_SRCS) scripts/lua2c.py | $(EE_EMBED_DIR)
+	@echo LUA2C - $@
+	python3 scripts/lua2c.py $@ $(LUA_EMBED_SRCS)
+
 $(MAIN_BUILD_STAMP): | $(EE_OBJ_DIR)
-	@for s in $(EE_OBJ_DIR).main_build_js $(EE_OBJ_DIR).main_build_capp; do \
+	@for s in $(EE_OBJ_DIR).main_build_js $(EE_OBJ_DIR).main_build_capp $(EE_OBJ_DIR).main_build_lua; do \
 		if [ -f "$$s" ] && [ "$$s" != "$(MAIN_BUILD_STAMP)" ]; then \
 			rm -f "$$s" "$(EE_OBJ_DIR)main.o"; \
 		fi; \
@@ -334,12 +388,12 @@ endif
 #-------------------------- App Content ---------------------------#
 
 all: $(MAIN_BUILD_STAMP) $(DIR_GUARD) $(EXT_LIBS) $(EE_OBJS) libs
-	$(MAKE) -f Makefile.dl KEYBOARD=$(DYNAMIC_KEYBOARD)
-	$(MAKE) -f Makefile.dl MOUSE=$(DYNAMIC_MOUSE)
-	$(MAKE) -f Makefile.dl NETWORK=$(DYNAMIC_NETWORK)
-	$(MAKE) -f Makefile.dl NATIVE_COMPILER=$(DYNAMIC_NATIVE_COMPILER)
-	$(MAKE) -f Makefile.dl ARCHIVE=$(DYNAMIC_ARCHIVE)
-	$(MAKE) -f Makefile.dl MPEG_VIDEO=$(DYNAMIC_MPEG_VIDEO)
+	$(MAKE) -f Makefile.dl ENGINE=$(DL_ENGINE) KEYBOARD=$(DYNAMIC_KEYBOARD)
+	$(MAKE) -f Makefile.dl ENGINE=$(DL_ENGINE) MOUSE=$(DYNAMIC_MOUSE)
+	$(MAKE) -f Makefile.dl ENGINE=$(DL_ENGINE) NETWORK=$(DYNAMIC_NETWORK)
+	$(MAKE) -f Makefile.dl ENGINE=$(DL_ENGINE) NATIVE_COMPILER=$(DYNAMIC_NATIVE_COMPILER)
+	$(MAKE) -f Makefile.dl ENGINE=$(DL_ENGINE) ARCHIVE=$(DYNAMIC_ARCHIVE)
+	$(MAKE) -f Makefile.dl ENGINE=$(DL_ENGINE) MPEG_VIDEO=$(DYNAMIC_MPEG_VIDEO)
 
 	$(EE_CXX) -T$(EE_LINKFILE) $(EE_OPTFLAGS) -o $(EE_BIN_DIR)tmp.elf $(EE_OBJS) $(EE_SRC_DIR)dummy-exports.c $(EE_LDFLAGS) $(EXTRA_LDFLAGS) -Wno-write-strings $(EE_LIBS)
 	./build-exports.sh
@@ -356,12 +410,12 @@ all: $(MAIN_BUILD_STAMP) $(DIR_GUARD) $(EXT_LIBS) $(EE_OBJS) libs
  # vu0_mpgs: src/vu0/matrix_multiply.vsm
 
 debug: $(DIR_GUARD) $(EXT_LIBS) $(EE_OBJS) 
-	$(MAKE) -f Makefile.dl KEYBOARD=$(DYNAMIC_KEYBOARD)
-	$(MAKE) -f Makefile.dl MOUSE=$(DYNAMIC_MOUSE)
-	$(MAKE) -f Makefile.dl NETWORK=$(DYNAMIC_NETWORK)
-	$(MAKE) -f Makefile.dl NATIVE_COMPILER=$(DYNAMIC_NATIVE_COMPILER)
-	$(MAKE) -f Makefile.dl ARCHIVE=$(DYNAMIC_ARCHIVE)
-	$(MAKE) -f Makefile.dl MPEG_VIDEO=$(DYNAMIC_MPEG_VIDEO)
+	$(MAKE) -f Makefile.dl ENGINE=$(DL_ENGINE) KEYBOARD=$(DYNAMIC_KEYBOARD)
+	$(MAKE) -f Makefile.dl ENGINE=$(DL_ENGINE) MOUSE=$(DYNAMIC_MOUSE)
+	$(MAKE) -f Makefile.dl ENGINE=$(DL_ENGINE) NETWORK=$(DYNAMIC_NETWORK)
+	$(MAKE) -f Makefile.dl ENGINE=$(DL_ENGINE) NATIVE_COMPILER=$(DYNAMIC_NATIVE_COMPILER)
+	$(MAKE) -f Makefile.dl ENGINE=$(DL_ENGINE) ARCHIVE=$(DYNAMIC_ARCHIVE)
+	$(MAKE) -f Makefile.dl ENGINE=$(DL_ENGINE) MPEG_VIDEO=$(DYNAMIC_MPEG_VIDEO)
 
 	$(EE_CXX) -T$(EE_LINKFILE) $(EE_OPTFLAGS) -o $(EE_BIN_DIR)tmp.elf $(EE_OBJS) $(EE_SRC_DIR)dummy-exports.c $(EE_LDFLAGS) $(EXTRA_LDFLAGS) -Wno-write-strings $(EE_LIBS)
 	./build-exports.sh
@@ -382,7 +436,7 @@ clean:
 	$(MAKE) -C ee_modules/mpeg clean
 	$(MAKE) -C ee_modules/erl clean
 
-	$(MAKE) -f Makefile.dl KEYBOARD=1 clean
+	$(MAKE) -f Makefile.dl ENGINE=$(DL_ENGINE) KEYBOARD=1 clean
 	$(MAKE) -f Makefile.dl MOUSE=1 clean
 	$(MAKE) -f Makefile.dl NETWORK=1 clean
 	$(MAKE) -f Makefile.dl NATIVE_COMPILER=1 clean

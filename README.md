@@ -79,6 +79,7 @@ The full API reference and guides live in [`docs/`](docs/README.md):
 
 * [Getting Started](docs/GETTING_STARTED.md) — prerequisites, quick start, language features, error reporting
 * [Module System](docs/MODULE_SYSTEM.md) — JavaScript and native modules
+* [Lua Runtime](docs/LUA.md) — the alternative Lua 5.4 scripting engine (`make SCRIPT_ENGINE=lua`)
 * [Core API](docs/CORE_API.md) — `std`, `os`, `System`, `IOP`, `Archive`, `Mutex`, `Thread`, `Timer`, automatic LZ4 EE RAM compaction
 * [Math API](docs/MATH_API.md) — `Vector4`, `Matrix4`, `Color`
 * [2D Graphics API](docs/GRAPHICS_2D_API.md) — `Image`, `ImageList`, `Draw`, `Screen`, `Font`

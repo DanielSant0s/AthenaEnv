@@ -79,6 +79,19 @@ ifeq ($(MPEG_VIDEO),1)
   endif
 endif
 
+# ENGINE=lua builds the same subsystems against the Lua bindings, as
+# <name>_lua.erl (the Lua runtime maps require "x.erl" to x_lua.erl).
+ENGINE ?= js
+ifeq ($(ENGINE),lua)
+  EE_CFLAGS := $(filter-out -DATHENA_JS,$(EE_CFLAGS)) -DATHENA_LUA
+  EE_INCS += -I$(EE_SRC_DIR)lua -I$(EE_SRC_DIR)lua_api
+  EE_OBJS := $(patsubst $(JS_API_DIR)ath_network.o,$(LUA_API_DIR)ath_lua_network.o,$(EE_OBJS))
+  EE_OBJS := $(patsubst $(JS_API_DIR)ath_archive.o,$(LUA_API_DIR)ath_lua_archive.o,$(EE_OBJS))
+  EE_OBJS := $(patsubst $(JS_API_DIR)ath_mpeg.o,$(LUA_API_DIR)ath_lua_video.o,$(EE_OBJS))
+  EE_OBJS := $(filter-out $(JS_API_DIR)%,$(EE_OBJS))
+  EE_TARGET_ERL := $(EE_TARGET_ERL:.erl=_lua.erl)
+endif
+
 EE_OBJS := $(EE_OBJS:%=$(EE_OBJ_DIR)%)
 
 EE_MODULES := $(EE_MODULES:%=$(EE_MODULES_DIR)%)

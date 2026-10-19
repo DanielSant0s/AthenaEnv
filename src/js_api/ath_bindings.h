@@ -61,6 +61,7 @@ typedef struct {
 typedef struct {
     AthenaPhysicsBody  *body;
     AthenaPhysicsWorld *parent_world;
+    bool                borrowed; /* wraps a body owned by another wrapper: never destroyed */
 } JSBody;
 
 typedef struct {
@@ -78,6 +79,10 @@ extern JSClassID js_space_class_id;
 #endif
 
 JSClassID get_matrix4_class_id(void);
+/* Matrix4/Vector4 over engine-owned memory: never freed by the GC; `owner`
+ * (an object, or JS_UNDEFINED) is kept alive as long as the view. */
+JSValue athena_js_matrix4_view(JSContext *ctx, void *data, JSValueConst owner);
+JSValue athena_js_vector4_view(JSContext *ctx, void *data, JSValueConst owner);
 JSClassID get_vector2_class_id(void);
 JSClassID get_vector3_class_id(void);
 JSClassID get_vector4_class_id(void);

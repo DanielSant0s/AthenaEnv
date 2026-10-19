@@ -77,8 +77,10 @@ static JSValue js_screen_get_free_vram(JSContext *ctx, JSValue this_val, int arg
 }
 
 static JSValue js_screen_get_fps(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
-	int time_intvl;
-	JS_ToInt32(ctx, &time_intvl, argv[0]);
+	/* the interval is also the sampling period; 0 would stop the counter */
+	int time_intvl = 60;
+	if (argc > 0 && !JS_IsUndefined(argv[0]))
+		JS_ToInt32(ctx, &time_intvl, argv[0]);
 	return JS_NewFloat32(ctx, athena_screen_get_fps(time_intvl));
 }
 

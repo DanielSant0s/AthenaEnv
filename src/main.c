@@ -20,6 +20,11 @@
 #include <ath_env.h>
 #endif
 
+#ifdef ATHENA_LUA
+#include <ath_lua.h>
+#endif
+#include <lockman.h>
+
 #define NEWLIB_PORT_AWARE
 #include <fileXio_rpc.h>
 #include <fileio.h>
@@ -128,6 +133,10 @@ int main(int argc, char **argv) {
     bool reset_iop = true;
 
     char newCWD[255];
+
+#ifdef ATHENA_LUA
+    set_default_script("main.lua");
+#endif
 
     init_memory_manager();
     init_lockman();
@@ -312,6 +321,15 @@ int main(int argc, char **argv) {
 
     do {
         err_msg = run_script(athena_get_default_script(), false);
+
+        athena_error_screen(err_msg, dark_mode);
+
+    } while (err_msg != NULL);
+#elif defined(ATHENA_LUA)
+    const char* err_msg = NULL;
+
+    do {
+        err_msg = athena_lua_run_script(athena_get_default_script());
 
         athena_error_screen(err_msg, dark_mode);
 
