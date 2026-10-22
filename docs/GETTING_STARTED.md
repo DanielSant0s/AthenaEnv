@@ -55,16 +55,39 @@ AthenaEnv uses a slightly modified version of the QuickJS interpreter, which mea
 
 ### Float32
 
-This project introduces a data type not native to JavaScript: single floats. Despite being less accurate than the classic doubles for number semantics, they are important for performance on the PS2, as the console only processes 32-bit floats on its FPU.
+The PS2's FPU only handles 32-bit floats: doubles are emulated in software and cost tens to hundreds of cycles per operation. So on AthenaEnv, **non-integer numbers are single floats (float32) by default**, the same choice as Lua builds with `LUA_32BITS`:
 
-You can write single floats on AthenaEnv following the syntax below:
 ```js
-let test_float = 15.0f; // The 'f' suffix makes QuickJS recognize it as a single float.
+let a = 0.5;          // float32
+let b = 1 / 3;        // float32: 0.33333334
+let c = 7;            // int32
+let d = 2 ** 40;      // double: integers past int32 stay exact (up to 2^53)
+let t = Date.now();   // double, exact
 ```
-or
-```js
-let test_float = Math.fround(15.0); // Math.fround returns real single floats on Athena.
-```
+
+| Value | Stored as |
+|---|---|
+| integer that fits in 32 bits | int32 |
+| integer beyond int32 (up to 2^53), e.g. `Date.now()`, hashes | double (exact) |
+| outside the float32 range (`Number.MAX_VALUE`, `Number.MIN_VALUE`) | double |
+| anything else (literals, `/`, `Math.*`, `parseFloat`, `JSON.parse`...) | float32 |
+
+Arithmetic, comparisons and `Math.*` on ints and float32 run on the FPU; an operation that involves a real double is done in double. Numbers print with the shortest digits that read back as the same value (`String(0.1)` is `"0.1"`, `String(1/3)` is `"0.33333334"`).
+
+Things to keep in mind:
+* Precision is ~7 significant digits. Large non-integer values (seconds since epoch with a fraction, for example) lose their fractional part; keep times in integer milliseconds.
+* The EE FPU rounds toward zero, so `1 + 0.1` is `1.0999999` and results can differ in the last digit from a PC.
+* `Math.fround(x)` and the `f` suffix (`15.0f`) still work.
+
+Building with `-DJS_NO_FLOAT32_NUMBERS` restores standard double semantics (much slower on the EE).
+
+### Performance notes
+
+* `let`/`const` cost the same as `var`: the compiler removes the temporal-dead-zone checks it can prove unnecessary.
+* Property reads and writes (`obj.x`), methods and getters/setters inherited from a class or a native binding (`obj.method()`, `font.scale`), globals (`Math`, `Screen`) and `arr.length` go through inline caches. Objects that keep the same shape run fastest.
+* Common sequences run as one instruction: `local.x`, `arr.length` and `arr[i]` when `arr` is a module-level variable (the `for (let i = 0; i < arr.length; i++) { const e = arr[i]; ... }` loop).
+* Prefer methods that take numbers over temporary objects in hot code: `ro.setPosition(x, y, z)` instead of `ro.position = { x, y, z }`.
+* `System.profileStart(hz)` / `System.profileStop(path)` record a statistical profile; `scripts/profile_report.py` turns it into a report (see [Core API](CORE_API.md)).
 
 ### Native compilation
 

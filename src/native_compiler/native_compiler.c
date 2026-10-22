@@ -2172,9 +2172,9 @@ static int bytecode_to_ir_impl(NativeCompiler *nc, const uint8_t *bytecode,
                 int local_idx = ir_out->sig.arg_count + var_idx;
                 if (local_idx < NC_MAX_LOCALS) {
                     /* set_loc leaves value on stack, unlike put_loc */
-                    IRInstr dup_instr = { .op = IR_DUP, .type = NATIVE_TYPE_UNKNOWN };
-                    ir_emit(ir_out, current_block, &dup_instr);
+                    /* store, then reload: see OP_set_loc0 */
                     ir_emit_store_local(ir_out, current_block, local_idx, NATIVE_TYPE_UNKNOWN);
+                    ir_emit_load_local(ir_out, current_block, local_idx, ir_out->local_types[local_idx]);
                     if (local_idx >= ir_out->local_count) ir_out->local_count = local_idx + 1;
                 }
                 break;
@@ -2261,6 +2261,8 @@ static int bytecode_to_ir_impl(NativeCompiler *nc, const uint8_t *bytecode,
             /* CRITICAL: OP_put_loc0 accesses var_buf[0], not arg_buf[0]. */
             case OP_put_loc0: {
                 int local_idx = ir_out->sig.arg_count + 0;  /* var_buf[0] -> local[arg_count + 0] */
+                /* like get_loc: the IR must know this local exists */
+                if (local_idx >= ir_out->local_count) ir_out->local_count = local_idx + 1;
                 ir_emit_store_local(ir_out, current_block, local_idx, NATIVE_TYPE_UNKNOWN);
                 break;
             }
@@ -2270,37 +2272,51 @@ static int bytecode_to_ir_impl(NativeCompiler *nc, const uint8_t *bytecode,
             /* CRITICAL: OP_get_loc0-3, OP_put_loc1-3, OP_set_loc0-3 access var_buf[idx], not arg_buf[idx]. */
             case OP_get_loc0: {
                 int local_idx = ir_out->sig.arg_count + 0;
+                /* like get_loc: the IR must know this local exists */
+                if (local_idx >= ir_out->local_count) ir_out->local_count = local_idx + 1;
                 ir_emit_load_local(ir_out, current_block, local_idx, ir_out->local_types[local_idx]);
                 break;
             }
             case OP_get_loc1: {
                 int local_idx = ir_out->sig.arg_count + 1;
+                /* like get_loc: the IR must know this local exists */
+                if (local_idx >= ir_out->local_count) ir_out->local_count = local_idx + 1;
                 ir_emit_load_local(ir_out, current_block, local_idx, ir_out->local_types[local_idx]);
                 break;
             }
             case OP_get_loc2: {
                 int local_idx = ir_out->sig.arg_count + 2;
+                /* like get_loc: the IR must know this local exists */
+                if (local_idx >= ir_out->local_count) ir_out->local_count = local_idx + 1;
                 ir_emit_load_local(ir_out, current_block, local_idx, ir_out->local_types[local_idx]);
                 break;
             }
             case OP_get_loc3: {
                 int local_idx = ir_out->sig.arg_count + 3;
+                /* like get_loc: the IR must know this local exists */
+                if (local_idx >= ir_out->local_count) ir_out->local_count = local_idx + 1;
                 ir_emit_load_local(ir_out, current_block, local_idx, ir_out->local_types[local_idx]);
                 break;
             }
             
             case OP_put_loc1: {
                 int local_idx = ir_out->sig.arg_count + 1;
+                /* like get_loc: the IR must know this local exists */
+                if (local_idx >= ir_out->local_count) ir_out->local_count = local_idx + 1;
                 ir_emit_store_local(ir_out, current_block, local_idx, NATIVE_TYPE_UNKNOWN);
                 break;
             }
             case OP_put_loc2: {
                 int local_idx = ir_out->sig.arg_count + 2;
+                /* like get_loc: the IR must know this local exists */
+                if (local_idx >= ir_out->local_count) ir_out->local_count = local_idx + 1;
                 ir_emit_store_local(ir_out, current_block, local_idx, NATIVE_TYPE_UNKNOWN);
                 break;
             }
             case OP_put_loc3: {
                 int local_idx = ir_out->sig.arg_count + 3;
+                /* like get_loc: the IR must know this local exists */
+                if (local_idx >= ir_out->local_count) ir_out->local_count = local_idx + 1;
                 ir_emit_store_local(ir_out, current_block, local_idx, NATIVE_TYPE_UNKNOWN);
                 break;
             }
@@ -2308,9 +2324,13 @@ static int bytecode_to_ir_impl(NativeCompiler *nc, const uint8_t *bytecode,
             case OP_set_loc0: case OP_set_loc1: case OP_set_loc2: case OP_set_loc3: {
                 int var_idx = op - OP_set_loc0;
                 int local_idx = ir_out->sig.arg_count + var_idx;
-                IRInstr dup_instr = { .op = IR_DUP, .type = NATIVE_TYPE_UNKNOWN };
-                ir_emit(ir_out, current_block, &dup_instr);
+                /* like get_loc: the IR must know this local exists */
+                if (local_idx >= ir_out->local_count) ir_out->local_count = local_idx + 1;
+                /* set_loc = put_loc + get_loc: store, then reload the local
+                   (the dup+store form miscompiled once let/const lost their
+                   TDZ checks and QuickJS started fusing put_loc/get_loc) */
                 ir_emit_store_local(ir_out, current_block, local_idx, NATIVE_TYPE_UNKNOWN);
+                ir_emit_load_local(ir_out, current_block, local_idx, ir_out->local_types[local_idx]);
                 break;
             }
             
@@ -2402,9 +2422,9 @@ static int bytecode_to_ir_impl(NativeCompiler *nc, const uint8_t *bytecode,
                 uint8_t var_idx = bytecode[pc++];
                 int local_idx = ir_out->sig.arg_count + var_idx;
                 if (local_idx < NC_MAX_LOCALS) {
-                    IRInstr dup_instr = { .op = IR_DUP, .type = NATIVE_TYPE_UNKNOWN };
-                    ir_emit(ir_out, current_block, &dup_instr);
+                    /* store, then reload: see OP_set_loc0 */
                     ir_emit_store_local(ir_out, current_block, local_idx, NATIVE_TYPE_UNKNOWN);
+                    ir_emit_load_local(ir_out, current_block, local_idx, ir_out->local_types[local_idx]);
                     if (local_idx >= ir_out->local_count) ir_out->local_count = local_idx + 1;
                 } else {
                     nc->has_error = true;
@@ -2524,13 +2544,14 @@ static int bytecode_to_ir_impl(NativeCompiler *nc, const uint8_t *bytecode,
             
             /* Local variable increment/decrement */
             case OP_inc_loc: {
-                if (pc + 1 >= bytecode_len) {
+                if (pc >= bytecode_len) {
                     nc->has_error = true;
                     snprintf(nc->error_msg, sizeof(nc->error_msg), "inc_loc: bytecode overflow at pc=%zu", pc);
                     return -1;
                 }
-                uint16_t idx = bytecode[pc] | (bytecode[pc+1] << 8);
-                pc += 2;
+                /* loc8 operand: a var_buf index, mapped like get_loc */
+                int idx = ir_out->sig.arg_count + bytecode[pc];
+                pc += 1;
                 if (idx < NC_MAX_LOCALS) {
                     ir_emit_load_local(ir_out, current_block, idx, ir_out->local_types[idx]);
                     ir_emit_const_i32(ir_out, current_block, 1);
@@ -2542,13 +2563,14 @@ static int bytecode_to_ir_impl(NativeCompiler *nc, const uint8_t *bytecode,
             }
             
             case OP_dec_loc: {
-                if (pc + 1 >= bytecode_len) {
+                if (pc >= bytecode_len) {
                     nc->has_error = true;
                     snprintf(nc->error_msg, sizeof(nc->error_msg), "dec_loc: bytecode overflow at pc=%zu", pc);
                     return -1;
                 }
-                uint16_t idx = bytecode[pc] | (bytecode[pc+1] << 8);
-                pc += 2;
+                /* loc8 operand: a var_buf index, mapped like get_loc */
+                int idx = ir_out->sig.arg_count + bytecode[pc];
+                pc += 1;
                 if (idx < NC_MAX_LOCALS) {
                     ir_emit_load_local(ir_out, current_block, idx, ir_out->local_types[idx]);
                     ir_emit_const_i32(ir_out, current_block, 1);
@@ -2560,13 +2582,14 @@ static int bytecode_to_ir_impl(NativeCompiler *nc, const uint8_t *bytecode,
             }
             
             case OP_add_loc: {
-                if (pc + 1 >= bytecode_len) {
+                if (pc >= bytecode_len) {
                     nc->has_error = true;
                     snprintf(nc->error_msg, sizeof(nc->error_msg), "add_loc: bytecode overflow at pc=%zu", pc);
                     return -1;
                 }
-                uint16_t idx = bytecode[pc] | (bytecode[pc+1] << 8);
-                pc += 2;
+                /* loc8 operand: a var_buf index, mapped like get_loc */
+                int idx = ir_out->sig.arg_count + bytecode[pc];
+                pc += 1;
                 if (idx < NC_MAX_LOCALS) {
                     /* Stack: value -> add to local[idx] */
                     ir_emit_load_local(ir_out, current_block, idx, ir_out->local_types[idx]);
@@ -5390,11 +5413,13 @@ static int emit_ir_instruction(NativeCompiler *nc, const IRInstr *instr, const i
             MipsReg arr = POP_REG();
             POP_TYPE();
             NativeType elem = instr->operand.field.field_type;
-            MipsReg data = PUSH_REG();
-            mips_lw(em, data, 0, arr);
-            mips_sll(em, REG_AT, idx, 2);
-            mips_addu(em, REG_AT, data, REG_AT);
+            /* one register: first arr->data, then the element - it is the
+               result left on the stack (it used to be a second register,
+               popped right away, so the result was the data pointer) */
             MipsReg dst = PUSH_REG();
+            mips_lw(em, dst, 0, arr);
+            mips_sll(em, REG_AT, idx, 2);
+            mips_addu(em, REG_AT, dst, REG_AT);
             if (elem == NATIVE_TYPE_FLOAT32) {
                 MipsFpuReg f = mips_alloc_fpr(em);
                 mips_lwc1(em, f, 0, REG_AT);
@@ -5403,7 +5428,6 @@ static int emit_ir_instruction(NativeCompiler *nc, const IRInstr *instr, const i
             } else {
                 mips_lw(em, dst, 0, REG_AT);
             }
-            POP_REG();
             PUSH_TYPE(elem);
             break;
         }
@@ -7729,8 +7753,23 @@ static int extract_js_bytecode(NativeCompiler *nc, JSValueConst js_func,
         return ret;
     }
     
-    /* Extract bytecode info */
-    *out_bytecode = info.bytecode;
+    /* Extract bytecode info. The interpreter's bytecode carries
+     * superinstructions; the compiler decodes the plain sequence, from a
+     * copy (kept until the next compilation). */
+    {
+        static uint8_t *plain_buf;
+        static size_t plain_cap;
+        if (info.bytecode_len > plain_cap) {
+            uint8_t *nb = realloc(plain_buf, info.bytecode_len);
+            if (!nb)
+                return -3;
+            plain_buf = nb;
+            plain_cap = info.bytecode_len;
+        }
+        memcpy(plain_buf, info.bytecode, info.bytecode_len);
+        JS_UnfuseBytecode(plain_buf, info.bytecode_len);
+        *out_bytecode = plain_buf;
+    }
     *out_len = info.bytecode_len;
     *out_arg_count = info.arg_count;
     *out_var_count = info.var_count;
@@ -7802,6 +7841,8 @@ CompileResult native_compile_function(NativeCompiler *nc, JSValueConst js_func,
     NC_LOG("compile: START args=%d vars=%d bytecode_len=%zu", js_arg_count, js_var_count, bytecode_len);
     int parse_result = bytecode_to_ir(nc, bytecode, bytecode_len, &nc->ir_func);
     NC_LOG("compile: bytecode_to_ir returned %d", parse_result);
+    if (parse_result < 0)
+        NC_LOG("compile: error: %s", nc->error_msg);
     if (parse_result < 0) {
         /* If nc->error_msg was set, use it; otherwise create generic message */
         if (nc->error_msg[0] == '\0') {
@@ -7988,7 +8029,31 @@ int native_register_compiled_function(NativeCompiler *nc, void *code_ptr,
  * Call a compiled native function.
  * Converts JS arguments and invokes the native code.
  */
-JSValue native_func_call(JSContext *ctx, NativeFunc *func, int argc, JSValueConst *argv) {
+/* Number arguments: the int and float32 values the interpreter produces are
+   read inline, anything else takes the full conversion */
+static inline int nc_arg_float(JSContext *ctx, float *f, JSValueConst v) {
+    int tag = JS_VALUE_GET_TAG(v);
+    if (tag == JS_CUSTOM_TAG_FLOAT32) {
+        *f = JS_VALUE_GET_FLOAT32(v);
+        return 0;
+    }
+    if (tag == JS_TAG_INT) {
+        *f = (float)JS_VALUE_GET_INT(v);
+        return 0;
+    }
+    return JS_ToFloat32(ctx, f, v);
+}
+
+static inline int nc_arg_int(JSContext *ctx, int32_t *i, JSValueConst v) {
+    if (JS_VALUE_GET_TAG(v) == JS_TAG_INT) {
+        *i = JS_VALUE_GET_INT(v);
+        return 0;
+    }
+    return JS_ToInt32(ctx, i, v);
+}
+
+/* the general case: arrays, pointers, strings, 64-bit values */
+static __attribute__((noinline)) JSValue native_func_call_general(JSContext *ctx, NativeFunc *func, int argc, JSValueConst *argv) {
     if (!func || !func->is_valid || !func->code_ptr) {
         return JS_ThrowTypeError(ctx, "Invalid native function");
     }
@@ -7999,6 +8064,7 @@ JSValue native_func_call(JSContext *ctx, NativeFunc *func, int argc, JSValueCons
     if (argc < sig->arg_count) {
         return JS_ThrowTypeError(ctx, "Not enough arguments");
     }
+
     
     /* Convert arguments based on signature */
     int32_t int_args[MAX_NATIVE_ARGS];
@@ -8010,7 +8076,7 @@ JSValue native_func_call(JSContext *ctx, NativeFunc *func, int argc, JSValueCons
             case NATIVE_TYPE_INT32:
             case NATIVE_TYPE_UINT32:
             case NATIVE_TYPE_BOOL:
-                if (JS_ToInt32(ctx, &int_args[i], argv[i]) < 0) {
+                if (nc_arg_int(ctx, &int_args[i], argv[i]) < 0) {
                     return JS_EXCEPTION;
                 }
                 break;
@@ -8027,14 +8093,13 @@ JSValue native_func_call(JSContext *ctx, NativeFunc *func, int argc, JSValueCons
                 break;
             }
                 
-            case NATIVE_TYPE_FLOAT32: {
-                double d;
-                if (JS_ToFloat64(ctx, &d, argv[i]) < 0) {
+            case NATIVE_TYPE_FLOAT32:
+                /* straight to float: going through a double is software
+                   emulated on the EE */
+                if (nc_arg_float(ctx, &float_args[i], argv[i]) < 0) {
                     return JS_EXCEPTION;
                 }
-                float_args[i] = (float)d;
                 break;
-            }
             
             case NATIVE_TYPE_INT32_ARRAY:
             case NATIVE_TYPE_UINT32_ARRAY:
@@ -8164,7 +8229,7 @@ JSValue native_func_call(JSContext *ctx, NativeFunc *func, int argc, JSValueCons
         native_float_func_8_t float_fn = (native_float_func_8_t)func->code_ptr;
         float result = float_fn(args[0], args[1], args[2], args[3],
                                  args[4], args[5], args[6], args[7]);
-        return JS_NewFloat64(ctx, result);
+        return JS_NewFloat32(ctx, result);
     }
     
     /* For int64, the result is in $v0 as a 64-bit value */
@@ -8213,3 +8278,58 @@ JSValue native_func_call(JSContext *ctx, NativeFunc *func, int argc, JSValueCons
             return JS_UNDEFINED;
     }
 }
+
+JSValue native_func_call(JSContext *ctx, NativeFunc *func, int argc, JSValueConst *argv) {
+    const NativeFuncSignature *sig;
+    if (!func || !func->is_valid || !func->code_ptr || argc < func->sig.arg_count)
+        return native_func_call_general(ctx, func, argc, argv);  /* reports the error */
+    sig = &func->sig;
+
+    /* The common case (helpers like clamp, lerp, hit tests): only number
+     * arguments and a number/void result. They go straight into the
+     * argument registers (floats as their bit pattern), in one pass. */
+    if (sig->return_type == NATIVE_TYPE_FLOAT32 || sig->return_type == NATIVE_TYPE_INT32 ||
+        sig->return_type == NATIVE_TYPE_VOID || sig->return_type == NATIVE_TYPE_BOOL ||
+        sig->return_type == NATIVE_TYPE_UINT32) {
+        int32_t sargs[8];
+        int n = sig->arg_count, i;
+        for (i = 0; i < n; i++) {
+            NativeType t = sig->arg_types[i];
+            if (t == NATIVE_TYPE_FLOAT32) {
+                union { float f; int32_t v; } u;
+                if (nc_arg_float(ctx, &u.f, argv[i]) < 0)
+                    return JS_EXCEPTION;
+                sargs[i] = u.v;
+            } else if (t == NATIVE_TYPE_INT32 || t == NATIVE_TYPE_UINT32 || t == NATIVE_TYPE_BOOL) {
+                if (nc_arg_int(ctx, &sargs[i], argv[i]) < 0)
+                    return JS_EXCEPTION;
+            } else {
+                break;
+            }
+        }
+        if (i == n) {
+            for (; i < 8; i++)
+                sargs[i] = 0;
+            if (sig->return_type == NATIVE_TYPE_FLOAT32) {
+                typedef float (*nc_float_fn_t)(int32_t, int32_t, int32_t, int32_t,
+                                               int32_t, int32_t, int32_t, int32_t);
+                float r = ((nc_float_fn_t)func->code_ptr)(sargs[0], sargs[1], sargs[2], sargs[3],
+                                                          sargs[4], sargs[5], sargs[6], sargs[7]);
+                return JS_NewFloat32(ctx, r);
+            } else {
+                typedef int32_t (*nc_int_fn_t)(int32_t, int32_t, int32_t, int32_t,
+                                               int32_t, int32_t, int32_t, int32_t);
+                int32_t r = ((nc_int_fn_t)func->code_ptr)(sargs[0], sargs[1], sargs[2], sargs[3],
+                                                          sargs[4], sargs[5], sargs[6], sargs[7]);
+                switch (sig->return_type) {
+                case NATIVE_TYPE_INT32: return JS_NewInt32(ctx, r);
+                case NATIVE_TYPE_UINT32: return JS_NewUint32(ctx, (uint32_t)r);
+                case NATIVE_TYPE_BOOL: return JS_NewBool(ctx, r != 0);
+                default: return JS_UNDEFINED;
+                }
+            }
+        }
+    }
+    return native_func_call_general(ctx, func, argc, argv);
+}
+

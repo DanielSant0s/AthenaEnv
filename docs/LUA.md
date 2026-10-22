@@ -129,11 +129,14 @@ local ui = app.AppUI{ title = "My app", category = "games" }
 
 ## Performance
 
-Measured in PCSX2 on the same scenes, with the same scripted input for both runtimes:
+Measured in PCSX2 after the QuickJS performance work (float32 numbers, TDZ check elimination, inline caches, superinstructions, allocator), on the same scenes with the same scripted input for both runtimes. `starfox` spawns random content and its frame rate depends on it, so both runs use the same random number sequence:
 
 | Scene | JavaScript | Lua |
 |---|---|---|
-| `physics_collision` (lights and post-FX on) | 24–25 FPS | 31–32 FPS |
-| `physics_collision` (lights and post-FX off) | 38 FPS | 42 FPS |
-| `physics_collision` script time per frame | ~24.5 ms | ~16 ms |
-| `starfox` (gameplay, vsync on; JS uses `Native.compile`) | 47 FPS | 58 FPS |
+| `physics_collision` (lights and post-FX on) | 31–32 FPS | 32–33 FPS |
+| `physics_collision` (lights and post-FX off) | 43 FPS | 42.6 FPS |
+| `starfox` gameplay, vsync on | 57 FPS | 58 FPS |
+| `starfox` gameplay, vsync off (equivalent pure scripts) | 196 FPS | 198 FPS |
+| `starfox` gameplay, vsync off (`starfox.js` with `Native.compile`) | 216 FPS | - |
+
+Object creation (`{x, y, z}` literals) and number-to-string conversion are faster in JS. Plain interpreter loops (integer and float arithmetic, small function calls) are still 1.2–2x faster in Lua, whose register-based bytecode needs fewer instructions per operation.

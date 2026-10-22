@@ -140,6 +140,12 @@ function System.lz4Compress(data) end
 ---@return Buffer
 function System.lz4Decompress(data, size) end
 function System.getTemperature() end
+---Starts the statistical PC profiler (`hz` samples per second, default 1000).
+---@return boolean
+function System.profileStart(hz) end
+---Stops it and writes the raw u32 PCs to `path` (see scripts/profile_report.py).
+---@return integer samples
+function System.profileStop(path) end
 ---Calls a native function. `args` is a list of `{ type = System.T_*, value = v }`.
 ---@param fn integer address
 ---@param args? { type: integer, value: any }[]
@@ -768,6 +774,7 @@ function RenderObject:render() end
 function RenderObject:renderBounds() end
 function RenderObject:setPosition(x, y, z) end
 function RenderObject:setRotation(x, y, z) end
+function RenderObject:setScale(x, y, z) end
 ---@return Matrix4
 function RenderObject:getBoneTransform(index) end
 ---@param anim Animation

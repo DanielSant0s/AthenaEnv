@@ -97,7 +97,7 @@ ifeq ($(DEBUG),1)
   EE_CFLAGS += -DDEBUG
 endif
 
-JS_CORE = quickjs/cutils.o quickjs/libregexp.o quickjs/libunicode.o \
+JS_CORE = quickjs/f32str.o quickjs/cutils.o quickjs/libregexp.o quickjs/libunicode.o \
 				 quickjs/realpath.o quickjs/quickjs.o quickjs/quickjs-libc.o
 
 VU1_MPGS = draw_3D_colors.o \
@@ -112,7 +112,7 @@ VU1_MPGS = draw_3D_colors.o \
 
 # VU0_MPGS = matrix_multiply.o
 
-APP_CORE = main.o athena_core.o bootlogo.o texture_manager.o owl_packet.o profiler.o vif.o athena_math.o memory.o lz4_ps2.o ee_tools.o module_system.o iop_manager.o taskman.o lockman.o pad.o system.o strUtils.o mpg_manager.o matrix.o vector.o excepHandler.o exceptions.o athena/system_facade.o athena/iop_facade.o athena/pad.o athena/timer.o athena/mutex.o athena/task.o
+APP_CORE = main.o athena_core.o malloc_lock.o athena/sampler.o bootlogo.o texture_manager.o owl_packet.o profiler.o vif.o athena_math.o memory.o lz4_ps2.o ee_tools.o module_system.o iop_manager.o taskman.o lockman.o pad.o system.o strUtils.o mpg_manager.o matrix.o vector.o excepHandler.o exceptions.o athena/system_facade.o athena/iop_facade.o athena/pad.o athena/timer.o athena/mutex.o athena/task.o
 
 INI_READER = readini/src/readini.o
 
@@ -321,6 +321,8 @@ EE_OBJS := $(EE_OBJS:%=$(EE_OBJ_DIR)%)
 
 ifeq ($(ATHENA_JS),1)
   EE_CFLAGS += -DATHENA_JS
+  # the JS heap pool (quickjs.c) takes back its blocks if they reach libc
+  EE_LDFLAGS += -Wl,--wrap=free -Wl,--wrap=realloc
 endif
 
 ifeq ($(ATHENA_LUA),1)

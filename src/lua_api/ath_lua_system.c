@@ -23,6 +23,7 @@
 #include <n32_call.h>
 
 #include <athena/system_facade.h>
+#include <athena/sampler.h>
 #include <erl.h>
 
 extern int athena_lua_request_reload(lua_State *L, const char *script);
@@ -421,6 +422,18 @@ static int l_lz4_decompress(lua_State *L)
     return 1;
 }
 
+static int l_profile_start(lua_State *L)
+{
+    lua_pushboolean(L, athena_sampler_start((int)luaL_optinteger(L, 1, 1000)) == 0);
+    return 1;
+}
+
+static int l_profile_stop(lua_State *L)
+{
+    lua_pushinteger(L, athena_sampler_stop(luaL_optstring(L, 1, NULL)));
+    return 1;
+}
+
 static int l_get_temperature(lua_State *L)
 {
     unsigned char in_buffer[1] = { 0xEF }, out_buffer[16] = { 0 };
@@ -576,6 +589,8 @@ static const luaL_Reg system_funcs[] = {
     { "lz4Compress", l_lz4_compress },
     { "lz4Decompress", l_lz4_decompress },
     { "getTemperature", l_get_temperature },
+    { "profileStart", l_profile_start },
+    { "profileStop", l_profile_stop },
     { "nativeCall", l_native_call },
     { "loadReloc", l_load_reloc },
     { "unloadReloc", l_unload_reloc },

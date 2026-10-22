@@ -268,6 +268,10 @@ declare class RenderObject {
     dispose(): void;
     /** Looks up a bone by name. */
     getBoneTransform(name: string): BoneTransform | undefined;
+    /** Set the transform from numbers (no temporary {x, y, z} object). */
+    setPosition(x: number, y: number, z: number): void;
+    setRotation(x: number, y: number, z: number): void;
+    setScale(x: number, y: number, z: number): void;
     /** Attaches a physics collision geometry to this object. Pass `null` to detach. @remarks Requires the Physics build. */
     setCollision(geom: PhysicsGeom | null): void;
     /** Attaches a physics rigid body to this object. Pass `null` to detach. @remarks Requires the Physics build. */

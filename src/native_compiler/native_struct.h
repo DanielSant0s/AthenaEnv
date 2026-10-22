@@ -64,6 +64,7 @@ typedef struct NativeStructInstance {
     uint32_t count;             /* Number of contiguous instances at `data` (1 unless STRUCT_INST_FLAG_ARRAY) */
     uint8_t flags;              /* Instance flags (STRUCT_INST_FLAG_*) */
     uint8_t managed;            /* 1 = GC managed, 0 = manual */
+    uint64_t js_view_cache;     /* JSValue *: element views (StructType.array), see ath_native.c */
 } NativeStructInstance;
 
 /*

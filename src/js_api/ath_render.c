@@ -1582,6 +1582,24 @@ static JSValue js_render_object_set(JSContext *ctx, JSValueConst this_val, JSVal
     return JS_UNDEFINED;
 }
 
+/* setPosition/setRotation/setScale(x, y, z): the transform setters without
+ * building an {x, y, z} object per call */
+static JSValue js_render_object_set_xyz(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv, int magic)
+{
+	JSRenderObject* ro = JS_GetOpaque2(ctx, this_val, js_render_object_class_id);
+	float *dst;
+	if (!ro)
+		return JS_EXCEPTION;
+
+	dst = magic == 0 ? js_ro_data(ro)->position : magic == 1 ? js_ro_data(ro)->rotation : js_ro_data(ro)->scale;
+	if (JS_ToFloat32(ctx, &dst[0], argv[0]) || JS_ToFloat32(ctx, &dst[1], argv[1]) ||
+	    JS_ToFloat32(ctx, &dst[2], argv[2]))
+		return JS_EXCEPTION;
+
+	update_object_space(js_ro_data(ro));
+	return JS_UNDEFINED;
+}
+
 // Get bone transform by name
 static JSValue athena_ro_get_bone_transform(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
 	JSRenderObject* ro = JS_GetOpaque2(ctx, this_val, js_render_object_class_id);
@@ -1645,6 +1663,9 @@ static const JSCFunctionListEntry js_render_object_proto_funcs[] = {
 	JS_CFUNC_DEF("dispose",  0,    js_drawfree),
 
 	JS_CFUNC_DEF("getBoneTransform",  1,  athena_ro_get_bone_transform),
+	JS_CFUNC_MAGIC_DEF("setPosition", 3, js_render_object_set_xyz, 0),
+	JS_CFUNC_MAGIC_DEF("setRotation", 3, js_render_object_set_xyz, 1),
+	JS_CFUNC_MAGIC_DEF("setScale",    3, js_render_object_set_xyz, 2),
 
 	#ifdef ATHENA_PHYSICS
 	JS_CFUNC_DEF("setCollision",        1,  athena_ro_collision),

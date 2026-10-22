@@ -135,6 +135,12 @@ The OS functions usually return 0 if OK or an OS-specific negative error code.
 * `System.exitToBrowser()`
 * `System.setDarkMode(value)`
 * `let temps = System.getTemperature()` — only works with SCPH-500XX and later models.
+* `System.profileStart(hz)` — starts a statistical profiler: a timer interrupt records the interrupted program counter `hz` times per second (default 1000, up to ~10000). Works in both runtimes.
+* `let samples = System.profileStop(path)` — stops it and writes the raw samples (little-endian u32 PCs) to `path`; returns the sample count. Turn them into a report with the matching unstripped ELF (`make EE_STRIP=true`):
+  ```sh
+  python3 scripts/profile_report.py bin/athena.elf prof.bin 40 src/quickjs/quickjs.c
+  ```
+  It lists the hottest functions and source lines, and (given `quickjs.c`) the time per bytecode handler.
 * `let info = System.getMCInfo(slot)` — `info.type`, `info.freemem`, `info.format`
 * `let ee_info = System.getCPUInfo()` — `implementation`, `revision`, `FPUimplementation`, `FPUrevision`, `ICacheSize`, `DCacheSize`, `RAMSize`, `MachineSize`
 * `let gs_info = System.getGPUInfo()` — `id`, `revision`

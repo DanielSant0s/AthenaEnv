@@ -1488,6 +1488,22 @@ void athena_error_screen(const char* errMsg, bool dark_mode) {
             color2 = GS_SETREG_RGBAQ(0x80,0x80,0x80,0x80,0x00);
         }
 
+		/* what fits between the title and the restart hint: a long
+		   backtrace (deep recursion) would run over it */
+		char shown[1024];
+		{
+			const char *src = errMsg;
+			int len = 0, lines = 0;
+			while (*src && len < (int)sizeof(shown) - 8) {
+				if (*src == '\n' && ++lines == 15)
+					break;
+				shown[len++] = *src++;
+			}
+			if (*src)
+				len += sprintf(shown + len, "\n  ...");
+			shown[len] = '\0';
+		}
+
 		int slot = fntLoadFile(NULL);
 		fntSetCharSize(slot, FNTSYS_CHAR_SIZE*64, FNTSYS_CHAR_SIZE*64);
 
@@ -1496,7 +1512,7 @@ void athena_error_screen(const char* errMsg, bool dark_mode) {
     	while (!isButtonPressed(PAD_START)) {
 			clearScreen(color);
 			fntRenderString(slot, 15, 15, 0, 625, 448, "AthenaEnv ERROR!", 1.2f, color2);
-			fntRenderString(slot, 15, 80, 0, 625, 448, errMsg, 0.8f, color2);
+			fntRenderString(slot, 15, 80, 0, 625, 448, shown, 0.8f, color2);
 			fntRenderString(slot, 15, 400, 0, 625, 448, "Press [start] to restart", 0.8f, color2);
 			flipScreen();
 		} 

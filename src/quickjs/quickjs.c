@@ -50,6 +50,7 @@
 #include "list.h"
 #include "quickjs.h"
 #include "libregexp.h"
+#include "f32str.h"
 #ifdef CONFIG_BIGNUM
 #include "libbf.h"
 #endif
@@ -84,6 +85,27 @@
 #define CONFIG_STACK_CHECK
 #endif
 
+
+#ifdef JS_FLOAT32_NUMBERS
+/* Called by JS_NewFloat64 for every non-int32 number (see quickjs.h). */
+JSValue js_float32_number_policy(double d)
+{
+    float f;
+
+    if (d != d)
+        return JS_NAN;
+    /* integers past int32: exact as doubles up to 2^53 (float32 would
+       round 2^31 + 1, timestamps, hashes...) */
+    if (fabs(d) <= 9007199254740992.0 && d == (double)(int64_t)d)
+        return __JS_NewFloat64(NULL, d);
+    /* outside the float32 range (it would overflow to infinity or underflow
+       to 0): keep the double. Infinities are fine either way. */
+    if (fabs(d) > 3.4028234663852886e+38 || (d != 0.0 && fabs(d) < 1.401298464324817e-45))
+        return __JS_NewFloat64(NULL, d);
+    f = (float)d;
+    return custom_JS_NewFloat32(NULL, f);
+}
+#endif
 
 /* dump object free */
 //#define DUMP_FREE
@@ -246,6 +268,12 @@ typedef struct {
 } JSNumericOperations;
 #endif
 
+#define JS_ATOM_CACHE_SIZE 128 /* power of two */
+typedef struct JSAtomCacheEntry {
+    const char *str;    /* C string address passed to JS_NewAtom */
+    JSAtom atom;
+} JSAtomCacheEntry;
+
 struct JSRuntime {
     JSMallocFunctions mf;
     JSMallocState malloc_state;
@@ -258,6 +286,9 @@ struct JSRuntime {
     uint32_t *atom_hash;
     JSAtomStruct **atom_array;
     int atom_free_index; /* 0 = none */
+    JSAtomCacheEntry atom_cache[JS_ATOM_CACHE_SIZE]; /* see JS_NewAtom */
+    uint16_t field_ic[2048]; /* get_field/put_field slot guesses, see JS_FIELD_IC_SLOT */
+    struct { uint16_t idx, var_count; } global_ic[1024]; /* get_var, see OP_get_var */
 
     int class_count;    /* size of class_array */
     JSClass *class_array;
@@ -852,7 +883,9 @@ typedef struct JSProperty {
     } u;
 } JSProperty;
 
-#define JS_PROP_INITIAL_SIZE 2
+/* 4, not 2: {x, y, z} and {x, y, z, w} are the most common objects in game
+   code, and 2 meant a realloc of the property array for every one */
+#define JS_PROP_INITIAL_SIZE 4
 #define JS_PROP_INITIAL_HASH_SIZE 4 /* must be a power of two */
 #define JS_ARRAY_INITIAL_SIZE 2
 
@@ -1717,6 +1750,222 @@ static inline size_t js_def_malloc_usable_size(void *ptr)
 #endif
 }
 
+#ifdef PS2
+/* Small-block pool for the JS heap.
+ *
+ * QuickJS allocates and frees small blocks constantly (objects, property
+ * arrays, shapes, short strings, closures, temporary {x, y, z} values).
+ * Blocks up to JS_POOL_MAX bytes come from per-size free lists instead of
+ * newlib's malloc: a pop or a push, no heap search, no bin management.
+ *
+ * Blocks are carved from JS_POOL_CHUNK-sized chunks aligned to their own
+ * size, so the owner of any pointer is a bitmap lookup on ptr >> 15, and
+ * every block is 16-byte aligned (classes are multiples of 16). Chunks are
+ * kept once allocated: the pool grows to the script's peak small-object
+ * usage. JS Threads share the runtime, so the lists are updated with
+ * interrupts disabled (DIntr/EIntr are plain di/ei, not syscalls). */
+
+#include <kernel.h>
+
+#define JS_POOL_MAX         128
+#define JS_POOL_CLASSES     (JS_POOL_MAX / 16)
+#define JS_POOL_CHUNK_SHIFT 15
+#define JS_POOL_CHUNK       (1 << JS_POOL_CHUNK_SHIFT)
+#define JS_POOL_RAM         (32 * 1024 * 1024)  /* EE main RAM */
+
+typedef struct JSPoolBlock { struct JSPoolBlock *next; } JSPoolBlock;
+
+static JSPoolBlock *js_pool_free_list[JS_POOL_CLASSES];
+static uint32_t js_pool_chunk_map[JS_POOL_RAM / JS_POOL_CHUNK / 32];
+static uint8_t js_pool_chunk_class[JS_POOL_RAM / JS_POOL_CHUNK];
+int js_pool_bypass;
+
+static inline int js_pool_owns(const void *ptr)
+{
+    uintptr_t a = (uintptr_t)ptr;
+    uint32_t chunk;
+    if (a >= JS_POOL_RAM)
+        return 0;
+    chunk = a >> JS_POOL_CHUNK_SHIFT;
+    return (js_pool_chunk_map[chunk >> 5] >> (chunk & 31)) & 1;
+}
+
+static inline size_t js_pool_block_size(const void *ptr)
+{
+    return (js_pool_chunk_class[(uintptr_t)ptr >> JS_POOL_CHUNK_SHIFT] + 1) * 16;
+}
+
+/* called with interrupts disabled */
+static int js_pool_refill(int cls)
+{
+    size_t bsize = (cls + 1) * 16;
+    uint8_t *chunk = memalign(JS_POOL_CHUNK, JS_POOL_CHUNK);
+    uint32_t id;
+    size_t off;
+
+    if (!chunk || (uintptr_t)chunk + JS_POOL_CHUNK > JS_POOL_RAM) {
+        free(chunk);
+        return -1;
+    }
+    id = (uintptr_t)chunk >> JS_POOL_CHUNK_SHIFT;
+    js_pool_chunk_class[id] = cls;
+    js_pool_chunk_map[id >> 5] |= 1u << (id & 31);
+    for (off = 0; off + bsize <= JS_POOL_CHUNK; off += bsize) {
+        JSPoolBlock *b = (JSPoolBlock *)(chunk + off);
+        b->next = js_pool_free_list[cls];
+        js_pool_free_list[cls] = b;
+    }
+    return 0;
+}
+
+static void *js_pool_alloc(size_t size)
+{
+    int cls = (int)((size - 1) >> 4), ie;
+    JSPoolBlock *b;
+
+    ie = DIntr();
+    b = js_pool_free_list[cls];
+    if (unlikely(!b)) {
+        if (js_pool_refill(cls) < 0) {
+            if (ie) EIntr();
+            return malloc(size);
+        }
+        b = js_pool_free_list[cls];
+    }
+    js_pool_free_list[cls] = b->next;
+    if (ie) EIntr();
+    return b;
+}
+
+static void js_pool_release(void *ptr)
+{
+    int cls = js_pool_chunk_class[(uintptr_t)ptr >> JS_POOL_CHUNK_SHIFT], ie;
+    JSPoolBlock *b = ptr;
+
+    ie = DIntr();
+    b->next = js_pool_free_list[cls];
+    js_pool_free_list[cls] = b;
+    if (ie) EIntr();
+}
+
+/* Safety net for code that frees or reallocs js_malloc'd memory with the
+ * libc functions (pre-existing in places, harmless while both were the
+ * same heap). The link wraps free/realloc (-Wl,--wrap, see the Makefile),
+ * so a pool block reaching them is handled by the pool. */
+void __real_free(void *ptr);
+void *__real_realloc(void *ptr, size_t size);
+
+void __wrap_free(void *ptr)
+{
+    if (js_pool_owns(ptr))
+        js_pool_release(ptr);
+    else
+        __real_free(ptr);
+}
+
+void *__wrap_realloc(void *ptr, size_t size)
+{
+    void *new_ptr;
+    size_t old_size;
+
+    if (!js_pool_owns(ptr))
+        return __real_realloc(ptr, size);
+    old_size = js_pool_block_size(ptr);
+    if (size <= old_size && size != 0)
+        return ptr;
+    new_ptr = size ? malloc(size) : NULL;
+    if (size && !new_ptr)
+        return NULL;
+    if (new_ptr)
+        memcpy(new_ptr, ptr, old_size);
+    js_pool_release(ptr);
+    return new_ptr;
+}
+
+/* What QuickJS may write into (JSMallocFunctions.js_malloc_usable_size):
+ * exact for pool blocks; 0 ("no slack") for the system heap, as before,
+ * since ps2_malloc_usable_size is only good enough for accounting. */
+static size_t js_pool_writable_size(const void *ptr)
+{
+    return js_pool_owns(ptr) ? js_pool_block_size(ptr) : 0;
+}
+
+static size_t js_pool_usable_size(const void *ptr)
+{
+    if (js_pool_owns(ptr))
+        return js_pool_block_size(ptr);
+    return ps2_malloc_usable_size((void *)ptr);
+}
+
+static void *js_def_malloc(JSMallocState *s, size_t size)
+{
+    void *ptr;
+
+    assert(size != 0);
+    if (unlikely(s->malloc_size + size > s->malloc_limit))
+        return NULL;
+
+    if (size <= JS_POOL_MAX && !js_pool_bypass)
+        ptr = js_pool_alloc(size);
+    else
+        ptr = malloc(size);
+    if (!ptr)
+        return NULL;
+
+    s->malloc_count++;
+    s->malloc_size += js_pool_usable_size(ptr) + MALLOC_OVERHEAD;
+    return ptr;
+}
+
+static void js_def_free(JSMallocState *s, void *ptr)
+{
+    if (!ptr)
+        return;
+
+    s->malloc_count--;
+    s->malloc_size -= js_pool_usable_size(ptr) + MALLOC_OVERHEAD;
+    if (js_pool_owns(ptr))
+        js_pool_release(ptr);
+    else
+        free(ptr);
+}
+
+static void *js_def_realloc(JSMallocState *s, void *ptr, size_t size)
+{
+    size_t old_size;
+    void *new_ptr;
+
+    if (!ptr) {
+        if (size == 0)
+            return NULL;
+        return js_def_malloc(s, size);
+    }
+    old_size = js_pool_usable_size(ptr);
+    if (size == 0) {
+        js_def_free(s, ptr);
+        return NULL;
+    }
+    if (js_pool_owns(ptr)) {
+        if (size <= old_size)
+            return ptr;     /* still fits its block */
+        new_ptr = js_def_malloc(s, size);
+        if (!new_ptr)
+            return NULL;
+        memcpy(new_ptr, ptr, old_size);
+        js_def_free(s, ptr);
+        return new_ptr;
+    }
+    if (s->malloc_size + size - old_size > s->malloc_limit)
+        return NULL;
+
+    new_ptr = realloc(ptr, size);
+    if (!new_ptr)
+        return NULL;
+
+    s->malloc_size += js_pool_usable_size(new_ptr) - old_size;
+    return new_ptr;
+}
+#else
 static void *js_def_malloc(JSMallocState *s, size_t size)
 {
     void *ptr;
@@ -1772,6 +2021,7 @@ static void *js_def_realloc(JSMallocState *s, void *ptr, size_t size)
     s->malloc_size += js_def_malloc_usable_size(ptr) - old_size;
     return ptr;
 }
+#endif
 
 static const JSMallocFunctions def_malloc_funcs = {
     js_def_malloc,
@@ -1786,6 +2036,8 @@ static const JSMallocFunctions def_malloc_funcs = {
 #elif defined(__linux__)
     (size_t (*)(const void *))malloc_usable_size,
 #elif defined(PS2)
+    js_pool_writable_size,
+#elif 0
     NULL,
 #else
     /* change this to `NULL,` if compilation fails */
@@ -2936,7 +3188,31 @@ JSAtom JS_NewAtomLen(JSContext *ctx, const char *str, size_t len)
 
 JSAtom JS_NewAtom(JSContext *ctx, const char *str)
 {
+#ifdef PS2
+    /* Native bindings call JS_GetPropertyStr(obj, "x") and friends per
+     * value, and each one used to strlen, hash and look the name up in the
+     * atom table. Like luaS_new's API cache, remember the atom per C string
+     * address; a hit is checked against the atom's current text, so a
+     * reused buffer or a freed (or recycled) atom just misses. */
+    JSRuntime *rt = ctx->rt;
+    JSAtomCacheEntry *e = &rt->atom_cache[((uintptr_t)str >> 2) & (JS_ATOM_CACHE_SIZE - 1)];
+    JSAtom atom;
+
+    if (e->str == str && e->atom < (JSAtom)rt->atom_size) {
+        JSAtomStruct *p = rt->atom_array[e->atom];
+        if (p && !atom_is_free(p) && p->atom_type == JS_ATOM_TYPE_STRING && !p->is_wide_char &&
+            strncmp(str, (const char *)p->u.str8, p->len) == 0 && str[p->len] == '\0')
+            return JS_DupAtom(ctx, e->atom);
+    }
+    atom = JS_NewAtomLen(ctx, str, strlen(str));
+    if (atom != JS_ATOM_NULL && !__JS_AtomIsTaggedInt(atom)) {
+        e->str = str;
+        e->atom = atom;
+    }
+    return atom;
+#else
     return JS_NewAtomLen(ctx, str, strlen(str));
+#endif
 }
 
 JSAtom JS_NewAtomUInt32(JSContext *ctx, uint32_t n)
@@ -3063,7 +3339,7 @@ static JSValue __JS_AtomToValue(JSContext *ctx, JSAtom atom, BOOL force_string)
     char buf[ATOM_GET_STR_BUF_SIZE];
 
     if (__JS_AtomIsTaggedInt(atom)) {
-        snprintf(buf, sizeof(buf), "%u", __JS_AtomToUInt32(atom));
+        js_i32_to_string((int32_t)__JS_AtomToUInt32(atom), buf);
         return JS_NewString(ctx, buf);
     } else {
         JSRuntime *rt = ctx->rt;
@@ -3085,6 +3361,14 @@ static JSValue __JS_AtomToValue(JSContext *ctx, JSAtom atom, BOOL force_string)
             return JS_DupValue(ctx, JS_MKPTR(JS_TAG_SYMBOL, p));
         }
     }
+}
+
+JS_BOOL JS_AtomGetIndex(JSContext *ctx, JSAtom atom, uint32_t *pidx)
+{
+    if (!__JS_AtomIsTaggedInt(atom))
+        return FALSE;
+    *pidx = __JS_AtomToUInt32(atom);
+    return TRUE;
 }
 
 JSValue JS_AtomToValue(JSContext *ctx, JSAtom atom)
@@ -11697,7 +11981,7 @@ JSValue JS_ToStringInternal(JSContext *ctx, JSValueConst val, BOOL is_ToProperty
     case JS_TAG_STRING:
         return JS_DupValue(ctx, val);
     case JS_TAG_INT:
-        snprintf(buf, sizeof(buf), "%d", JS_VALUE_GET_INT(val));
+        js_i32_to_string(JS_VALUE_GET_INT(val), buf); /* printf would go through 64-bit division */
         str = buf;
         goto new_string;
     case JS_TAG_BOOL:
@@ -11733,7 +12017,9 @@ JSValue JS_ToStringInternal(JSContext *ctx, JSValueConst val, BOOL is_ToProperty
         return js_dtoa(ctx, JS_VALUE_GET_FLOAT64(val), 10, 0,
                        JS_DTOA_VAR_FORMAT);
     case JS_CUSTOM_TAG_FLOAT32:
-        snprintf(buf, sizeof(buf), "%g", JS_VALUE_GET_FLOAT32(val));
+        /* shortest decimal that reads back as the same float32, formatted
+           like Number.prototype.toString, without doubles or printf */
+        js_f32_to_string(JS_VALUE_GET_FLOAT32(val), buf);
         str = buf;
         goto new_string;
 #ifdef CONFIG_BIGNUM
@@ -14587,9 +14873,30 @@ static no_inline __exception int js_binary_arith_slow(JSContext *ctx, JSValue *s
 
     op1 = sp[-2];
     op2 = sp[-1];
-    if (JS_TAG_IS_FLOAT32(JS_VALUE_GET_NORM_TAG(op1)) || JS_TAG_IS_FLOAT32(JS_VALUE_GET_NORM_TAG(op2))){
-        JS_ToFloat32Free(ctx, &f1, op1);
-        JS_ToFloat32Free(ctx, &f2, op2);
+#ifdef JS_FLOAT32_NUMBERS
+    if (JS_VALUE_IS_BOTH_INT(op1, op2) && op == OP_mod) {
+        /* the opcode fast path leaves negative operands and zero here */
+        int32_t v1 = JS_VALUE_GET_INT(op1), v2 = JS_VALUE_GET_INT(op2);
+        if (v2 != 0 && !(v2 == -1 && v1 == INT32_MIN)) {
+            int32_t r = v1 % v2;
+            /* the result takes the dividend's sign: -4 % 2 is -0 */
+            sp[-2] = (r == 0 && v1 < 0) ? custom_JS_NewFloat32(ctx, -0.0f) : JS_NewInt32(ctx, r);
+            return 0;
+        }
+    }
+#endif
+    if ((JS_TAG_IS_FLOAT32(JS_VALUE_GET_NORM_TAG(op1)) || JS_TAG_IS_FLOAT32(JS_VALUE_GET_NORM_TAG(op2)))
+#ifdef JS_FLOAT32_NUMBERS
+        /* a real double (integer past int32) keeps the exact double path */
+        && !JS_TAG_IS_FLOAT64(JS_VALUE_GET_TAG(op1)) && !JS_TAG_IS_FLOAT64(JS_VALUE_GET_TAG(op2))
+#endif
+        ) {
+        if (JS_ToFloat32Free(ctx, &f1, op1)) {
+            JS_FreeValue(ctx, op2);
+            goto exception;
+        }
+        if (JS_ToFloat32Free(ctx, &f2, op2))
+            goto exception;
 
         switch(op) {
         case OP_sub:
@@ -14658,8 +14965,13 @@ static no_inline __exception int js_add_slow(JSContext *ctx, JSValue *sp)
     tag1 = JS_VALUE_GET_TAG(op1);
     tag2 = JS_VALUE_GET_TAG(op2);
     if ((JS_TAG_IS_FLOAT32(tag1) || JS_TAG_IS_FLOAT32(tag2)) &&
+#ifdef JS_FLOAT32_NUMBERS
+        /* a real double (integer past int32) keeps the exact double path */
+        JS_TAG_IS_INT_OR_FLOAT32(tag1) && JS_TAG_IS_INT_OR_FLOAT32(tag2)) {
+#else
         (tag1 == JS_TAG_INT || JS_TAG_IS_FLOAT32(tag1) || JS_TAG_IS_FLOAT64(tag1)) &&
         (tag2 == JS_TAG_INT || JS_TAG_IS_FLOAT32(tag2) || JS_TAG_IS_FLOAT64(tag2))) {
+#endif
         /* Only narrow when a float32 is actually one of the operands. The
          * float32 test used to be missing, so this branch also swallowed
          * int+float64 and int+int-overflow and pushed them through float32:
@@ -16692,6 +17004,175 @@ typedef enum {
 #define FUNC_RET_YIELD      1
 #define FUNC_RET_YIELD_STAR 2
 
+/* Inline cache for get_field/put_field (obj.name). Each instruction site
+ * (keyed by its pc in rt->field_ic) remembers the slot where it last found
+ * the property. A guess is only used after checking, on the object at hand,
+ * that its shape has this very atom at that slot as a plain data property
+ * (writable, for stores) - so a stale, colliding or polymorphic entry can
+ * only miss, never read or write the wrong property. A miss takes the
+ * normal lookup and refreshes the guess. */
+#define JS_FIELD_IC_SLOT(rt, pc) \
+    (&(rt)->field_ic[((uintptr_t)(pc) ^ ((uintptr_t)(pc) >> 11)) & (countof((rt)->field_ic) - 1)])
+
+static inline JSProperty *js_field_ic_lookup(JSObject *p, JSAtom atom, uint32_t idx,
+                                            int flag_mask, int flags)
+{
+    JSShape *sh = p->shape;
+    if (likely(idx < (uint32_t)sh->prop_count)) {
+        JSShapeProperty *prs = get_shape_prop(sh) + idx;
+        if (likely(prs->atom == atom && (prs->flags & flag_mask) == flags))
+            return &p->prop[idx];
+    }
+    return NULL;
+}
+
+static inline void js_field_ic_fill(JSObject *p, JSAtom atom, uint16_t *slot)
+{
+    JSProperty *pr;
+    JSShapeProperty *prs = find_own_property(&pr, p, atom);
+    if (prs)
+        *slot = (uint16_t)(prs - get_shape_prop(p->shape));
+}
+
+/* Reads (get_field/get_field2) also cache properties found on the direct
+ * prototype, which is where methods live (obj.method(), instance of a
+ * class or of a native binding class). The slot then holds the index in
+ * the prototype's shape with JS_FIELD_IC_PROTO set. A hit re-checks
+ * everything against the current objects: the prototype is read from the
+ * receiver's shape (so setPrototypeOf is seen), the prototype's slot is
+ * validated like an own slot, and the receiver must not have the property
+ * itself - which an object with exotic handlers may have without a shape
+ * entry, so those are left to the full lookup (fast arrays have none for
+ * names). */
+#define JS_FIELD_IC_PROTO 0x8000
+
+static inline BOOL js_field_ic_proto_ok(JSObject *p)
+{
+    return !p->is_exotic || (p->fast_array && p->class_id == JS_CLASS_ARRAY);
+}
+
+static inline JSProperty *js_field_ic_proto_lookup(JSObject *p, JSAtom atom, uint32_t ic,
+                                                  int flags)
+{
+    JSObject *holder;
+    JSProperty *pr;
+    if (!(ic & JS_FIELD_IC_PROTO) || !js_field_ic_proto_ok(p))
+        return NULL;
+    holder = p->shape->proto;
+    if (!holder)
+        return NULL;
+    pr = js_field_ic_lookup(holder, atom, ic & ~JS_FIELD_IC_PROTO, JS_PROP_TMASK, flags);
+    if (!pr || find_own_property1(p, atom))
+        return NULL;
+    return pr;
+}
+
+static inline void js_field_ic_fill_get(JSObject *p, JSAtom atom, uint16_t *slot)
+{
+    JSProperty *pr;
+    JSShapeProperty *prs = find_own_property(&pr, p, atom);
+    JSObject *holder;
+    if (prs) {
+        *slot = (uint16_t)(prs - get_shape_prop(p->shape));
+    } else if (js_field_ic_proto_ok(p) && (holder = p->shape->proto) != NULL) {
+        prs = find_own_property(&pr, holder, atom);
+        if (prs && ((prs->flags & JS_PROP_TMASK) == JS_PROP_NORMAL ||
+                    (prs->flags & JS_PROP_TMASK) == JS_PROP_GETSET))
+            *slot = (uint16_t)(prs - get_shape_prop(holder->shape)) | JS_FIELD_IC_PROTO;
+    }
+}
+
+/* Stores: an own slot, or an accessor on the prototype (a data property
+   there is shadowed by the store, so only setters are cached). */
+static inline void js_field_ic_fill_put(JSObject *p, JSAtom atom, uint16_t *slot)
+{
+    JSProperty *pr;
+    JSShapeProperty *prs = find_own_property(&pr, p, atom);
+    JSObject *holder;
+    if (prs) {
+        *slot = (uint16_t)(prs - get_shape_prop(p->shape));
+    } else if (js_field_ic_proto_ok(p) && (holder = p->shape->proto) != NULL) {
+        prs = find_own_property(&pr, holder, atom);
+        if (prs && (prs->flags & JS_PROP_TMASK) == JS_PROP_GETSET)
+            *slot = (uint16_t)(prs - get_shape_prop(holder->shape)) | JS_FIELD_IC_PROTO;
+    }
+}
+
+/* Accessor property (get/set, as native bindings and classes define them),
+   own or on the prototype, cached in the same slot as data properties. The
+   getter/setter is then called directly, like JS_GetPropertyInternal and
+   call_setter do once their lookup has found it. */
+static inline JSProperty *js_field_ic_accessor(JSObject *p, JSAtom atom, uint32_t ic)
+{
+    JSProperty *pr = js_field_ic_lookup(p, atom, ic, JS_PROP_TMASK, JS_PROP_GETSET);
+    if (!pr)
+        pr = js_field_ic_proto_lookup(p, atom, ic, JS_PROP_GETSET);
+    return pr;
+}
+
+static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
+                               JSValueConst this_obj, JSValueConst new_target,
+                               int argc, JSValue *argv, int flags);
+
+
+/* Calls from the bytecode interpreter. A C function (Math.sin, a native
+ * binding method...) goes straight to js_call_c_function, which is where
+ * JS_CallInternal would dispatch it anyway, without paying the
+ * interpreter's own prologue (callee-saved registers, a large frame, the
+ * bytecode function checks) first. */
+static inline JSValue js_call_from_bytecode(JSContext *ctx, JSValueConst func_obj,
+                                            JSValueConst this_obj, int argc, JSValue *argv)
+{
+    if (JS_VALUE_GET_TAG(func_obj) == JS_TAG_OBJECT) {
+        JSObject *p = JS_VALUE_GET_OBJ(func_obj);
+        if (p->class_id == JS_CLASS_C_FUNCTION)
+            return js_call_c_function(ctx, func_obj, this_obj, argc, (JSValueConst *)argv, 0);
+        /* JS_NewCFunctionData functions (bindings with data, Native.compile) */
+        if (p->class_id == JS_CLASS_C_FUNCTION_DATA)
+            return js_c_function_data_call(ctx, func_obj, this_obj, argc, (JSValueConst *)argv, 0);
+    }
+    return JS_CallInternal(ctx, func_obj, this_obj, JS_UNDEFINED, argc, argv, 0);
+}
+
+/* Getter/setter calls from the field cache. A native accessor (the
+   JS_CGETSET_DEF properties of bindings, Native.struct fields) is called
+   directly, without js_call_c_function's stack frame - the frame is only
+   seen by backtraces of errors thrown in it; anything else is a normal
+   call, holding a reference since the accessor may remove the property. */
+static inline JSValue js_ic_call_getter(JSContext *ctx, JSObject *getter, JSValueConst this_obj)
+{
+    JSValue func, ret;
+    if (getter->class_id == JS_CLASS_C_FUNCTION) {
+        if (getter->u.cfunc.cproto == JS_CFUNC_getter)
+            return getter->u.cfunc.c_function.getter(getter->u.cfunc.realm, this_obj);
+        if (getter->u.cfunc.cproto == JS_CFUNC_getter_magic)
+            return getter->u.cfunc.c_function.getter_magic(getter->u.cfunc.realm, this_obj,
+                                                           getter->u.cfunc.magic);
+    }
+    func = JS_DupValue(ctx, JS_MKPTR(JS_TAG_OBJECT, getter));
+    ret = js_call_from_bytecode(ctx, func, this_obj, 0, NULL);
+    JS_FreeValue(ctx, func);
+    return ret;
+}
+
+/* *pval stays owned by the caller */
+static inline JSValue js_ic_call_setter(JSContext *ctx, JSObject *setter, JSValueConst this_obj,
+                                        JSValue *pval)
+{
+    JSValue func, ret;
+    if (setter->class_id == JS_CLASS_C_FUNCTION) {
+        if (setter->u.cfunc.cproto == JS_CFUNC_setter)
+            return setter->u.cfunc.c_function.setter(setter->u.cfunc.realm, this_obj, *pval);
+        if (setter->u.cfunc.cproto == JS_CFUNC_setter_magic)
+            return setter->u.cfunc.c_function.setter_magic(setter->u.cfunc.realm, this_obj, *pval,
+                                                           setter->u.cfunc.magic);
+    }
+    func = JS_DupValue(ctx, JS_MKPTR(JS_TAG_OBJECT, setter));
+    ret = js_call_from_bytecode(ctx, func, this_obj, 1, pval);
+    JS_FreeValue(ctx, func);
+    return ret;
+}
+
 /* argv[] is modified if (flags & JS_CALL_FLAG_COPY_ARGV) = 0. */
 static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
                                JSValueConst this_obj, JSValueConst new_target,
@@ -16862,6 +17343,20 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
             {
                 JSValue val;
 
+                /* arr.length: an own data property of arrays, so the
+                   get_field inline cache applies */
+                if (likely(JS_VALUE_GET_TAG(sp[-1]) == JS_TAG_OBJECT)) {
+                    uint16_t *ic = JS_FIELD_IC_SLOT(rt, pc);
+                    JSObject *p = JS_VALUE_GET_OBJ(sp[-1]);
+                    JSProperty *pr = js_field_ic_lookup(p, JS_ATOM_length, *ic, JS_PROP_TMASK, 0);
+                    if (pr) {
+                        val = JS_DupValue(ctx, pr->u.value);
+                        JS_FreeValue(ctx, sp[-1]);
+                        sp[-1] = val;
+                        BREAK;
+                    }
+                    js_field_ic_fill(p, JS_ATOM_length, ic);
+                }
                 val = JS_GetProperty(ctx, sp[-1], JS_ATOM_length);
                 if (unlikely(JS_IsException(val)))
                     goto exception;
@@ -17137,8 +17632,8 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
             has_call_argc:
                 call_argv = sp - call_argc;
                 sf->cur_pc = pc;
-                ret_val = JS_CallInternal(ctx, call_argv[-1], JS_UNDEFINED,
-                                          JS_UNDEFINED, call_argc, call_argv, 0);
+                ret_val = js_call_from_bytecode(ctx, call_argv[-1], JS_UNDEFINED,
+                                                call_argc, call_argv);
                 if (unlikely(JS_IsException(ret_val)))
                     goto exception;
                 if (opcode == OP_tail_call)
@@ -17146,6 +17641,12 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
                 for(i = -1; i < call_argc; i++)
                     JS_FreeValue(ctx, call_argv[i]);
                 sp -= call_argc + 1;
+                /* f(); as a statement: run the OP_drop that follows here */
+                if (*pc == OP_drop) {
+                    JS_FreeValue(ctx, ret_val);
+                    pc++;
+                    BREAK;
+                }
                 *sp++ = ret_val;
             }
             BREAK;
@@ -17173,8 +17674,8 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
                 pc += 2;
                 call_argv = sp - call_argc;
                 sf->cur_pc = pc;
-                ret_val = JS_CallInternal(ctx, call_argv[-1], call_argv[-2],
-                                          JS_UNDEFINED, call_argc, call_argv, 0);
+                ret_val = js_call_from_bytecode(ctx, call_argv[-1], call_argv[-2],
+                                                call_argc, call_argv);
                 if (unlikely(JS_IsException(ret_val)))
                     goto exception;
                 if (opcode == OP_tail_call_method)
@@ -17182,6 +17683,12 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
                 for(i = -2; i < call_argc; i++)
                     JS_FreeValue(ctx, call_argv[i]);
                 sp -= call_argc + 2;
+                /* obj.m(); as a statement: run the OP_drop that follows here */
+                if (*pc == OP_drop) {
+                    JS_FreeValue(ctx, ret_val);
+                    pc++;
+                    BREAK;
+                }
                 *sp++ = ret_val;
             }
             BREAK;
@@ -17409,9 +17916,34 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
             {
                 JSValue val;
                 JSAtom atom;
+                /* Inline cache for globals (Math, Screen...): a slot guess in
+                   global_obj, valid while global_var_obj (searched first; its
+                   lexical variables are never deleted) has as many properties
+                   as when it was taken, and checked like get_field's. */
+                typeof(rt->global_ic[0]) *gic =
+                    &rt->global_ic[((uintptr_t)pc ^ ((uintptr_t)pc >> 11)) & (countof(rt->global_ic) - 1)];
+                JSObject *gvo = JS_VALUE_GET_OBJ(ctx->global_var_obj);
                 atom = get_u32(pc);
                 pc += 4;
 
+                if (likely(gic->var_count == gvo->shape->prop_count)) {
+                    JSProperty *pr = js_field_ic_lookup(JS_VALUE_GET_OBJ(ctx->global_obj), atom,
+                                                        gic->idx, JS_PROP_TMASK, 0);
+                    if (pr) {
+                        *sp++ = JS_DupValue(ctx, pr->u.value);
+                        BREAK;
+                    }
+                }
+                {
+                    JSProperty *pr;
+                    JSObject *go = JS_VALUE_GET_OBJ(ctx->global_obj);
+                    JSShapeProperty *prs;
+                    if (!find_own_property(&pr, gvo, atom) &&
+                        (prs = find_own_property(&pr, go, atom)) != NULL) {
+                        gic->idx = (uint16_t)(prs - get_shape_prop(go->shape));
+                        gic->var_count = (uint16_t)gvo->shape->prop_count;
+                    }
+                }
                 val = JS_GetGlobalVar(ctx, atom, opcode - OP_get_var_undef);
                 if (unlikely(JS_IsException(val)))
                     goto exception;
@@ -17613,7 +18145,88 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
                 set_value(ctx, var_refs[idx]->pvalue, JS_DupValue(ctx, sp[-1]));
             }
             BREAK;
+        CASE(OP_get_ref_length):
+            {
+                /* array.length of a closure variable: the length of an
+                   Array is always its first property */
+                JSValue arr = *var_refs[get_u16(pc)]->pvalue;
+                if (likely(JS_VALUE_GET_TAG(arr) == JS_TAG_OBJECT &&
+                           JS_VALUE_GET_OBJ(arr)->class_id == JS_CLASS_ARRAY)) {
+                    *sp++ = JS_DupValue(ctx, JS_VALUE_GET_OBJ(arr)->prop[0].u.value);
+                    pc += 3;
+                    BREAK;
+                }
+            }
+            goto get_var_ref_check_op;
+
+        CASE(OP_get_ref_loc_array_el):
+            {
+                /* closure_array[local] (OP_get_array_el's fast case) */
+                JSValue arr = *var_refs[get_u16(pc)]->pvalue;
+                JSValue iv;
+                int n;
+                if (pc[2] == OP_get_loc8) {
+                    iv = var_buf[pc[3]];
+                    n = 5;
+                } else {
+                    iv = var_buf[pc[2] - OP_get_loc0];
+                    n = 4;
+                }
+                if (likely(JS_VALUE_GET_TAG(arr) == JS_TAG_OBJECT &&
+                           JS_VALUE_GET_TAG(iv) == JS_TAG_INT)) {
+                    JSObject *p = JS_VALUE_GET_OBJ(arr);
+                    uint32_t i = JS_VALUE_GET_INT(iv);
+                    if (i < (uint32_t)p->u.array.count) {
+                        if (p->class_id == JS_CLASS_ARRAY) {
+                            *sp++ = JS_DupValue(ctx, p->u.array.u.values[i]);
+                            pc += n;
+                            BREAK;
+                        } else if (p->class_id == JS_CLASS_FLOAT32_ARRAY) {
+                            *sp++ = JS_NewFloat32(ctx, p->u.array.u.float_ptr[i]);
+                            pc += n;
+                            BREAK;
+                        }
+                    }
+                }
+            }
+            goto get_var_ref_check_op;
+
+        CASE(OP_get_loc0_field):
+        CASE(OP_get_loc1_field):
+        CASE(OP_get_loc2_field):
+        CASE(OP_get_loc3_field):
+        CASE(OP_get_loc8_field):
+            {
+                /* local.name: OP_get_field's cached cases, without pushing
+                   (and reference counting) the object first */
+                JSValue obj;
+                const uint8_t *fpc;
+                if (opcode == OP_get_loc8_field) {
+                    obj = var_buf[*pc];
+                    fpc = pc + 1;
+                } else {
+                    obj = var_buf[opcode - OP_get_loc0_field];
+                    fpc = pc;
+                }
+                if (likely(JS_VALUE_GET_TAG(obj) == JS_TAG_OBJECT)) {
+                    JSObject *p = JS_VALUE_GET_OBJ(obj);
+                    JSAtom atom = get_u32(fpc + 1);
+                    uint16_t ic = *JS_FIELD_IC_SLOT(rt, fpc + 1);
+                    JSProperty *pr = js_field_ic_lookup(p, atom, ic, JS_PROP_TMASK, 0);
+                    if (pr || (pr = js_field_ic_proto_lookup(p, atom, ic, 0))) {
+                        *sp++ = JS_DupValue(ctx, pr->u.value);
+                        pc = (uint8_t *)fpc + 5;
+                        BREAK;
+                    }
+                }
+                /* only the get_loc; OP_get_field runs next */
+                *sp++ = JS_DupValue(ctx, obj);
+                pc = (uint8_t *)fpc;
+            }
+            BREAK;
+
         CASE(OP_get_var_ref_check):
+        get_var_ref_check_op:
             {
                 int idx;
                 JSValue val;
@@ -18032,9 +18645,31 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
             {
                 JSValue val;
                 JSAtom atom;
+                uint16_t *ic = JS_FIELD_IC_SLOT(rt, pc);
                 atom = get_u32(pc);
                 pc += 4;
 
+                if (likely(JS_VALUE_GET_TAG(sp[-1]) == JS_TAG_OBJECT)) {
+                    JSObject *p = JS_VALUE_GET_OBJ(sp[-1]);
+                    JSProperty *pr = js_field_ic_lookup(p, atom, *ic, JS_PROP_TMASK, 0);
+                    if (pr || (pr = js_field_ic_proto_lookup(p, atom, *ic, 0))) {
+                        val = JS_DupValue(ctx, pr->u.value);
+                        JS_FreeValue(ctx, sp[-1]);
+                        sp[-1] = val;
+                        BREAK;
+                    }
+                    pr = js_field_ic_accessor(p, atom, *ic);
+                    if (pr && pr->u.getset.getter) {
+                        sf->cur_pc = pc;
+                        val = js_ic_call_getter(ctx, pr->u.getset.getter, sp[-1]);
+                        if (unlikely(JS_IsException(val)))
+                            goto exception;
+                        JS_FreeValue(ctx, sp[-1]);
+                        sp[-1] = val;
+                        BREAK;
+                    }
+                    js_field_ic_fill_get(p, atom, ic);
+                }
                 val = JS_GetProperty(ctx, sp[-1], atom);
                 if (unlikely(JS_IsException(val)))
                     goto exception;
@@ -18047,9 +18682,28 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
             {
                 JSValue val;
                 JSAtom atom;
+                uint16_t *ic = JS_FIELD_IC_SLOT(rt, pc);
                 atom = get_u32(pc);
                 pc += 4;
 
+                if (likely(JS_VALUE_GET_TAG(sp[-1]) == JS_TAG_OBJECT)) {
+                    JSObject *p = JS_VALUE_GET_OBJ(sp[-1]);
+                    JSProperty *pr = js_field_ic_lookup(p, atom, *ic, JS_PROP_TMASK, 0);
+                    if (pr || (pr = js_field_ic_proto_lookup(p, atom, *ic, 0))) {
+                        *sp++ = JS_DupValue(ctx, pr->u.value);
+                        BREAK;
+                    }
+                    pr = js_field_ic_accessor(p, atom, *ic);
+                    if (pr && pr->u.getset.getter) {
+                        sf->cur_pc = pc;
+                        val = js_ic_call_getter(ctx, pr->u.getset.getter, sp[-1]);
+                        if (unlikely(JS_IsException(val)))
+                            goto exception;
+                        *sp++ = val;
+                        BREAK;
+                    }
+                    js_field_ic_fill_get(p, atom, ic);
+                }
                 val = JS_GetProperty(ctx, sp[-1], atom);
                 if (unlikely(JS_IsException(val)))
                     goto exception;
@@ -18061,9 +18715,38 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
             {
                 int ret;
                 JSAtom atom;
+                uint16_t *ic = JS_FIELD_IC_SLOT(rt, pc);
                 atom = get_u32(pc);
                 pc += 4;
 
+                if (likely(JS_VALUE_GET_TAG(sp[-2]) == JS_TAG_OBJECT)) {
+                    JSObject *p = JS_VALUE_GET_OBJ(sp[-2]);
+                    /* the same fast case JS_SetPropertyInternal takes for an
+                       own writable data property */
+                    JSProperty *pr = js_field_ic_lookup(p, atom, *ic,
+                                                        JS_PROP_TMASK | JS_PROP_WRITABLE | JS_PROP_LENGTH,
+                                                        JS_PROP_WRITABLE);
+                    if (pr) {
+                        set_value(ctx, &pr->u.value, sp[-1]);
+                        JS_FreeValue(ctx, sp[-2]);
+                        sp -= 2;
+                        BREAK;
+                    }
+                    pr = js_field_ic_accessor(p, atom, *ic);
+                    if (pr && pr->u.getset.setter) {
+                        JSValue r;
+                        sf->cur_pc = pc;
+                        r = js_ic_call_setter(ctx, pr->u.getset.setter, sp[-2], sp - 1);
+                        if (unlikely(JS_IsException(r)))
+                            goto exception;
+                        JS_FreeValue(ctx, r);
+                        JS_FreeValue(ctx, sp[-1]);
+                        JS_FreeValue(ctx, sp[-2]);
+                        sp -= 2;
+                        BREAK;
+                    }
+                    js_field_ic_fill_put(p, atom, ic);
+                }
                 ret = JS_SetPropertyInternal(ctx, sp[-2], atom, sp[-1],
                                              JS_PROP_THROW_STRICT);
                 JS_FreeValue(ctx, sp[-2]);
@@ -18131,6 +18814,24 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
                 atom = get_u32(pc);
                 pc += 4;
 
+                /* object literal field on a plain object: what
+                   JS_DefineProperty ends up doing for a new property, a
+                   shape transition (shared through the shape hash) */
+                if (likely(JS_VALUE_GET_TAG(sp[-2]) == JS_TAG_OBJECT)) {
+                    JSObject *p = JS_VALUE_GET_OBJ(sp[-2]);
+                    if (p->class_id == JS_CLASS_OBJECT && p->extensible &&
+                        !find_own_property1(p, atom)) {
+                        JSProperty *pr = add_property(ctx, p, atom, JS_PROP_C_W_E);
+                        if (unlikely(!pr)) {
+                            JS_FreeValue(ctx, sp[-1]);
+                            sp--;
+                            goto exception;
+                        }
+                        pr->u.value = sp[-1];
+                        sp--;
+                        BREAK;
+                    }
+                }
                 ret = JS_DefinePropertyValue(ctx, sp[-2], atom, sp[-1],
                                              JS_PROP_C_W_E | JS_PROP_THROW);
                 sp--;
@@ -18254,6 +18955,46 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
             {
                 JSValue val;
 
+                /* arr[i] on a plain array, inline (JS_GetPropertyValue's
+                   fast case without the call) */
+                if (likely(JS_VALUE_GET_TAG(sp[-2]) == JS_TAG_OBJECT &&
+                           JS_VALUE_GET_TAG(sp[-1]) == JS_TAG_INT)) {
+                    JSObject *p = JS_VALUE_GET_OBJ(sp[-2]);
+                    uint32_t idx = JS_VALUE_GET_INT(sp[-1]);
+                    if (idx < (uint32_t)p->u.array.count) {
+                        if (p->class_id == JS_CLASS_ARRAY)
+                            val = JS_DupValue(ctx, p->u.array.u.values[idx]);
+                        else if (p->class_id == JS_CLASS_FLOAT32_ARRAY)
+                            val = JS_NewFloat32(ctx, p->u.array.u.float_ptr[idx]);
+                        else
+                            goto get_array_el_slow;
+                        JS_FreeValue(ctx, sp[-2]);
+                        sp[-2] = val;
+                        sp--;
+                        BREAK;
+                    }
+                }
+            get_array_el_slow:
+                if (JS_VALUE_GET_TAG(sp[-2]) == JS_TAG_OBJECT &&
+                    JS_VALUE_GET_TAG(sp[-1]) == JS_TAG_INT &&
+                    JS_VALUE_GET_INT(sp[-1]) >= 0) {
+                    /* an exotic class's own indexed read (JSClassExoticMethods.get_index) */
+                    JSObject *p = JS_VALUE_GET_OBJ(sp[-2]);
+                    const JSClassExoticMethods *em;
+                    if (p->is_exotic && !p->fast_array &&
+                        (em = rt->class_array[p->class_id].exotic) != NULL &&
+                        em->get_index) {
+                        val = em->get_index(ctx, sp[-2], JS_VALUE_GET_INT(sp[-1]));
+                        if (val != JS_UNINITIALIZED) {
+                            JS_FreeValue(ctx, sp[-2]);
+                            sp[-2] = val;
+                            sp--;
+                            if (unlikely(JS_IsException(val)))
+                                goto exception;
+                            BREAK;
+                        }
+                    }
+                }
                 val = JS_GetPropertyValue(ctx, sp[-2], sp[-1]);
                 JS_FreeValue(ctx, sp[-2]);
                 sp[-2] = val;
@@ -18317,6 +19058,27 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
             {
                 int ret;
 
+                /* arr[i] = v on an existing element of a plain array */
+                if (likely(JS_VALUE_GET_TAG(sp[-3]) == JS_TAG_OBJECT &&
+                           JS_VALUE_GET_TAG(sp[-2]) == JS_TAG_INT)) {
+                    JSObject *p = JS_VALUE_GET_OBJ(sp[-3]);
+                    uint32_t idx = JS_VALUE_GET_INT(sp[-2]);
+                    if (p->class_id == JS_CLASS_ARRAY && idx < (uint32_t)p->u.array.count) {
+                        set_value(ctx, &p->u.array.u.values[idx], sp[-1]);
+                        JS_FreeValue(ctx, sp[-3]);
+                        sp -= 3;
+                        BREAK;
+                    }
+                    /* Float32Array element from an int or float32: no conversion
+                       that could run user code or detach the buffer */
+                    if (p->class_id == JS_CLASS_FLOAT32_ARRAY && idx < (uint32_t)p->u.array.count &&
+                        JS_TAG_IS_INT_OR_FLOAT32(JS_VALUE_GET_TAG(sp[-1]))) {
+                        p->u.array.u.float_ptr[idx] = JS_VALUE_GET_NUM_FLOAT32(sp[-1]);
+                        JS_FreeValue(ctx, sp[-3]);
+                        sp -= 3;
+                        BREAK;
+                    }
+                }
                 ret = JS_SetPropertyValue(ctx, sp[-3], sp[-2], sp[-1], JS_PROP_THROW_STRICT);
                 JS_FreeValue(ctx, sp[-3]);
                 sp -= 3;
@@ -18423,8 +19185,11 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
                     sp[-2] = JS_NewInt32(ctx, r);
                     sp--;
                 } else if (JS_VALUE_IS_BOTH_FLOAT32(op1, op2)) {
-                    sp[-2] = custom_JS_NewFloat32(ctx, JS_VALUE_GET_FLOAT32(op1) +
-                                             JS_VALUE_GET_FLOAT32(op2));
+                    sp[-2] = JS_NewFloat32(ctx, JS_VALUE_GET_FLOAT32(op1) + JS_VALUE_GET_FLOAT32(op2));
+                    sp--;
+                } else if (JS_VALUE_IS_BOTH_INT_OR_FLOAT32(op1, op2)) {
+                    sp[-2] = JS_NewFloat32(ctx, JS_VALUE_GET_NUM_FLOAT32(op1) +
+                                           JS_VALUE_GET_NUM_FLOAT32(op2));
                     sp--;
                 } else if (JS_VALUE_IS_BOTH_FLOAT(op1, op2)) {
                     sp[-2] = __JS_NewFloat64(ctx, JS_VALUE_GET_FLOAT64(op1) +
@@ -18453,6 +19218,14 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
                     if (unlikely((int)r != r))
                         goto add_loc_slow;
                     *pv = JS_NewInt32(ctx, r);
+                    sp--;
+                } else if (JS_VALUE_IS_BOTH_FLOAT32(*pv, sp[-1])) {
+                    *pv = JS_NewFloat32(ctx, JS_VALUE_GET_FLOAT32(*pv) +
+                                        JS_VALUE_GET_FLOAT32(sp[-1]));
+                    sp--;
+                } else if (JS_VALUE_IS_BOTH_INT_OR_FLOAT32(*pv, sp[-1])) {
+                    *pv = JS_NewFloat32(ctx, JS_VALUE_GET_NUM_FLOAT32(*pv) +
+                                        JS_VALUE_GET_NUM_FLOAT32(sp[-1]));
                     sp--;
                 } else if (JS_VALUE_GET_TAG(*pv) == JS_TAG_STRING) {
                     JSValue op1;
@@ -18491,11 +19264,14 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
                         goto binary_arith_slow;
                     sp[-2] = JS_NewInt32(ctx, r);
                     sp--;
+                } else if (JS_VALUE_IS_BOTH_FLOAT32(op1, op2)) {
+                    sp[-2] = JS_NewFloat32(ctx, JS_VALUE_GET_FLOAT32(op1) - JS_VALUE_GET_FLOAT32(op2));
+                    sp--;
                 } else if (JS_VALUE_IS_BOTH_FLOAT(op1, op2)) {
                     sp[-2] = __JS_NewFloat64(ctx, JS_VALUE_GET_FLOAT64(op1) - JS_VALUE_GET_FLOAT64(op2));
                     sp--;
-                } else if (JS_VALUE_IS_BOTH_FLOAT32(op1, op2)) {
-                    sp[-2] = custom_JS_NewFloat32(ctx, JS_VALUE_GET_FLOAT32(op1) - JS_VALUE_GET_FLOAT32(op2));
+                } else if (JS_VALUE_IS_BOTH_INT_OR_FLOAT32(op1, op2)) {
+                    sp[-2] = JS_NewFloat32(ctx, JS_VALUE_GET_NUM_FLOAT32(op1) - JS_VALUE_GET_NUM_FLOAT32(op2));
                     sp--;
                 } else {
                     goto binary_arith_slow;
@@ -18530,6 +19306,9 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
                     }
                     sp[-2] = JS_NewInt32(ctx, r);
                     sp--;
+                } else if (JS_VALUE_IS_BOTH_FLOAT32(op1, op2)) {
+                    sp[-2] = JS_NewFloat32(ctx, JS_VALUE_GET_FLOAT32(op1) * JS_VALUE_GET_FLOAT32(op2));
+                    sp--;
                 } else if (JS_VALUE_IS_BOTH_FLOAT(op1, op2)) {
 #ifdef CONFIG_BIGNUM
                     if (unlikely(sf->js_mode & JS_MODE_MATH))
@@ -18539,8 +19318,8 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
                 mul_fp_res:
                     sp[-2] = __JS_NewFloat64(ctx, d);
                     sp--;
-                } else if (JS_VALUE_IS_BOTH_FLOAT32(op1, op2)) {
-                    sp[-2] = custom_JS_NewFloat32(ctx, JS_VALUE_GET_FLOAT32(op1) * JS_VALUE_GET_FLOAT32(op2));
+                } else if (JS_VALUE_IS_BOTH_INT_OR_FLOAT32(op1, op2)) {
+                    sp[-2] = JS_NewFloat32(ctx, JS_VALUE_GET_NUM_FLOAT32(op1) * JS_VALUE_GET_NUM_FLOAT32(op2));
                     sp--;
                 } else {
                     goto binary_arith_slow;
@@ -18558,10 +19337,29 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
                         goto binary_arith_slow;
                     v1 = JS_VALUE_GET_INT(op1);
                     v2 = JS_VALUE_GET_INT(op2);
+#ifdef JS_FLOAT32_NUMBERS
+                    /* exact integer quotient (no -0, no INT32_MIN / -1) */
+                    if (v2 != 0 && !(v2 == -1 && v1 == INT32_MIN) &&
+                        !(v1 == 0 && v2 < 0) && v1 % v2 == 0) {
+                        sp[-2] = JS_NewInt32(ctx, v1 / v2);
+                        sp--;
+                        BREAK;
+                    }
+                    /* both exact in float32: the hardware quotient is what
+                       JS_NewFloat64 would round the double one to */
+                    if (v1 >= -16777216 && v1 <= 16777216 && v2 >= -16777216 && v2 <= 16777216) {
+                        sp[-2] = JS_NewFloat32(ctx, (float)v1 / (float)v2);
+                        sp--;
+                        BREAK;
+                    }
+#endif
                     sp[-2] = JS_NewFloat64(ctx, (double)v1 / (double)v2);
                     sp--;
                 } else if (JS_VALUE_IS_BOTH_FLOAT32(op1, op2)) {
                     sp[-2] = JS_NewFloat32(ctx, JS_VALUE_GET_FLOAT32(op1) / JS_VALUE_GET_FLOAT32(op2));
+                    sp--;
+                } else if (JS_VALUE_IS_BOTH_INT_OR_FLOAT32(op1, op2)) {
+                    sp[-2] = JS_NewFloat32(ctx, JS_VALUE_GET_NUM_FLOAT32(op1) / JS_VALUE_GET_NUM_FLOAT32(op2));
                     sp--;
                 } else {
                     goto binary_arith_slow;
@@ -18605,7 +19403,7 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
                 uint32_t tag;
                 op1 = sp[-1];
                 tag = JS_VALUE_GET_TAG(op1);
-                if (tag == JS_TAG_INT || JS_TAG_IS_FLOAT64(tag)) {
+                if (tag == JS_TAG_INT || JS_TAG_IS_FLOAT32(tag) || JS_TAG_IS_FLOAT64(tag)) {
                 } else {
                     if (js_unary_arith_slow(ctx, sp, opcode))
                         goto exception;
@@ -18632,6 +19430,8 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
                         goto neg_fp_res;
                     }
                     sp[-1] = JS_NewInt32(ctx, -val);
+                } else if (JS_TAG_IS_FLOAT32(tag)) {
+                    sp[-1] = JS_NewFloat32(ctx, -JS_VALUE_GET_FLOAT32(op1));
                 } else if (JS_TAG_IS_FLOAT64(tag)) {
                     d = -JS_VALUE_GET_FLOAT64(op1);
                 neg_fp_res:
@@ -18652,6 +19452,8 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
                     if (unlikely(val == INT32_MAX))
                         goto inc_slow;
                     sp[-1] = JS_NewInt32(ctx, val + 1);
+                } else if (JS_TAG_IS_FLOAT32(JS_VALUE_GET_TAG(op1))) {
+                    sp[-1] = JS_NewFloat32(ctx, JS_VALUE_GET_FLOAT32(op1) + 1.0f);
                 } else {
                 inc_slow:
                     if (js_unary_arith_slow(ctx, sp, opcode))
@@ -18669,6 +19471,8 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
                     if (unlikely(val == INT32_MIN))
                         goto dec_slow;
                     sp[-1] = JS_NewInt32(ctx, val - 1);
+                } else if (JS_TAG_IS_FLOAT32(JS_VALUE_GET_TAG(op1))) {
+                    sp[-1] = JS_NewFloat32(ctx, JS_VALUE_GET_FLOAT32(op1) - 1.0f);
                 } else {
                 dec_slow:
                     if (js_unary_arith_slow(ctx, sp, opcode))
@@ -18678,6 +19482,23 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
             BREAK;
         CASE(OP_post_inc):
         CASE(OP_post_dec):
+            {
+                /* the old value stays at sp[-1], the new one goes to sp[0] */
+                JSValue op1 = sp[-1];
+                int delta = opcode == OP_post_inc ? 1 : -1;
+                if (JS_VALUE_GET_TAG(op1) == JS_TAG_INT) {
+                    int val = JS_VALUE_GET_INT(op1);
+                    if (likely(val != (delta > 0 ? INT32_MAX : INT32_MIN))) {
+                        sp[0] = JS_NewInt32(ctx, val + delta);
+                        sp++;
+                        BREAK;
+                    }
+                } else if (JS_TAG_IS_FLOAT32(JS_VALUE_GET_TAG(op1))) {
+                    sp[0] = JS_NewFloat32(ctx, JS_VALUE_GET_FLOAT32(op1) + (float)delta);
+                    sp++;
+                    BREAK;
+                }
+            }
             if (js_post_inc_slow(ctx, sp, opcode))
                 goto exception;
             sp++;
@@ -18696,6 +19517,17 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
                     if (unlikely(val == INT32_MAX))
                         goto inc_loc_slow;
                     var_buf[idx] = JS_NewInt32(ctx, val + 1);
+                    /* i++ at the end of a for loop: take the back jump here
+                       (same target and interrupt poll as OP_goto8/16) */
+                    if (*pc == OP_goto8) {
+                        pc += 1 + (int8_t)pc[1];
+                        if (unlikely(js_poll_interrupts(ctx)))
+                            goto exception;
+                    } else if (*pc == OP_goto16) {
+                        pc += 1 + (int16_t)get_u16(pc + 1);
+                        if (unlikely(js_poll_interrupts(ctx)))
+                            goto exception;
+                    }
                 } else {
                 inc_loc_slow:
                     /* must duplicate otherwise the variable value may
@@ -18887,6 +19719,34 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
             BREAK;
 
 
+/* A comparison followed by a conditional jump (every loop test and most
+ * ifs) branches right away instead of pushing a boolean for the jump to pop
+ * after one more dispatch. The bytecode is unchanged: this only peeks at the
+ * next opcode. Jump targets are relative to the operand, as in the jump
+ * handlers, and interrupts are polled the same way. */
+#define CMP_FUSED_BRANCH(res)                                           \
+                {                                                       \
+                    uint8_t next_op_ = *pc;                             \
+                    if (next_op_ == OP_if_false8 || next_op_ == OP_if_true8) { \
+                        if ((next_op_ == OP_if_true8) == !!(res))       \
+                            pc += 1 + (int8_t)pc[1];                    \
+                        else                                            \
+                            pc += 2;                                    \
+                        if (unlikely(js_poll_interrupts(ctx)))          \
+                            goto exception;                             \
+                        BREAK;                                          \
+                    }                                                   \
+                    if (next_op_ == OP_if_false || next_op_ == OP_if_true) { \
+                        if ((next_op_ == OP_if_true) == !!(res))        \
+                            pc += 1 + (int32_t)get_u32(pc + 1);         \
+                        else                                            \
+                            pc += 5;                                    \
+                        if (unlikely(js_poll_interrupts(ctx)))          \
+                            goto exception;                             \
+                        BREAK;                                          \
+                    }                                                   \
+                }
+
 #define OP_CMP(opcode, binary_op, slow_call)              \
             CASE(opcode):                                 \
                 {                                         \
@@ -18894,8 +19754,20 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
                 op1 = sp[-2];                             \
                 op2 = sp[-1];                                   \
                 if (likely(JS_VALUE_IS_BOTH_INT(op1, op2))) {           \
-                    sp[-2] = JS_NewBool(ctx, JS_VALUE_GET_INT(op1) binary_op JS_VALUE_GET_INT(op2)); \
-                    sp--;                                               \
+                    int res_ = JS_VALUE_GET_INT(op1) binary_op JS_VALUE_GET_INT(op2); \
+                    sp -= 2;                                            \
+                    CMP_FUSED_BRANCH(res_);                             \
+                    *sp++ = JS_NewBool(ctx, res_);                      \
+                } else if (JS_VALUE_IS_BOTH_FLOAT32(op1, op2)) {        \
+                    int res_ = JS_VALUE_GET_FLOAT32(op1) binary_op JS_VALUE_GET_FLOAT32(op2); \
+                    sp -= 2;                                            \
+                    CMP_FUSED_BRANCH(res_);                             \
+                    *sp++ = JS_NewBool(ctx, res_);                      \
+                } else if (JS_VALUE_IS_BOTH_INT_OR_FLOAT32(op1, op2)) { \
+                    int res_ = JS_VALUE_GET_NUM_FLOAT32(op1) binary_op JS_VALUE_GET_NUM_FLOAT32(op2); \
+                    sp -= 2;                                            \
+                    CMP_FUSED_BRANCH(res_);                             \
+                    *sp++ = JS_NewBool(ctx, res_);                      \
                 } else {                                                \
                     if (slow_call)                                      \
                         goto exception;                                 \
@@ -31854,6 +32726,194 @@ static void put_short_code(DynBuf *bc_out, int op, int idx)
 }
 
 /* peephole optimizations and resolve goto/labels */
+/* TDZ check elimination. Every access to a let/const local is emitted as
+ * get_loc_check/put_loc_check, which tests for the uninitialized marker on
+ * each read and write and also keeps the peephole optimizer below from
+ * fusing patterns such as `i++` into inc_loc. A forward "definitely
+ * initialized" dataflow over the phase-2 bytecode turns the checks into plain
+ * get_loc/put_loc wherever every path to them has initialized the variable.
+ *
+ * Soundness: a variable is cleared by set_loc_uninitialized (scope entry)
+ * and set by any write or by a check that succeeded; states meet by
+ * intersection. Jump successors come from the label operands (catch and
+ * gosub targets included); an op wrongly assumed to fall through can only
+ * shrink states, so only label operands must be exact. Code the analysis
+ * does not reach keeps its checks. */
+static int optimize_tdz_checks(JSContext *ctx, JSFunctionDef *s)
+{
+    uint8_t *bc = s->byte_code.buf;
+    int bc_len = s->byte_code.size;
+    int words = (s->var_count + 31) / 32;
+    int pos, op, len, changed, i, n_insn, has_checks = 0;
+    int *insn_of_pos = NULL, *label_insn = NULL, *insn_pos = NULL;
+    uint32_t *state = NULL, *cur = NULL;
+    uint8_t *visited = NULL;
+
+    if (words == 0 || bc_len == 0)
+        return 0;
+
+    /* index the instructions and labels */
+    n_insn = 0;
+    for (pos = 0; pos < bc_len; pos += opcode_info[bc[pos]].size) {
+        op = bc[pos];
+        if (op == OP_get_loc_check || op == OP_put_loc_check || op == OP_set_loc_uninitialized)
+            has_checks = 1;
+        n_insn++;
+    }
+    if (!has_checks)
+        return 0;
+
+    insn_pos = js_malloc(ctx, sizeof(int) * (n_insn + 1));
+    insn_of_pos = js_malloc(ctx, sizeof(int) * (bc_len + 1));
+    label_insn = js_malloc(ctx, sizeof(int) * (s->label_count + 1));
+    state = js_malloc(ctx, sizeof(uint32_t) * words * n_insn);
+    cur = js_malloc(ctx, sizeof(uint32_t) * words);
+    visited = js_mallocz(ctx, n_insn);
+    if (!insn_pos || !insn_of_pos || !label_insn || !state || !cur || !visited)
+        goto done;
+
+    for (i = 0; i < s->label_count; i++)
+        label_insn[i] = -1;
+    for (pos = 0, i = 0; pos < bc_len; pos += opcode_info[bc[pos]].size, i++) {
+        insn_pos[i] = pos;
+        insn_of_pos[pos] = i;
+        if (bc[pos] == OP_label)
+            label_insn[get_u32(bc + pos + 1)] = i;
+    }
+    insn_pos[n_insn] = bc_len;
+
+    /* entry: nothing is known to be initialized */
+    memset(state, 0, sizeof(uint32_t) * words);
+    visited[0] = 1;
+
+#define TDZ_MERGE(target) do {                                          \
+        int t_ = (target), w_;                                          \
+        if (t_ >= 0 && t_ < n_insn) {                                   \
+            uint32_t *st_ = state + t_ * words;                         \
+            if (!visited[t_]) {                                         \
+                memcpy(st_, cur, sizeof(uint32_t) * words);             \
+                visited[t_] = 1;                                        \
+                changed = 1;                                            \
+            } else {                                                    \
+                for (w_ = 0; w_ < words; w_++) {                        \
+                    uint32_t m_ = st_[w_] & cur[w_];                    \
+                    if (m_ != st_[w_]) { st_[w_] = m_; changed = 1; }   \
+                }                                                       \
+            }                                                           \
+        }                                                               \
+    } while (0)
+
+    do {
+        changed = 0;
+        for (i = 0; i < n_insn; i++) {
+            int idx, label = -1, falls = 1;
+            if (!visited[i])
+                continue;
+            pos = insn_pos[i];
+            op = bc[pos];
+            memcpy(cur, state + i * words, sizeof(uint32_t) * words);
+
+            switch (op) {
+            case OP_set_loc_uninitialized:
+                idx = get_u16(bc + pos + 1);
+                cur[idx >> 5] &= ~(1u << (idx & 31));
+                break;
+            case OP_put_loc:
+            case OP_set_loc:
+            case OP_put_loc_check:
+            case OP_put_loc_check_init:
+            case OP_get_loc_check:      /* past it, the read succeeded */
+                idx = get_u16(bc + pos + 1);
+                cur[idx >> 5] |= 1u << (idx & 31);
+                break;
+            case OP_goto:
+            case OP_return:
+            case OP_return_undef:
+            case OP_return_async:
+            case OP_throw:
+            case OP_throw_error:
+            case OP_ret:
+            case OP_tail_call:
+            case OP_tail_call_method:
+                falls = 0;
+                break;
+            }
+
+            switch (opcode_info[op].fmt) {
+            case OP_FMT_label:
+            case OP_FMT_label_u16:
+                label = get_u32(bc + pos + 1);
+                break;
+            case OP_FMT_atom_label_u8:
+            case OP_FMT_atom_label_u16:
+                label = get_u32(bc + pos + 5);
+                break;
+            }
+            if (op == OP_label)
+                label = -1;     /* defines the label, does not jump */
+            if (label >= 0 && label < s->label_count)
+                TDZ_MERGE(label_insn[label]);
+            if (falls)
+                TDZ_MERGE(i + 1);
+        }
+    } while (changed);
+#undef TDZ_MERGE
+
+    /* rewrite the checks whose variable is initialized on every path */
+    for (i = 0; i < n_insn; i++) {
+        int idx;
+        pos = insn_pos[i];
+        op = bc[pos];
+        if (!visited[i] || (op != OP_get_loc_check && op != OP_put_loc_check))
+            continue;
+        idx = get_u16(bc + pos + 1);
+        if (state[i * words + (idx >> 5)] & (1u << (idx & 31)))
+            bc[pos] = op == OP_get_loc_check ? OP_get_loc : OP_put_loc;
+    }
+
+    /* A variable with no check left is never read before initialization,
+     * so the uninitialized marker written at each scope entry (in loops,
+     * every iteration) is dead, unless a closure or a reference object can
+     * still observe the variable: closures check it through their var_ref
+     * and make_loc_ref references through get_ref_value. */
+    {
+        int has_refs = 0;
+        memset(cur, 0, sizeof(uint32_t) * words);   /* reused: still checked */
+        for (i = 0; i < n_insn; i++) {
+            int idx;
+            pos = insn_pos[i];
+            op = bc[pos];
+            if (op == OP_make_loc_ref || op == OP_make_var_ref_ref) {
+                has_refs = 1;
+            } else if (op == OP_get_loc_check || op == OP_put_loc_check || op == OP_put_loc_check_init) {
+                idx = get_u16(bc + pos + 1);
+                cur[idx >> 5] |= 1u << (idx & 31);
+            }
+        }
+        if (!has_refs) {
+            for (i = 0; i < n_insn; i++) {
+                int idx;
+                pos = insn_pos[i];
+                if (bc[pos] != OP_set_loc_uninitialized)
+                    continue;
+                idx = get_u16(bc + pos + 1);
+                if (!(cur[idx >> 5] & (1u << (idx & 31))) && !s->vars[idx].is_captured)
+                    memset(bc + pos, OP_nop, 3);
+            }
+        }
+    }
+
+ done:
+    js_free(ctx, insn_pos);
+    js_free(ctx, insn_of_pos);
+    js_free(ctx, label_insn);
+    js_free(ctx, state);
+    js_free(ctx, cur);
+    js_free(ctx, visited);
+    (void)len;
+    return 0;
+}
+
 static __exception int resolve_labels(JSContext *ctx, JSFunctionDef *s)
 {
     int pos, pos_next, bc_len, op, op1, len, i, line_num;
@@ -32623,6 +33683,10 @@ static __exception int resolve_labels(JSContext *ctx, JSFunctionDef *s)
             goto no_change;
 #endif
 
+        case OP_nop:
+            /* erased by optimize_tdz_checks */
+            break;
+
         default:
         no_change:
             add_pc2line_info(s, bc_out.size, line_num);
@@ -32961,6 +34025,70 @@ static int add_module_variables(JSContext *ctx, JSFunctionDef *fd)
     return 0;
 }
 
+/* Superinstructions: frequent sequences get the opcode of their first
+ * instruction replaced by one that runs the whole sequence (the operands and
+ * the following instructions stay where they are, see quickjs-opcode.h).
+ * Each handler takes its fast case for the whole sequence and otherwise
+ * runs only the first instruction, so the rest executes as usual - which is
+ * also what happens when a jump lands inside a sequence. */
+static void fuse_superinstructions(uint8_t *bc, int len)
+{
+    int pos = 0, op, next;
+    while (pos < len) {
+        op = bc[pos];
+        next = pos + short_opcode_info(op).size;
+        if (next >= len)
+            break;
+        switch (op) {
+        case OP_get_var_ref_check:
+            if (bc[next] == OP_get_length) {
+                bc[pos] = OP_get_ref_length;
+            } else if (bc[next] >= OP_get_loc0 && bc[next] <= OP_get_loc3) {
+                if (next + 1 < len && bc[next + 1] == OP_get_array_el)
+                    bc[pos] = OP_get_ref_loc_array_el;
+            } else if (bc[next] == OP_get_loc8) {
+                if (next + 2 < len && bc[next + 2] == OP_get_array_el)
+                    bc[pos] = OP_get_ref_loc_array_el;
+            }
+            break;
+        case OP_get_loc0: case OP_get_loc1: case OP_get_loc2: case OP_get_loc3:
+            if (bc[next] == OP_get_field)
+                bc[pos] = OP_get_loc0_field + (op - OP_get_loc0);
+            break;
+        case OP_get_loc8:
+            if (bc[next] == OP_get_field)
+                bc[pos] = OP_get_loc8_field;
+            break;
+        }
+        pos = next;
+    }
+}
+
+/* Gives back the plain instruction sequence (for code that decodes the
+   bytecode, such as the native compiler). */
+void JS_UnfuseBytecode(uint8_t *bc, size_t len)
+{
+    size_t pos = 0;
+    int op;
+    while (pos < len) {
+        op = bc[pos];
+        switch (op) {
+        case OP_get_ref_length:
+        case OP_get_ref_loc_array_el:
+            bc[pos] = op = OP_get_var_ref_check;
+            break;
+        case OP_get_loc0_field: case OP_get_loc1_field:
+        case OP_get_loc2_field: case OP_get_loc3_field:
+            bc[pos] = op = OP_get_loc0 + (op - OP_get_loc0_field);
+            break;
+        case OP_get_loc8_field:
+            bc[pos] = op = OP_get_loc8;
+            break;
+        }
+        pos += short_opcode_info(op).size;
+    }
+}
+
 /* create a function object from a function definition. The function
    definition is freed. All the child functions are also created. It
    must be done this way to resolve all the variables. */
@@ -33054,6 +34182,8 @@ static JSValue js_create_function(JSContext *ctx, JSFunctionDef *fd)
     }
 #endif
 
+    optimize_tdz_checks(ctx, fd);
+
     if (resolve_labels(ctx, fd))
         goto fail;
 
@@ -33084,6 +34214,7 @@ static JSValue js_create_function(JSContext *ctx, JSFunctionDef *fd)
     b->byte_code_buf = (void *)((uint8_t*)b + byte_code_offset);
     b->byte_code_len = fd->byte_code.size;
     memcpy(b->byte_code_buf, fd->byte_code.buf, fd->byte_code.size);
+    fuse_superinstructions(b->byte_code_buf, b->byte_code_len);
     js_free(ctx, fd->byte_code.buf);
     fd->byte_code.buf = NULL;
 
@@ -36616,7 +37747,7 @@ static int JS_InstantiateFunctionListItem(JSContext *ctx, JSValueConst obj,
         val = custom_JS_NewFloat32(ctx, e->u.f32);
         break;
     case JS_DEF_PROP_DOUBLE:
-        val = __JS_NewFloat64(ctx, e->u.f64);
+        val = JS_NewFloat64(ctx, e->u.f64) /* number policy */;
         break;
     case JS_DEF_PROP_UNDEFINED:
         val = JS_UNDEFINED;
@@ -36683,7 +37814,7 @@ int JS_SetModuleExportList(JSContext *ctx, JSModuleDef *m,
             val = custom_JS_NewFloat32(ctx, e->u.f32);
             break;
         case JS_DEF_PROP_DOUBLE:
-            val = __JS_NewFloat64(ctx, e->u.f64);
+            val = JS_NewFloat64(ctx, e->u.f64) /* number policy */;
             break;
         case JS_DEF_OBJECT:
             val = JS_NewObject(ctx);
@@ -40431,12 +41562,24 @@ static JSValue js_number_toFixed(JSContext *ctx, JSValueConst this_val,
     val = js_thisNumberValue(ctx, this_val);
     if (JS_IsException(val))
         return val;
+    if (JS_ToInt32Sat(ctx, &f, argv[0])) {
+        JS_FreeValue(ctx, val);
+        return JS_EXCEPTION;
+    }
+    if (f < 0 || f > 100) {
+        JS_FreeValue(ctx, val);
+        return JS_ThrowRangeError(ctx, "invalid number of digits");
+    }
+    /* float32 and int32 values: exact integer formatting, no doubles */
+    if (JS_VALUE_GET_TAG(val) == JS_CUSTOM_TAG_FLOAT32 ||
+        (JS_VALUE_GET_TAG(val) == JS_TAG_INT && abs(JS_VALUE_GET_INT(val)) <= 16777216)) {
+        char buf[32];
+        float fv = JS_VALUE_GET_NUM_FLOAT32(val);
+        if (js_f32_to_fixed(fv, f, buf) >= 0)
+            return JS_NewString(ctx, buf);
+    }
     if (JS_ToFloat64Free(ctx, &d, val))
         return JS_EXCEPTION;
-    if (JS_ToInt32Sat(ctx, &f, argv[0]))
-        return JS_EXCEPTION;
-    if (f < 0 || f > 100)
-        return JS_ThrowRangeError(ctx, "invalid number of digits");
     if (fabs(d) >= 1e21) {
         return JS_ToStringFree(ctx, __JS_NewFloat64(ctx, d));
     } else {
@@ -42454,7 +43597,157 @@ static JSValue js_math_random(JSContext *ctx, JSValueConst this_val,
     return __JS_NewFloat64(ctx, u.d - 1.0);
 }
 
+#ifdef JS_FLOAT32_NUMBERS
+/* Math.* under the float32 number policy: int and float32 arguments run in
+ * single precision on the FPU; real doubles (integers past int32) keep the
+ * double path so e.g. Math.floor(Date.now() / 1000) stays exact. */
+
+static float js_math_roundf(float a)
+{
+    float r = floorf(a);
+    if (a - r >= 0.5f)
+        r += 1.0f;
+    if (r == 0.0f && signbit(a))
+        r = -0.0f;          /* Math.round(-0.4) is -0 */
+    return r;
+}
+
+static float js_math_signf(float a)
+{
+    if (isnan(a) || a == 0.0f)
+        return a;
+    return a < 0.0f ? -1.0f : 1.0f;
+}
+
+/* keep_int: floor/ceil/round/trunc of an int32 is that int32 */
+#define JS_MATH_F32_FUNC(name, ffunc, dfunc, keep_int)                        \
+static JSValue js_math_##name##_f32(JSContext *ctx, JSValueConst this_val,   \
+                                    int argc, JSValueConst *argv)            \
+{                                                                             \
+    JSValueConst v = argv[0];                                                 \
+    int tag = JS_VALUE_GET_TAG(v);                                            \
+    double d;                                                                 \
+    if (keep_int && tag == JS_TAG_INT)                                        \
+        return v;                                                             \
+    if (JS_TAG_IS_INT_OR_FLOAT32(tag))                                        \
+        return JS_NewFloat32(ctx, ffunc(JS_VALUE_GET_NUM_FLOAT32(v)));        \
+    if (JS_ToFloat64(ctx, &d, v))                                             \
+        return JS_EXCEPTION;                                                  \
+    return JS_NewFloat64(ctx, dfunc(d));                                      \
+}
+
+JS_MATH_F32_FUNC(floor, floorf, floor, 1)
+JS_MATH_F32_FUNC(ceil, ceilf, ceil, 1)
+JS_MATH_F32_FUNC(round, js_math_roundf, js_math_round, 1)
+JS_MATH_F32_FUNC(trunc, truncf, trunc, 1)
+JS_MATH_F32_FUNC(sign, js_math_signf, js_math_sign, 0)
+JS_MATH_F32_FUNC(sqrt, sqrtf, sqrt, 0)
+JS_MATH_F32_FUNC(sin, sinf, sin, 0)
+JS_MATH_F32_FUNC(cos, cosf, cos, 0)
+JS_MATH_F32_FUNC(tan, tanf, tan, 0)
+JS_MATH_F32_FUNC(asin, asinf, asin, 0)
+JS_MATH_F32_FUNC(acos, acosf, acos, 0)
+JS_MATH_F32_FUNC(atan, atanf, atan, 0)
+JS_MATH_F32_FUNC(exp, expf, exp, 0)
+JS_MATH_F32_FUNC(log, logf, log, 0)
+JS_MATH_F32_FUNC(log2, log2f, log2, 0)
+JS_MATH_F32_FUNC(log10, log10f, log10, 0)
+JS_MATH_F32_FUNC(cbrt, cbrtf, cbrt, 0)
+
+static JSValue js_math_abs_f32(JSContext *ctx, JSValueConst this_val,
+                               int argc, JSValueConst *argv)
+{
+    JSValueConst v = argv[0];
+    int tag = JS_VALUE_GET_TAG(v);
+    double d;
+    if (tag == JS_TAG_INT) {
+        int32_t i = JS_VALUE_GET_INT(v);
+        if (i >= 0)
+            return v;
+        if (i != INT32_MIN)
+            return JS_NewInt32(ctx, -i);
+    } else if (tag == JS_CUSTOM_TAG_FLOAT32) {
+        return JS_NewFloat32(ctx, fabsf(JS_VALUE_GET_FLOAT32(v)));
+    }
+    if (JS_ToFloat64(ctx, &d, v))
+        return JS_EXCEPTION;
+    return JS_NewFloat64(ctx, fabs(d));
+}
+
+static JSValue js_math_atan2_f32(JSContext *ctx, JSValueConst this_val,
+                                 int argc, JSValueConst *argv)
+{
+    double a, b;
+    if (JS_VALUE_IS_BOTH_INT_OR_FLOAT32(argv[0], argv[1]))
+        return JS_NewFloat32(ctx, atan2f(JS_VALUE_GET_NUM_FLOAT32(argv[0]),
+                                         JS_VALUE_GET_NUM_FLOAT32(argv[1])));
+    if (JS_ToFloat64(ctx, &a, argv[0]) || JS_ToFloat64(ctx, &b, argv[1]))
+        return JS_EXCEPTION;
+    return JS_NewFloat64(ctx, atan2(a, b));
+}
+
+static JSValue js_math_pow_f32(JSContext *ctx, JSValueConst this_val,
+                               int argc, JSValueConst *argv)
+{
+    double a, b;
+    if (JS_VALUE_IS_BOTH_INT_OR_FLOAT32(argv[0], argv[1])) {
+        float r = powf(JS_VALUE_GET_NUM_FLOAT32(argv[0]), JS_VALUE_GET_NUM_FLOAT32(argv[1]));
+        /* integral results past 2^24 are not exact in float32: let the
+           double path give the exact integer (e.g. 3 ** 20) */
+        if (!(fabsf(r) > 16777216.0f && r == truncf(r)))
+            return JS_NewFloat32(ctx, r);
+    }
+    if (JS_ToFloat64(ctx, &a, argv[0]) || JS_ToFloat64(ctx, &b, argv[1]))
+        return JS_EXCEPTION;
+    return JS_NewFloat64(ctx, js_pow(a, b));
+}
+
+static JSValue js_math_min_max_f32(JSContext *ctx, JSValueConst this_val,
+                                   int argc, JSValueConst *argv, int magic)
+{
+    int i, has_float32 = 0;
+    float r, a;
+
+    /* ints and float32 with at least one float32: compare on the FPU; all
+       ints, doubles, strings or objects go to the generic version */
+    for (i = 0; i < argc; i++) {
+        int tag = JS_VALUE_GET_TAG(argv[i]);
+        if (!JS_TAG_IS_INT_OR_FLOAT32(tag))
+            return js_math_min_max(ctx, this_val, argc, argv, magic);
+        has_float32 |= tag == JS_CUSTOM_TAG_FLOAT32;
+    }
+    if (!has_float32)
+        return js_math_min_max(ctx, this_val, argc, argv, magic);
+
+    r = JS_VALUE_GET_NUM_FLOAT32(argv[0]);
+    for (i = 1; i < argc && !isnan(r); i++) {
+        a = JS_VALUE_GET_NUM_FLOAT32(argv[i]);
+        if (isnan(a) || (magic ? a > r : a < r))
+            r = a;
+    }
+    return JS_NewFloat32(ctx, r);
+}
+
+static JSValue js_math_random_f32(JSContext *ctx, JSValueConst this_val,
+                                  int argc, JSValueConst *argv)
+{
+    /* 24 random bits: every float32 step in [0, 1) */
+    uint64_t v = xorshift64star(&ctx->random_state);
+    return JS_NewFloat32(ctx, (float)(uint32_t)(v >> 40) * (1.0f / 16777216.0f));
+}
+#endif
+
 static const JSCFunctionListEntry js_math_funcs[] = {
+#ifdef JS_FLOAT32_NUMBERS
+    JS_CFUNC_MAGIC_DEF("min", 2, js_math_min_max_f32, 0 ),
+    JS_CFUNC_MAGIC_DEF("max", 2, js_math_min_max_f32, 1 ),
+
+    JS_CFUNC_DEF("abs", 1, js_math_abs_f32 ),
+    JS_CFUNC_DEF("floor", 1, js_math_floor_f32 ),
+    JS_CFUNC_DEF("ceil", 1, js_math_ceil_f32 ),
+    JS_CFUNC_DEF("round", 1, js_math_round_f32 ),
+    JS_CFUNC_DEF("sqrt", 1, js_math_sqrt_f32 ),
+#else
     JS_CFUNC_MAGIC_DEF("min", 2, js_math_min_max, 0 ),
     JS_CFUNC_MAGIC_DEF("max", 2, js_math_min_max, 1 ),
 
@@ -42463,6 +43756,7 @@ static const JSCFunctionListEntry js_math_funcs[] = {
     JS_CFUNC_SPECIAL_DEF("ceil", 1, d_d, ceil ),
     JS_CFUNC_SPECIAL_DEF("round", 1, d_d, js_math_round ),
     JS_CFUNC_SPECIAL_DEF("sqrt", 1, d_d, sqrt ),
+#endif
 
     JS_CFUNC_SPECIAL_DEF("absf", 1, f_f, fabsf ),
     JS_CFUNC_SPECIAL_DEF("floorf", 1, f_f, floorf ),
@@ -42470,6 +43764,18 @@ static const JSCFunctionListEntry js_math_funcs[] = {
     JS_CFUNC_SPECIAL_DEF("roundf", 1, f_f, roundf ),
     JS_CFUNC_SPECIAL_DEF("sqrtf", 1, f_f, sqrtf ),
 
+#ifdef JS_FLOAT32_NUMBERS
+    JS_CFUNC_DEF("acos", 1, js_math_acos_f32 ),
+    JS_CFUNC_DEF("asin", 1, js_math_asin_f32 ),
+    JS_CFUNC_DEF("atan", 1, js_math_atan_f32 ),
+    JS_CFUNC_DEF("atan2", 2, js_math_atan2_f32 ),
+    JS_CFUNC_DEF("cos", 1, js_math_cos_f32 ),
+    JS_CFUNC_DEF("exp", 1, js_math_exp_f32 ),
+    JS_CFUNC_DEF("log", 1, js_math_log_f32 ),
+    JS_CFUNC_DEF("pow", 2, js_math_pow_f32 ),
+    JS_CFUNC_DEF("sin", 1, js_math_sin_f32 ),
+    JS_CFUNC_DEF("tan", 1, js_math_tan_f32 ),
+#else
     JS_CFUNC_SPECIAL_DEF("acos", 1, d_d, acos ),
     JS_CFUNC_SPECIAL_DEF("asin", 1, d_d, asin ),
     JS_CFUNC_SPECIAL_DEF("atan", 1, d_d, atan ),
@@ -42480,6 +43786,7 @@ static const JSCFunctionListEntry js_math_funcs[] = {
     JS_CFUNC_SPECIAL_DEF("pow", 2, d_d_d, js_pow ),
     JS_CFUNC_SPECIAL_DEF("sin", 1, d_d, sin ),
     JS_CFUNC_SPECIAL_DEF("tan", 1, d_d, tan ),
+#endif
 
     JS_CFUNC_SPECIAL_DEF("acosf", 1, f_f, acosf ),
     JS_CFUNC_SPECIAL_DEF("asinf", 1, f_f, asinf ),
@@ -42492,8 +43799,13 @@ static const JSCFunctionListEntry js_math_funcs[] = {
     JS_CFUNC_SPECIAL_DEF("sinf", 1, f_f, sinf ),
     JS_CFUNC_SPECIAL_DEF("tanf", 1, f_f, tanf ),
     /* ES6 */
+#ifdef JS_FLOAT32_NUMBERS
+    JS_CFUNC_DEF("trunc", 1, js_math_trunc_f32 ),
+    JS_CFUNC_DEF("sign", 1, js_math_sign_f32 ),
+#else
     JS_CFUNC_SPECIAL_DEF("trunc", 1, d_d, trunc ),
     JS_CFUNC_SPECIAL_DEF("sign", 1, d_d, js_math_sign ),
+#endif
     JS_CFUNC_SPECIAL_DEF("cosh", 1, d_d, cosh ),
     JS_CFUNC_SPECIAL_DEF("sinh", 1, d_d, sinh ),
     JS_CFUNC_SPECIAL_DEF("tanh", 1, d_d, tanh ),
@@ -42502,9 +43814,15 @@ static const JSCFunctionListEntry js_math_funcs[] = {
     JS_CFUNC_SPECIAL_DEF("atanh", 1, d_d, atanh ),
     JS_CFUNC_SPECIAL_DEF("expm1", 1, d_d, expm1 ),
     JS_CFUNC_SPECIAL_DEF("log1p", 1, d_d, log1p ),
+#ifdef JS_FLOAT32_NUMBERS
+    JS_CFUNC_DEF("log2", 1, js_math_log2_f32 ),
+    JS_CFUNC_DEF("log10", 1, js_math_log10_f32 ),
+    JS_CFUNC_DEF("cbrt", 1, js_math_cbrt_f32 ),
+#else
     JS_CFUNC_SPECIAL_DEF("log2", 1, d_d, log2 ),
     JS_CFUNC_SPECIAL_DEF("log10", 1, d_d, log10 ),
     JS_CFUNC_SPECIAL_DEF("cbrt", 1, d_d, cbrt ),
+#endif
 
     JS_CFUNC_SPECIAL_DEF("truncf", 1, f_f, truncf ),
     //JS_CFUNC_SPECIAL_DEF("signf", 1, f_f, js_math_sign ),
@@ -42521,7 +43839,11 @@ static const JSCFunctionListEntry js_math_funcs[] = {
     JS_CFUNC_SPECIAL_DEF("cbrtf", 1, f_f, cbrtf ),
 
     JS_CFUNC_DEF("hypot", 2, js_math_hypot ),
+#ifdef JS_FLOAT32_NUMBERS
+    JS_CFUNC_DEF("random", 0, js_math_random_f32 ),
+#else
     JS_CFUNC_DEF("random", 0, js_math_random ),
+#endif
     JS_CFUNC_SPECIAL_DEF("fround", 1, f_d, js_math_fround ),
     JS_CFUNC_DEF("imul", 2, js_math_imul ),
     JS_CFUNC_DEF("clz32", 1, js_math_clz32 ),
@@ -51751,7 +53073,16 @@ static JSValue js_array_buffer_constructor3(JSContext *ctx,
             memset(abuf->data, 0, len);
         } else {
             /* the allocation must be done after the object creation */
+#ifdef PS2
+            /* ArrayBuffer memory is handed to native code (texture pixels,
+               vertex buffers) that may keep or free() it: never a pool
+               block, always the system heap */
+            js_pool_bypass++;
             abuf->data = js_mallocz(ctx, max_int(len, 1));
+            js_pool_bypass--;
+#else
+            abuf->data = js_mallocz(ctx, max_int(len, 1));
+#endif
             if (!abuf->data)
                 goto fail;
         }

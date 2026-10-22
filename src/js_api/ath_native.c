@@ -252,9 +252,13 @@ static JSValue js_native_compile(JSContext *ctx, JSValue this_val,
 static JSValue js_native_call_wrapper(JSContext *ctx, JSValueConst this_val,
                                            int argc, JSValueConst *argv,
                                            int magic, JSValue *func_data) {
-    /* Get native function handle from closure data */
+    /* Get native function handle from closure data (an int: EE addresses
+       are below 2^31) */
     uint32_t handle;
-    JS_ToUint32(ctx, &handle, func_data[0]);
+    if (JS_VALUE_GET_TAG(func_data[0]) == JS_TAG_INT)
+        handle = (uint32_t)JS_VALUE_GET_INT(func_data[0]);
+    else
+        JS_ToUint32(ctx, &handle, func_data[0]);
     
     NativeFunc *func = (NativeFunc *)(uintptr_t)handle;
     
@@ -471,29 +475,34 @@ static int js_struct_array_get_own_property(JSContext *ctx,
                                              JSValueConst obj, JSAtom prop) {
     NativeStructArrayView *view = JS_GetOpaque(obj, js_struct_array_class_id);
     if (!view || !view->inst || !view->field) return 0;
-    
-    /* Check if prop is a numeric index */
-    const char *prop_str = JS_AtomToCString(ctx, prop);
-    if (!prop_str) return 0;
-    
-    /* Check for "length" property */
-    if (strcmp(prop_str, "length") == 0) {
-        JS_FreeCString(ctx, prop_str);
-        if (desc) {
-            desc->flags = JS_PROP_ENUMERABLE;
-            desc->value = JS_NewInt32(ctx, view->field->array_count);
-            desc->getter = JS_UNDEFINED;
-            desc->setter = JS_UNDEFINED;
+
+    long idx;
+    uint32_t uidx;
+    if (JS_AtomGetIndex(ctx, prop, &uidx)) {
+        /* arr[i]: integer key, no string round trip */
+        idx = (long)uidx;
+    } else {
+        const char *prop_str = JS_AtomToCString(ctx, prop);
+        if (!prop_str) return 0;
+
+        /* Check for "length" property */
+        if (strcmp(prop_str, "length") == 0) {
+            JS_FreeCString(ctx, prop_str);
+            if (desc) {
+                desc->flags = JS_PROP_ENUMERABLE;
+                desc->value = JS_NewInt32(ctx, view->field->array_count);
+                desc->getter = JS_UNDEFINED;
+                desc->setter = JS_UNDEFINED;
+            }
+            return 1;
         }
-        return 1;
+
+        /* Try to parse as integer index */
+        char *endptr;
+        idx = strtol(prop_str, &endptr, 10);
+        JS_FreeCString(ctx, prop_str);
+        if (*endptr != '\0') return 0;  /* Not a valid number */
     }
-    
-    /* Try to parse as integer index */
-    char *endptr;
-    long idx = strtol(prop_str, &endptr, 10);
-    JS_FreeCString(ctx, prop_str);
-    
-    if (*endptr != '\0') return 0;  /* Not a valid number */
     if (idx < 0 || idx >= view->field->array_count) return 0;  /* Out of bounds */
     
     /* Calculate pointer to element */
@@ -514,7 +523,7 @@ static int js_struct_array_get_own_property(JSContext *ctx,
                 desc->value = JS_NewUint32(ctx, *(uint32_t *)ptr);
                 break;
             case NATIVE_TYPE_FLOAT32:
-                desc->value = JS_NewFloat64(ctx, *(float *)ptr);
+                desc->value = JS_NewFloat32(ctx, *(float *)ptr);
                 break;
             case NATIVE_TYPE_INT64:
                 desc->value = JS_NewFloat64(ctx, (double)*(int64_t *)ptr);
@@ -537,14 +546,19 @@ static int js_struct_array_set_property(JSContext *ctx, JSValueConst obj,
     if (!view || !view->inst || !view->field) return -1;
     
     /* Parse index */
-    const char *prop_str = JS_AtomToCString(ctx, prop);
-    if (!prop_str) return -1;
-    
-    char *endptr;
-    long idx = strtol(prop_str, &endptr, 10);
-    JS_FreeCString(ctx, prop_str);
-    
-    if (*endptr != '\0') return -1;  /* Not a valid number */
+    long idx;
+    uint32_t uidx;
+    if (JS_AtomGetIndex(ctx, prop, &uidx)) {
+        idx = (long)uidx;
+    } else {
+        const char *prop_str = JS_AtomToCString(ctx, prop);
+        if (!prop_str) return -1;
+
+        char *endptr;
+        idx = strtol(prop_str, &endptr, 10);
+        JS_FreeCString(ctx, prop_str);
+        if (*endptr != '\0') return -1;  /* Not a valid number */
+    }
     if (idx < 0 || idx >= view->field->array_count) {
         JS_ThrowRangeError(ctx, "Array index %ld out of bounds (0-%d)", 
                           idx, view->field->array_count - 1);
@@ -570,9 +584,9 @@ static int js_struct_array_set_property(JSContext *ctx, JSValueConst obj,
             break;
         }
         case NATIVE_TYPE_FLOAT32: {
-            double d;
-            if (JS_ToFloat64(ctx, &d, value) < 0) return -1;
-            *(float *)ptr = (float)d;
+            float f;
+            if (JS_ToFloat32(ctx, &f, value) < 0) return -1;
+            *(float *)ptr = f;
             break;
         }
         case NATIVE_TYPE_INT64: {
@@ -672,7 +686,7 @@ static JSValue js_struct_get(JSContext *ctx, JSValueConst this_val, int magic) {
         case NATIVE_TYPE_UINT32:
             return JS_NewUint32(ctx, *(uint32_t *)ptr);
         case NATIVE_TYPE_FLOAT32:
-            return JS_NewFloat64(ctx, *(float *)ptr);
+            return JS_NewFloat32(ctx, *(float *)ptr);
         case NATIVE_TYPE_INT64:
             return JS_NewFloat64(ctx, (double)*(int64_t *)ptr);
         case NATIVE_TYPE_UINT64:
@@ -706,9 +720,9 @@ static JSValue js_struct_set(JSContext *ctx, JSValueConst this_val, JSValueConst
             break;
         }
         case NATIVE_TYPE_FLOAT32: {
-            double d;
-            if (JS_ToFloat64(ctx, &d, val) < 0) return JS_EXCEPTION;
-            *(float *)ptr = (float)d;
+            float f;
+            if (JS_ToFloat32(ctx, &f, val) < 0) return JS_EXCEPTION;
+            *(float *)ptr = f;
             break;
         }
         case NATIVE_TYPE_INT64: {
@@ -749,8 +763,61 @@ JSClassID js_struct_instance_array_class_id = 0;
 static void js_struct_instance_array_finalizer(JSRuntime *rt, JSValue val) {
     NativeStructInstance *inst = JS_GetOpaque(val, js_struct_instance_array_class_id);
     if (inst) {
+        JSValue *views = (JSValue *)(uintptr_t)inst->js_view_cache;
+        if (views) {
+            for (uint32_t i = 0; i < inst->count; i++)
+                JS_FreeValueRT(rt, views[i]);
+            js_free_rt(rt, views);
+        }
         native_struct_free(inst);  /* frees the whole contiguous block */
     }
+}
+
+/* the element views point back at the array (they keep its buffer alive),
+   so the cycle collector has to see them */
+static void js_struct_instance_array_mark(JSRuntime *rt, JSValueConst val,
+                                          JS_MarkFunc *mark_func) {
+    NativeStructInstance *inst = JS_GetOpaque(val, js_struct_instance_array_class_id);
+    JSValue *views = inst ? (JSValue *)(uintptr_t)inst->js_view_cache : NULL;
+    if (views) {
+        for (uint32_t i = 0; i < inst->count; i++)
+            JS_MarkValue(rt, views[i], mark_func);
+    }
+}
+
+static JSValue js_struct_make_element_view(JSContext *ctx, JSValueConst parent,
+                                            NativeStructDef *def, void *elem_data);
+
+/* The element view of arr[idx] (a new reference), made on first use and
+ * kept: each view costs ~13 allocations (object + one getter + one setter
+ * closure per field + one atom per field) - fine for an occasional read,
+ * but arr[i].field from plain JS (as opposed to inside Native.compile,
+ * where it's just pointer arithmetic - see IR_ARRAY_ELEM_ADDR) runs at
+ * per-frame game-loop volume. The views are kept in a C array (zeroed:
+ * int 0 = not made yet) marked by js_struct_instance_array_mark. */
+static JSValue js_struct_instance_array_view(JSContext *ctx, JSValueConst obj,
+                                             NativeStructInstance *arr_inst, uint32_t idx) {
+    JSValue *views = (JSValue *)(uintptr_t)arr_inst->js_view_cache;
+    if (!views) {
+        views = js_mallocz(ctx, sizeof(JSValue) * arr_inst->count);
+        if (!views) return JS_EXCEPTION;
+        arr_inst->js_view_cache = (uintptr_t)views;
+    }
+    if (!JS_IsObject(views[idx])) {
+        void *elem_data = (uint8_t *)arr_inst->data + (size_t)idx * arr_inst->def->size;
+        JSValue view = js_struct_make_element_view(ctx, obj, arr_inst->def, elem_data);
+        if (JS_IsException(view)) return view;
+        views[idx] = view;
+    }
+    return JS_DupValue(ctx, views[idx]);
+}
+
+/* arr[i] from the interpreter (JSClassExoticMethods.get_index) */
+static JSValue js_struct_instance_array_get_index(JSContext *ctx, JSValueConst obj, uint32_t idx) {
+    NativeStructInstance *arr_inst = JS_GetOpaque(obj, js_struct_instance_array_class_id);
+    if (!arr_inst || !arr_inst->def || !arr_inst->data || idx >= arr_inst->count)
+        return JS_UNINITIALIZED;
+    return js_struct_instance_array_view(ctx, obj, arr_inst, idx);
 }
 
 /* Build a live view object for element `elem_data` of `def`-typed elements,
@@ -796,52 +863,36 @@ static int js_struct_instance_array_get_own_property(JSContext *ctx,
     NativeStructInstance *arr_inst = JS_GetOpaque(obj, js_struct_instance_array_class_id);
     if (!arr_inst || !arr_inst->def || !arr_inst->data) return 0;
 
-    const char *prop_str = JS_AtomToCString(ctx, prop);
-    if (!prop_str) return 0;
+    long idx;
+    uint32_t uidx;
+    if (JS_AtomGetIndex(ctx, prop, &uidx)) {
+        /* arr[i]: integer key, no string round trip */
+        idx = (long)uidx;
+    } else {
+        const char *prop_str = JS_AtomToCString(ctx, prop);
+        if (!prop_str) return 0;
 
-    if (strcmp(prop_str, "length") == 0) {
-        JS_FreeCString(ctx, prop_str);
-        if (desc) {
-            desc->flags = JS_PROP_ENUMERABLE;
-            desc->value = JS_NewInt32(ctx, (int32_t)arr_inst->count);
-            desc->getter = JS_UNDEFINED;
-            desc->setter = JS_UNDEFINED;
+        if (strcmp(prop_str, "length") == 0) {
+            JS_FreeCString(ctx, prop_str);
+            if (desc) {
+                desc->flags = JS_PROP_ENUMERABLE;
+                desc->value = JS_NewInt32(ctx, (int32_t)arr_inst->count);
+                desc->getter = JS_UNDEFINED;
+                desc->setter = JS_UNDEFINED;
+            }
+            return 1;
         }
-        return 1;
+
+        char *endptr;
+        idx = strtol(prop_str, &endptr, 10);
+        JS_FreeCString(ctx, prop_str);
+        if (*endptr != '\0') return 0;  /* not a numeric index */
     }
-
-    char *endptr;
-    long idx = strtol(prop_str, &endptr, 10);
-    JS_FreeCString(ctx, prop_str);
-
-    if (*endptr != '\0') return 0;  /* not a numeric index */
     if (idx < 0 || (uint32_t)idx >= arr_inst->count) return 0;  /* out of bounds */
 
     if (desc) {
-        /* Reuse a cached element view instead of allocating a fresh one on
-         * every access. Each view costs ~13 allocations (object + one getter
-         * + one setter closure per field + one atom per field) - fine for an
-         * occasional read, but arr[i].field from plain JS (as opposed to
-         * inside Native.compile, where it's just pointer arithmetic - see
-         * IR_ARRAY_ELEM_ADDR) at real per-frame game-loop volume turned into
-         * a real allocator/GC bottleneck.
-         *
-         * Cached under a plain (non-exotic) property on the array wrapper,
-         * so it's resolved by normal property lookup (find_own_property in
-         * quickjs.c) before this exotic get_own_property is ever consulted -
-         * no risk of re-entering this function for "__view_cache" itself. */
-        JSValue cache = JS_GetPropertyStr(ctx, obj, "__view_cache");
-        if (JS_IsUndefined(cache)) {
-            cache = JS_NewArray(ctx);
-            JS_DefinePropertyValueStr(ctx, obj, "__view_cache", JS_DupValue(ctx, cache), 0);
-        }
-        JSValue view = JS_GetPropertyUint32(ctx, cache, (uint32_t)idx);
-        if (JS_IsUndefined(view)) {
-            void *elem_data = (uint8_t *)arr_inst->data + (size_t)idx * arr_inst->def->size;
-            view = js_struct_make_element_view(ctx, obj, arr_inst->def, elem_data);
-            JS_SetPropertyUint32(ctx, cache, (uint32_t)idx, JS_DupValue(ctx, view));
-        }
-        JS_FreeValue(ctx, cache);
+        JSValue view = js_struct_instance_array_view(ctx, obj, arr_inst, (uint32_t)idx);
+        if (JS_IsException(view)) return -1;
 
         desc->flags = JS_PROP_ENUMERABLE;
         desc->getter = JS_UNDEFINED;
@@ -853,11 +904,13 @@ static int js_struct_instance_array_get_own_property(JSContext *ctx,
 
 static const JSClassExoticMethods js_struct_instance_array_exotic = {
     .get_own_property = js_struct_instance_array_get_own_property,
+    .get_index = js_struct_instance_array_get_index,
 };
 
 static JSClassDef js_struct_instance_array_class = {
     "NativeStructInstanceArray",
     .finalizer = js_struct_instance_array_finalizer,
+    .gc_mark = js_struct_instance_array_mark,
     .exotic = &js_struct_instance_array_exotic,
 };
 
@@ -1323,7 +1376,7 @@ static JSValue js_native_dyn_array_get(JSContext *ctx, JSValue this_val,
         case NATIVE_TYPE_UINT32:
             return JS_NewUint32(ctx, ((uint32_t *)arr->data)[index]);
         case NATIVE_TYPE_FLOAT32:
-            return JS_NewFloat64(ctx, (double)((float *)arr->data)[index]);
+            return JS_NewFloat32(ctx, ((float *)arr->data)[index]);
         default:
             return JS_ThrowTypeError(ctx, "Unsupported element type");
     }

@@ -991,6 +991,16 @@ static int l_ro_set_rotation(lua_State *L)
     return 0;
 }
 
+static int l_ro_set_scale(lua_State *L)
+{
+    athena_object_data *obj = ro_data(athena_lua_check_render_object(L, 1));
+    obj->scale[0] = athena_lua_checkfloat(L, 2);
+    obj->scale[1] = athena_lua_checkfloat(L, 3);
+    obj->scale[2] = athena_lua_checkfloat(L, 4);
+    update_object_space(obj);
+    return 0;
+}
+
 #define RO_PROP(name) { #name, get_ro_##name, set_ro_##name }
 
 static const athena_lua_prop ro_props[] = {
@@ -1003,7 +1013,7 @@ static const luaL_Reg ro_methods[] = {
     { "free", l_ro_free }, { "dispose", l_ro_free },
     { "getBoneTransform", l_ro_get_bone_transform },
     { "playAnim", l_ro_play_anim }, { "isPlayingAnim", l_ro_is_playing_anim },
-    { "setPosition", l_ro_set_position }, { "setRotation", l_ro_set_rotation },
+    { "setPosition", l_ro_set_position }, { "setRotation", l_ro_set_rotation }, { "setScale", l_ro_set_scale },
 #ifdef ATHENA_PHYSICS
     { "setCollision", l_ro_set_collision }, { "setPhysics", l_ro_set_physics },
 #endif

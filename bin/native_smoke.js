@@ -1040,7 +1040,9 @@ const dbl = compile("helper double", { args: ["int"], returns: "int" }, function
     // precision and an int+int overflow stopped widening to double. Note the
     // file carries two copies of that function - only the non-CONFIG_BIGNUM one
     // is live now that bignum is gone.
-    eq("14.10 [reg] int + double keeps precision", 1 + 0.1, 1.1, 1e-12);
+    // Since the float32 number policy, 0.1 is a float32 (1 + 0.1 runs on the
+    // FPU); doubles remain for integers past int32, which must stay exact.
+    eq("14.10 [reg] int + double keeps precision", 1 + 4294967296, 4294967297, 0);
     eq("14.11 [reg] int overflow widens to an exact double", 2147483647 + 1, 2147483648, 0);
 }
 

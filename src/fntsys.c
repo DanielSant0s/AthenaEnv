@@ -524,6 +524,25 @@ void fntRenderGlyph(fnt_glyph_cache_entry_t *glyph, owl_packet *packet, int pen_
 }
 
 #ifndef __RTL  
+/* Patches the tags of a glyph batch with the number of glyphs it really
+   holds (the packet is sized for the most it can take). */
+static void fntCloseBatch(owl_qword *last_cnt, owl_qword *last_direct, owl_qword *last_prim,
+                          owl_qword *before_first_draw, owl_qword *after_draw, int texture_id)
+{
+    int last_size = (((uint32_t)after_draw)-((uint32_t)before_first_draw))/16;
+
+    last_cnt->dword[0] = DMA_TAG((texture_id != -1? 11 : 7)+last_size, 0, DMA_CNT, 0, 0, 0);
+    last_direct->sword[3] = VIF_CODE(6+last_size, 0, VIF_DIRECT, 0);
+    /* same GIFTAG as the batch opens with: REGLIST of UV + XYZ2, one qword
+       per loop (two per glyph) */
+    last_prim->dword[0] = VU_GS_GIFTAG(last_size, 1, NO_CUSTOM_DATA, 0, 0, 1, 2);
+}
+
+/* Glyphs per batch: each takes 2 qwords of the packet, which has to fit in
+   half of the OWL packet buffer (4096 qwords). Longer strings (an error
+   message with a long backtrace) take several batches. */
+#define FNT_MAX_BATCH_GLYPHS 1024
+
 int fntRenderString(int id, int x, int y, short aligned, size_t width, size_t height, const char *string, float scale, u64 colour)
 {
     // wait for font lock to unlock
@@ -577,6 +596,8 @@ int fntRenderString(int id, int x, int y, short aligned, size_t width, size_t he
 
     bool started_rendering = false;
 
+    int batch_left = 0;
+
     for (; *text_to_render; ++text_to_render) {
         if (utf8Decode(&state, &codepoint, *text_to_render)) // accumulate the codepoint value 
             continue;
@@ -615,27 +636,16 @@ int fntRenderString(int id, int x, int y, short aligned, size_t width, size_t he
         }
 
         if (glyph->allocation) {
-            if (tex != &glyph->atlas->surface || !glyph->atlas->surface.Vram) {
+            if (tex != &glyph->atlas->surface || !glyph->atlas->surface.Vram || batch_left == 0) {
                 tex = &glyph->atlas->surface;
                 
-                if (started_rendering) {
-                    int last_size = (((uint32_t)after_draw)-((uint32_t)before_first_draw))/16;
-
-                    last_cnt->dword[0] = DMA_TAG((texture_id != -1? 11 : 7)+last_size, 0, DMA_CNT, 0, 0, 0);
-            
-                    last_direct->sword[3] = VIF_CODE(6+last_size, 0, VIF_DIRECT, 0);
-
-                    last_prim->dword[0] = VU_GS_GIFTAG(last_size/2, 
-				                            			1, NO_CUSTOM_DATA, 1, 
-				                            			VU_GS_PRIM(GS_PRIM_PRIM_SPRITE, 
-				                            					   0, 1, 
-				                            					   gsGlobal->PrimFogEnable, 
-				                            					   gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable, 1, gsGlobal->PrimContext, 0),
-    			                            			1, 4);
-
-                } 
+                if (started_rendering)
+                    fntCloseBatch(last_cnt, last_direct, last_prim, before_first_draw, after_draw, texture_id);
 
                 text_size = strlen(text_to_render)-count_spaces(text_to_render, chars_to_count)-count_nonascii(text_to_render);
+                if (text_size > FNT_MAX_BATCH_GLYPHS || text_size < 1)
+                    text_size = FNT_MAX_BATCH_GLYPHS;
+                batch_left = text_size;
                 int text_vert_size = (text_size*2);
 
                 texture_id = texture_manager_bind(gsGlobal, tex, true);
@@ -716,6 +726,7 @@ int fntRenderString(int id, int x, int y, short aligned, size_t width, size_t he
             }                 
 
             fntRenderGlyph(glyph, packet, pen_x, y, scale);
+            batch_left--;
             
             after_draw = packet->ptr;
 
@@ -724,6 +735,9 @@ int fntRenderString(int id, int x, int y, short aligned, size_t width, size_t he
 
         pen_x += ((int)(glyph->shx*scale) >> 6);
     }
+
+    if (started_rendering)
+        fntCloseBatch(last_cnt, last_direct, last_prim, before_first_draw, after_draw, texture_id);
 
     return pen_x;
 }

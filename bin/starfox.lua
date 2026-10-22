@@ -1525,7 +1525,7 @@ end
 -- ---------------------------------------------------------------------------
 -- Render helpers
 -- ---------------------------------------------------------------------------
-local function setScale(obj, x, y, z) obj.scale = { x = x, y = y, z = z } end
+local function setScale(obj, x, y, z) obj:setScale(x, y, z) end
 
 local function syncScene(camX, camY, camZ)
   for _, s in ipairs(stars) do

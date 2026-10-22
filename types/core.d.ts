@@ -509,6 +509,10 @@ declare namespace System {
 
     /** Only meaningful on SCPH-500XX and later models. */
     function getTemperature(): number;
+    /** Start the statistical PC profiler at `hz` samples per second (default 1000). @returns true if started. */
+    function profileStart(hz?: number): boolean;
+    /** Stop the profiler and write the raw u32 PCs to `path` (see scripts/profile_report.py). @returns the sample count, -1 on error. */
+    function profileStop(path?: string): number;
     function getMCInfo(slot?: number): MemoryCardInfo;
     function getCPUInfo(): CPUInfo;
     function getGPUInfo(): GPUInfo;

@@ -9,6 +9,7 @@
 #include <dbgprintf.h>
 
 #include <ath_env.h>
+#include <athena/sampler.h>
 #include <system.h>
 #include <memory.h>
 #include <def_mods.h>
@@ -658,6 +659,21 @@ static JSValue js_lz4_decompress(JSContext *ctx, JSValue this_val, int argc, JSV
 	return JS_NewArrayBuffer(ctx, dst, (size_t)dsize, js_free_malloc_buf, NULL, false);
 }
 
+static JSValue js_profile_start(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
+	int hz = 1000;
+	if (argc > 0)
+		JS_ToInt32(ctx, &hz, argv[0]);
+	return JS_NewBool(ctx, athena_sampler_start(hz) == 0);
+}
+
+static JSValue js_profile_stop(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
+	const char *path = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
+	int count = athena_sampler_stop(path);
+	if (path)
+		JS_FreeCString(ctx, path);
+	return JS_NewInt32(ctx, count);
+}
+
 static JSValue js_gettemps(JSContext *ctx, JSValue this_val, int argc, JSValueConst *argv) {
 	// Based on PS2Ident libxcdvd from SP193
 	unsigned char in_buffer[1], out_buffer[16];
@@ -887,6 +903,8 @@ static const JSCFunctionListEntry system_funcs[] = {
 	JS_CFUNC_DEF( "lz4Compress",              1,        js_lz4_compress          ),
 	JS_CFUNC_DEF( "lz4Decompress",            2,        js_lz4_decompress        ),
 	JS_CFUNC_DEF( "getTemperature",      	  0,   		js_gettemps	 			 ),
+	JS_CFUNC_DEF( "profileStart",        1,       js_profile_start ),
+	JS_CFUNC_DEF( "profileStop",         1,       js_profile_stop ),
 
 	JS_CFUNC_DEF( "nativeCall",      	      3, 		js_call_native		 	 ),
 

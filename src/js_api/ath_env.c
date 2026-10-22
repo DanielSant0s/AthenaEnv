@@ -228,7 +228,10 @@ const char* run_script(const char* script, bool isBuffer)
 			strcat(error_buf, "\n");
 			strcat(error_buf, stack);
 		}
-		
+		/* also on the console: tearing the VM down can abort (leak asserts)
+		   before the error screen gets to show it */
+		printf("%s\n", error_buf);
+
 		destroy_vm(ctx);
 
 		return error_buf; 

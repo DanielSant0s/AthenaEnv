@@ -358,6 +358,19 @@ DEF(   is_undefined, 1, 1, 1, none)
 DEF(        is_null, 1, 1, 1, none)
 DEF(typeof_is_undefined, 1, 1, 1, none)
 DEF( typeof_is_function, 1, 1, 1, none)
+
+/* Superinstructions (see fuse_superinstructions() in quickjs.c). One is
+   written over the opcode of the first instruction of a sequence; the rest
+   of the sequence is left in place, so size and format are those of that
+   first instruction, and code that walks or jumps into the bytecode sees
+   valid instructions. */
+DEF( get_ref_length, 3, 0, 1, var_ref)   /* get_var_ref_check + get_length */
+DEF(get_ref_loc_array_el, 3, 0, 1, var_ref) /* get_var_ref_check + get_loc0..3/get_loc8 + get_array_el */
+DEF( get_loc0_field, 1, 0, 1, none_loc)  /* get_loc0 + get_field */
+DEF( get_loc1_field, 1, 0, 1, none_loc)
+DEF( get_loc2_field, 1, 0, 1, none_loc)
+DEF( get_loc3_field, 1, 0, 1, none_loc)
+DEF( get_loc8_field, 2, 0, 1, loc8)      /* get_loc8 + get_field */
 #endif
 
 #undef DEF

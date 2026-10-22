@@ -46,6 +46,12 @@ extern "C" {
 
 #define JS_BOOL int
 
+/* PS2: non-integral numbers are float32 by default (see JS_NewFloat64).
+ * Build with -DJS_NO_FLOAT32_NUMBERS for standard double semantics. */
+#if defined(PS2) && !defined(JS_NO_FLOAT32_NUMBERS)
+#define JS_FLOAT32_NUMBERS
+#endif
+
 typedef struct JSRuntime JSRuntime;
 typedef struct JSContext JSContext;
 typedef struct JSObject JSObject;
@@ -289,11 +295,25 @@ static inline JS_BOOL JS_VALUE_IS_NAN(JSValue v)
 
 #define JS_VALUE_IS_BOTH_INT(v1, v2) ((JS_VALUE_GET_TAG(v1) | JS_VALUE_GET_TAG(v2)) == 0)
 #define JS_VALUE_IS_BOTH_FLOAT(v1, v2) (JS_TAG_IS_FLOAT64(JS_VALUE_GET_TAG(v1)) && JS_TAG_IS_FLOAT64(JS_VALUE_GET_TAG(v2)))
-#define JS_VALUE_IS_BOTH_FLOAT32(v1, v2) (JS_TAG_IS_FLOAT32(JS_VALUE_GET_TAG(v1)) && JS_TAG_IS_FLOAT32(JS_VALUE_GET_TAG(v2)))
+/* one test and one branch: the hot case of float arithmetic */
+#define JS_VALUE_IS_BOTH_FLOAT32(v1, v2) \
+    (((JS_VALUE_GET_TAG(v1) ^ JS_CUSTOM_TAG_FLOAT32) | (JS_VALUE_GET_TAG(v2) ^ JS_CUSTOM_TAG_FLOAT32)) == 0)
+
+/* int32 or float32: numbers the FPU handles natively (mixed int/float32
+ * arithmetic runs in single precision, like Lua with LUA_32BITS) */
+#define JS_TAG_IS_INT_OR_FLOAT32(tag) ((tag) == JS_TAG_INT || (tag) == JS_CUSTOM_TAG_FLOAT32)
+#define JS_VALUE_IS_BOTH_INT_OR_FLOAT32(v1, v2) \
+    (JS_TAG_IS_INT_OR_FLOAT32(JS_VALUE_GET_TAG(v1)) && JS_TAG_IS_INT_OR_FLOAT32(JS_VALUE_GET_TAG(v2)))
+#define JS_VALUE_GET_NUM_FLOAT32(v) \
+    (JS_VALUE_GET_TAG(v) == JS_TAG_INT ? (float)JS_VALUE_GET_INT(v) : JS_VALUE_GET_FLOAT32(v))
 
 #define JS_VALUE_GET_OBJ(v) ((JSObject *)JS_VALUE_GET_PTR(v))
 #define JS_VALUE_GET_STRING(v) ((JSString *)JS_VALUE_GET_PTR(v))
-#define JS_VALUE_HAS_REF_COUNT(v) ((unsigned)JS_VALUE_GET_TAG(v) >= (unsigned)JS_TAG_FIRST)
+/* tags JS_TAG_FIRST..-1. Written as a range check from 0: on MIPS it is
+   addiu + sltiu, where `(unsigned)tag >= (unsigned)JS_TAG_FIRST` had the
+   compiler rebuild the 0xfffffff5 constant in every Dup/Free */
+#define JS_VALUE_HAS_REF_COUNT(v) \
+    ((uint32_t)(JS_VALUE_GET_TAG(v) - JS_TAG_FIRST) < (uint32_t)(-JS_TAG_FIRST))
 
 /* special values */
 #define JS_NULL      JS_MKVAL(JS_TAG_NULL, 0)
@@ -479,6 +499,9 @@ void JS_FreeAtomRT(JSRuntime *rt, JSAtom v);
 JSValue JS_AtomToValue(JSContext *ctx, JSAtom atom);
 JSValue JS_AtomToString(JSContext *ctx, JSAtom atom);
 const char *JS_AtomToCString(JSContext *ctx, JSAtom atom);
+/* TRUE with *pidx set when atom is an integer key (obj[3]), without going
+   through its string form */
+JS_BOOL JS_AtomGetIndex(JSContext *ctx, JSAtom atom, uint32_t *pidx);
 JSAtom JS_ValueToAtom(JSContext *ctx, JSValueConst val);
 
 /* object class support */
@@ -523,6 +546,10 @@ typedef struct JSClassExoticMethods {
     /* return < 0 if exception or TRUE/FALSE */
     int (*set_property)(JSContext *ctx, JSValueConst obj, JSAtom atom,
                         JSValueConst value, JSValueConst receiver, int flags);
+    /* Optional fast path for obj[i] read by the interpreter with an integer
+       i >= 0: return the value (a new reference), or JS_UNINITIALIZED to
+       take the normal property lookup. */
+    JSValue (*get_index)(JSContext *ctx, JSValueConst obj, uint32_t idx);
 } JSClassExoticMethods;
 
 typedef void JSClassFinalizer(JSRuntime *rt, JSValue val);
@@ -594,6 +621,14 @@ static js_force_inline JSValue JS_NewUint32(JSContext *ctx, uint32_t val)
 JSValue JS_NewBigInt64(JSContext *ctx, int64_t v);
 JSValue JS_NewBigUint64(JSContext *ctx, uint64_t v);
 
+#ifdef JS_FLOAT32_NUMBERS
+/* Non-integral numbers are float32: the EE FPU is single precision and
+ * doubles are emulated in software. A double is kept only where float32
+ * would lose information: integers beyond int32 (exact up to 2^53, e.g.
+ * Date.now()) and values outside the float32 range. */
+JSValue js_float32_number_policy(double d);
+#endif
+
 static js_force_inline JSValue JS_NewFloat64(JSContext *ctx, double d)
 {
     JSValue v;
@@ -610,7 +645,11 @@ static js_force_inline JSValue JS_NewFloat64(JSContext *ctx, double d)
     if (u.u == t.u) {
         v = JS_MKVAL(JS_TAG_INT, val);
     } else {
+#ifdef JS_FLOAT32_NUMBERS
+        v = js_float32_number_policy(d);
+#else
         v = __JS_NewFloat64(ctx, d);
+#endif
     }
     return v;
 }
@@ -625,11 +664,24 @@ static js_force_inline JSValue JS_NewFloat32(JSContext *ctx, float f)
         uint32_t u;
     } u, t;
     u.f = f;
+#ifdef _EE
+    /* cvt.w.s saturates outside the int32 range: 2^31 and up come back as
+       INT32_MAX, which no float equals exactly, so excluding it rejects
+       them without the two float range compares */
     val = (int32_t)f;
     t.f = val;
     /* -0 cannot be represented as integer, so we compare the bit
         representation */
+    if (u.u == t.u && val != INT32_MAX) {
+#else
+    /* (int32_t)f is undefined outside the int32 range, so only floats
+       inside it can be ints */
+    if (!(f >= -2147483648.0f && f < 2147483648.0f))
+        return custom_JS_NewFloat32(ctx, f);
+    val = (int32_t)f;
+    t.f = val;
     if (u.u == t.u) {
+#endif
         v = JS_MKVAL(JS_TAG_INT, val);
     } else {
         v = custom_JS_NewFloat32(ctx, f);
@@ -1150,6 +1202,8 @@ typedef struct {
 } JSFunctionBytecodeInfo;
 
 /* Returns 0 on success, -1 if not a bytecode function, -2 on other errors */
+/* replaces superinstructions with the plain instructions they run */
+void JS_UnfuseBytecode(uint8_t *bc, size_t len);
 int JS_GetFunctionBytecodeInfo(JSContext *ctx, JSValueConst func_val, 
                                JSFunctionBytecodeInfo *info);
 
