@@ -193,6 +193,21 @@ static JSValue js_shadow_render(JSContext *ctx, JSValueConst this_val, int argc,
 	return JS_UNDEFINED;
 }
 
+// {x, y, width, height} on screen of the next render(), or null off-screen
+static JSValue js_shadow_screen_bounds(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+	JSShadowProjector *s = JS_GetOpaque2(ctx, this_val, js_shadow_projector_class_id);
+	if (!s) return JS_EXCEPTION;
+	int r[4];
+	if (!athena_shadow_projector_screen_bounds(s->proj, r))
+		return JS_NULL;
+	JSValue obj = JS_NewObject(ctx);
+	JS_DefinePropertyValueStr(ctx, obj, "x", JS_NewInt32(ctx, r[0]), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "y", JS_NewInt32(ctx, r[1]), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "width", JS_NewInt32(ctx, r[2] - r[0]), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "height", JS_NewInt32(ctx, r[3] - r[1]), JS_PROP_C_W_E);
+	return obj;
+}
+
 static const JSCFunctionListEntry js_shadow_projector_proto_funcs[] = {
 	JS_CFUNC_DEF("setTransform", 1, js_shadow_set_transform),
 	JS_CFUNC_DEF("setSize", 2, js_shadow_set_size),
@@ -211,12 +226,14 @@ static const JSCFunctionListEntry js_shadow_projector_proto_funcs[] = {
     JS_CGETSET_MAGIC_DEF("rotation",  js_shadow_get, js_shadow_set, 1),
     JS_CGETSET_MAGIC_DEF("scale",     js_shadow_get, js_shadow_set, 2),
 	JS_CFUNC_DEF("render", 0, js_shadow_render),
+	JS_CFUNC_DEF("screenBounds", 0, js_shadow_screen_bounds),
 };
 
 static const JSCFunctionListEntry js_shadows_consts[] = {
     JS_PROP_INT32_DEF("SHADOW_BLEND_DARKEN", SHADOW_BLEND_DARKEN, JS_PROP_CONFIGURABLE),
     JS_PROP_INT32_DEF("SHADOW_BLEND_ALPHA", SHADOW_BLEND_ALPHA, JS_PROP_CONFIGURABLE),
     JS_PROP_INT32_DEF("SHADOW_BLEND_ADD", SHADOW_BLEND_ADD, JS_PROP_CONFIGURABLE),
+    JS_PROP_INT32_DEF("SHADOW_BLEND_MULTIPLY", SHADOW_BLEND_MULTIPLY, JS_PROP_CONFIGURABLE),
 };
 
 static int js_shadows_init(JSContext *ctx, JSModuleDef *m) {

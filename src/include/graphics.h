@@ -164,6 +164,7 @@ typedef enum {
 	SCISSOR_BOUNDS,
 	PIXEL_ALPHA_BLEND_ENABLE,
 	COLOR_CLAMP_MODE,
+	ALPHA_CORRECTION,
 } eScreenParams;
 
 typedef struct {

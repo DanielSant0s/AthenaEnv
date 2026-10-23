@@ -129,12 +129,13 @@ local ui = app.AppUI{ title = "My app", category = "games" }
 
 ## Performance
 
-Measured in PCSX2 after the QuickJS performance work (float32 numbers, TDZ check elimination, inline caches, superinstructions, allocator), on the same scenes with the same scripted input for both runtimes. `starfox` spawns random content and its frame rate depends on it, so both runs use the same random number sequence:
+Measured in PCSX2 after the QuickJS performance work (float32 numbers, TDZ check elimination, inline caches, superinstructions, allocator), on the same scenes with the same scripted input for both runtimes. `starfox` spawns random content and its frame rate depends on it, so both runs use the same random number sequence. `physics_collision` runs with its dynamic shadows on (the default; L3 cycles exact shadows, fast overlaps and off); with them off it holds 60 FPS:
 
 | Scene | JavaScript | Lua |
 |---|---|---|
-| `physics_collision` (lights and post-FX on) | 31–32 FPS | 32–33 FPS |
-| `physics_collision` (lights and post-FX off) | 43 FPS | 42.6 FPS |
+| `physics_collision` (lights, post-FX and shadows on) | 48 FPS | 50 FPS |
+| `physics_collision` (lights on, post-FX off, shadows on) | 59 FPS | 59 FPS |
+| `physics_collision` (lights, post-FX and fast-overlap shadows on) | 54 FPS | 56 FPS |
 | `starfox` gameplay, vsync on | 57 FPS | 58 FPS |
 | `starfox` gameplay, vsync off (equivalent pure scripts) | 196 FPS | 198 FPS |
 | `starfox` gameplay, vsync off (`starfox.js` with `Native.compile`) | 216 FPS | - |

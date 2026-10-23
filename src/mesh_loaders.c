@@ -35,14 +35,17 @@ void calculate_bbox(athena_render_data* res_m) {
     lowY = hiY = res_m->positions[0][1];
     lowZ = hiZ = res_m->positions[0][2];
 	
+    // Plain float compares: fmin/fmax are the double versions, two soft-float
+    // conversions and a soft compare each -- and this runs per frame for
+    // geometry rewritten per frame (shadow grids, render_invalidate_compact_positions).
     for (int i = 0; i < res_m->index_count; i++) {
-        float* pos = res_m->positions[i];
-        lowX = fmin(lowX, pos[0]);
-        hiX =  fmax(hiX,  pos[0]);
-        lowY = fmin(lowY, pos[1]);
-        hiY =  fmax(hiY,  pos[1]);
-        lowZ = fmin(lowZ, pos[2]);
-        hiZ =  fmax(hiZ,  pos[2]);
+        const float* pos = res_m->positions[i];
+        if (pos[0] < lowX) lowX = pos[0];
+        if (pos[0] > hiX)  hiX  = pos[0];
+        if (pos[1] < lowY) lowY = pos[1];
+        if (pos[1] > hiY)  hiY  = pos[1];
+        if (pos[2] < lowZ) lowZ = pos[2];
+        if (pos[2] > hiZ)  hiZ  = pos[2];
     }
 
     VECTOR bbox[8] = {

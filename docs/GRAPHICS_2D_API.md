@@ -156,6 +156,7 @@ Screen.setParam(Screen.ALPHA_BLEND_EQUATION, NORMAL_BLEND);
   * `Screen.DEPTH_GREATER` - pixel Z > depth buffer Z passes
 * `Screen.PIXEL_ALPHA_BLEND_ENABLE`: bool - If enabled, switches per-pixel alpha blending based on source alpha most significant bit value.
 * `Screen.COLOR_CLAMP_MODE`: bool - If true, RGB components will be 0 if negative after alpha-blending, or 0xFF if 0x100 or above. Else, each color component will be ANDed with 0xFF, i.e. they overlap.
+* `Screen.ALPHA_CORRECTION`: bool - If enabled, bit 7 of every alpha value written to a CT32 draw buffer is forced to 1 (current context only). Together with `DST_ALPHA_TEST_ENABLE` it turns the alpha bit into a one-bit stencil: each pixel is written at most once until the alpha is cleared again.
 * `Screen.SCISSOR_BOUNDS` - Object model: `{x1: x_start, y1: y_start, x2: x_end, y2: y_end}`
 
 ## Font module

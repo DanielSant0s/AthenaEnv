@@ -90,6 +90,22 @@ static int l_proj_set_blend(lua_State *L) { athena_shadow_projector_set_blend(ch
 static int l_proj_set_uv_rect(lua_State *L) { athena_shadow_projector_set_uv_rect(check_proj(L, 1), F(2), F(3), F(4), F(5)); return 0; }
 static int l_proj_render(lua_State *L) { athena_shadow_projector_render(check_proj(L, 1)); return 0; }
 
+/* {x, y, width, height} on screen of the next render(), or nil off-screen */
+static int l_proj_screen_bounds(lua_State *L)
+{
+    int r[4];
+    if (!athena_shadow_projector_screen_bounds(check_proj(L, 1), r)) {
+        lua_pushnil(L);
+        return 1;
+    }
+    lua_createtable(L, 0, 4);
+    lua_pushinteger(L, r[0]); lua_setfield(L, -2, "x");
+    lua_pushinteger(L, r[1]); lua_setfield(L, -2, "y");
+    lua_pushinteger(L, r[2] - r[0]); lua_setfield(L, -2, "width");
+    lua_pushinteger(L, r[3] - r[1]); lua_setfield(L, -2, "height");
+    return 1;
+}
+
 #ifdef ATHENA_PHYSICS
 static int l_proj_enable_raycast(lua_State *L)
 {
@@ -135,7 +151,7 @@ static const luaL_Reg proj_methods[] = {
 #ifdef ATHENA_PHYSICS
     { "enableRaycast", l_proj_enable_raycast },
 #endif
-    { "render", l_proj_render }, { "free", l_proj_free },
+    { "render", l_proj_render }, { "screenBounds", l_proj_screen_bounds }, { "free", l_proj_free },
     { NULL, NULL }
 };
 
@@ -145,7 +161,7 @@ static const athena_lua_class proj_class = {
 
 static const athena_lua_const shadow_consts[] = {
     { "SHADOW_BLEND_DARKEN", SHADOW_BLEND_DARKEN }, { "SHADOW_BLEND_ALPHA", SHADOW_BLEND_ALPHA },
-    { "SHADOW_BLEND_ADD", SHADOW_BLEND_ADD },
+    { "SHADOW_BLEND_ADD", SHADOW_BLEND_ADD }, { "SHADOW_BLEND_MULTIPLY", SHADOW_BLEND_MULTIPLY },
     { NULL, 0 }
 };
 

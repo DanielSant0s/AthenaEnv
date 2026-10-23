@@ -459,6 +459,8 @@ declare namespace Shadows {
     const SHADOW_BLEND_DARKEN: number;
     const SHADOW_BLEND_ALPHA: number;
     const SHADOW_BLEND_ADD: number;
+    /** Scene color times (1 - texture alpha): one pass, vertex/texture RGB ignored. */
+    const SHADOW_BLEND_MULTIPLY: number;
 
     class Projector {
         constructor(texture?: Image);
@@ -490,6 +492,12 @@ declare namespace Shadows {
         enableRaycast(space: PhysicsSpace, enable: boolean, rayLength: number): void;
         /** Renders the shadow projector. Call every frame. */
         render(): void;
+        /**
+         * Screen rectangle (pixels, current camera) the next `render()` covers, or `null` when it is off-screen.
+         * @remarks With raycasting on, this builds the shadow grid now and the next `render()` reuses it,
+         * so it costs no extra work. Any setter (`setTransform`, ...) discards that grid.
+         */
+        screenBounds(): { x: number; y: number; width: number; height: number } | null;
 
         position: XYZ;
         /** @remarks Only `x`,`y`,`z` are exposed — despite being described as a quaternion, there is no `w` component on this property. */

@@ -125,10 +125,12 @@ void shadow_projector_init(ath_shadow_projector *p, GSSURFACE *tex) {
 }
 
 void shadow_projector_set_transform(ath_shadow_projector *p, const MATRIX transform) {
+	p->prepared = NULL;
 	matrix_functions->copy(p->transform, (float*)transform);
 }
 
 void shadow_projector_set_size(ath_shadow_projector *p, float width, float height) {
+	p->prepared = NULL;
 	p->width = width;
 	p->height = height;
 	// Changes the local grid itself, which the non-raycast path only writes when
@@ -143,6 +145,7 @@ void shadow_projector_set_grid(ath_shadow_projector *p, int gx, int gz) {
 }
 
 void shadow_projector_set_light_dir(ath_shadow_projector *p, float x, float y, float z) {
+	p->prepared = NULL;
 	p->lightDir[0] = x;
 	p->lightDir[1] = y;
 	p->lightDir[2] = z;
@@ -150,14 +153,17 @@ void shadow_projector_set_light_dir(ath_shadow_projector *p, float x, float y, f
 }
 
 void shadow_projector_set_bias(ath_shadow_projector *p, float bias) {
+	p->prepared = NULL;
 	p->bias = bias;
 }
 
 void shadow_projector_set_light_offset(ath_shadow_projector *p, float dist) {
+	p->prepared = NULL;
     p->lightOffset = dist;
 }
 
 void shadow_projector_set_slope_limit(ath_shadow_projector *p, float maxSlopeCos) {
+	p->prepared = NULL;
 	p->maxSlopeCos = maxSlopeCos;
 }
 
@@ -176,6 +182,7 @@ void shadow_projector_set_uv_rect(ath_shadow_projector *p, float u0, float v0, f
 }
 
 void shadow_projector_enable_raycast(ath_shadow_projector *p, AthenaPhysicsSpace *space, float rayLength, int enable) {
+	p->prepared = NULL;
 	p->raySpace = space;
 	p->rayLength = rayLength;
 	p->enableRaycast = enable;
@@ -233,6 +240,7 @@ static void shadow_slot_free(shadow_draw_slot *slot) {
 }
 
 static void shadow_slots_release(ath_shadow_projector *p) {
+    p->prepared = NULL;
     for (int i = 0; i < p->slotCount; i++)
         shadow_slot_free(&p->slots[i]);
 
@@ -345,7 +353,11 @@ static void shadow_build_world_grid(ath_shadow_projector *p, athena_render_data 
     // single call before, which is wasteful given this function already
     // runs once per shadow-casting object per frame.
     VECTOR *nodeNormals = p->enableRaycast ? p->nodeNormals : NULL;
+    const int raycast = p->enableRaycast && p->raySpace;
 
+    // Flat grid in world space first, so that the rays of the whole grid --
+    // all along -lightDir, from above each node -- go out as one batch.
+    VECTOR start_min, start_max;
 	int ni = 0;
 	for (int j = 0; j < gz; j++) {
 		float tz = (float)j / (float)(gz - 1);
@@ -357,24 +369,42 @@ static void shadow_build_world_grid(ath_shadow_projector *p, athena_render_data 
 			VECTOR world;
             matrix_functions->apply(world, p->transform, local);
             // shift along -lightDir to move decal relative to light direction
-            world[0] -= p->lightDir[0] * p->lightOffset;
-            world[1] -= p->lightDir[1];
-            world[2] -= p->lightDir[2] * p->lightOffset;
+            p->nodes[ni][0] = world[0] - p->lightDir[0] * p->lightOffset;
+            p->nodes[ni][1] = world[1] - p->lightDir[1];
+            p->nodes[ni][2] = world[2] - p->lightDir[2] * p->lightOffset;
+            p->nodes[ni][3] = 1.0f;
+            for (int a = 0; a < 3; a++) {
+                float s = p->nodes[ni][a] + p->lightDir[a] * (p->rayLength * 0.5f);
+                if (ni == 0 || s < start_min[a]) start_min[a] = s;
+                if (ni == 0 || s > start_max[a]) start_max[a] = s;
+            }
+            ni++;
+		}
+	}
 
-			if (p->enableRaycast && p->raySpace) {
-				VECTOR start, dir;
+    static AthenaRayBatch batch __attribute__((aligned(16)));
+    if (raycast) {
+        VECTOR dir = { -p->lightDir[0], -p->lightDir[1], -p->lightDir[2], 0.0f };
+        start_min[3] = start_max[3] = 0.0f;
+        athena_physics_ray_batch_begin(&batch, p->raySpace, dir, p->rayLength, 0, start_min, start_max);
+    }
+
+	ni = 0;
+	for (int j = 0; j < gz; j++) {
+		for (int i = 0; i < gx; i++) {
+			VECTOR world;
+            copy_vector(world, p->nodes[ni]);
+
+			if (raycast) {
+				VECTOR start;
 				// Start above the surface along +lightDir, cast towards -lightDir
 				start[0] = world[0] + p->lightDir[0] * (p->rayLength * 0.5f);
 				start[1] = world[1] + p->lightDir[1] * (p->rayLength * 0.5f);
 				start[2] = world[2] + p->lightDir[2] * (p->rayLength * 0.5f);
 				start[3] = 1.0f;
-				dir[0] = -p->lightDir[0];
-				dir[1] = -p->lightDir[1];
-				dir[2] = -p->lightDir[2];
-				dir[3] = 0.0f;
 
 				AthenaRaycastHit hit __attribute__((aligned(16)));
-				if (athena_physics_space_raycast(p->raySpace, start, dir, p->rayLength, 0, &hit)) {
+				if (athena_physics_ray_batch_cast(&batch, start, &hit)) {
 					// Slope filter
                     if (p->maxSlopeCos > -0.5f) {
 						VECTOR up = { 0.0f, 1.0f, 0.0f, 0.0f };
@@ -444,8 +474,13 @@ void shadow_projector_render(ath_shadow_projector *p) {
     if (shadow_is_dynamic(p)) {
         // World-space geometry, different every draw: it needs a slot the DMAC
         // is done with, and the object matrix has to stay out of the way.
-        slot = shadow_pick_slot(p);
-        shadow_build_world_grid(p, &slot->data);
+        // shadow_projector_screen_bounds() may have built it already.
+        slot = p->prepared;
+        p->prepared = NULL;
+        if (!slot) {
+            slot = shadow_pick_slot(p);
+            shadow_build_world_grid(p, &slot->data);
+        }
         matrix_functions->identity(p->obj.transform);
 
         // This may well have been slot 0, so the local grid is no longer there.
@@ -485,6 +520,10 @@ void shadow_projector_render(ath_shadow_projector *p) {
         case SHADOW_BLEND_ADD:
             set_screen_param(ALPHA_BLEND_EQUATION, GS_ALPHA_BLEND_ADD);
             break;
+        case SHADOW_BLEND_MULTIPLY:
+            // (0 - Cd) * As + Cd
+            set_screen_param(ALPHA_BLEND_EQUATION, ALPHA_EQUATION(ZERO_RGB, DST_RGB, SRC_ALPHA, DST_RGB, 0x00));
+            break;
     }
 
     // Render-to-texture silhouettes can have been written by VU1 immediately
@@ -510,6 +549,77 @@ void shadow_projector_render(ath_shadow_projector *p) {
     slot->hasQueued = 1;
 
 	set_screen_param(ALPHA_BLEND_EQUATION, old_alpha);
+}
+
+// world_screen / screen_scale of the current camera (render.c)
+extern MATRIX world_screen;
+extern FIVECTOR screen_scale;
+
+int shadow_projector_screen_bounds(ath_shadow_projector *p, int out[4]) {
+    const int screen_w = gsGlobal->Width;
+    const int screen_h = gsGlobal->Height;
+    VECTOR corners[4];
+    const VECTOR *pts;
+    int count;
+
+    if (shadow_is_dynamic(p)) {
+        // The grid render() is about to draw: build it now, in the slot that
+        // render will use.
+        if (!p->prepared) {
+            p->prepared = shadow_pick_slot(p);
+            shadow_build_world_grid(p, &p->prepared->data);
+            // that may have been slot 0, as render() notes
+            p->localGridDirty = 1;
+        }
+        pts = (const VECTOR *)p->nodes;
+        count = p->gridX * p->gridZ;
+    } else {
+        // A flat grid: its four corners, placed as shadow_place_object does
+        const float hw = p->width * 0.5f, hh = p->height * 0.5f;
+        const float cx[4] = { -hw, hw, -hw, hw }, cz[4] = { -hh, -hh, hh, hh };
+        for (int i = 0; i < 4; i++) {
+            VECTOR local = { cx[i], 0.0f, cz[i], 1.0f };
+            matrix_functions->apply(corners[i], p->transform, local);
+            corners[i][0] -= p->lightDir[0] * p->lightOffset;
+            corners[i][1] -= p->lightDir[1];
+            corners[i][2] -= p->lightDir[2] * p->lightOffset;
+        }
+        pts = (const VECTOR *)corners;
+        count = 4;
+    }
+
+    float x0 = 1e30f, y0 = 1e30f, x1 = -1e30f, y1 = -1e30f;
+    for (int i = 0; i < count; i++) {
+        VECTOR clip;
+        matrix_functions->apply(clip, world_screen, (float *)pts[i]);
+        if (clip[3] < 0.05f) {
+            // reaches behind the near plane: no useful projection, take
+            // the whole screen
+            out[0] = 0; out[1] = 0; out[2] = screen_w; out[3] = screen_h;
+            return 1;
+        }
+        // the VU1 mapping: clip / w * scale + scale (+2048, the GS offset)
+        float inv_w = 1.0f / clip[3];
+        float sx = clip[0] * inv_w * screen_scale.x + screen_scale.x;
+        float sy = clip[1] * inv_w * screen_scale.y + screen_scale.y;
+        if (sx < x0) x0 = sx;
+        if (sx > x1) x1 = sx;
+        if (sy < y0) y0 = sy;
+        if (sy > y1) y1 = sy;
+    }
+
+    // a pixel of margin for rasterization and bilinear filtering
+    int ix0 = (int)x0 - 1, iy0 = (int)y0 - 1;
+    int ix1 = (int)x1 + 2, iy1 = (int)y1 + 2;
+    if (ix0 < 0) ix0 = 0;
+    if (iy0 < 0) iy0 = 0;
+    if (ix1 > screen_w) ix1 = screen_w;
+    if (iy1 > screen_h) iy1 = screen_h;
+    if (ix0 >= ix1 || iy0 >= iy1)
+        return 0;
+
+    out[0] = ix0; out[1] = iy0; out[2] = ix1; out[3] = iy1;
+    return 1;
 }
 
 static void shadow_slot_build(ath_shadow_projector *p, shadow_draw_slot *slot) {

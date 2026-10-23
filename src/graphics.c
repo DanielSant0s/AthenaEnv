@@ -430,7 +430,7 @@ static uint32_t gs_ensure_depth_temp_buffer(void) {
 // Channel copy, one 64x32 page at a time -- ported from gtavl_plugins/rw_se/src/secore.c
 // (performChannelCopy).
 //
-// A page is 96 sprites (384 qw of UV/XYZ2), and those sprites are the same for
+// A page is 96 sprites (192 qw of UV/XYZ2), and those sprites are the same for
 // every page: the UVs are page-relative, and the only per-page difference was
 // the screen position baked into each XYZ2. That position now comes from
 // XYOFFSET instead -- the sprites are stored page-local plus CC_ORIGIN, and
@@ -443,8 +443,12 @@ static uint32_t gs_ensure_depth_temp_buffer(void) {
 // Only the row pattern depends on the channel (green/alpha start on the odd
 // pattern), so there are two bodies. The horizontal 8-texel offset of blue and
 // alpha is done by CLAMP region repeat, not the UVs.
+//
+// The body is REGLIST, two 64-bit registers per qword: half the qwords of
+// PACKED (one register per qword) for the same sprites. Every full-screen
+// pass sends 140 of these pages through PATH2, so that halves its GIF traffic.
 #define CC_ORIGIN 2048
-#define CC_BODY_QWC (1 + 96 * 4) // sprite GIF tag + 96 sprites
+#define CC_BODY_QWC (1 + 96 * 2) // sprite GIF tag + 96 sprites, 2 qw each
 
 static owl_qword cc_body[2][CC_BODY_QWC] __attribute__((aligned(64)));
 static bool cc_body_ready = false;
@@ -457,27 +461,33 @@ static void cc_build_bodies(void) {
         // PRE = 0: the header writes PRIM through A+D, so the tag (and with it
         // the body) does not depend on alpha blending or the context.
         owl_add_tag(&body, (GS_UV) | (GS_XYZ2 << 4) | (GS_UV << 8) | (GS_XYZ2 << 12),
-                    GIF_SET_TAG(96, 1, 0, 0, 0, 4));
+                    GIF_SET_TAG(96, 1, 0, 0, 1, 4));
 
+        // Raw register layouts (REGLIST): UV = U | V << 16, XYZ2 = X | Y << 16 | Z << 32.
+        // Each qword is one sprite corner: UV in the low half, XYZ2 in the high.
+#define CC_UV(u, v)   ((uint64_t)(u) | ((uint64_t)(v) << 16))
+#define CC_XYZ(x, y)  ((uint64_t)(x) | ((uint64_t)(y) << 16) | (1ULL << 32))
         for (int y = 0; y < 32; y += 2) {
-            uint64_t y0 = (uint64_t)((y + CC_ORIGIN) << 4) << 32;
-            uint64_t y1 = (uint64_t)((y + 2 + CC_ORIGIN) << 4) << 32;
+            uint32_t y0 = (uint32_t)((y + CC_ORIGIN) << 4);
+            uint32_t y1 = (uint32_t)((y + 2 + CC_ORIGIN) << 4);
             if (((y % 4) == 0) ^ (odd_first == 1)) { // Even (4 16x2 sprites)
                 for (int x = 0; x < 64; x += 16) {
-                    owl_add_tag(&body, 0, GS_SETREG_STQ(8 + ((8 + x * 2) << 4), 8 + ((y * 2) << 4)));
-                    owl_add_tag(&body, 1, (uint64_t)((x + CC_ORIGIN) << 4) | y0);
-                    owl_add_tag(&body, 0, GS_SETREG_STQ(8 + ((24 + x * 2) << 4), 8 + ((2 + y * 2) << 4)));
-                    owl_add_tag(&body, 1, (uint64_t)((x + 16 + CC_ORIGIN) << 4) | y1);
+                    owl_add_tag(&body, CC_XYZ((x + CC_ORIGIN) << 4, y0),
+                                CC_UV(8 + ((8 + x * 2) << 4), 8 + ((y * 2) << 4)));
+                    owl_add_tag(&body, CC_XYZ((x + 16 + CC_ORIGIN) << 4, y1),
+                                CC_UV(8 + ((24 + x * 2) << 4), 8 + ((2 + y * 2) << 4)));
                 }
             } else { // Odd (Eight 8x2 sprites)
                 for (int x = 0; x < 64; x += 8) {
-                    owl_add_tag(&body, 0, GS_SETREG_STQ(8 + ((4 + x * 2) << 4), 8 + ((y * 2) << 4)));
-                    owl_add_tag(&body, 1, (uint64_t)((x + CC_ORIGIN) << 4) | y0);
-                    owl_add_tag(&body, 0, GS_SETREG_STQ(8 + ((12 + x * 2) << 4), 8 + ((2 + y * 2) << 4)));
-                    owl_add_tag(&body, 1, (uint64_t)((x + 8 + CC_ORIGIN) << 4) | y1);
+                    owl_add_tag(&body, CC_XYZ((x + CC_ORIGIN) << 4, y0),
+                                CC_UV(8 + ((4 + x * 2) << 4), 8 + ((y * 2) << 4)));
+                    owl_add_tag(&body, CC_XYZ((x + 8 + CC_ORIGIN) << 4, y1),
+                                CC_UV(8 + ((12 + x * 2) << 4), 8 + ((2 + y * 2) << 4)));
                 }
             }
         }
+#undef CC_UV
+#undef CC_XYZ
     }
 
     SyncDCache(cc_body, (uint8_t *)cc_body + sizeof(cc_body) - 1);
@@ -631,8 +641,13 @@ void gs_channel_shuffle_ex(GSSURFACE *dst, GSSURFACE *source, GSSURFACE *pal, co
 
     uint32_t startX = cfg ? (cfg->x & ~63u) : 0;
     uint32_t startY = cfg ? (cfg->y & ~31u) : 0;
-    uint32_t endX   = (cfg && cfg->width)  ? (startX + cfg->width)  : dst->Width;
-    uint32_t endY   = (cfg && cfg->height) ? (startY + cfg->height) : dst->Height;
+    // The region starts on the page holding x/y and ends on the one holding
+    // x + width - 1: measured from the unaligned corner, or an unaligned x/y
+    // would lose its right/bottom edge.
+    uint32_t endX   = (cfg && cfg->width)  ? (cfg->x + cfg->width)  : dst->Width;
+    uint32_t endY   = (cfg && cfg->height) ? (cfg->y + cfg->height) : dst->Height;
+    if (endX > dst->Width)  endX = dst->Width;
+    if (endY > dst->Height) endY = dst->Height;
 
     for (uint32_t y = startY; y < endY; y += 32) {
         uint32_t page_row = y >> 5;
@@ -1222,6 +1237,9 @@ void set_screen_param(uint8_t param, uint64_t value) {
 		case COLOR_CLAMP_MODE:
 			set_register(GS_CACHE_COLCLAMP, value);
 			return;
+		case ALPHA_CORRECTION:
+			set_register(GS_CACHE_FBA+gsGlobal->PrimContext, value ? 1 : 0);
+			return;
 	}
 
 	set_register(GS_CACHE_TEST+gsGlobal->PrimContext, test.data);
@@ -1258,6 +1276,8 @@ uint64_t get_screen_param(uint8_t param) {
 			return get_register(GS_CACHE_PABE);
 		case COLOR_CLAMP_MODE:
 			return get_register(GS_CACHE_COLCLAMP);
+		case ALPHA_CORRECTION:
+			return get_register(GS_CACHE_FBA+gsGlobal->PrimContext);
 	}
 }
 

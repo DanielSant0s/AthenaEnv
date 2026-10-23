@@ -375,7 +375,7 @@ Lights.set(fillLight, Lights.AMBIENT,    0.05f, 0.04f, 0.03f);
 Lights.set(fillLight, Lights.DIFFUSE,    0.34f, 0.27f, 0.20f);
 Lights.set(fillLight, Lights.SPECULAR,   0.70f, 0.50f, 0.30f); // warm second highlight
 
-// --- Dynamic Silhouette Shadows (L3 to toggle) ---
+// --- Dynamic Silhouette Shadows (L3: exact -> fast overlaps -> off) ---
 // One 128x128 target is consumed immediately after each light-camera draw.
 // Reuse framebuffer red for coverage and the unused Z24 byte to save scene red.
 // Coverage and the final darkening both stay at framebuffer resolution.
@@ -396,6 +396,7 @@ if (!shadowRT.lock()) throw new Error("Unable to reserve the shadow render targe
 // Constant RGB makes additive coverage linear in filtered texture alpha.
 const shadowClear = Color.new(128, 128, 128, 0);
 const shadowCoverageClear = Color.new(127, 127, 127, 128);
+const shadowStencilClear = Color.new(0, 0, 0, 0);
 const shadowCopyBlend = Screen.alphaEquation(
     Screen.SRC_RGB, Screen.ZERO_RGB, Screen.ALPHA_FIX, Screen.ZERO_RGB, 128);
 const shadowSilhouetteBlend = Screen.alphaEquation(
@@ -405,11 +406,12 @@ const shadowSceneBlend = Screen.alphaEquation(
 const shadowDarkenBlend = Screen.alphaEquation(
     Screen.DST_RGB, Screen.ZERO_RGB, Screen.DST_ALPHA, Screen.ZERO_RGB, 0);
 const shadowIdentityLUT = Screen.createShuffleLUT((value) => Color.new(value, value, value, value));
-// RGB coverage saturates at 255: 127 + 128 * min(sum(coverage), 1).
-// Convert it to light transmittance in alpha without resampling any pixels.
+// Each shadow adds 128 * SHADOW_OPACITY * coverage to red (127 base); the sum is
+// capped at full opacity, so overlaps darken once. Convert it to light
+// transmittance in alpha without resampling any pixels.
 const shadowMaskLUT = Screen.createShuffleLUT((value) => {
-    const coverage = Math.max(0, Math.min(1, (value - 127) / 128));
-    return Color.new(0, 0, 0, Math.round(128 * (1 - SHADOW_OPACITY * coverage)));
+    const darken = Math.min(Math.max(0, value - 127), 128 * SHADOW_OPACITY);
+    return Color.new(0, 0, 0, Math.round(128 - darken));
 });
 const sunLength = Math.sqrt(SUN_DIR.x * SUN_DIR.x + SUN_DIR.y * SUN_DIR.y + SUN_DIR.z * SUN_DIR.z);
 const shadowLight = { x: SUN_DIR.x / sunLength, y: SUN_DIR.y / sunLength, z: SUN_DIR.z / sunLength };
@@ -430,8 +432,9 @@ function createShadowProjector(size, grid) {
     // The projector applies -lightDir*bias: negative lifts toward the sun.
     projector.setBias(-0.018);
     projector.setSlopeLimit(0.45);
-    projector.setBlend(Shadows.SHADOW_BLEND_ADD);
-    projector.setColor(1, 1, 1, 1);
+    // Opacity rides in the vertex alpha, so the texture alpha a draw reads is
+    // already the darkening both blends below need.
+    projector.setColor(1, 1, 1, SHADOW_OPACITY);
     projector.setSize(size, size);
     // Color is baked when geometry is built, so set it before setGrid().
     projector.setGrid(grid, grid);
@@ -439,14 +442,35 @@ function createShadowProjector(size, grid) {
     return projector;
 }
 const playerShadow = createShadowProjector(3.2, 6);
-const propShadow = createShadowProjector(1.65, 4);
+// One projector per shadowed prop: screenBounds() builds a projector's grid
+// and keeps it for its next render(), so each caster needs its own.
+const propShadows = [];
+for (let i = 0; i < SHADOW_PROP_LIMIT; i++) propShadows.push(createShadowProjector(1.65, 4));
 const shadowCandidates = allProps.map((prop, i) => ({
     prop, data: i < crates.length ? box : monkeyData, x: 0, y: 0, z: 0, distance: 0
 }));
 function shadowDistanceOrder(a, b) { return a.distance - b.distance; }
 const shadowView = Camera.save();
-let shadowsEnabled = true;
+// EXACT resolves overlapping shadows with the coverage passes; FAST marks the
+// darkened pixels in alpha instead, where the first shadow to reach a pixel wins.
+const SHADOW_OFF = 0, SHADOW_EXACT = 1, SHADOW_FAST = 2;
+const SHADOW_MODE_NAMES = ["OFF", "ON", "ON (fast overlaps)"];
+let shadowMode = SHADOW_EXACT;
 let shadowDraws = 0;
+let shadowOverlapGroups = 0;
+// Casters whose shadow is on screen this frame, with their screen bounds.
+const shadowCasters = [];
+for (let i = 0; i <= SHADOW_PROP_LIMIT; i++) shadowCasters.push({
+    obj: null, data: null, projector: null, size: 0, x: 0, y: 0, z: 0,
+    x0: 0, y0: 0, x1: 0, y1: 0, group: 0
+});
+let shadowCasterCount = 0;
+// Casters whose bounds intersect, directly or through another caster. Only
+// shadows that can overlap need more than one pass over the scene.
+const shadowGroups = [];
+for (let i = 0; i <= SHADOW_PROP_LIMIT; i++) shadowGroups.push({ members: [], count: 0, x0: 0, y0: 0, x1: 0, y1: 0 });
+let shadowGroupCount = 0;
+const shadowRegion = { x: 0, y: 0, width: 0, height: 0 };
 
 // Reserve context 2 for silhouette generation; its Z writes stay masked.
 Screen.switchContext();
@@ -460,6 +484,53 @@ Screen.setParam(Screen.SCISSOR_BOUNDS, { x1: 0, y1: 0, x2: 127, y2: 127 });
 Screen.setParam(Screen.ALPHA_BLEND_EQUATION, shadowCopyBlend);
 Screen.switchContext();
 Screen.setBuffer(Screen.DEPTH_BUFFER, zbuf, 0);
+
+// Places a caster's projector under it and queues it when its shadow is on screen.
+function placeCasterShadow(obj, data, projector, size, x, y, z) {
+    // Start just above the whole caster, including the grid's lower corners.
+    const rayOffset = (SHADOW_RAY_LENGTH - size) * 0.5;
+    shadowTransform[12] = x - shadowLight.x * rayOffset;
+    shadowTransform[13] = y - shadowLight.y * rayOffset + shadowLight.y;
+    shadowTransform[14] = z - shadowLight.z * rayOffset;
+    projector.setTransform(shadowTransform);
+    const bounds = projector.screenBounds();
+    if (!bounds) return;
+    const caster = shadowCasters[shadowCasterCount++];
+    caster.obj = obj; caster.data = data; caster.projector = projector;
+    caster.size = size; caster.x = x; caster.y = y; caster.z = z;
+    caster.x0 = bounds.x; caster.y0 = bounds.y;
+    caster.x1 = bounds.x + bounds.width; caster.y1 = bounds.y + bounds.height;
+}
+
+function groupShadowCasters() {
+    for (let i = 0; i < shadowCasterCount; i++) shadowCasters[i].group = -1;
+    shadowGroupCount = 0;
+    for (let i = 0; i < shadowCasterCount; i++) {
+        if (shadowCasters[i].group >= 0) continue;
+        const group = shadowGroups[shadowGroupCount];
+        shadowCasters[i].group = shadowGroupCount++;
+        group.members[0] = shadowCasters[i];
+        group.count = 1;
+        // Members join while the loop runs, so their neighbours join too.
+        for (let m = 0; m < group.count; m++) {
+            const a = group.members[m];
+            for (let j = i + 1; j < shadowCasterCount; j++) {
+                const b = shadowCasters[j];
+                if (b.group < 0 && a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1) {
+                    b.group = a.group;
+                    group.members[group.count++] = b;
+                }
+            }
+        }
+        const first = group.members[0];
+        group.x0 = first.x0; group.y0 = first.y0; group.x1 = first.x1; group.y1 = first.y1;
+        for (let m = 1; m < group.count; m++) {
+            const c = group.members[m];
+            group.x0 = Math.min(group.x0, c.x0); group.y0 = Math.min(group.y0, c.y0);
+            group.x1 = Math.max(group.x1, c.x1); group.y1 = Math.max(group.y1, c.y1);
+        }
+    }
+}
 
 function renderCasterShadow(obj, data, projector, size, x, y, z) {
     Screen.switchContext();
@@ -491,22 +562,130 @@ function renderCasterShadow(obj, data, projector, size, x, y, z) {
     Render.setView(60, 2, 250);
     Camera.restore(shadowView);
     Camera.update();
-    // Start just above the whole caster, including the grid's lower corners.
-    const rayOffset = (SHADOW_RAY_LENGTH - size) * 0.5;
-    shadowTransform[12] = x - shadowLight.x * rayOffset;
-    shadowTransform[13] = y - shadowLight.y * rayOffset + shadowLight.y;
-    shadowTransform[14] = z - shadowLight.z * rayOffset;
-    projector.setTransform(shadowTransform);
+    // Drawn from the grid placeCasterShadow() built.
     projector.render();
     shadowDraws++;
 }
 
+// Multiplies the scene straight from each caster's projector: all a shadow
+// alone on screen needs. With stencil (FAST overlaps), alpha bit 7 marks every
+// pixel already darkened so an overlap darkens once.
+function renderShadowGroupDirect(group, stencil, depthTest, depthMethod) {
+    Screen.setParam(Screen.ALPHA_TEST_ENABLE, false);
+    Screen.setParam(Screen.DST_ALPHA_TEST_ENABLE, false);
+    if (stencil) {
+        Screen.setParam(Screen.DEPTH_TEST_ENABLE, false);
+        Screen.setParam(Screen.ALPHA_BLEND_EQUATION, shadowCopyBlend);
+        Screen.setBuffer(Screen.DRAW_BUFFER, fbuf, 0x00FFFFFF);
+        Draw.rect(group.x0, group.y0, group.x1 - group.x0, group.y1 - group.y0, shadowStencilClear);
+        Screen.setBuffer(Screen.DRAW_BUFFER, fbuf, 0);
+        Screen.setParam(Screen.DST_ALPHA_TEST_ENABLE, true);
+        Screen.setParam(Screen.DST_ALPHA_TEST_METHOD, Screen.DST_ALPHA_ZERO);
+        Screen.setParam(Screen.ALPHA_CORRECTION, true);
+    } else {
+        // RGB only: the scene's alpha stays as it was.
+        Screen.setBuffer(Screen.DRAW_BUFFER, fbuf, 0xFF000000);
+    }
+    Screen.setParam(Screen.DEPTH_TEST_ENABLE, depthTest);
+    Screen.setParam(Screen.DEPTH_TEST_METHOD, depthMethod);
+    Screen.setParam(Screen.ALPHA_TEST_ENABLE, true);
+    Screen.setParam(Screen.ALPHA_TEST_METHOD, Screen.ALPHA_GREATER);
+    Screen.setParam(Screen.ALPHA_TEST_REF, 0);
+    Screen.setParam(Screen.ALPHA_TEST_FAIL, Screen.ALPHA_FAIL_NO_UPDATE);
+    for (let i = 0; i < group.count; i++) {
+        const c = group.members[i];
+        c.projector.setBlend(Shadows.SHADOW_BLEND_MULTIPLY);
+        renderCasterShadow(c.obj, c.data, c.projector, c.size, c.x, c.y, c.z);
+    }
+    if (stencil) {
+        Screen.setParam(Screen.ALPHA_CORRECTION, false);
+        Screen.setParam(Screen.DST_ALPHA_TEST_ENABLE, false);
+    }
+}
+
+// Overlapping shadows, resolved exactly: red becomes a coverage buffer that
+// every shadow of the group adds to, then the scene is darkened once by it.
+function renderShadowGroupCoverage(group, depthTest, depthMethod) {
+    // Whole GS pages (64x32): the channel shuffles work page by page, and every
+    // pass has to cover exactly the same pixels.
+    shadowRegion.x = group.x0 & ~63;
+    shadowRegion.y = group.y0 & ~31;
+    shadowRegion.width = Math.min(canvas.width, (group.x1 + 63) & ~63) - shadowRegion.x;
+    shadowRegion.height = Math.min(canvas.height, (group.y1 + 31) & ~31) - shadowRegion.y;
+    const region = shadowRegion;
+
+    // The scene has already been shaded once. Save red in the unused Z24
+    // alpha byte using a CT32 physical view: depth's low 24 bits stay intact.
+    Screen.setParam(Screen.DST_ALPHA_TEST_ENABLE, false);
+    Screen.setParam(Screen.ALPHA_TEST_ENABLE, false);
+    Screen.channelShuffle(fbuf, shadowIdentityLUT, Screen.CHANNEL_RED, {
+        dst: zbuf, rawDestination: true, outMask: Screen.CHANNEL_ALPHA,
+        alphaBlend: false, alphaTest: false,
+        x: region.x, y: region.y, width: region.width, height: region.height
+    });
+    Screen.setParam(Screen.DEPTH_TEST_ENABLE, false);
+    Screen.setParam(Screen.ALPHA_BLEND_EQUATION, shadowCopyBlend);
+    Screen.setBuffer(Screen.DRAW_BUFFER, fbuf, 0xFFFFFF00);
+    Draw.rect(region.x, region.y, region.width, region.height, shadowCoverageClear);
+    Screen.setParam(Screen.DEPTH_TEST_ENABLE, depthTest);
+    Screen.setParam(Screen.DEPTH_TEST_METHOD, depthMethod);
+
+    // Red += filtered coverage, clamped to 255. Partial edges remain
+    // continuous and order independent.
+    Screen.setParam(Screen.ALPHA_TEST_ENABLE, true);
+    Screen.setParam(Screen.ALPHA_TEST_METHOD, Screen.ALPHA_GREATER);
+    Screen.setParam(Screen.ALPHA_TEST_REF, 0);
+    Screen.setParam(Screen.ALPHA_TEST_FAIL, Screen.ALPHA_FAIL_NO_UPDATE);
+
+    for (let i = 0; i < group.count; i++) {
+        const c = group.members[i];
+        c.projector.setBlend(Shadows.SHADOW_BLEND_ADD);
+        renderCasterShadow(c.obj, c.data, c.projector, c.size, c.x, c.y, c.z);
+    }
+    Screen.channelShuffle(Screen.DRAW_BUFFER, shadowMaskLUT, Screen.CHANNEL_RED, {
+        outMask: Screen.CHANNEL_ALPHA, alphaBlend: false, alphaTest: false,
+        x: region.x, y: region.y, width: region.width, height: region.height
+    });
+    // Restore saved red multiplied by transmittance. Read exactly the same
+    // physical layout used above; a normal Z read would permute the blocks.
+    Screen.channelShuffle(zbuf, shadowIdentityLUT, Screen.CHANNEL_ALPHA, {
+        rawSource: true, outMask: Screen.CHANNEL_RED, alphaBlend: true,
+        blendEquation: shadowSceneBlend, alphaTest: false,
+        x: region.x, y: region.y, width: region.width, height: region.height
+    });
+    Screen.setParam(Screen.ALPHA_TEST_ENABLE, false);
+    Screen.setParam(Screen.DEPTH_TEST_ENABLE, false);
+    Screen.setBuffer(Screen.DRAW_BUFFER, fbuf, 0xFF0000FF);
+    Screen.setParam(Screen.ALPHA_BLEND_EQUATION, shadowDarkenBlend);
+    Draw.rect(region.x, region.y, region.width, region.height, shadowCoverageClear);
+}
+
 function renderDynamicShadows(px, py, pz, camX, camY, camZ) {
     shadowDraws = 0;
-    if (!shadowsEnabled) return;
+    shadowOverlapGroups = 0;
+    if (shadowMode === SHADOW_OFF) return;
     // Reuse the state object: the follow camera has the standard world-up.
     shadowView.position.x = camX; shadowView.position.y = camY; shadowView.position.z = camZ;
     shadowView.target.x = camTargetX; shadowView.target.y = camTargetY; shadowView.target.z = camTargetZ;
+
+    shadowCasterCount = 0;
+    placeCasterShadow(skin_object, gltf_skin, playerShadow, 3.2, px, py - PLAYER_RADIUS + 0.9, pz);
+    for (let i = 0; i < shadowCandidates.length; i++) {
+        const candidate = shadowCandidates[i], p = candidate.prop.body.getPosition();
+        candidate.x = p[0]; candidate.y = p[1]; candidate.z = p[2];
+        const dx = p[0] - px, dz = p[2] - pz;
+        candidate.distance = dx * dx + dz * dz;
+    }
+    shadowCandidates.sort(shadowDistanceOrder);
+    for (let i = 0; i < SHADOW_PROP_LIMIT; i++) {
+        const candidate = shadowCandidates[i];
+        if (candidate.distance > SHADOW_DISTANCE * SHADOW_DISTANCE) break;
+        placeCasterShadow(candidate.prop.obj, candidate.data, propShadows[i], 1.65,
+            candidate.x, candidate.y, candidate.z);
+    }
+    if (shadowCasterCount === 0) return;
+    groupShadowCasters();
+
     const alphaTest = Screen.getParam(Screen.ALPHA_TEST_ENABLE);
     const alphaMethod = Screen.getParam(Screen.ALPHA_TEST_METHOD);
     const alphaRef = Screen.getParam(Screen.ALPHA_TEST_REF);
@@ -520,59 +699,20 @@ function renderDynamicShadows(px, py, pz, camX, camY, camZ) {
     const pixelBlend = Screen.getParam(Screen.PIXEL_ALPHA_BLEND_ENABLE);
     Screen.setBuffer(Screen.DEPTH_BUFFER, zbuf, 1);
     try {
-        // The scene has already been shaded once. Save red in the unused Z24
-        // alpha byte using a CT32 physical view: depth's low 24 bits stay intact.
-        Screen.setParam(Screen.DST_ALPHA_TEST_ENABLE, false);
-        Screen.setParam(Screen.ALPHA_TEST_ENABLE, false);
-        Screen.channelShuffle(fbuf, shadowIdentityLUT, Screen.CHANNEL_RED, {
-            dst: zbuf, rawDestination: true, outMask: Screen.CHANNEL_ALPHA,
-            alphaBlend: false, alphaTest: false
-        });
-        Screen.setParam(Screen.DEPTH_TEST_ENABLE, false);
-        Screen.setParam(Screen.ALPHA_BLEND_EQUATION, shadowCopyBlend);
         Screen.setParam(Screen.COLOR_CLAMP_MODE, 1);
         Screen.setParam(Screen.PIXEL_ALPHA_BLEND_ENABLE, false);
-        Screen.setBuffer(Screen.DRAW_BUFFER, fbuf, 0xFFFFFF00);
-        Draw.rect(0, 0, canvas.width, canvas.height, shadowCoverageClear);
-        Screen.setParam(Screen.DEPTH_TEST_ENABLE, depthTest);
-        Screen.setParam(Screen.DEPTH_TEST_METHOD, depthMethod);
-
-        // Red += filtered coverage, clamped to 255. Solid overlap is already
-        // saturated, while partial edges remain continuous and order independent.
-        Screen.setParam(Screen.ALPHA_TEST_ENABLE, true);
-        Screen.setParam(Screen.ALPHA_TEST_METHOD, Screen.ALPHA_GREATER);
-        Screen.setParam(Screen.ALPHA_TEST_REF, 0);
-        Screen.setParam(Screen.ALPHA_TEST_FAIL, Screen.ALPHA_FAIL_NO_UPDATE);
-
-        renderCasterShadow(skin_object, gltf_skin, playerShadow, 3.2, px, py - PLAYER_RADIUS + 0.9, pz);
-        for (let i = 0; i < shadowCandidates.length; i++) {
-            const candidate = shadowCandidates[i], p = candidate.prop.body.getPosition();
-            candidate.x = p[0]; candidate.y = p[1]; candidate.z = p[2];
-            const dx = p[0] - px, dz = p[2] - pz;
-            candidate.distance = dx * dx + dz * dz;
+        for (let g = 0; g < shadowGroupCount; g++) {
+            const group = shadowGroups[g];
+            if (group.count === 1) {
+                renderShadowGroupDirect(group, false, depthTest, depthMethod);
+                continue;
+            }
+            shadowOverlapGroups++;
+            if (shadowMode === SHADOW_FAST) renderShadowGroupDirect(group, true, depthTest, depthMethod);
+            else renderShadowGroupCoverage(group, depthTest, depthMethod);
         }
-        shadowCandidates.sort(shadowDistanceOrder);
-        for (let i = 0; i < SHADOW_PROP_LIMIT; i++) {
-            const candidate = shadowCandidates[i];
-            if (candidate.distance > SHADOW_DISTANCE * SHADOW_DISTANCE) break;
-            renderCasterShadow(candidate.prop.obj, candidate.data, propShadow, 1.65,
-                candidate.x, candidate.y, candidate.z);
-        }
-        Screen.channelShuffle(Screen.DRAW_BUFFER, shadowMaskLUT, Screen.CHANNEL_RED, {
-            outMask: Screen.CHANNEL_ALPHA, alphaBlend: false, alphaTest: false
-        });
-        // Restore saved red multiplied by transmittance. Read exactly the same
-        // physical layout used above; a normal Z read would permute the blocks.
-        Screen.channelShuffle(zbuf, shadowIdentityLUT, Screen.CHANNEL_ALPHA, {
-            rawSource: true, outMask: Screen.CHANNEL_RED, alphaBlend: true,
-            blendEquation: shadowSceneBlend, alphaTest: false
-        });
-        Screen.setParam(Screen.ALPHA_TEST_ENABLE, false);
-        Screen.setParam(Screen.DEPTH_TEST_ENABLE, false);
-        Screen.setBuffer(Screen.DRAW_BUFFER, fbuf, 0xFF0000FF);
-        Screen.setParam(Screen.ALPHA_BLEND_EQUATION, shadowDarkenBlend);
-        Draw.rect(0, 0, canvas.width, canvas.height, shadowCoverageClear);
     } finally {
+        Screen.setParam(Screen.ALPHA_CORRECTION, false);
         Screen.setParam(Screen.DST_ALPHA_TEST_ENABLE, destinationTest);
         Screen.setParam(Screen.DST_ALPHA_TEST_METHOD, destinationMethod);
         Screen.setParam(Screen.ALPHA_TEST_ENABLE, alphaTest);
@@ -868,7 +1008,7 @@ while (true) {
     }
 
     if (!BENCHMARK && pad.justPressed(Pads.R3)) fxReset((fxLevel + 1) % FX_LEVELS.length);
-    if (pad.justPressed(Pads.L3)) shadowsEnabled = !shadowsEnabled;
+    if (pad.justPressed(Pads.L3)) shadowMode = (shadowMode + 1) % SHADOW_MODE_NAMES.length;
 
     if (pad.justPressed(Pads.START)) {
         resetSandbox();
@@ -1222,6 +1362,11 @@ while (true) {
     Screen.setParam(Screen.DEPTH_TEST_ENABLE, true);
     Screen.setParam(Screen.DEPTH_TEST_METHOD, Screen.DEPTH_GEQUAL);
     renderOpaqueScene();
+    // Hand the scene to the GPU now: the shadow casters' raycasts and setup
+    // that follow take a while on the EE, and the queued scene would otherwise
+    // only go out once the shadow passes fill the packet buffer -- the GPU
+    // idle all that time, then the EE waiting for it.
+    Screen.flush();
     renderDynamicShadows(px, py, pz, camX, camY, camZ);
     // World-space billboards use scene depth, then receive the same fog/DOF.
     fxRender();
@@ -1282,7 +1427,7 @@ while (true) {
         `${stateLabel} (${currentAnim.toUpperCase()})`,
         `SELECT  Fog: ${activeFog.name}`,
         `R3  FX density: ${FX_LEVELS[fxLevel]}  (${fxStats.active} active, ${fxStats.visible} visible, ${fxStats.batches} batches)`,
-        `L3  Shadows: ${shadowsEnabled ? "ON" : "OFF"}  (${shadowDraws} casters)`,
+        `L3  Shadows: ${SHADOW_MODE_NAMES[shadowMode]}  (${shadowDraws} casters, ${shadowOverlapGroups} overlapping)`,
         `START  Reset sandbox  |  Fast clip: ${renderStats.fastClip}`,
     ];
     if (statusTimer > 0) worldLines.push(`>> ${statusText}`);

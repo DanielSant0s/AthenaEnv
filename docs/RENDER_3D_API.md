@@ -238,6 +238,7 @@ The Shadows module provides real-time shadow projection capabilities using a gri
 * `Shadows.SHADOW_BLEND_DARKEN` - Darken blend mode (default)
 * `Shadows.SHADOW_BLEND_ALPHA` - Alpha blend mode
 * `Shadows.SHADOW_BLEND_ADD` - Additive blend mode
+* `Shadows.SHADOW_BLEND_MULTIPLY` - Multiplies the scene by `1 - alpha` (texture alpha times the projector color's alpha); RGB is ignored. One pass, but two overlapping shadows darken twice
 
 **Construction:**
 
@@ -259,6 +260,7 @@ Creates a new shadow projector using the specified texture for the shadow appear
 * `setUVRect(u0, v0, u1, v1)` - Set texture UV rectangle for shadow appearance.
 * `enableRaycast(space, enable, rayLength)` - Enable/disable `Physics` ray casting for accurate shadow placement. See [Physics](PHYSICS_API.md) for `space`.
 * `render()` - Render the shadow projector (call every frame).
+* `screenBounds()` - Screen rectangle `{x, y, width, height}` in pixels that the next `render()` covers under the current camera, or `null` when it is off-screen. Use it to skip off-screen casters, or to limit full-screen passes to where the shadows are (see `physics_collision.js`). With raycasting on, the grid is built here and the next `render()` reuses it, so the call costs no extra work; any setter discards that grid.
 
 **Properties:**
 

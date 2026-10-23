@@ -363,8 +363,9 @@ void draw_circle(float x, float y, float radius, u64 color, u8 filled)
     						1, 1)
 						);
 
+	const float step = (float)(M_PI * 2.0 / 36.0); // a float constant: M_PI is a double
 	for (int a = 0; a < 36; a++) {
-		owl_add_xy(packet, (athena_cosf(a * (M_PI*2)/36) * radius) + x, (athena_sinf(a * (M_PI*2)/36) * radius) + y);
+		owl_add_xy(packet, (athena_cosf(a * step) * radius) + x, (athena_sinf(a * step) * radius) + y);
 	}
 
 	if (!filled) { // using 2x to round it to 38

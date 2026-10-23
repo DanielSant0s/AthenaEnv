@@ -702,10 +702,14 @@ function ShadowProjector:setBlend(mode) end
 function ShadowProjector:setUVRect(u1, v1, u2, v2) end
 function ShadowProjector:enableRaycast(space) end
 function ShadowProjector:render() end
+---Screen rectangle (pixels) the next render() covers, or nil when off-screen.
+---With raycasting on, builds the grid now and the next render() reuses it.
+---@return {x: integer, y: integer, width: integer, height: integer}|nil
+function ShadowProjector:screenBounds() end
 function ShadowProjector:free() end
 
 ---@class Shadows
-Shadows = { SHADOW_BLEND_DARKEN = 0, SHADOW_BLEND_ALPHA = 1, SHADOW_BLEND_ADD = 2 }
+Shadows = { SHADOW_BLEND_DARKEN = 0, SHADOW_BLEND_ALPHA = 1, SHADOW_BLEND_ADD = 2, SHADOW_BLEND_MULTIPLY = 3 }
 ---@return ShadowProjector
 function Shadows.Projector(opts) end
 

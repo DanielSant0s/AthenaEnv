@@ -243,7 +243,7 @@ float athena_acosf(float x) {
   return t;
 }
 
-float athena_sinf(float x) { return athena_cosf(x - M_PI_2); }
+float athena_sinf(float x) { return athena_cosf(x - (float)M_PI_2); }
 
 float athena_tanf(float x) { return athena_sinf(x) / athena_cosf(x); }
 

@@ -25,6 +25,8 @@ void athena_shadow_projector_enable_raycast(AthenaShadowProjector *p, AthenaPhys
 
 void athena_shadow_projector_render(AthenaShadowProjector *p);
 void athena_shadow_projector_sync_transform(AthenaShadowProjector *p);
+/* { x0, y0, x1, y1 } on screen of the next render (see shadow_projector_screen_bounds) */
+int athena_shadow_projector_screen_bounds(AthenaShadowProjector *p, int out[4]);
 
 athena_object_data *athena_shadow_projector_object(AthenaShadowProjector *p);
 

@@ -246,6 +246,40 @@ void athena_physics_space_collide2(AthenaPhysicsGeom *g1, AthenaPhysicsGeom *g2,
 int athena_physics_space_raycast(AthenaPhysicsSpace *space, const VECTOR origin, const VECTOR dir,
                                  float max_len, int backface_cull, AthenaRaycastHit *out_hit);
 
+/* Many rays sharing one direction and length (a shadow grid): the geoms they
+ * can reach are picked once, from the box swept by all the origins, and boxes
+ * get the ray direction in their own frame precomputed. Each cast returns what
+ * athena_physics_space_raycast would. The space must not change between begin
+ * and the last cast. */
+#define ATH_RAY_BATCH_MAX 32
+
+typedef struct AthenaRayBatchBox {
+    MATRIX   rot;
+    VECTOR   pos;
+    VECTOR   half;
+    VECTOR   inv_dir;              /* 1 / local direction, per axis */
+    int      parallel[3];          /* local direction ~0 on that axis */
+    AthenaPhysicsGeom *geom;
+} AthenaRayBatchBox __attribute__((aligned(16)));
+
+typedef struct AthenaRayBatch {
+    AthenaPhysicsSpace *space;
+    VECTOR   dir;                  /* normalized */
+    float    max_len;
+    int      backface_cull;
+    int      overflow;             /* too many candidates: casts take the plain path */
+    int      count;                /* candidates, in space order */
+    int      box_count;
+    AthenaPhysicsGeom *cand[ATH_RAY_BATCH_MAX];
+    int8_t   box_of[ATH_RAY_BATCH_MAX];   /* index into boxes, -1 = generic test */
+    AthenaRayBatchBox  boxes[ATH_RAY_BATCH_MAX];
+} AthenaRayBatch __attribute__((aligned(16)));
+
+void athena_physics_ray_batch_begin(AthenaRayBatch *batch, AthenaPhysicsSpace *space, const VECTOR dir,
+                                    float max_len, int backface_cull,
+                                    const VECTOR origins_min, const VECTOR origins_max);
+int athena_physics_ray_batch_cast(AthenaRayBatch *batch, const VECTOR origin, AthenaRaycastHit *out_hit);
+
 /* Body */
 AthenaPhysicsBody *athena_physics_body_create(AthenaPhysicsWorld *world);
 void athena_physics_body_destroy(AthenaPhysicsBody *body);

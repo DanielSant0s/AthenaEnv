@@ -238,6 +238,8 @@ declare namespace Screen {
     const SCISSOR_BOUNDS: 9;
     const PIXEL_ALPHA_BLEND_ENABLE: number;
     const COLOR_CLAMP_MODE: number;
+    /** Forces bit 7 of every alpha written to the draw buffer to 1 (GS FBA), current context only. */
+    const ALPHA_CORRECTION: number;
 
     // -- alpha test methods ----------------------------------------------------
     const ALPHA_NEVER: number;

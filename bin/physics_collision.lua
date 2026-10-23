@@ -331,7 +331,7 @@ Lights.set(fillLight, Lights.AMBIENT,    0.05, 0.04, 0.03)
 Lights.set(fillLight, Lights.DIFFUSE,    0.34, 0.27, 0.20)
 Lights.set(fillLight, Lights.SPECULAR,   0.70, 0.50, 0.30)
 
--- Dynamic silhouette shadows (L3 to toggle) -- see physics_collision.js -------
+-- Dynamic silhouette shadows (L3: exact -> fast overlaps -> off) -- see physics_collision.js
 local SHADOW_PROP_LIMIT = 6
 local SHADOW_DISTANCE = 20
 local SHADOW_RAY_LENGTH = 12
@@ -352,10 +352,11 @@ local shadowSilhouetteBlend = Screen.alphaEquation(Screen.ZERO_RGB, Screen.ZERO_
 local shadowSceneBlend = Screen.alphaEquation(Screen.SRC_RGB, Screen.ZERO_RGB, Screen.DST_ALPHA, Screen.ZERO_RGB, 0)
 local shadowDarkenBlend = Screen.alphaEquation(Screen.DST_RGB, Screen.ZERO_RGB, Screen.DST_ALPHA, Screen.ZERO_RGB, 0)
 local shadowIdentityLUT = Screen.createShuffleLUT(function(v) return Color.new(v, v, v, v) end)
--- RGB coverage saturates at 255: 127 + 128 * min(sum(coverage), 1).
+-- Each shadow adds 128 * SHADOW_OPACITY * coverage to red (127 base); the sum is
+-- capped at full opacity, so overlaps darken once.
 local shadowMaskLUT = Screen.createShuffleLUT(function(v)
-  local coverage = max(0, min(1, (v - 127) / 128))
-  return Color.new(0, 0, 0, floor(128 * (1 - SHADOW_OPACITY * coverage) + 0.5))
+  local darken = min(max(0, v - 127), 128 * SHADOW_OPACITY)
+  return Color.new(0, 0, 0, floor(128 - darken + 0.5))
 end)
 local sunLength = sqrt(SUN_DIR.x * SUN_DIR.x + SUN_DIR.y * SUN_DIR.y + SUN_DIR.z * SUN_DIR.z)
 local shadowLight = { x = SUN_DIR.x / sunLength, y = SUN_DIR.y / sunLength, z = SUN_DIR.z / sunLength }
@@ -374,22 +375,39 @@ local function createShadowProjector(size, grid)
   projector:setLightOffset(0)
   projector:setBias(-0.018)
   projector:setSlopeLimit(0.45)
-  projector:setBlend(Shadows.SHADOW_BLEND_ADD)
-  projector:setColor(1, 1, 1, 1)
+  -- Opacity rides in the vertex alpha: both blends below read it from the texture alpha.
+  projector:setColor(1, 1, 1, SHADOW_OPACITY)
   projector:setSize(size, size)
   projector:setGrid(grid, grid) -- color is baked when geometry is built
   projector:enableRaycast(shadowSpace, true, SHADOW_RAY_LENGTH)
   return projector
 end
 local playerShadow = createShadowProjector(3.2, 6)
-local propShadow = createShadowProjector(1.65, 4)
+-- Per-frame shadow state, one table: the main chunk is at Lua's 200-local limit.
+-- projectors: one per shadowed prop -- screenBounds() builds a projector's grid
+-- and keeps it for its next render(), so each caster needs its own.
+-- casters/count: casters whose shadow is on screen this frame, with their
+-- screen bounds. groups/groupCount: casters whose bounds intersect, directly or
+-- through another caster; only shadows that can overlap need more than one pass.
+-- EXACT resolves overlaps with the coverage passes; FAST marks the darkened
+-- pixels in alpha instead, where the first shadow to reach a pixel wins.
+local shadowFrame = {
+  projectors = {}, casters = {}, count = 0, groups = {}, groupCount = 0, overlapping = 0,
+  OFF = 0, EXACT = 1, FAST = 2, MODE_NAMES = { [0] = "OFF", "ON", "ON (fast overlaps)" },
+  stencilClear = Color.new(0, 0, 0, 0),
+}
+for i = 1, SHADOW_PROP_LIMIT do shadowFrame.projectors[i] = createShadowProjector(1.65, 4) end
+for i = 1, SHADOW_PROP_LIMIT + 1 do
+  shadowFrame.casters[i] = {}
+  shadowFrame.groups[i] = { members = {}, count = 0, x0 = 0, y0 = 0, x1 = 0, y1 = 0 }
+end
 local shadowCandidates = {}
 for i, prop in ipairs(allProps) do
   shadowCandidates[i] = { prop = prop, data = i <= #crates and box or monkeyData, x = 0, y = 0, z = 0, distance = 0 }
 end
 local function shadowDistanceOrder(a, b) return a.distance < b.distance end
 local shadowView = Camera.save()
-local shadowsEnabled = true
+local shadowMode = shadowFrame.EXACT
 local shadowDraws = 0
 
 -- Reserve context 2 for silhouette generation; its Z writes stay masked.
@@ -402,6 +420,59 @@ Screen.setParam(Screen.SCISSOR_BOUNDS, { x1 = 0, y1 = 0, x2 = 127, y2 = 127 })
 Screen.setParam(Screen.ALPHA_BLEND_EQUATION, shadowCopyBlend)
 Screen.switchContext()
 Screen.setBuffer(Screen.DEPTH_BUFFER, zbuf, 0)
+
+-- Places a caster's projector under it and queues it when its shadow is on screen.
+local function placeCasterShadow(obj, data, projector, size, x, y, z)
+  -- Start just above the whole caster, including the grid's lower corners.
+  local rayOffset = (SHADOW_RAY_LENGTH - size) * 0.5
+  shadowTransform[13] = x - shadowLight.x * rayOffset
+  shadowTransform[14] = y - shadowLight.y * rayOffset + shadowLight.y
+  shadowTransform[15] = z - shadowLight.z * rayOffset
+  projector:setTransform(shadowTransform)
+  local b = projector:screenBounds()
+  if not b then return end
+  local f = shadowFrame
+  f.count = f.count + 1
+  local c = f.casters[f.count]
+  c.obj, c.data, c.projector, c.size, c.x, c.y, c.z = obj, data, projector, size, x, y, z
+  c.x0, c.y0, c.x1, c.y1 = b.x, b.y, b.x + b.width, b.y + b.height
+end
+
+function shadowFrame.groupCasters()
+  local f = shadowFrame
+  for i = 1, f.count do f.casters[i].group = 0 end
+  f.groupCount = 0
+  for i = 1, f.count do
+    if f.casters[i].group == 0 then
+      f.groupCount = f.groupCount + 1
+      local group = f.groups[f.groupCount]
+      f.casters[i].group = f.groupCount
+      group.members[1] = f.casters[i]
+      group.count = 1
+      -- Members join while the loop runs, so their neighbours join too.
+      local m = 1
+      while m <= group.count do
+        local a = group.members[m]
+        for j = i + 1, f.count do
+          local b = f.casters[j]
+          if b.group == 0 and a.x0 < b.x1 and b.x0 < a.x1 and a.y0 < b.y1 and b.y0 < a.y1 then
+            b.group = a.group
+            group.count = group.count + 1
+            group.members[group.count] = b
+          end
+        end
+        m = m + 1
+      end
+      local first = group.members[1]
+      group.x0, group.y0, group.x1, group.y1 = first.x0, first.y0, first.x1, first.y1
+      for k = 2, group.count do
+        local c = group.members[k]
+        group.x0, group.y0 = min(group.x0, c.x0), min(group.y0, c.y0)
+        group.x1, group.y1 = max(group.x1, c.x1), max(group.y1, c.y1)
+      end
+    end
+  end
+end
 
 local function renderCasterShadow(obj, data, projector, size, x, y, z)
   Screen.switchContext()
@@ -427,27 +498,131 @@ local function renderCasterShadow(obj, data, projector, size, x, y, z)
   Render.setView(60, 2, 250)
   Camera.restore(shadowView)
   Camera.update()
-  -- Start just above the whole caster, including the grid's lower corners.
-  local rayOffset = (SHADOW_RAY_LENGTH - size) * 0.5
-  shadowTransform[13] = x - shadowLight.x * rayOffset
-  shadowTransform[14] = y - shadowLight.y * rayOffset + shadowLight.y
-  shadowTransform[15] = z - shadowLight.z * rayOffset
-  projector:setTransform(shadowTransform)
+  -- Drawn from the grid placeCasterShadow() built.
   projector:render()
   shadowDraws = shadowDraws + 1
 end
 
+-- Multiplies the scene straight from each caster's projector: all a shadow
+-- alone on screen needs. With stencil (FAST overlaps), alpha bit 7 marks every
+-- pixel already darkened so an overlap darkens once.
+function shadowFrame.renderDirect(group, stencil, depthTest, depthMethod)
+  Screen.setParam(Screen.ALPHA_TEST_ENABLE, false)
+  Screen.setParam(Screen.DST_ALPHA_TEST_ENABLE, false)
+  if stencil then
+    Screen.setParam(Screen.DEPTH_TEST_ENABLE, false)
+    Screen.setParam(Screen.ALPHA_BLEND_EQUATION, shadowCopyBlend)
+    Screen.setBuffer(Screen.DRAW_BUFFER, fbuf, 0x00FFFFFF)
+    Draw.rect(group.x0, group.y0, group.x1 - group.x0, group.y1 - group.y0, shadowFrame.stencilClear)
+    Screen.setBuffer(Screen.DRAW_BUFFER, fbuf, 0)
+    Screen.setParam(Screen.DST_ALPHA_TEST_ENABLE, true)
+    Screen.setParam(Screen.DST_ALPHA_TEST_METHOD, Screen.DST_ALPHA_ZERO)
+    Screen.setParam(Screen.ALPHA_CORRECTION, true)
+  else
+    -- RGB only: the scene's alpha stays as it was.
+    Screen.setBuffer(Screen.DRAW_BUFFER, fbuf, 0xFF000000)
+  end
+  Screen.setParam(Screen.DEPTH_TEST_ENABLE, depthTest)
+  Screen.setParam(Screen.DEPTH_TEST_METHOD, depthMethod)
+  Screen.setParam(Screen.ALPHA_TEST_ENABLE, true)
+  Screen.setParam(Screen.ALPHA_TEST_METHOD, Screen.ALPHA_GREATER)
+  Screen.setParam(Screen.ALPHA_TEST_REF, 0)
+  Screen.setParam(Screen.ALPHA_TEST_FAIL, Screen.ALPHA_FAIL_NO_UPDATE)
+  for i = 1, group.count do
+    local c = group.members[i]
+    c.projector:setBlend(Shadows.SHADOW_BLEND_MULTIPLY)
+    renderCasterShadow(c.obj, c.data, c.projector, c.size, c.x, c.y, c.z)
+  end
+  if stencil then
+    Screen.setParam(Screen.ALPHA_CORRECTION, false)
+    Screen.setParam(Screen.DST_ALPHA_TEST_ENABLE, false)
+  end
+end
+
+-- Overlapping shadows, resolved exactly: red becomes a coverage buffer that
+-- every shadow of the group adds to, then the scene is darkened once by it.
+function shadowFrame.renderCoverage(group, depthTest, depthMethod)
+  -- Whole GS pages (64x32): the channel shuffles work page by page, and every
+  -- pass has to cover exactly the same pixels.
+  local rx, ry = group.x0 & ~63, group.y0 & ~31
+  local region = {
+    x = rx, y = ry,
+    width = min(canvas.width, (group.x1 + 63) & ~63) - rx,
+    height = min(canvas.height, (group.y1 + 31) & ~31) - ry,
+  }
+  -- Save red in the unused Z24 alpha byte using a CT32 physical view.
+  Screen.setParam(Screen.DST_ALPHA_TEST_ENABLE, false)
+  Screen.setParam(Screen.ALPHA_TEST_ENABLE, false)
+  Screen.channelShuffle(fbuf, shadowIdentityLUT, Screen.CHANNEL_RED, {
+    dst = zbuf, rawDestination = true, outMask = Screen.CHANNEL_ALPHA, alphaBlend = false, alphaTest = false,
+    x = region.x, y = region.y, width = region.width, height = region.height,
+  })
+  Screen.setParam(Screen.DEPTH_TEST_ENABLE, false)
+  Screen.setParam(Screen.ALPHA_BLEND_EQUATION, shadowCopyBlend)
+  Screen.setBuffer(Screen.DRAW_BUFFER, fbuf, 0xFFFFFF00)
+  Draw.rect(region.x, region.y, region.width, region.height, shadowCoverageClear)
+  Screen.setParam(Screen.DEPTH_TEST_ENABLE, depthTest)
+  Screen.setParam(Screen.DEPTH_TEST_METHOD, depthMethod)
+
+  -- Red += filtered coverage, clamped to 255.
+  Screen.setParam(Screen.ALPHA_TEST_ENABLE, true)
+  Screen.setParam(Screen.ALPHA_TEST_METHOD, Screen.ALPHA_GREATER)
+  Screen.setParam(Screen.ALPHA_TEST_REF, 0)
+  Screen.setParam(Screen.ALPHA_TEST_FAIL, Screen.ALPHA_FAIL_NO_UPDATE)
+
+  for i = 1, group.count do
+    local c = group.members[i]
+    c.projector:setBlend(Shadows.SHADOW_BLEND_ADD)
+    renderCasterShadow(c.obj, c.data, c.projector, c.size, c.x, c.y, c.z)
+  end
+  Screen.channelShuffle(Screen.DRAW_BUFFER, shadowMaskLUT, Screen.CHANNEL_RED, {
+    outMask = Screen.CHANNEL_ALPHA, alphaBlend = false, alphaTest = false,
+    x = region.x, y = region.y, width = region.width, height = region.height,
+  })
+  -- Restore saved red multiplied by transmittance (same physical layout).
+  Screen.channelShuffle(zbuf, shadowIdentityLUT, Screen.CHANNEL_ALPHA, {
+    rawSource = true, outMask = Screen.CHANNEL_RED, alphaBlend = true,
+    blendEquation = shadowSceneBlend, alphaTest = false,
+    x = region.x, y = region.y, width = region.width, height = region.height,
+  })
+  Screen.setParam(Screen.ALPHA_TEST_ENABLE, false)
+  Screen.setParam(Screen.DEPTH_TEST_ENABLE, false)
+  Screen.setBuffer(Screen.DRAW_BUFFER, fbuf, 0xFF0000FF)
+  Screen.setParam(Screen.ALPHA_BLEND_EQUATION, shadowDarkenBlend)
+  Draw.rect(region.x, region.y, region.width, region.height, shadowCoverageClear)
+end
+
 local function renderDynamicShadows(px, py, pz, camX, camY, camZ)
   shadowDraws = 0
-  if not shadowsEnabled then return end
+  shadowFrame.overlapping = 0
+  if shadowMode == shadowFrame.OFF then return end
   local sp, st = shadowView.position, shadowView.target
   sp.x, sp.y, sp.z = camX, camY, camZ
   st.x, st.y, st.z = camTargetX, camTargetY, camTargetZ
+
+  local f = shadowFrame
+  f.count = 0
+  placeCasterShadow(skin_object, gltf_skin, playerShadow, 3.2, px, py - PLAYER_RADIUS + 0.9, pz)
+  for _, c in ipairs(shadowCandidates) do
+    local x, y, z = c.prop.body:getPosition()
+    c.x, c.y, c.z = x, y, z
+    local dx, dz = x - px, z - pz
+    c.distance = dx * dx + dz * dz
+  end
+  table.sort(shadowCandidates, shadowDistanceOrder)
+  for i = 1, SHADOW_PROP_LIMIT do
+    local c = shadowCandidates[i]
+    if c.distance > SHADOW_DISTANCE * SHADOW_DISTANCE then break end
+    placeCasterShadow(c.prop.obj, c.data, f.projectors[i], 1.65, c.x, c.y, c.z)
+  end
+  if f.count == 0 then return end
+  f.groupCasters()
+
   local saved = {}
   for _, p in ipairs({ "ALPHA_TEST_ENABLE", "ALPHA_TEST_METHOD", "ALPHA_TEST_REF", "ALPHA_TEST_FAIL",
                        "DST_ALPHA_TEST_ENABLE", "DST_ALPHA_TEST_METHOD", "DEPTH_TEST_ENABLE",
                        "DEPTH_TEST_METHOD", "ALPHA_BLEND_EQUATION", "COLOR_CLAMP_MODE",
-                       "PIXEL_ALPHA_BLEND_ENABLE" }) do
+                       "PIXEL_ALPHA_BLEND_ENABLE", "ALPHA_CORRECTION" }) do
     saved[#saved + 1] = { Screen[p], Screen.getParam(Screen[p]) }
   end
   local depthTest = Screen.getParam(Screen.DEPTH_TEST_ENABLE)
@@ -455,53 +630,18 @@ local function renderDynamicShadows(px, py, pz, camX, camY, camZ)
   Screen.setBuffer(Screen.DEPTH_BUFFER, zbuf, 1)
 
   local ok, err = pcall(function()
-    -- Save red in the unused Z24 alpha byte using a CT32 physical view.
-    Screen.setParam(Screen.DST_ALPHA_TEST_ENABLE, false)
-    Screen.setParam(Screen.ALPHA_TEST_ENABLE, false)
-    Screen.channelShuffle(fbuf, shadowIdentityLUT, Screen.CHANNEL_RED, {
-      dst = zbuf, rawDestination = true, outMask = Screen.CHANNEL_ALPHA, alphaBlend = false, alphaTest = false,
-    })
-    Screen.setParam(Screen.DEPTH_TEST_ENABLE, false)
-    Screen.setParam(Screen.ALPHA_BLEND_EQUATION, shadowCopyBlend)
     Screen.setParam(Screen.COLOR_CLAMP_MODE, 1)
     Screen.setParam(Screen.PIXEL_ALPHA_BLEND_ENABLE, false)
-    Screen.setBuffer(Screen.DRAW_BUFFER, fbuf, 0xFFFFFF00)
-    Draw.rect(0, 0, canvas.width, canvas.height, shadowCoverageClear)
-    Screen.setParam(Screen.DEPTH_TEST_ENABLE, depthTest)
-    Screen.setParam(Screen.DEPTH_TEST_METHOD, depthMethod)
-
-    -- Red += filtered coverage, clamped to 255.
-    Screen.setParam(Screen.ALPHA_TEST_ENABLE, true)
-    Screen.setParam(Screen.ALPHA_TEST_METHOD, Screen.ALPHA_GREATER)
-    Screen.setParam(Screen.ALPHA_TEST_REF, 0)
-    Screen.setParam(Screen.ALPHA_TEST_FAIL, Screen.ALPHA_FAIL_NO_UPDATE)
-
-    renderCasterShadow(skin_object, gltf_skin, playerShadow, 3.2, px, py - PLAYER_RADIUS + 0.9, pz)
-    for _, c in ipairs(shadowCandidates) do
-      local x, y, z = c.prop.body:getPosition()
-      c.x, c.y, c.z = x, y, z
-      local dx, dz = x - px, z - pz
-      c.distance = dx * dx + dz * dz
+    for g = 1, f.groupCount do
+      local group = f.groups[g]
+      if group.count == 1 then
+        f.renderDirect(group, false, depthTest, depthMethod)
+      else
+        f.overlapping = f.overlapping + 1
+        if shadowMode == f.FAST then f.renderDirect(group, true, depthTest, depthMethod)
+        else f.renderCoverage(group, depthTest, depthMethod) end
+      end
     end
-    table.sort(shadowCandidates, shadowDistanceOrder)
-    for i = 1, SHADOW_PROP_LIMIT do
-      local c = shadowCandidates[i]
-      if c.distance > SHADOW_DISTANCE * SHADOW_DISTANCE then break end
-      renderCasterShadow(c.prop.obj, c.data, propShadow, 1.65, c.x, c.y, c.z)
-    end
-    Screen.channelShuffle(Screen.DRAW_BUFFER, shadowMaskLUT, Screen.CHANNEL_RED, {
-      outMask = Screen.CHANNEL_ALPHA, alphaBlend = false, alphaTest = false,
-    })
-    -- Restore saved red multiplied by transmittance (same physical layout).
-    Screen.channelShuffle(zbuf, shadowIdentityLUT, Screen.CHANNEL_ALPHA, {
-      rawSource = true, outMask = Screen.CHANNEL_RED, alphaBlend = true,
-      blendEquation = shadowSceneBlend, alphaTest = false,
-    })
-    Screen.setParam(Screen.ALPHA_TEST_ENABLE, false)
-    Screen.setParam(Screen.DEPTH_TEST_ENABLE, false)
-    Screen.setBuffer(Screen.DRAW_BUFFER, fbuf, 0xFF0000FF)
-    Screen.setParam(Screen.ALPHA_BLEND_EQUATION, shadowDarkenBlend)
-    Draw.rect(0, 0, canvas.width, canvas.height, shadowCoverageClear)
   end)
 
   for _, s in ipairs(saved) do Screen.setParam(s[1], s[2]) end
@@ -702,7 +842,7 @@ while true do
   end
 
   if not BENCHMARK and pad:justPressed(Pads.R3) then fxReset((fxLevel + 1) % FX_LEVEL_COUNT) end
-  if pad:justPressed(Pads.L3) then shadowsEnabled = not shadowsEnabled end
+  if pad:justPressed(Pads.L3) then shadowMode = (shadowMode + 1) % 3 end
 
   if pad:justPressed(Pads.START) then
     resetSandbox()
@@ -1010,6 +1150,8 @@ while true do
   Screen.setParam(Screen.DEPTH_TEST_ENABLE, true)
   Screen.setParam(Screen.DEPTH_TEST_METHOD, Screen.DEPTH_GEQUAL)
   renderOpaqueScene()
+  -- Hand the scene to the GPU now (see physics_collision.js).
+  Screen.flush()
   renderDynamicShadows(px, py, pz, camX, camY, camZ)
   -- World-space billboards use scene depth, then receive the same fog/DOF.
   fxRender()
@@ -1062,7 +1204,8 @@ while true do
     stateLabel .. " (" .. currentAnim:upper() .. ")",
     "SELECT  Fog: " .. activeFog.name,
     fmt("R3  FX density: %d  (%d active, %d visible, %d batches)", FX_LEVELS[fxLevel], fxStats.active, fxStats.visible, fxStats.batches),
-    fmt("L3  Shadows: %s  (%d casters)", shadowsEnabled and "ON" or "OFF", shadowDraws),
+    fmt("L3  Shadows: %s  (%d casters, %d overlapping)", shadowFrame.MODE_NAMES[shadowMode], shadowDraws,
+      shadowFrame.overlapping),
     "START  Reset sandbox  |  Fast clip: " .. renderStats.fastClip,
   }
   if statusTimer > 0 then worldLines[#worldLines + 1] = ">> " .. statusText end

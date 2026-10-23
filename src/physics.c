@@ -2419,6 +2419,187 @@ int athena_physics_space_raycast(AthenaPhysicsSpace *space, const VECTOR origin,
     return hit_any;
 }
 
+/* Same AABB as geom_compute_aabb gives a ray of this origin */
+static inline void ray_batch_aabb(const AthenaRayBatch *b, const VECTOR origin, VECTOR out_min, VECTOR out_max) {
+    VECTOR end_pt;
+    end_pt[0] = origin[0] + b->dir[0] * b->max_len;
+    end_pt[1] = origin[1] + b->dir[1] * b->max_len;
+    end_pt[2] = origin[2] + b->dir[2] * b->max_len;
+    end_pt[3] = 0.0f;
+    vu0_vec_min_max(out_min, out_max, origin, end_pt);
+    out_min[0] -= 0.001f; out_min[1] -= 0.001f; out_min[2] -= 0.001f;
+    out_max[0] += 0.001f; out_max[1] += 0.001f; out_max[2] += 0.001f;
+}
+
+void athena_physics_ray_batch_begin(AthenaRayBatch *b, AthenaPhysicsSpace *space, const VECTOR dir,
+                                    float max_len, int backface_cull,
+                                    const VECTOR origins_min, const VECTOR origins_max) {
+    b->space = space;
+    b->max_len = max_len;
+    b->backface_cull = backface_cull;
+    b->overflow = 0;
+    b->count = 0;
+    b->box_count = 0;
+    if (!space || !dir || max_len <= 0.0f)
+        return;
+    vu0_vec_normalize_len(b->dir, dir);
+
+    /* everything any of the rays can reach: the origins' box swept along the
+       ray, with ray_batch_aabb's margin (a superset of every ray's own AABB) */
+    VECTOR sweep_min, sweep_max;
+    for (int a = 0; a < 3; a++) {
+        float lo = origins_min[a] < origins_max[a] ? origins_min[a] : origins_max[a];
+        float hi = origins_min[a] < origins_max[a] ? origins_max[a] : origins_min[a];
+        float d = b->dir[a] * max_len;
+        sweep_min[a] = (d < 0.0f ? lo + d : lo) - 0.01f;
+        sweep_max[a] = (d > 0.0f ? hi + d : hi) + 0.01f;
+    }
+    sweep_min[3] = sweep_max[3] = 0.0f;
+
+    for (AthenaPhysicsGeom *g = space->geoms; g; g = g->next) {
+        if (g->type == ATH_GEOM_RAY)
+            continue;
+        if (g->aabb_dirty || (g->body && g->body->enabled) || g->type == ATH_GEOM_TRANSFORM) {
+            geom_compute_aabb(g);
+        }
+        if (!vu0_aabb_overlap(sweep_min, sweep_max, g->aabb_min, g->aabb_max))
+            continue;
+        if (b->count == ATH_RAY_BATCH_MAX) {
+            b->overflow = 1;
+            return;
+        }
+
+        int box = -1;
+        if (g->type == ATH_GEOM_BOX) {
+            /* collide_ray_box's frame change, done once for the shared direction */
+            AthenaRayBatchBox *bx = &b->boxes[b->box_count];
+            VECTOR ld;
+            geom_get_world_pose(g, bx->pos, bx->rot);
+            vu0_mat3_mul_transpose_vec(ld, bx->rot, b->dir);
+            vu0_vec_copy(bx->half, g->box.half_extents);
+            for (int a = 0; a < 3; a++) {
+                bx->parallel[a] = fabsf(ld[a]) < 1e-7f;
+                bx->inv_dir[a] = bx->parallel[a] ? 0.0f : 1.0f / ld[a];
+            }
+            bx->geom = g;
+            box = b->box_count++;
+        }
+        b->cand[b->count] = g;
+        b->box_of[b->count] = (int8_t)box;
+        b->count++;
+    }
+}
+
+int athena_physics_ray_batch_cast(AthenaRayBatch *b, const VECTOR origin, AthenaRaycastHit *out_hit) {
+    if (!b->space || b->max_len <= 0.0f)
+        return 0;
+    if (b->overflow)
+        return athena_physics_space_raycast(b->space, origin, b->dir, b->max_len, b->backface_cull, out_hit);
+
+    VECTOR ray_min, ray_max;
+    ray_batch_aabb(b, origin, ray_min, ray_max);
+
+    int hit_any = 0;
+    float best_dist = b->max_len;
+    AthenaContact best_contact __attribute__((aligned(16)));
+    AthenaPhysicsGeom ray_geom __attribute__((aligned(16)));
+    int ray_geom_ready = 0;
+
+    for (int i = 0; i < b->count; i++) {
+        AthenaPhysicsGeom *g = b->cand[i];
+        if (!vu0_aabb_overlap(ray_min, ray_max, g->aabb_min, g->aabb_max))
+            continue;
+
+        int bi = b->box_of[i];
+        if (bi >= 0) {
+            /* collide_ray_box with the direction terms precomputed */
+            const AthenaRayBatchBox *bx = &b->boxes[bi];
+            VECTOR diff, lo;
+            vu0_vec_sub(diff, origin, bx->pos);
+            vu0_mat3_mul_transpose_vec(lo, bx->rot, diff);
+
+            float tmin = 0.0f;
+            float tmax = best_dist;
+            int hit_axis = -1;
+            float hit_sign = 0.0f;
+            int miss = 0;
+            for (int a = 0; a < 3; a++) {
+                const float he = bx->half[a];
+                if (bx->parallel[a]) {
+                    if (lo[a] < -he || lo[a] > he) { miss = 1; break; }
+                } else {
+                    float t1 = (-he - lo[a]) * bx->inv_dir[a];
+                    float t2 = ( he - lo[a]) * bx->inv_dir[a];
+                    float s = -1.0f;
+                    if (t1 > t2) {
+                        float tmp = t1; t1 = t2; t2 = tmp;
+                        s = 1.0f;
+                    }
+                    if (t1 > tmin) {
+                        tmin = t1;
+                        hit_axis = a;
+                        hit_sign = s;
+                    }
+                    if (t2 < tmax)
+                        tmax = t2;
+                    if (tmin > tmax) { miss = 1; break; }
+                }
+            }
+            if (miss || (hit_axis < 0 && b->backface_cull))
+                continue;
+            if (tmin <= best_dist) {
+                best_dist = tmin;
+                init_contact_defaults(&best_contact, NULL, g);
+                vu0_vec_madd(best_contact.pos, origin, b->dir, tmin);
+                if (hit_axis >= 0) {
+                    VECTOR n_local = { 0.0f, 0.0f, 0.0f, 0.0f };
+                    n_local[hit_axis] = hit_sign;
+                    vu0_mat3_mul_vec(best_contact.normal, bx->rot, n_local);
+                } else {
+                    vu0_vec_scale(best_contact.normal, b->dir, -1.0f);
+                }
+                best_contact.depth = tmin;
+                hit_any = 1;
+            }
+            continue;
+        }
+
+        /* any other shape: the plain path's ray geom */
+        if (!ray_geom_ready) {
+            memset(&ray_geom, 0, sizeof(ray_geom));
+            ray_geom.type = ATH_GEOM_RAY;
+            vu0_vec_copy(ray_geom.position, origin);
+            vu0_mat_identity(ray_geom.rotation);
+            ray_geom.scale[0] = ray_geom.scale[1] = ray_geom.scale[2] = 1.0f;
+            vu0_vec_copy(ray_geom.ray.dir, b->dir);
+            ray_geom.ray.first_contact = 0;
+            ray_geom.ray.backface_cull = b->backface_cull;
+            ray_geom.ray.closest_hit = 1;
+            vu0_vec_copy(ray_geom.aabb_min, ray_min);
+            vu0_vec_copy(ray_geom.aabb_max, ray_max);
+            ray_geom_ready = 1;
+        }
+        AthenaContact c __attribute__((aligned(16)));
+        ray_geom.ray.length = best_dist;
+        if (athena_physics_collide(&ray_geom, g, 1, &c) > 0) {
+            if (c.depth <= best_dist) {
+                best_dist = c.depth;
+                best_contact = c;
+                hit_any = 1;
+            }
+        }
+    }
+
+    if (hit_any && out_hit) {
+        vu0_vec_copy(out_hit->pos, best_contact.pos);
+        vu0_vec_copy(out_hit->normal, best_contact.normal);
+        out_hit->depth = best_contact.depth;
+        out_hit->geom = best_contact.g2;
+        out_hit->tri_index = best_contact.tri_index;
+    }
+    return hit_any;
+}
+
 /* ============================================================================
  * Geometry API Implementation
  * ============================================================================ */

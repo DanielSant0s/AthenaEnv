@@ -9,6 +9,7 @@
 #define SHADOW_BLEND_DARKEN 0
 #define SHADOW_BLEND_ALPHA  1
 #define SHADOW_BLEND_ADD    2
+#define SHADOW_BLEND_MULTIPLY 3   // dst * (1 - srcAlpha): texture alpha darkens, RGB ignored
 
 // A projector's chunks reach its vertex buffer through a DMA_REF, so the DMAC
 // reads that buffer whenever the chain it was queued in finally runs -- long
@@ -68,6 +69,11 @@ typedef struct ath_shadow_projector {
     uint32_t *triNodeIdx;        // vtxCount entries mapping vertex -> node index
     int vtxCount;                // cached vertex count
     int localGridDirty;          // slot 0 no longer holds the untouched local grid
+
+    // Raycast grid already built for the current settings by
+    // shadow_projector_screen_bounds(), used by the next render. Any setter
+    // drops it.
+    shadow_draw_slot *prepared;
 } ath_shadow_projector;
 
 void shadow_projector_init(ath_shadow_projector *p, GSSURFACE *tex);
@@ -85,6 +91,12 @@ void shadow_projector_enable_raycast(ath_shadow_projector *p, AthenaPhysicsSpace
 
 // Draw using the VU1 colors pipeline, with darkening blend equation
 void shadow_projector_render(ath_shadow_projector *p);
+
+// Screen rectangle the next render() covers under the current camera, in
+// pixels: out = { x0, y0, x1, y1 } (x1/y1 exclusive), clamped to the screen.
+// Returns 0 when it is off-screen. A raycast grid is built here and kept for
+// that render, so this costs nothing extra.
+int shadow_projector_screen_bounds(ath_shadow_projector *p, int out[4]);
 
 // Free all projector-allocated resources
 void shadow_projector_free(ath_shadow_projector *p);

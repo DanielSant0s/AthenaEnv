@@ -683,6 +683,7 @@ static int l_screen_set_param(lua_State *L)
         case DST_ALPHA_TEST_ENABLE:
         case DEPTH_TEST_ENABLE:
         case PIXEL_ALPHA_BLEND_ENABLE:
+        case ALPHA_CORRECTION:
             value = athena_lua_tobool(L, 2);
             break;
         case ALPHA_TEST_METHOD:
@@ -730,6 +731,7 @@ static int l_screen_get_param(lua_State *L)
         case DEPTH_TEST_METHOD:
         case PIXEL_ALPHA_BLEND_ENABLE:
         case COLOR_CLAMP_MODE:
+        case ALPHA_CORRECTION:
             lua_pushinteger(L, (lua_Integer)value);
             return 1;
         case ALPHA_BLEND_EQUATION: {
@@ -1103,7 +1105,7 @@ static const athena_lua_const screen_consts[] = {
     { "SRC_RGB", SRC_RGB }, { "DST_RGB", DST_RGB }, { "ZERO_RGB", ZERO_RGB },
     { "SRC_ALPHA", SRC_ALPHA }, { "DST_ALPHA", DST_ALPHA }, { "ALPHA_FIX", ALPHA_FIX },
     { "SCISSOR_BOUNDS", SCISSOR_BOUNDS }, { "PIXEL_ALPHA_BLEND_ENABLE", PIXEL_ALPHA_BLEND_ENABLE },
-    { "COLOR_CLAMP_MODE", COLOR_CLAMP_MODE },
+    { "COLOR_CLAMP_MODE", COLOR_CLAMP_MODE }, { "ALPHA_CORRECTION", ALPHA_CORRECTION },
     { "NTSC", GS_MODE_NTSC }, { "DTV_480p", GS_MODE_DTV_480P }, { "PAL", GS_MODE_PAL },
     { "DTV_576p", GS_MODE_DTV_576P }, { "DTV_720p", GS_MODE_DTV_720P }, { "DTV_1080i", GS_MODE_DTV_1080I },
     { "INTERLACED", GS_INTERLACED }, { "PROGRESSIVE", GS_NONINTERLACED },

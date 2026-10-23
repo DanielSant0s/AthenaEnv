@@ -106,6 +106,12 @@ void athena_shadow_projector_sync_transform(AthenaShadowProjector *p)
 
     shadow_create_transform_matrix(p->proj.transform, p->proj.obj.position,
                                    p->proj.obj.rotation, p->proj.obj.scale);
+    p->proj.prepared = NULL;
+}
+
+int athena_shadow_projector_screen_bounds(AthenaShadowProjector *p, int out[4])
+{
+    return p ? shadow_projector_screen_bounds(&p->proj, out) : 0;
 }
 
 athena_object_data *athena_shadow_projector_object(AthenaShadowProjector *p)
