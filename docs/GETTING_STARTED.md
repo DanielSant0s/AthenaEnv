@@ -43,7 +43,7 @@ os.setInterval(() => { // Basically creates an infinite loop, similar to while t
   Screen.flip(); // Updates the screen.
 }, 0);
 ```
-See more examples at [AthenaEnv samples](https://github.com/DanielSant0s/AthenaEnv/tree/main/bin).
+See more examples at [AthenaEnv samples](https://github.com/DanielSant0s/AthenaEnv/tree/main/examples).
 
 ### How to run it
 

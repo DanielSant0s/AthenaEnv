@@ -7,7 +7,10 @@ src/main.js.c
 
 obj/
 embed/
-bin/brew_data.json
+# Generated: make builds the ELFs and modules, make dist copies examples/ in.
+/bin/
+# Release zips from scripts/package.sh
+/dist/
 
 .*
 
@@ -18,8 +21,6 @@ bin/brew_data.json
 
 src/exports.c
 *.erl
-bin/starfox.js
-bin/starfox_save.json
 
 RENDER_3D_ANALYSIS.md
 *.pyc

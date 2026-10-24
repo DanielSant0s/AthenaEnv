@@ -1220,7 +1220,7 @@ MIPS_CFLAGS += -march=r5900 -mabi=eabi
 
 ### C. Testing
 
-**Test suite:** `bin/native_smoke.js`
+**Test suite:** `examples/native_smoke/main.js`
 - Self-checking regression suite: every case runs the same computation natively
   and in plain JS, then diffs the results. Prints `N passed, M failed`.
 - Covers arithmetic, control flow, optimizer passes, Math intrinsics, registered

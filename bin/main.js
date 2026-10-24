@@ -7,7 +7,7 @@
 
 import { rgba, ACCENTS, accent, mix, COLORS, Spring, clamp, lerp, easeOut,
          roundRect, roundGradient, panel, ring, vgradient, bar, toggle, glyph, hints } from 'athenaos/gfx.js';
-import { scanApps, categoryOf, initials } from 'athenaos/registry.js';
+import { scanApps, categoryOf, initials, DEMOS_ELF } from 'athenaos/registry.js';
 import { loadSettings, saveSettings, loadSession, saveSession } from 'athenaos/storage.js';
 import { text, textV, measure, fit, wrap, pad2, margin, now as nowIn,
          clockText as clockIn, dateText as dateIn } from 'athenaos/ui.js';
@@ -412,6 +412,7 @@ function detailsInput() {
     const app = focusedApp();
     if (!app || pressed(Pads.CIRCLE) || pressed(Pads.TRIANGLE)) { closeOverlay(); return; }
     if (pressed(Pads.CROSS)) { closeOverlay(); launch(app); }
+    if (app.c && pressed(Pads.R1)) { closeOverlay(); launch(app, "c"); }
     if (pressed(Pads.SQUARE)) togglePin(app);
 }
 
@@ -436,11 +437,12 @@ function drawDetails() {
     wrap(ui, blurb, 0.5, w - 48).slice(0, 2).forEach((line, i) => textV(ui, x + 24, y + 146 + i * 20, line, 0.5, COLORS.text));
 
     const runs = session.launches[app.file] || 0;
-    textV(ui, x + 24, y + 190, `${app.file}   -   Home: ${app.exit}   -   Opened ${runs} time${runs === 1 ? "" : "s"}`, 0.42, COLORS.textFaint);
+    textV(ui, x + 24, y + 190, `${app.file}${app.c ? " + main.c" : ""}   -   Home: ${app.exit}   -   Opened ${runs} time${runs === 1 ? "" : "s"}`, 0.42, COLORS.textFaint);
 
     Draw.rect(x + 24, y + h - 42, w - 48, 1, COLORS.stroke);
     const pinned = session.pinned.includes(app.file);
-    hints([["cross", "Open"], ["square", pinned ? "Unpin" : "Pin"], ["circle", "Close"]], x + w - 24, y + h - 21, ui);
+    hints([["cross", "Open"], ...(app.c ? [["R1", "Open in C"]] : []), ["square", pinned ? "Unpin" : "Pin"], ["circle", "Close"]],
+          x + w - 24, y + h - 21, ui);
 }
 
 // Control center -------------------------------------------------------------------
@@ -448,7 +450,7 @@ function drawDetails() {
 const CC_ITEMS = [
     { label: "Settings",       sub: "Theme, clock, wallpaper", run: () => openOverlay("settings") },
     { label: "System monitor", sub: "Memory, video, hardware", run: () => openOverlay("monitor") },
-    { label: "File manager",   sub: "Browse devices",          run: () => { const a = appByFile("app_filemgr.js"); if (a) { closeOverlay(); launch(a); } } },
+    { label: "File manager",   sub: "Browse devices",          run: () => { const a = appByFile("apps/app_filemgr/main.js"); if (a) { closeOverlay(); launch(a); } } },
     { label: "Lock",           sub: "Back to the lock screen", run: () => { closeOverlay(); state = "lock"; lock.fade.snap(1); } },
     { label: "Restart shell",  sub: "Reload AthenaOS",         run: () => { pendingReload = "main.js"; } },
     { label: "Power",          sub: "Exit to the PS2 browser", run: () => { confirmPower = true; } },
@@ -613,12 +615,16 @@ const OVERLAYS = {
 
 // --- Launching -------------------------------------------------------------------------
 
-let launching = null;           // { app, t }
+let launching = null;           // { app, t, lang }
 let pendingReload = null;        // file to std.reload() at the end of the frame
+let pendingC = null;             // app to run in athena_demos.elf at the end of the frame
 
-function launch(app) {
+// lang "c": the app's C version, in athena_demos.elf, which loads this shell back
+// when the app returns. Either way session.launching names the app, so the shell
+// greets it on the way back.
+function launch(app, lang = "js") {
     if (launching) return;
-    launching = { app, t: 0 };
+    launching = { app, t: 0, lang };
     session.launching = app.file;
     session.recents = [app.file, ...session.recents.filter(f => f !== app.file)].slice(0, 8);
     session.launches[app.file] = (session.launches[app.file] || 0) + 1;
@@ -632,7 +638,10 @@ function drawLaunch() {
     Draw.rect(0, 0, W, H, rgba(0, 0, 0, t));
     drawTile(launching.app, W / 2, H / 2 - 20, lerp(GRID.tile, 120, t), 0, 1);
     text(ui, W / 2, H / 2 + 56, launching.app.name, 0.7, rgba(255, 255, 255, t), Font.ALIGN_HCENTER);
-    if (launching.t >= LEN + 4) pendingReload = launching.app.file;
+    if (launching.t >= LEN + 4) {
+        if (launching.lang === "c") pendingC = launching.app;
+        else pendingReload = launching.app.file;
+    }
 }
 
 // --- Main loop -----------------------------------------------------------------------
@@ -689,5 +698,11 @@ while (true) {
         Screen.clear(Color.new(0, 0, 0));
         Screen.flip();
         std.reload(pendingReload);
+    }
+    if (pendingC) {
+        Screen.clear(Color.new(0, 0, 0));
+        Screen.flip();
+        System.loadELF(System.boot_path.replace(/\/$/, "") + "/" + DEMOS_ELF,
+            ["--app=" + pendingC.id, "--return=athena.elf", "--return-script=main.js"]);
     }
 }

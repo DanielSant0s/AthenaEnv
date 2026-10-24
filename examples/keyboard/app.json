@@ -1,0 +1,8 @@
+{
+    "name": "Keyboard demo",
+    "author": "Daniel Santos",
+    "version": "04102023",
+    "category": "input",
+    "blurb": "Live USB keyboard events with a custom keymap.",
+    "exit": "TRIANGLE"
+}

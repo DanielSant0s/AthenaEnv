@@ -32,6 +32,33 @@ A script loads one with `import` (see [Module System](MODULE_SYSTEM.md)). Settin
   
 In addition, you can just type ```make clean``` to remove compilation cache resources.
 
+## The bin folder and the examples
+`bin/` is generated: it is what goes on the memory card or USB drive. `make` builds the ELFs and modules into it, and ```make dist``` copies the shell, the apps and their assets there from `examples/`:
+
+| Source | Ends up in | What |
+|--------|------------|------|
+| `examples/shell/` | `bin/` | AthenaOS (`main.js`, `main.lua`, `athenaos/`) and `athena.ini` |
+| `examples/shared/` | `bin/` | Assets several apps use (`render/`, `fonts/`, ...) |
+| `examples/<app>/` | `bin/apps/<app>/` | `app.json`, `main.js`, `main.lua`, `main.c` (marks a C version, built into `athena_demos.elf` by `make demos`) |
+| `examples/<app>/assets/` | `bin/` | Assets only that app uses |
+
+Apps run from the boot folder, like the shell, so an app's asset paths are relative to `bin/` whether the file came from `shared/` or from the app's own `assets/`. `app.json` holds what the shell lists (name, author, version, category, blurb, icon, exit button); a `"lua"` or `"js"` object overrides fields for that language. `examples/<app>/main.c` is the app's C version (see [C API](C_API.md)).
+
+Only newer files are copied, and saved data in `bin/` (`athena.ini`, settings, saves) is never overwritten. ```make dist DIST_FLAGS=--clean``` empties `bin/` first, keeping the ELFs, the modules and `athena.ini`.
+
+## Release packages
+`scripts/package.sh js lua demos` zips a built `bin/` into `dist/` (each zip unpacks into an `AthenaEnv/` folder). The CI builds and publishes the same three:
+
+| Package | Contents |
+|---------|----------|
+| `AthenaEnv-js.zip` | `athena.elf`, `athena_pkd.elf`, the JavaScript `.erl` modules and a hello world `main.js` with its `athena.ini` (from `examples/starter/js/`) |
+| `AthenaEnv-lua.zip` | `athena_lua.elf`, `athena_lua_pkd.elf`, the Lua `.erl` modules and a hello world `main.lua` with its `athena.ini` (from `examples/starter/lua/`) |
+| `AthenaEnv-demos.zip` | `bin/` after `make dist`: AthenaOS, every example in JavaScript and Lua, and the C versions in `athena_demos.elf` |
+
+Build `bin/` the way the CI does before packaging: `make`, `make SCRIPT_ENGINE=lua`, `make demos` for the C apps, then `make dist`.
+
+`make capp` and `make demos` compile into `obj/c/`, not `obj/`: a C build links the network, archive and MPEG modules in, which the script builds load as `.erl` modules, so the two can't share objects.
+
 ## Customizing compilation
 AthenaEnv has some flags and variables that can be change when compiling as command line arguments, which let you to customize athena final binaries.
 * EE_BIN_PREF - Binary name prefix. Default: athena

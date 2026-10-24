@@ -1,0 +1,8 @@
+{
+    "name": "Header request",
+    "author": "Daniel Santos",
+    "version": "05112023",
+    "category": "network",
+    "blurb": "HTTP HEAD request and response headers.",
+    "exit": "TRIANGLE"
+}

@@ -1,0 +1,8 @@
+{
+    "name": "2D Draw",
+    "author": "Daniel Santos",
+    "version": "02282025",
+    "category": "2d",
+    "blurb": "MMI accelerated points, lines, rects, circles and quads.",
+    "exit": "TRIANGLE"
+}

@@ -1,0 +1,8 @@
+{
+    "name": "Physics demo",
+    "author": "Daniel Santos",
+    "version": "04072023",
+    "category": "3d",
+    "blurb": "Rigid bodies, BVH trimesh, joints and shadows in a courtyard.",
+    "exit": "TRIANGLE"
+}

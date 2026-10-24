@@ -1,0 +1,8 @@
+{
+    "name": "Hello world",
+    "author": "Daniel Santos",
+    "version": "03112025",
+    "category": "2d",
+    "blurb": "Font basics: colors, outline, drop shadow and scaling.",
+    "exit": "TRIANGLE"
+}

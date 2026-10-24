@@ -41,7 +41,7 @@ export const DEFAULT_SESSION = {
     launching: null,     // app started from the shell; null means cold boot
     recents: [],         // most recent first
     launches: {},        // file -> launch count
-    pinned: ["starfox.js", "render.js", "physics_collision.js", "sound.js", "app_filemgr.js"],
+    pinned: ["apps/starfox/main.js", "apps/render/main.js", "apps/physics_collision/main.js", "apps/sound/main.js", "apps/app_filemgr/main.js"],
 };
 
 export const loadSettings = () => readJSON("settings.json", DEFAULT_SETTINGS);

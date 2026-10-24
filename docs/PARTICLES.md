@@ -29,7 +29,7 @@ fx.draw();
 fx.dispose();
 ```
 
-Run [bin/particles.js](../bin/particles.js) for a complete screen-space example. [bin/physics_collision.js](../bin/physics_collision.js) uses world-space dust and fragments on footsteps, landings and prop impacts.
+Run [examples/particles](../examples/particles/main.js) for a complete screen-space example. [examples/physics_collision](../examples/physics_collision/main.js) uses world-space dust and fragments on footsteps, landings and prop impacts.
 
 ## System options
 

@@ -1,0 +1,8 @@
+{
+    "name": "Shadow volumes",
+    "author": "Daniel Santos",
+    "version": "23102026",
+    "category": "3d",
+    "blurb": "Stencil shadow volumes on the GS, with the red channel as the stencil.",
+    "exit": "TRIANGLE"
+}

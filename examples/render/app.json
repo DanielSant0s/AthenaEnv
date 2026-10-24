@@ -1,0 +1,8 @@
+{
+    "name": "Render demo",
+    "author": "Daniel Santos",
+    "version": "04072023",
+    "category": "3d",
+    "blurb": "VU1 3D pipeline: lighting, materials, glTF and OBJ models.",
+    "exit": "TRIANGLE"
+}

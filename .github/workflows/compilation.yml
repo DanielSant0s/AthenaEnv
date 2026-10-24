@@ -50,28 +50,43 @@ jobs:
         echo "$PS2DEV/dvp/bin" >> "$GITHUB_PATH"
         echo "$PS2SDK/bin" >> "$GITHUB_PATH"
 
-    - name: Compile project
+    # bin/ is generated: both engines and the C apps are built into it, then
+    # make dist copies the shell, the apps and their assets from examples/.
+    - name: Compile JavaScript engine
       run: |
         chmod +x build-exports.sh
-        make clean all
+        make clean
+        make -j$(nproc) all
       env:
         ATHENAENV_SRC: "${{ github.workspace }}/src"
 
+    - name: Compile Lua engine
+      run: make -j$(nproc) SCRIPT_ENGINE=lua
+      env:
+        ATHENAENV_SRC: "${{ github.workspace }}/src"
+
+    - name: Compile C apps
+      run: |
+        make -j$(nproc) capp
+        make -j$(nproc) demos
+      env:
+        ATHENAENV_SRC: "${{ github.workspace }}/src"
+
+    - name: Assemble bin and packages
+      run: |
+        make dist
+        sh scripts/package.sh js lua demos
+
     - name: Get short SHA
       id: slug
-      run: echo "sha8=$(echo ${GITHUB_SHA} | cut -c1-8)" >> $GITHUB_ENV
+      run: echo "sha8=$(echo ${GITHUB_SHA} | cut -c1-8)" >> $GITHUB_OUTPUT
 
     - name: Upload artifacts
       if: ${{ success() }}
       uses: actions/upload-artifact@v4
       with:
         name: AthenaEnv-${{ steps.slug.outputs.sha8 }}
-        path: bin
-
-    - name: Compress & Rename bin folder
-      run: |
-        mv bin/ AthenaEnv/
-        tar -zcvf AthenaEnv.tar.gz AthenaEnv
+        path: dist/*.zip
 
 
     - name: Create Pre-release
@@ -82,13 +97,18 @@ jobs:
         automatic_release_tag: "latest"
         title: "Development build"
         files: |
-               AthenaEnv.tar.gz
+               dist/AthenaEnv-js.zip
+               dist/AthenaEnv-lua.zip
+               dist/AthenaEnv-demos.zip
 
     - name: Release
       if: startsWith(github.ref, 'refs/tags/')
       uses: softprops/action-gh-release@v2
       with:
-        files: AthenaEnv.tar.gz
+        files: |
+          dist/AthenaEnv-js.zip
+          dist/AthenaEnv-lua.zip
+          dist/AthenaEnv-demos.zip
         tag_name: ${{ steps.tag.outputs.VERSION }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,8 @@
+{
+    "name": "Star Fox",
+    "author": "Daniel Santos",
+    "version": "07112026",
+    "category": "games",
+    "blurb": "A rail shooter built on the 3D renderer.",
+    "exit": "TRIANGLE"
+}

@@ -1,0 +1,8 @@
+{
+    "name": "Normal mapping",
+    "author": "Daniel Santos",
+    "version": "23102026",
+    "category": "3d",
+    "blurb": "Per-pixel DOT3 lighting on the GS: Gouraud vs 2-pass vs 4-pass.",
+    "exit": "TRIANGLE"
+}

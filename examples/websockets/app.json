@@ -1,0 +1,8 @@
+{
+    "name": "Websockets",
+    "author": "Daniel Santos",
+    "version": "05112023",
+    "category": "network",
+    "blurb": "Secure WebSocket echo round-trip.",
+    "exit": "TRIANGLE"
+}

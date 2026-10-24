@@ -1,9 +1,12 @@
 -- AthenaOS app registry (Lua port of athenaos/registry.js).
 --
--- Any .lua file in the boot folder whose first line is a JSON comment is an app:
---   -- {"name": "Pong", "author": "...", "version": "...", "file": "pong.lua",
---   --  "icon": "pong_icon.png", "category": "games", "blurb": "...", "exit": "START"}
--- `icon`, `category`, `blurb` and `exit` are optional.
+-- Every folder under apps/ with an app.json and a main.lua is an app:
+--   apps/pong/app.json  {"name": "Pong", "author": "...", "version": "...",
+--                        "icon": "pong_icon.png", "category": "games", "blurb": "...", "exit": "START"}
+--   apps/pong/main.lua
+-- `icon`, `category`, `blurb` and `exit` are optional; "js": {...} / "lua": {...}
+-- override fields for one language. Apps run from the boot folder, like the
+-- shell: `icon` and every asset path are relative to it.
 
 local M = {}
 
@@ -25,36 +28,41 @@ function M.categoryOf(id)
   return M.CATEGORIES[#M.CATEGORIES]
 end
 
-local function readHeader(file)
-  local f = io.open(file, "r")
+M.APPS_DIR = "apps"
+-- Every C app, run with --app=<id> (examples/common/demos_main.c).
+M.DEMOS_ELF = "athena_demos.elf"
+
+local function readMeta(dir)
+  local f = io.open(dir .. "/app.json", "r")
   if not f then return nil end
-  local line = f:read("l")
+  local text = f:read("a")
   f:close()
-  if not line then return nil end
-  local json = line:gsub("^%s*%-%-%s*", "")
-  if json:sub(1, 1) ~= "{" then return nil end
-  local ok, meta = pcall(JSON.parse, json)
-  if not ok then
-    print("[athenaos] bad app header in " .. file .. ": " .. tostring(meta))
+  local ok, meta = pcall(JSON.parse, text)
+  if not ok or type(meta) ~= "table" then
+    print("[athenaos] bad " .. dir .. "/app.json: " .. tostring(meta))
     return nil
+  end
+  if type(meta.lua) == "table" then
+    for k, v in pairs(meta.lua) do meta[k] = v end
   end
   return meta
 end
 
-local SHELL_FILES = { ["main.lua"] = true }
-
 function M.scanApps()
   local apps = {}
-  for _, entry in ipairs(System.listDir()) do
-    local file = entry.name
-    if not entry.dir and file:lower():sub(-4) == ".lua" and not SHELL_FILES[file] then
-      local meta = readHeader(file)
+  for _, entry in ipairs(System.listDir(M.APPS_DIR)) do
+    local dir = M.APPS_DIR .. "/" .. entry.name
+    local file = dir .. "/main.lua"
+    if entry.dir and entry.name:sub(1, 1) ~= "." and io.exists(file) then
+      local meta = readMeta(dir)
       if meta and meta.name then
         apps[#apps + 1] = {
+          id = entry.name,
           name = meta.name,
           author = meta.author or "Unknown",
           version = meta.version or "",
-          file = meta.file or file,
+          file = file,
+          c = io.exists(dir .. "/main.c") and io.exists(M.DEMOS_ELF),
           iconPath = (meta.icon and io.exists(meta.icon)) and meta.icon or nil,
           icon = nil, -- Image, loaded lazily by the shell
           category = M.categoryOf(meta.category or "system").id,

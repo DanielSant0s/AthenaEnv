@@ -1,0 +1,7 @@
+{
+    "name": "Native 2D particles",
+    "author": "Daniel Santos",
+    "category": "2d",
+    "blurb": "VU1 pooled particles: smoke trails and additive sparks.",
+    "exit": "TRIANGLE"
+}

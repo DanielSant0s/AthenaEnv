@@ -1,0 +1,9 @@
+{
+    "name": "Gamepad tester",
+    "author": "Daniel Santos",
+    "version": "08122024",
+    "category": "input",
+    "blurb": "Every button, pressure level, stick and rumble of your gamepad.",
+    "icon": "pads_icon.png",
+    "exit": "START+R3+UP"
+}

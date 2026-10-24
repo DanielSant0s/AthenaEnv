@@ -131,6 +131,7 @@ int main(int argc, char **argv) {
 
     bool ignore_ini = false;
     bool reset_iop = true;
+    const char *cli_script = NULL;  // --script=: wins over athena.ini's default_script
 
     char newCWD[255];
 
@@ -159,6 +160,7 @@ int main(int argc, char **argv) {
         for (int i = 1, arg = argv[1]; i < argc; i++, arg = argv[i]) {
             if ((tmp_arg = strpre("--script=", arg)) || (tmp_arg = strpre("-s=", arg))) {
                 set_default_script(tmp_arg);
+                cli_script = tmp_arg;
                 tmp_arg = NULL;
             } else if (!strcmp("--nologo", arg) || !strcmp("-l", arg)) {
                 boot_logo = false;
@@ -289,6 +291,9 @@ int main(int argc, char **argv) {
             readini_close(&ini);
         }
     }
+
+    if (cli_script)
+        set_default_script(cli_script);
 
     installExceptionHandlers();
 

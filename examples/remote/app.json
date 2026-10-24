@@ -1,0 +1,8 @@
+{
+    "name": "DVD Remote demo",
+    "author": "Daniel Santos",
+    "version": "08012026",
+    "category": "input",
+    "blurb": "DVD remote control buttons via the IR receiver.",
+    "exit": "TRIANGLE"
+}

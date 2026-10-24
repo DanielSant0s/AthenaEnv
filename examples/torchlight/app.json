@@ -1,0 +1,8 @@
+{
+    "name": "Torchlight",
+    "author": "Daniel Santos",
+    "version": "23102026",
+    "category": "3d",
+    "blurb": "A torch in a dungeon: DOT3 normal mapping, stencil shadow volumes and a point light.",
+    "exit": "TRIANGLE"
+}

@@ -1,0 +1,8 @@
+{
+    "name": "Mouse demo",
+    "author": "Daniel Santos",
+    "version": "04102023",
+    "category": "input",
+    "blurb": "USB mouse pointer, buttons and wheel.",
+    "exit": "TRIANGLE"
+}

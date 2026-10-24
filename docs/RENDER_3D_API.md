@@ -353,4 +353,4 @@ if (Shadows.beginVolumes()) {
 }
 ```
 
-Depth-pass counting (the GS tests GEQUAL/GREATER, never "behind"). The camera never ends up inside a volume: each extruded vertex stops just in front of the near plane, and the caps close the volume there. A caster's own faces turned from the light are where the volume starts, so they are not shadowed by it. See [bin/torchlight.js](../bin/torchlight.js): a point light, DOT3 everywhere and six volumes.
+Depth-pass counting (the GS tests GEQUAL/GREATER, never "behind"). The camera never ends up inside a volume: each extruded vertex stops just in front of the near plane, and the caps close the volume there. A caster's own faces turned from the light are where the volume starts, so they are not shadowed by it. See [examples/torchlight](../examples/torchlight/main.js): a point light, DOT3 everywhere and six volumes.

@@ -72,6 +72,8 @@ Textures and meshes register themselves. A GS-resident texture's EE pixel copy, 
 |--------|---------|--------|
 | Full (JS + C) | `make` | `bin/athena.elf` + `lib/libathena.a` + `lib/libathena_js.a` |
 | C-only example | `make capp` | `bin/athena_capp.elf` |
+| Every C app | `make demos` | `bin/athena_demos.elf`: each `examples/<app>/main.c`, picked with `--app=<app>` |
+| One C app alone | `make capp CAPP_NAME=physics_collision` | `bin/athena_physics_collision.elf` from `examples/physics_collision/main.c` |
 | Libraries only | `make libs` | Static archives in `lib/` |
 | No JS | `make ATHENA_JS=0` | Core without QuickJS |
 
@@ -80,6 +82,33 @@ Verify decoupling:
 ```bash
 bash scripts/verify-decouple.sh
 ```
+
+## C apps and the AthenaOS SDK
+
+An example's C version lives next to its scripts, in `examples/<app>/main.c`. `examples/common/athenaos/app.h` is the C side of `athenaos/app.js`: the same top bar, stats cards and footer hints (`AthenaOSApp`, `athenaos_chrome`, `athenaos_hud`, ...), Triangle for Home, and the `ATHENAOS_APP(id, main)` entry macro:
+
+```c
+#include "athenaos/app.h"
+
+static const AthenaOSHint hints[] = { { "cross", "Jump" } };
+
+static int my_main(int argc, char **argv) {
+    AthenaOSApp ui;
+    AthenaPad *pad = athena_pad_open(0);
+    athenaos_app_init(&ui, "My demo", "3d", hints, 1);
+    for (;;) {
+        athena_pad_update(pad);
+        if (athenaos_home_requested(pad))
+            return 0;           // back to the shell that launched it
+        /* ...draw... */
+        athenaos_chrome(&ui);
+        athena_screen_flip();
+    }
+}
+ATHENAOS_APP(my_demo, my_main)
+```
+
+`make demos` links every C app into `bin/athena_demos.elf` (`ATHENAOS_DEMOS` turns `ATHENAOS_APP` into a registration). It runs the app named by `--app=<id>`; when the app returns it loads `--return=<elf>` with `--return-script=<script>`, which is how the AthenaOS shells offer "Open in C" (R1 in an app's details) and get the user back. Without `--app` it shows a launcher of the C apps. `make capp CAPP_NAME=<app>` still builds a single app as its own ELF.
 
 ## JavaScript bindings
 

@@ -39,6 +39,17 @@ void athena_render_module_reset_stats(void);
 
 AthenaRenderData *athena_render_data_create(void);
 AthenaRenderData *athena_render_data_load(const char *path, GSSURFACE *texture);
+// Geometry built in code (Render.vertexList in JS): count vertices, each
+// attribute an x/y/z/w VECTOR per vertex; any but positions may be NULL. The
+// arrays are copied. One material (diffuse 0, so the vertex colours show)
+// covers every vertex; add textures with athena_render_data_push_texture.
+AthenaRenderData *athena_render_data_from_vertices(const VECTOR *positions, const VECTOR *normals,
+                                                   const VECTOR *texcoords, const VECTOR *colours,
+                                                   uint32_t count);
+// Replaces the geometry in place (the "vertices" setter in JS): same layout
+// as athena_render_data_from_vertices, copied; count 0 empties the mesh.
+void athena_render_data_set_vertices(AthenaRenderData *rd, const VECTOR *positions, const VECTOR *normals,
+                                     const VECTOR *texcoords, const VECTOR *colours, uint32_t count);
 void athena_render_data_destroy(AthenaRenderData *rd);
 void athena_render_data_free(AthenaRenderData *rd);
 AthenaRenderData *athena_render_data_clone(const AthenaRenderData *src);

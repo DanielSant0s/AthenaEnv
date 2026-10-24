@@ -1,0 +1,11 @@
+{
+    "name": "Tilemap Dynamic",
+    "author": "Daniel Santos",
+    "version": "07112026",
+    "category": "2d",
+    "blurb": "Tilemap sprites updated every frame from an ArrayBuffer.",
+    "exit": "TRIANGLE",
+    "lua": {
+        "blurb": "Tilemap sprites updated every frame from a Buffer."
+    }
+}

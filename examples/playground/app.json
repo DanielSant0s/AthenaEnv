@@ -1,0 +1,8 @@
+{
+    "name": "Playground",
+    "author": "Daniel Santos",
+    "version": "06022024",
+    "category": "system",
+    "blurb": "Vector and matrix math API checks.",
+    "exit": "TRIANGLE"
+}

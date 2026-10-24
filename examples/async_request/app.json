@@ -1,0 +1,11 @@
+{
+    "name": "Async Network",
+    "author": "Daniel Santos",
+    "version": "04072023",
+    "category": "network",
+    "blurb": "Non-blocking HTTPS download with transfer progress.",
+    "exit": "TRIANGLE",
+    "lua": {
+        "blurb": "Non-blocking HTTPS download with async/await."
+    }
+}

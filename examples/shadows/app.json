@@ -1,0 +1,8 @@
+{
+    "name": "Shadows demo",
+    "author": "Daniel Santos",
+    "version": "04072023",
+    "category": "3d",
+    "blurb": "Real-time projected shadows on a skinned character.",
+    "exit": "TRIANGLE"
+}

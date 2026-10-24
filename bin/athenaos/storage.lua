@@ -58,7 +58,7 @@ M.DEFAULT_SESSION = {
   launching = JSON.null, -- app started from the shell; null means cold boot
   recents = JSON.array(),
   launches = {},         -- file -> launch count
-  pinned = JSON.array({ "render.lua", "physics_collision.lua", "sound.lua", "pong.lua" }),
+  pinned = JSON.array({ "apps/render/main.lua", "apps/physics_collision/main.lua", "apps/sound/main.lua", "apps/pong/main.lua" }),
 }
 
 function M.loadSettings() return M.readJSON("settings.json", M.DEFAULT_SETTINGS) end

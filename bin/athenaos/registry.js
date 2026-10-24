@@ -1,9 +1,12 @@
 // AthenaOS app registry.
 //
-// Any .js file in the boot folder whose first line is a JSON comment is an app:
-//   // {"name": "Pong", "author": "...", "version": "...", "file": "pong.js",
-//   //  "icon": "pong_icon.png", "category": "games", "blurb": "...", "exit": "START"}
-// `icon`, `category`, `blurb` and `exit` are optional.
+// Every folder under apps/ with an app.json and a main.js is an app:
+//   apps/pong/app.json  {"name": "Pong", "author": "...", "version": "...",
+//                        "icon": "pong_icon.png", "category": "games", "blurb": "...", "exit": "START"}
+//   apps/pong/main.js
+// `icon`, `category`, `blurb` and `exit` are optional; "js": {...} / "lua": {...}
+// override fields for one language. Apps run from the boot folder, like the
+// shell: `icon` and every asset path are relative to it.
 
 export const CATEGORIES = [
     { id: "all",     label: "All",      rgb: [104, 112, 255] },
@@ -18,38 +21,40 @@ export const CATEGORIES = [
 
 export const categoryOf = (id) => CATEGORIES.find(c => c.id === id) || CATEGORIES[CATEGORIES.length - 1];
 
-function readHeader(file) {
-    const fd = std.open(file, "r");
-    if (!fd) return null;
-    const line = fd.getline();
-    fd.close();
-    if (!line) return null;
-    const json = line.replace(/^\s*\/\/\s*/, "");
-    if (json[0] !== "{") return null;
+export const APPS_DIR = "apps";
+// Every C app, run with --app=<id> (examples/common/demos_main.c).
+export const DEMOS_ELF = "athena_demos.elf";
+
+function readMeta(dir) {
+    const text = std.loadFile(`${dir}/app.json`);
+    if (!text) return null;
     try {
-        return JSON.parse(json);
+        const meta = JSON.parse(text);
+        return meta.js ? Object.assign(meta, meta.js) : meta;
     } catch (e) {
-        console.log(`[athenaos] bad app header in ${file}: ${e}`);
+        console.log(`[athenaos] bad ${dir}/app.json: ${e}`);
         return null;
     }
 }
 
-const SHELL_FILES = ["main.js", "UI.js"];
-
 export function scanApps() {
     const apps = [];
-    System.listDir().forEach(entry => {
-        const file = entry.name;
-        if (entry.dir || !file.toLowerCase().endsWith(".js") || SHELL_FILES.includes(file)) return;
+    System.listDir(APPS_DIR).forEach(entry => {
+        if (!entry.dir || entry.name[0] === ".") return;
+        const dir = `${APPS_DIR}/${entry.name}`;
+        const file = `${dir}/main.js`;
+        if (!std.exists(file)) return;
 
-        const meta = readHeader(file);
+        const meta = readMeta(dir);
         if (!meta || !meta.name) return;
 
         apps.push({
+            id: entry.name,
             name: meta.name,
             author: meta.author || "Unknown",
             version: meta.version || "",
-            file: meta.file || file,
+            file,
+            c: std.exists(`${dir}/main.c`) && std.exists(DEMOS_ELF),
             iconPath: (meta.icon && std.exists(meta.icon)) ? meta.icon : null,
             icon: null,           // Image, loaded lazily by the shell
             category: categoryOf(meta.category || "system").id,

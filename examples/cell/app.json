@@ -1,0 +1,9 @@
+{
+    "name": "Cell.io",
+    "author": "Daniel Santos",
+    "version": "04072023",
+    "category": "games",
+    "blurb": "Eat smaller cells, avoid bigger ones. Agar.io style arcade.",
+    "icon": "cell_icon.png",
+    "exit": "TRIANGLE"
+}

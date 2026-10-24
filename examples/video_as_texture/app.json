@@ -1,0 +1,8 @@
+{
+    "name": "Texture video",
+    "author": "Daniel Santos",
+    "version": "08022026",
+    "category": "media",
+    "blurb": "MPEG video decoded straight into a rotating texture.",
+    "exit": "TRIANGLE"
+}

@@ -1,0 +1,9 @@
+{
+    "name": "File manager",
+    "author": "Daniel Santos",
+    "version": "04072023",
+    "category": "system",
+    "blurb": "Browse memory cards, USB and HDD; copy, move and extract archives.",
+    "icon": "lfm_icon.png",
+    "exit": "TRIANGLE"
+}

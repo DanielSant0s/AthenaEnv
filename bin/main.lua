@@ -237,7 +237,7 @@ local TABS = {
 -- tab and focus are 0-based, like the JS shell
 local desk = { tab = 0, focus = 0, topRow = 0, tabX = Spring(M, 0.25), tabW = Spring(30, 0.25), scroll = Spring(0, 0.25) }
 
-local state, overlay, launching, pendingReload
+local state, overlay, launching, pendingReload, pendingC
 local launch, openOverlay
 
 local function homeApps()
@@ -447,6 +447,7 @@ local function detailsInput()
   local app = focusedApp()
   if not app or pressed(Pads.CIRCLE) or pressed(Pads.TRIANGLE) then closeOverlay() return end
   if pressed(Pads.CROSS) then closeOverlay() launch(app) end
+  if app.c and pressed(Pads.R1) then closeOverlay() launch(app, "c") end
   if pressed(Pads.SQUARE) then togglePin(app) end
 end
 
@@ -474,12 +475,16 @@ local function drawDetails()
   end
 
   local runs = session.launches[app.file] or 0
-  textV(ui, x + 24, y + 190, string.format("%s   -   Home: %s   -   Opened %d time%s", app.file, app.exit, runs, runs == 1 and "" or "s"),
+  textV(ui, x + 24, y + 190, string.format("%s%s   -   Home: %s   -   Opened %d time%s", app.file, app.c and " + main.c" or "", app.exit, runs, runs == 1 and "" or "s"),
         0.42, COLORS.textFaint)
 
   Draw.rect(x + 24, y + h - 42, w - 48, 1, COLORS.stroke)
   local pinned = contains(session.pinned, app.file)
-  hints({ { "cross", "Open" }, { "square", pinned and "Unpin" or "Pin" }, { "circle", "Close" } }, x + w - 24, y + h - 21, ui)
+  local list = { { "cross", "Open" } }
+  if app.c then list[#list + 1] = { "R1", "Open in C" } end
+  list[#list + 1] = { "square", pinned and "Unpin" or "Pin" }
+  list[#list + 1] = { "circle", "Close" }
+  hints(list, x + w - 24, y + h - 21, ui)
 end
 
 -- Control center ----------------------------------------------------------------
@@ -488,7 +493,7 @@ local CC_ITEMS = {
   { label = "Settings",       sub = "Theme, clock, wallpaper", run = function() openOverlay("settings") end },
   { label = "System monitor", sub = "Memory, video, hardware", run = function() openOverlay("monitor") end },
   { label = "File manager",   sub = "Browse devices", run = function()
-      local a = appByFile("app_filemgr.lua")
+      local a = appByFile("apps/app_filemgr/main.lua")
       if a then closeOverlay() launch(a) else notify("File manager not installed") end
     end },
   { label = "Lock",           sub = "Back to the lock screen", run = function() closeOverlay() state = "lock" lock.fade:snap(1) end },
@@ -668,9 +673,12 @@ local OVERLAYS = {
 
 -- Launching -------------------------------------------------------------------------
 
-launch = function(app)
+-- lang "c": the app's C version, in athena_demos.elf, which loads this shell back
+-- when the app returns. Either way session.launching names the app, so the shell
+-- greets it on the way back.
+launch = function(app, lang)
   if launching then return end
-  launching = { app = app, t = 0 }
+  launching = { app = app, t = 0, lang = lang or "lua" }
   session.launching = app.file
   local recents = JSON.array({ app.file })
   for _, f in ipairs(session.recents) do
@@ -688,7 +696,9 @@ local function drawLaunch()
   Draw.rect(0, 0, W, H, rgba(0, 0, 0, t))
   drawTile(launching.app, W / 2, H / 2 - 20, lerp(GRID.tile, 120, t), 0, 1)
   text(ui, W / 2, H / 2 + 56, launching.app.name, 0.7, rgba(255, 255, 255, t), Font.ALIGN_HCENTER)
-  if launching.t >= LEN + 4 then pendingReload = launching.app.file end
+  if launching.t >= LEN + 4 then
+    if launching.lang == "c" then pendingC = launching.app else pendingReload = launching.app.file end
+  end
 end
 
 -- Main loop -------------------------------------------------------------------------
@@ -750,5 +760,11 @@ while true do
     Screen.clear(Color.new(0, 0, 0))
     Screen.flip()
     System.reload(pendingReload)
+  end
+  if pendingC then
+    Screen.clear(Color.new(0, 0, 0))
+    Screen.flip()
+    System.loadELF(System.boot_path:gsub("/$", "") .. "/" .. registry.DEMOS_ELF,
+      { "--app=" .. pendingC.id, "--return=athena_lua.elf", "--return-script=main.lua" })
   end
 end

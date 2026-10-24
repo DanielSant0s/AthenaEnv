@@ -1,0 +1,7 @@
+{
+    "name": "Native compiler smoke test",
+    "author": "Daniel Santos",
+    "category": "system",
+    "blurb": "Regression suite for the AOT native JS compiler.",
+    "exit": "TRIANGLE"
+}

@@ -1577,6 +1577,7 @@ static int l_render_stats(lua_State *L)
 /* vertexList(positions, normals, texcoords, colors, materials, material_indices [, shareBuffers]) */
 static int l_render_vertex_list(lua_State *L)
 {
+    lua_settop(L, 7); /* see l_render_material */
     lua_createtable(L, 0, 7);
     for (int i = 0; i < 4; i++) {
         lua_pushvalue(L, i + 1);
@@ -1616,6 +1617,9 @@ static int l_render_material(lua_State *L)
         "transmission_filter", "disolve", "texture_id", "bump_texture_id", "ref_texture_id", "decal_texture_id",
         "normal_texture_id",
     };
+    /* Missing trailing args read as nil: without this, the first index past
+     * the last argument would be the table created below. */
+    lua_settop(L, 14);
     lua_createtable(L, 0, 14);
     for (int i = 0; i < 14; i++) {
         lua_pushvalue(L, i + 1);

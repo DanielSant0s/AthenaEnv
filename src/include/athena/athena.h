@@ -88,6 +88,10 @@
 #include <athena/mouse.h>
 #endif
 
+#ifdef ATHENA_REMOTE
+#include <athena/remote.h>
+#endif
+
 #ifdef ATHENA_CAMERA
 #include <athena/camera.h>
 #endif

@@ -1,0 +1,8 @@
+{
+    "name": "Network demo",
+    "author": "Daniel Santos",
+    "version": "04072023",
+    "category": "network",
+    "blurb": "HTTPS GET with TLS verification.",
+    "exit": "TRIANGLE"
+}

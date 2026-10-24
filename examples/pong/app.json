@@ -1,0 +1,8 @@
+{
+    "name": "Pong",
+    "author": "Daniel Santos",
+    "version": "04252023",
+    "category": "games",
+    "blurb": "The classic, with ADPCM sound effects.",
+    "exit": "TRIANGLE"
+}

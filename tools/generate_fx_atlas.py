@@ -38,6 +38,6 @@ def generate():
 
 
 if __name__ == "__main__":
-    target = Path(__file__).resolve().parents[1] / "bin/render/fx_atlas.png"
+    target = Path(__file__).resolve().parents[1] / "examples/shared/render/fx_atlas.png"
     target.write_bytes(generate())
     print(f"Generated {target.name}: 64x32 RGBA, {target.stat().st_size} bytes")

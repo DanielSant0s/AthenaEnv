@@ -32,9 +32,67 @@ $(EE_OBJ_DIR)capp_main.o: examples/capp/main.c | $(EE_OBJ_DIR)
 	@echo CC - $<
 	$(EE_CC) $(EE_CFLAGS) $(EE_INCS) -c $< -o $@
 
-capp: $(MAIN_BUILD_STAMP) $(DIR_GUARD) $(EXT_LIBS) $(filter-out $(ATHENA_JS_LIB_OBJS),$(ATHENA_CORE_LIB_OBJS)) $(EE_OBJ_DIR)main.o $(EE_OBJ_DIR)capp_main.o
-	$(EE_CXX) -T$(EE_LINKFILE) $(EE_OPTFLAGS) -o $(EE_BIN_DIR)athena_capp.elf \
-		$(filter-out $(ATHENA_JS_LIB_OBJS),$(ATHENA_CORE_LIB_OBJS)) $(EE_OBJ_DIR)main.o $(EE_OBJ_DIR)capp_main.o \
-		$(EE_LDFLAGS) $(EXTRA_LDFLAGS) -fpermissive -Wno-write-strings $(EE_LIBS) $(EE_SRC_DIR)dummy-exports.c
-	$(EE_STRIP) $(EE_BIN_DIR)athena_capp.elf
-	@echo "Built $(EE_BIN_DIR)athena_capp.elf (C-only)"
+# The C side of the AthenaOS SDK (examples/common): the app chrome and the
+# registry that athena_demos.elf dispatches through.
+CAPP_INCS := -Iexamples/common
+CAPP_SDK_OBJ := $(EE_OBJ_DIR)capp_sdk/app.o
+$(CAPP_SDK_OBJ): examples/common/athenaos/app.c examples/common/athenaos/app.h | $(EE_OBJ_DIR)
+	@echo CC - $<
+	$(DIR_GUARD)
+	$(EE_CC) $(EE_CFLAGS) $(EE_INCS) $(CAPP_INCS) -c $< -o $@
+
+# Which C app `make capp` links: examples/$(CAPP_NAME)/main.c into
+# bin/athena_$(CAPP_NAME).elf, e.g. `make capp CAPP_NAME=physics_collision`.
+# The default (capp) is the C API playground, which does not use the SDK.
+CAPP_NAME ?= capp
+ifeq ($(CAPP_NAME),capp)
+CAPP_OBJ := $(EE_OBJ_DIR)capp_main.o
+else
+CAPP_OBJ := $(EE_OBJ_DIR)capp_$(CAPP_NAME).o $(CAPP_SDK_OBJ)
+$(EE_OBJ_DIR)capp_$(CAPP_NAME).o: examples/$(CAPP_NAME)/main.c examples/common/athenaos/app.h | $(EE_OBJ_DIR)
+	@echo CC - $<
+	$(EE_CC) $(EE_CFLAGS) $(EE_INCS) $(CAPP_INCS) -c $< -o $@
+endif
+CAPP_ELF := $(EE_BIN_DIR)athena_$(CAPP_NAME).elf
+
+CAPP_LINK = $(EE_CXX) -T$(EE_LINKFILE) $(EE_OPTFLAGS) -o $@ 	$(filter-out $(ATHENA_JS_LIB_OBJS),$(ATHENA_CORE_LIB_OBJS)) $(EE_OBJ_DIR)main.o $(1) 	$(EE_SRC_DIR)dummy-exports.c $(EE_LDFLAGS) $(EXTRA_LDFLAGS) -fpermissive -Wno-write-strings $(EE_LIBS)
+CAPP_DEPS := $(MAIN_BUILD_STAMP) $(DIR_GUARD) $(EXT_LIBS) $(filter-out $(ATHENA_JS_LIB_OBJS),$(ATHENA_CORE_LIB_OBJS)) $(EE_OBJ_DIR)main.o
+
+.PHONY: capp demos
+capp: $(CAPP_ELF)
+$(CAPP_ELF): $(CAPP_DEPS) $(CAPP_OBJ)
+	$(call CAPP_LINK,$(CAPP_OBJ))
+	$(EE_STRIP) $@
+	@echo "Built $@ (C-only)"
+
+# Every C app in one ELF: each examples/<app>/main.c built with ATHENAOS_DEMOS,
+# so ATHENAOS_APP registers it instead of being the entry point, plus the
+# dispatcher (examples/common/demos_main.c). The shells launch an app's C
+# version with athena_demos.elf --app=<app>.
+DEMOS_SRCS := $(wildcard examples/*/main.c)
+DEMOS_SRCS := $(filter-out examples/capp/main.c,$(DEMOS_SRCS))
+DEMOS_OBJS := $(patsubst examples/%/main.c,$(EE_OBJ_DIR)demos/%.o,$(DEMOS_SRCS))               $(EE_OBJ_DIR)demos/demos_main.o $(CAPP_SDK_OBJ)
+DEMOS_ELF := $(EE_BIN_DIR)athena_demos.elf
+
+# The app list as a file that only changes with it, so adding or removing an
+# app relinks the ELF (no object is newer when one is removed).
+DEMOS_LIST := $(EE_OBJ_DIR)demos/apps.list
+ifneq ($(filter demos,$(MAKECMDGOALS)),)
+$(shell mkdir -p $(EE_OBJ_DIR)demos; echo '$(DEMOS_SRCS)' | cmp -s - $(DEMOS_LIST) || echo '$(DEMOS_SRCS)' > $(DEMOS_LIST))
+endif
+
+$(EE_OBJ_DIR)demos/%.o: examples/%/main.c examples/common/athenaos/app.h | $(EE_OBJ_DIR)
+	@echo CC - $<
+	$(DIR_GUARD)
+	$(EE_CC) $(EE_CFLAGS) $(EE_INCS) $(CAPP_INCS) -DATHENAOS_DEMOS -c $< -o $@
+
+$(EE_OBJ_DIR)demos/demos_main.o: examples/common/demos_main.c examples/common/athenaos/app.h | $(EE_OBJ_DIR)
+	@echo CC - $<
+	$(DIR_GUARD)
+	$(EE_CC) $(EE_CFLAGS) $(EE_INCS) $(CAPP_INCS) -DATHENAOS_DEMOS -c $< -o $@
+
+demos: $(DEMOS_ELF)
+$(DEMOS_ELF): $(CAPP_DEPS) $(DEMOS_OBJS) $(DEMOS_LIST)
+	$(call CAPP_LINK,$(DEMOS_OBJS))
+	$(EE_STRIP) $@
+	@echo "Built $@ ($(words $(DEMOS_SRCS)) C apps)"

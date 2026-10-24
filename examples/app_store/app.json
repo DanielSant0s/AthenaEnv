@@ -1,0 +1,8 @@
+{
+    "name": "App store",
+    "author": "Daniel Santos",
+    "version": "04102023",
+    "category": "network",
+    "blurb": "Download homebrew from the online Brew Store catalog.",
+    "exit": "TRIANGLE"
+}

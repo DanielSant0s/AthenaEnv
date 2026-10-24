@@ -79,6 +79,6 @@ Use these to implement streaming tilemaps, network-loaded levels, or background 
 * Sprite layout: `athena_sprite_data` in `src/include/tile_render.h`.
 * Renderer implementation: `src/tile_render.c` (shows batching, alpha handling, texture binding).
 * JavaScript binding: `src/js_api/ath_sprite.c`.
-* Example: `bin/tilemap.js` animates a grid by writing into a `DataView` every frame.
+* Example: `examples/tilemap/main.js` animates a grid by writing into a `DataView` every frame.
 
 With the descriptor/buffer split you can keep large tilesets in memory without re-uploading textures and still enjoy low-cost sprite mutations.

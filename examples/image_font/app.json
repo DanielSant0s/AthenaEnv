@@ -1,0 +1,8 @@
+{
+    "name": "DejaVu Font Demo",
+    "author": "Daniel Santos",
+    "version": "11292025",
+    "category": "2d",
+    "blurb": "Bitmap image fonts with alignment, outline and shadows.",
+    "exit": "TRIANGLE"
+}

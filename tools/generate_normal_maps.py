@@ -1,7 +1,7 @@
 """Generate the normal mapping demo's brick and stone slab maps (numpy + Pillow).
 
 Run from any directory: python tools/generate_normal_maps.py
-Writes bricks_* and tiles_* (diffuse, 8-bit paletted; normal, RGBA) to bin/render.
+Writes bricks_* and tiles_* (diffuse, 8-bit paletted; normal, RGBA) to examples/shared/render.
 256x256 and tileable; tangent-space normals in the glTF convention, green = image up.
 """
 
@@ -11,7 +11,7 @@ from PIL import Image
 
 N = 256
 rng = np.random.default_rng(7)
-out_dir = Path(__file__).resolve().parent.parent / "bin" / "render"
+out_dir = Path(__file__).resolve().parent.parent / "examples" / "shared" / "render"
 
 
 def tile_noise(n, cells, octaves=4, seed=0):

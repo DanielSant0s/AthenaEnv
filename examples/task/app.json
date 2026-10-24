@@ -1,0 +1,11 @@
+{
+    "name": "Task sample",
+    "author": "Daniel Santos",
+    "version": "04232025",
+    "category": "system",
+    "blurb": "Threads, mutexes and timers running beside the main loop.",
+    "exit": "TRIANGLE",
+    "lua": {
+        "blurb": "Threads, coroutines, timers and pad events beside the main loop."
+    }
+}

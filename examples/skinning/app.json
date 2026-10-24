@@ -1,0 +1,8 @@
+{
+    "name": "Skinning demo",
+    "author": "Daniel Santos",
+    "version": "04072023",
+    "category": "3d",
+    "blurb": "GPU skinned glTF animation.",
+    "exit": "TRIANGLE"
+}

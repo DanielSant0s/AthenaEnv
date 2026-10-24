@@ -39,6 +39,14 @@ ILINK ?= 0
 MX4SIO ?= 0
 
 # Scripting engine: js (QuickJS), lua (Lua 5.4) or none (pure C app, see capp).
+# make capp / make demos build C apps (Makefile.lib) and link no script engine.
+C_ONLY_GOAL := $(filter capp demos,$(MAKECMDGOALS))
+# Their objects go to their own tree: a C build links the network, archive and
+# MPEG modules in (see below), which the script builds load as .erl instead,
+# and objects shared with those builds would keep the wrong #ifdefs.
+ifneq ($(C_ONLY_GOAL),)
+  EE_OBJ_DIR := obj/c/
+endif
 SCRIPT_ENGINE ?= js
 
 ifeq ($(SCRIPT_ENGINE),lua)
@@ -70,6 +78,13 @@ STATIC_REMOTE ?= 1
 STATIC_NATIVE_COMPILER ?= 0
 STATIC_ARCHIVE ?= 0
 STATIC_MPEG_VIDEO ?= 0
+
+# C apps cannot load the script engines' .erl modules: they link these in.
+ifneq ($(C_ONLY_GOAL),)
+  STATIC_NETWORK := 1
+  STATIC_ARCHIVE := 1
+  STATIC_MPEG_VIDEO := 1
+endif
 
 DYNAMIC_KEYBOARD ?= 0
 DYNAMIC_MOUSE ?= 0
@@ -322,8 +337,11 @@ EE_OBJS := $(EE_OBJS:%=$(EE_OBJ_DIR)%)
 
 ifeq ($(ATHENA_JS),1)
   EE_CFLAGS += -DATHENA_JS
-  # the JS heap pool (quickjs.c) takes back its blocks if they reach libc
+  # the JS heap pool (quickjs.c) takes back its blocks if they reach libc;
+  # capp/demos link without quickjs.c, so without the wrappers
+  ifeq ($(C_ONLY_GOAL),)
   EE_LDFLAGS += -Wl,--wrap=free -Wl,--wrap=realloc
+  endif
 endif
 
 ifeq ($(ATHENA_LUA),1)
@@ -342,12 +360,12 @@ endif
 
 # main.c is compiled differently with/without ATHENA_JS; invalidate only that
 # object when switching modes instead of wiping the whole tree on every capp.
-ifeq ($(filter capp,$(MAKECMDGOALS)),capp)
-MAIN_BUILD_STAMP := $(EE_OBJ_DIR).main_build_capp
+ifneq ($(C_ONLY_GOAL),)
+MAIN_BUILD_STAMP := $(EE_OBJ_DIR).main_build_c
 else ifeq ($(ATHENA_LUA),1)
 MAIN_BUILD_STAMP := $(EE_OBJ_DIR).main_build_lua
 else ifeq ($(ATHENA_JS),0)
-MAIN_BUILD_STAMP := $(EE_OBJ_DIR).main_build_capp
+MAIN_BUILD_STAMP := $(EE_OBJ_DIR).main_build_c
 else
 MAIN_BUILD_STAMP := $(EE_OBJ_DIR).main_build_js
 endif
@@ -361,7 +379,7 @@ $(EE_EMBED_DIR)ath_lua_embedded.c: $(LUA_EMBED_SRCS) scripts/lua2c.py | $(EE_EMB
 	python3 scripts/lua2c.py $@ $(LUA_EMBED_SRCS)
 
 $(MAIN_BUILD_STAMP): | $(EE_OBJ_DIR)
-	@for s in $(EE_OBJ_DIR).main_build_js $(EE_OBJ_DIR).main_build_capp $(EE_OBJ_DIR).main_build_lua; do \
+	@for s in $(EE_OBJ_DIR).main_build_js $(EE_OBJ_DIR).main_build_c $(EE_OBJ_DIR).main_build_lua; do \
 		if [ -f "$$s" ] && [ "$$s" != "$(MAIN_BUILD_STAMP)" ]; then \
 			rm -f "$$s" "$(EE_OBJ_DIR)main.o"; \
 		fi; \
@@ -426,6 +444,13 @@ debug: $(DIR_GUARD) $(EXT_LIBS) $(EE_OBJS)
 	rm $(EE_BIN_DIR)tmp.elf
 
 	echo "Building bin/athena_debug.elf with debug symbols..."
+
+# bin/ is generated: the ELFs above, plus the shell, apps and assets that
+# scripts/dist.sh copies from examples/. `make dist DIST_FLAGS=--clean` starts
+# bin/ over (keeping the ELFs, the .erl modules and athena.ini).
+.PHONY: dist
+dist:
+	sh scripts/dist.sh $(DIST_FLAGS)
 
 clean:
 	echo Cleaning executables...
@@ -515,6 +540,6 @@ $(EE_OBJ_DIR)%.o: $(EE_EMBED_DIR)%.c | $(EE_OBJ_DIR)
 	$(DIR_GUARD)
 	$(EE_CC) $(EE_CFLAGS) $(EE_INCS) -c $< -o $@
 
-# capp must override flags after Makefile.eeglobal expands EE_CFLAGS.
-capp: ATHENA_JS=0
-capp: EE_CFLAGS := $(filter-out -DATHENA_NATIVE_COMPILER -DATHENA_JS,$(EE_CFLAGS))
+# capp/demos must override flags after Makefile.eeglobal expands EE_CFLAGS.
+capp demos: ATHENA_JS=0
+capp demos: EE_CFLAGS := $(filter-out -DATHENA_NATIVE_COMPILER -DATHENA_JS,$(EE_CFLAGS))

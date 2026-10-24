@@ -1,0 +1,8 @@
+{
+    "name": "Sockets demo",
+    "author": "Daniel Santos",
+    "version": "04072023",
+    "category": "network",
+    "blurb": "Raw TCP socket talking HTTP to a web server.",
+    "exit": "TRIANGLE"
+}

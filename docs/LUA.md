@@ -1,6 +1,6 @@
 # Lua runtime
 
-AthenaEnv can be built with **Lua 5.4** as its scripting engine instead of QuickJS. The Lua target has the same modules as the JavaScript one: 2D/3D rendering, physics, tilemaps, particles, audio, input, network, video and archives. It runs the same AthenaOS shell and ships a Lua version of every sample in `bin/`.
+AthenaEnv can be built with **Lua 5.4** as its scripting engine instead of QuickJS. The Lua target has the same modules as the JavaScript one: 2D/3D rendering, physics, tilemaps, particles, audio, input, network, video and archives. It runs the same AthenaOS shell and ships a Lua version of every sample in `examples/`.
 
 Both runtimes sit on top of the same C facade (`src/athena/`, see [Pure-C API](C_API.md)). Only the binding layer differs: `src/js_api/` for QuickJS and `src/lua_api/` for Lua.
 
@@ -67,7 +67,7 @@ Every global module from the JS runtime exists under the same name: `Screen`, `I
 | `Camera` USB module | `EyeToy` |
 | `Thread` (EE thread) | `Thread(fn)`, cooperative (see below) |
 | `import ... from 'athena_network.erl'` | nothing: first use of `Network`/`Request`/... loads the module |
-| `import { x } from 'lib.js'` | `local lib = require "lib"` (`bin/?.lua`, `bin/?/init.lua`) |
+| `import { x } from 'lib.js'` | `local lib = require "lib"` (`?.lua`, `?/init.lua` from the boot folder) |
 
 **Index base.** Lua tables, lists returned by the API, `AnimCollection` and `Matrix4` are 1-based. Values that name hardware or memory stay 0-based: texture ids, material indices, byte offsets in a `Buffer`, sprite records in a `TileMap.SpriteBuffer`, pad ports and IOP ids.
 

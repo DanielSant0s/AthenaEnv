@@ -55,6 +55,102 @@ AthenaRenderData *athena_render_data_create(void)
     return rd;
 }
 
+AthenaRenderData *athena_render_data_from_vertices(const VECTOR *positions, const VECTOR *normals,
+                                                   const VECTOR *texcoords, const VECTOR *colours,
+                                                   uint32_t count)
+{
+    const VECTOR *src[4] = { positions, normals, texcoords, colours };
+    AthenaRenderData *rd;
+
+    if (!positions || count == 0)
+        return NULL;
+
+    rd = athena_render_data_create();
+    if (!rd)
+        return NULL;
+
+    athena_render_data *m = &rd->m;
+    VECTOR **dst[4] = { &m->positions, &m->normals, &m->texcoords, &m->colours };
+    for (int i = 0; i < 4; i++) {
+        if (!src[i])
+            continue;
+        *dst[i] = memalign(16, count * sizeof(VECTOR));
+        memcpy(*dst[i], src[i], count * sizeof(VECTOR));
+    }
+    m->index_count = count;
+    calculate_bbox(m);
+
+    // One material over every vertex. Diffuse 0, not 1: the VU adds the
+    // material diffuse to the vertex colour, and geometry built in code brings
+    // its own colours (see the JS RenderData constructor).
+    m->materials = memalign(16, sizeof(ath_mat));
+    memset(m->materials, 0, sizeof(ath_mat));
+    m->material_count = 1;
+    init_vector(m->materials[0].ambient);
+    init_vector(m->materials[0].specular);
+    init_vector(m->materials[0].emission);
+    init_vector(m->materials[0].transmittance);
+    init_vector(m->materials[0].transmission_filter);
+    m->materials[0].shininess = 1.0f;
+    m->materials[0].refraction = 1.0f;
+    m->materials[0].disolve = 1.0f;
+    m->materials[0].texture_id = -1;
+    m->materials[0].bump_texture_id = -1;
+    m->materials[0].decal_texture_id = -1;
+    m->materials[0].ref_texture_id = -1;
+    m->materials[0].normal_texture_id = -1;
+
+    m->material_indices = malloc(sizeof(material_index));
+    m->material_index_count = 1;
+    m->material_indices[0].index = 0;
+    m->material_indices[0].end = count - 1;  // inclusive
+
+    athena_render_data_apply_defaults(rd);
+    FlushCache(WRITEBACK_DCACHE);
+    return rd;
+}
+
+void athena_render_data_set_vertices(AthenaRenderData *rd, const VECTOR *positions, const VECTOR *normals,
+                                     const VECTOR *texcoords, const VECTOR *colours, uint32_t count)
+{
+    const VECTOR *src[4] = { positions, normals, texcoords, colours };
+
+    if (!rd)
+        return;
+
+    athena_render_data *m = &rd->m;
+    VECTOR **dst[4] = { &m->positions, &m->normals, &m->texcoords, &m->colours };
+
+    // The old buffers may be DMA_REF'd by a chain still in flight.
+    owl_wait_inflight();
+    athena_mem_unregister_mesh(m);
+
+    for (int i = 0; i < 4; i++) {
+        if (*dst[i] && rd->owns_vertices[i])
+            free(*dst[i]);
+        *dst[i] = NULL;
+        if (src[i] && count) {
+            *dst[i] = memalign(16, count * sizeof(VECTOR));
+            memcpy(*dst[i], src[i], count * sizeof(VECTOR));
+        }
+        rd->owns_vertices[i] = true;
+    }
+    m->index_count = positions ? count : 0;
+
+    // Same bookkeeping as the script's "vertices" setter: a single material
+    // group follows the new count, the cooked caches and the box are rebuilt.
+    m->frozen = false;
+    athena_mem_register_mesh(m);
+    athena_render_data_invalidate_compact_cache(rd);
+    athena_render_data_invalidate_chain_cache(rd);
+    if (m->material_indices && m->material_index_count == 1)
+        m->material_indices[0].end = m->index_count ? m->index_count - 1 : 0;
+    if (m->index_count)
+        calculate_bbox(m);
+
+    FlushCache(WRITEBACK_DCACHE);
+}
+
 AthenaRenderData *athena_render_data_load(const char *path, GSSURFACE *texture)
 {
     AthenaRenderData *rd;

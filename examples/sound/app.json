@@ -1,0 +1,9 @@
+{
+    "name": "Audio player",
+    "author": "Daniel Santos",
+    "version": "04072023",
+    "category": "media",
+    "blurb": "Stream OGG and WAV tracks with seek and playlist.",
+    "icon": "sap_icon.png",
+    "exit": "TRIANGLE"
+}

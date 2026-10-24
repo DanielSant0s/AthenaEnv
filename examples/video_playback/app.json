@@ -1,0 +1,8 @@
+{
+    "name": "Video Playback",
+    "author": "Daniel Santos",
+    "version": "08022026",
+    "category": "media",
+    "blurb": "Fullscreen MPEG-1/2 playback.",
+    "exit": "TRIANGLE"
+}
