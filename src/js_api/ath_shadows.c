@@ -2,6 +2,7 @@
 #include <ath_bindings.h>
 #include <athena/image.h>
 #include <athena/shadows_facade.h>
+#include <shadow_volumes.h>
 
 static JSClassID js_shadow_projector_class_id;
 
@@ -229,7 +230,128 @@ static const JSCFunctionListEntry js_shadow_projector_proto_funcs[] = {
 	JS_CFUNC_DEF("screenBounds", 0, js_shadow_screen_bounds),
 };
 
+// --- Shadows.Volume: stencil shadow volume of a RenderObject ---
+
+typedef struct {
+	ath_shadow_volume *vol;
+	JSValue caster; // keeps the RenderObject alive while the volume follows it
+} JSShadowVolume;
+
+static JSClassID js_shadow_volume_class_id;
+
+static void js_shadow_volume_finalizer(JSRuntime *rt, JSValue val) {
+	JSShadowVolume *s = JS_GetOpaque(val, js_shadow_volume_class_id);
+	if (s) {
+		shadow_volume_free(s->vol);
+		JS_FreeValueRT(rt, s->caster);
+		js_free_rt(rt, s);
+	}
+}
+
+static JSValue js_shadow_volume_ctor(JSContext *ctx, JSValueConst new_target, int argc, JSValueConst *argv) {
+	JSRenderObject *ro = argc > 0 ? JS_GetOpaque(argv[0], js_render_object_class_id) : NULL;
+	if (!ro)
+		return JS_ThrowTypeError(ctx, "Shadows.Volume: expected a RenderObject");
+
+	JSShadowVolume *s = js_mallocz(ctx, sizeof(*s));
+	if (!s) return JS_EXCEPTION;
+	s->vol = shadow_volume_create(&ro->native->obj);
+	if (!s->vol) {
+		js_free(ctx, s);
+		return JS_ThrowTypeError(ctx, "Shadows.Volume: the mesh has no vertex data (frozen?)");
+	}
+	s->caster = JS_DupValue(ctx, argv[0]);
+
+	JSValue proto = JS_GetPropertyStr(ctx, new_target, "prototype");
+	JSValue obj = JS_NewObjectProtoClass(ctx, proto, js_shadow_volume_class_id);
+	JS_FreeValue(ctx, proto);
+	if (JS_IsException(obj)) {
+		shadow_volume_free(s->vol);
+		JS_FreeValue(ctx, s->caster);
+		js_free(ctx, s);
+		return JS_EXCEPTION;
+	}
+	JS_SetOpaque(obj, s);
+	return obj;
+}
+
+static JSValue js_shadow_volume_render(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+	JSShadowVolume *s = JS_GetOpaque2(ctx, this_val, js_shadow_volume_class_id);
+	if (!s) return JS_EXCEPTION;
+	shadow_volume_render(s->vol);
+	return JS_UNDEFINED;
+}
+
+static JSValue js_shadow_volume_get(JSContext *ctx, JSValueConst this_val, int magic) {
+	JSShadowVolume *s = JS_GetOpaque2(ctx, this_val, js_shadow_volume_class_id);
+	if (!s) return JS_EXCEPTION;
+	switch (magic) {
+		case 0: return JS_NewFloat32(ctx, s->vol->extrusion);
+		case 1: return JS_NewInt32(ctx, (int)s->vol->edge_count);
+	}
+	return JS_UNDEFINED;
+}
+
+static JSValue js_shadow_volume_set(JSContext *ctx, JSValueConst this_val, JSValue val, int magic) {
+	JSShadowVolume *s = JS_GetOpaque2(ctx, this_val, js_shadow_volume_class_id);
+	if (!s) return JS_EXCEPTION;
+	if (magic == 0)
+		JS_ToFloat32(ctx, &s->vol->extrusion, val);
+	return JS_UNDEFINED;
+}
+
+static const JSCFunctionListEntry js_shadow_volume_proto_funcs[] = {
+	JS_CFUNC_DEF("render", 0, js_shadow_volume_render),
+	JS_CGETSET_MAGIC_DEF("extrusion", js_shadow_volume_get, js_shadow_volume_set, 0),
+	JS_CGETSET_MAGIC_DEF("edges",     js_shadow_volume_get, NULL, 1),
+};
+
+// Shadows.beginVolumes([{x, y, width, height}]) -> false when the buffers can't take it
+static JSValue js_shadows_begin_volumes(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+	int rect[4];
+	const int *r = NULL;
+	if (argc > 0 && JS_IsObject(argv[0])) {
+		int x = 0, y = 0, w = 0, h = 0;
+		JS_ToInt32(ctx, &x, JS_GetPropertyStr(ctx, argv[0], "x"));
+		JS_ToInt32(ctx, &y, JS_GetPropertyStr(ctx, argv[0], "y"));
+		JS_ToInt32(ctx, &w, JS_GetPropertyStr(ctx, argv[0], "width"));
+		JS_ToInt32(ctx, &h, JS_GetPropertyStr(ctx, argv[0], "height"));
+		rect[0] = x; rect[1] = y; rect[2] = x + w; rect[3] = y + h;
+		r = rect;
+	}
+	return JS_NewBool(ctx, shadow_volumes_begin(r));
+}
+
+// Shadows.endVolumes(opacity = 0.5), or Shadows.endVolumes([renderObjects]):
+// the shadowed pixels of those objects redrawn with the ambient light only.
+static JSValue js_shadows_end_volumes(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+	if (argc > 0 && JS_IsArray(ctx, argv[0])) {
+		uint32_t len = 0;
+		JSValue jlen = JS_GetPropertyStr(ctx, argv[0], "length");
+		JS_ToUint32(ctx, &len, jlen);
+		JS_FreeValue(ctx, jlen);
+		athena_object_data *objs[64];
+		int count = 0;
+		for (uint32_t i = 0; i < len && count < 64; i++) {
+			JSValue item = JS_GetPropertyUint32(ctx, argv[0], i);
+			JSRenderObject *ro = JS_GetOpaque(item, js_render_object_class_id);
+			if (ro)
+				objs[count++] = &ro->native->obj;
+			JS_FreeValue(ctx, item);
+		}
+		shadow_volumes_end_relight(objs, count);
+		return JS_UNDEFINED;
+	}
+	float opacity = 0.5f;
+	if (argc > 0)
+		JS_ToFloat32(ctx, &opacity, argv[0]);
+	shadow_volumes_end(opacity);
+	return JS_UNDEFINED;
+}
+
 static const JSCFunctionListEntry js_shadows_consts[] = {
+    JS_CFUNC_DEF("beginVolumes", 1, js_shadows_begin_volumes),
+    JS_CFUNC_DEF("endVolumes", 1, js_shadows_end_volumes),
     JS_PROP_INT32_DEF("SHADOW_BLEND_DARKEN", SHADOW_BLEND_DARKEN, JS_PROP_CONFIGURABLE),
     JS_PROP_INT32_DEF("SHADOW_BLEND_ALPHA", SHADOW_BLEND_ALPHA, JS_PROP_CONFIGURABLE),
     JS_PROP_INT32_DEF("SHADOW_BLEND_ADD", SHADOW_BLEND_ADD, JS_PROP_CONFIGURABLE),
@@ -247,6 +369,16 @@ static int js_shadows_init(JSContext *ctx, JSModuleDef *m) {
 	JS_SetConstructor(ctx, cls, proto);
 	JS_SetClassProto(ctx, js_shadow_projector_class_id, proto);
 	JS_SetModuleExport(ctx, m, "Projector", cls);
+
+	JS_NewClassID(&js_shadow_volume_class_id);
+	JSClassDef vdef = { "ShadowVolume", .finalizer = js_shadow_volume_finalizer };
+	JS_NewClass(JS_GetRuntime(ctx), js_shadow_volume_class_id, &vdef);
+	proto = JS_NewObject(ctx);
+	JS_SetPropertyFunctionList(ctx, proto, js_shadow_volume_proto_funcs, countof(js_shadow_volume_proto_funcs));
+	cls = JS_NewCFunction2(ctx, js_shadow_volume_ctor, "Volume", 1, JS_CFUNC_constructor, 0);
+	JS_SetConstructor(ctx, cls, proto);
+	JS_SetClassProto(ctx, js_shadow_volume_class_id, proto);
+	JS_SetModuleExport(ctx, m, "Volume", cls);
     return JS_SetModuleExportList(ctx, m, js_shadows_consts, countof(js_shadows_consts));
 }
 
@@ -254,6 +386,7 @@ JSModuleDef *athena_shadows_init(JSContext *ctx) {
 	JSModuleDef *m = JS_NewCModule(ctx, "Shadows", js_shadows_init);
 	if (!m) return NULL;
 	JS_AddModuleExport(ctx, m, "Projector");
+	JS_AddModuleExport(ctx, m, "Volume");
 	JS_AddModuleExportList(ctx, m, js_shadows_consts, countof(js_shadows_consts));
 	return m;
 }

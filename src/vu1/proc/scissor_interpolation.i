@@ -57,7 +57,7 @@ CO_NEXT_IN:
    ; The first vertex is "outside", and the second is "inside".  Find the
    ; point of intersection, and store it in the clipping work buffer.
    ;---------------------------------------------------------------------
-   bal                  RetAddr1, INTERPOLATE
+   bal                  RetAddr1, INTERPOLATE_REV
 
    sqi                  NewSTQ,    (ClipWorkBuf1++)
    sqi                  NewColor,  (ClipWorkBuf1++)
@@ -115,75 +115,80 @@ SCISSOR_INTERPOLATION_END:
    jr                   RetAddr2
 
 ;--------------------------------------------------------------------------------------------------
-; Calculate the point of insersection between a clip plane and a line going from "CurrentVertex" to
-; "NextVertex" (in clipping space). The intersection point is returned in "NewVertex".
+; Calculate the point of intersection between a clip plane and the line between "CurrentVertex" and
+; "NextVertex" (in clipping space), returned in "NewVertex" (and "NewColor", "NewSTQ").
+;
+; Always worked out from the end inside the plane: the two triangles sharing an edge walk it in
+; opposite directions, and interpolating each from its own first vertex gave two slightly different
+; points -- cracks between the fans. From the inside end both get the same bits. INTERPOLATE when
+; "CurrentVertex" is the inside end, INTERPOLATE_REV when "NextVertex" is: the same code with the
+; two swapped, rather than copies of them (VCL runs out of registers).
 ;--------------------------------------------------------------------------------------------------
-; Input:  "CurrentVertex" and "NextVertex" is the line
-;         "PlaneSign" is the sign of the clipping plane
+; Input:  "PlaneSign" is the sign of the clipping plane
 ;         "NbrRotate" is 0 for X, 1 for Y, and 2 for Z plane
-; Output: "NewVertex" is the intersection point
 ;--------------------------------------------------------------------------------------------------
 INTERPOLATE:
-   ;---------------------------------------------------------------------------------
-   ; Find the distance of the current vertex to the clipping plane. In clip space the
-   ; extents of the clipping regions are all vf17w for the clip test so the clipping
-   ; plane in clip space is simply vf17w * the sign of the plane (vf30x)
-   ;---------------------------------------------------------------------------------
-   mul.w                Temp1, CurrentVertex, PlaneSign[x]        ; Temp1 = CurrentVertex - (sign * CurrentVertex[w])
-   sub                  Temp1, CurrentVertex, Temp1[w]            ;
+   mul.w                Temp1, CurrentVertex, PlaneSign[x]      ; Temp1 = d_in, Temp2 = d_out: each end's
+   sub                  Temp1, CurrentVertex, Temp1[w]          ; distance to the plane, at w * sign
+   mul.w                Temp2, NextVertex, PlaneSign[x]
+   sub                  Temp2, NextVertex, Temp2[w]
 
-   ;-----------------------------------
-   ; Same thing but for NextVertex
-   ;-----------------------------------
-   mul.w                Temp2, NextVertex, PlaneSign[x]           ; Temp1 = NextVertex - (sign * NextVertex[w])
-   sub                  Temp2, NextVertex, Temp2[w]               ;
-
-   ;-------------------------------------------
-   ; Rotate the vertices around until the field
-   ; we are checking against is in the x field
-   ;-------------------------------------------
+   ; Rotate the field checked against into x.
    iadd                 NbrRotations, vi00, NbrRotates
-
-LOOP_ROT:
-   ibeq                 NbrRotations, vi00, LOOP_ROT_END
-
+INTERPOLATE_ROT:
+   ibeq                 NbrRotations, vi00, INTERPOLATE_ROT_END
    mr32                 Temp1, Temp1
    mr32                 Temp2, Temp2
-
    isubiu               NbrRotations, NbrRotations, 1
-   b                    LOOP_ROT
-
-LOOP_ROT_END:
-   ;---------------------------------------------------------
-   ; Calculate the difference between Current and Next vertex
-   ;---------------------------------------------------------
+   b                    INTERPOLATE_ROT
+INTERPOLATE_ROT_END:
+   ; ratio = |d_in / (d_out - d_in)|
    sub.x                Difference, Temp2, Temp1
-
-   ;---------------------------------------------------------------
-   ;ok so now divide current by the ratio between current and previous vectors
-   ;and get the abs version
-   ;q = (current.x - current.w * cplane)/(next.x-next.x * cplane)
-   ;---------------------------------------------------------------
    div                  Q, Temp1[x], Difference[x]
    add.x                Answer, vf00, Q
-   abs.x                Answer, Answer          ; ans = |(c-cw)/((n-nw)+(c-cw))|
+   abs.x                Answer, Answer
 
-   ;-------------------------------------------------------------------
-   ; NewVertex = ((NextVertex - CurrentVertex) * Ratio) + CurrentVertex
-   ;-------------------------------------------------------------------
+   ; New = (out - in) * ratio + in
    sub                  NewVertex, NextVertex, CurrentVertex
    sub                  NewColor,  NextColor,  CurrentColor
    sub                  NewSTQ,    NextSTQ,    CurrentSTQ
-
    mul                  NewVertex, NewVertex, Answer[x]
    mul                  NewColor,  NewColor,  Answer[x]
    mul                  NewSTQ,    NewSTQ,    Answer[x]
-
    add                  NewVertex, NewVertex, CurrentVertex
    add                  NewColor,  NewColor,  CurrentColor
    add                  NewSTQ,    NewSTQ,    CurrentSTQ
+   jr                   RetAddr1
 
-   ;-----------------------------------
-   ; Done
-   ;-----------------------------------
+INTERPOLATE_REV:
+   mul.w                Temp1, NextVertex, PlaneSign[x]         ; Temp1 = d_in, Temp2 = d_out: each end's
+   sub                  Temp1, NextVertex, Temp1[w]             ; distance to the plane, at w * sign
+   mul.w                Temp2, CurrentVertex, PlaneSign[x]
+   sub                  Temp2, CurrentVertex, Temp2[w]
+
+   ; Rotate the field checked against into x.
+   iadd                 NbrRotations, vi00, NbrRotates
+INTERPOLATE_REV_ROT:
+   ibeq                 NbrRotations, vi00, INTERPOLATE_REV_ROT_END
+   mr32                 Temp1, Temp1
+   mr32                 Temp2, Temp2
+   isubiu               NbrRotations, NbrRotations, 1
+   b                    INTERPOLATE_REV_ROT
+INTERPOLATE_REV_ROT_END:
+   ; ratio = |d_in / (d_out - d_in)|
+   sub.x                Difference, Temp2, Temp1
+   div                  Q, Temp1[x], Difference[x]
+   add.x                Answer, vf00, Q
+   abs.x                Answer, Answer
+
+   ; New = (out - in) * ratio + in
+   sub                  NewVertex, CurrentVertex, NextVertex
+   sub                  NewColor,  CurrentColor,  NextColor
+   sub                  NewSTQ,    CurrentSTQ,    NextSTQ
+   mul                  NewVertex, NewVertex, Answer[x]
+   mul                  NewColor,  NewColor,  Answer[x]
+   mul                  NewSTQ,    NewSTQ,    Answer[x]
+   add                  NewVertex, NewVertex, NextVertex
+   add                  NewColor,  NewColor,  NextColor
+   add                  NewSTQ,    NewSTQ,    NextSTQ
    jr                   RetAddr1

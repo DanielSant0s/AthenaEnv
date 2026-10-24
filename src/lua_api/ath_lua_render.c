@@ -11,6 +11,7 @@
 #include <render.h>
 #include <lz4_ps2.h>
 #include <athena/render_facade.h>
+#include <normalmap.h>
 #include <athena/anim3d.h>
 #include <athena/lights.h>
 #include <athena/camera3d.h>
@@ -231,10 +232,12 @@ static void apply_materials(lua_State *L, AthenaRenderData *rd, int idx)
         athena_lua_field_float(L, t, "disolve", &mat->disolve);
 
         mat->texture_id = mat->ref_texture_id = mat->bump_texture_id = mat->decal_texture_id = -1;
+        mat->normal_texture_id = -1;
         athena_lua_field_int(L, t, "texture_id", &mat->texture_id);
         athena_lua_field_int(L, t, "ref_texture_id", &mat->ref_texture_id);
         athena_lua_field_int(L, t, "bump_texture_id", &mat->bump_texture_id);
         athena_lua_field_int(L, t, "decal_texture_id", &mat->decal_texture_id);
+        athena_lua_field_int(L, t, "normal_texture_id", &mat->normal_texture_id);
 
         if (mat->ref_texture_id != -1)
             m->attributes.has_refmap = true;
@@ -292,6 +295,7 @@ static void init_script_material(athena_render_data *m)
     mat->refraction = 1.0f;
     mat->disolve = 1.0f;
     mat->texture_id = mat->bump_texture_id = mat->decal_texture_id = mat->ref_texture_id = -1;
+    mat->normal_texture_id = -1;
 
     m->attributes.has_decal = false;
     m->attributes.has_refmap = false;
@@ -709,6 +713,7 @@ static int get_rd_materials(lua_State *L)
         athena_lua_set_int(L, "ref_texture_id", mat->ref_texture_id);
         athena_lua_set_int(L, "bump_texture_id", mat->bump_texture_id);
         athena_lua_set_int(L, "decal_texture_id", mat->decal_texture_id);
+        athena_lua_set_int(L, "normal_texture_id", mat->normal_texture_id);
         lua_rawseti(L, -2, i + 1);
     }
     return 1;
@@ -757,6 +762,8 @@ static int set_rd_texture_mapping(lua_State *L) { check_rd(L, 1)->m.attributes.t
 static int get_rd_shade_model(lua_State *L) { lua_pushinteger(L, check_rd(L, 1)->m.attributes.shade_model); return 1; }
 static int set_rd_shade_model(lua_State *L) { check_rd(L, 1)->m.attributes.shade_model = athena_lua_checku32(L, 2); return 0; }
 static int get_rd_size(lua_State *L) { lua_pushinteger(L, check_rd(L, 1)->m.index_count); return 1; }
+static int get_rd_normal_mapping(lua_State *L) { lua_pushinteger(L, check_rd(L, 1)->m.attributes.normal_mapping); return 1; }
+static int set_rd_normal_mapping(lua_State *L) { check_rd(L, 1)->m.attributes.normal_mapping = (int)luaL_checkinteger(L, 2); return 0; }
 static int get_rd_pipeline(lua_State *L) { lua_pushinteger(L, check_rd(L, 1)->m.pipeline); return 1; }
 static int set_rd_pipeline(lua_State *L) { check_rd(L, 1)->m.pipeline = (eRenderPipelines)athena_lua_checku32(L, 2); return 0; }
 
@@ -791,6 +798,7 @@ static const athena_lua_prop rd_props[] = {
     RD_PROP(vertices), RD_PROP(materials), RD_PROP(material_indices),
     RD_PROP(accurate_clipping), RD_PROP(face_culling), RD_PROP(texture_mapping),
     RD_PROP(shade_model), { "size", get_rd_size, NULL }, RD_PROP(bounds), RD_PROP(pipeline),
+    RD_PROP(normal_mapping),
     { NULL, NULL, NULL }
 };
 
@@ -1606,9 +1614,10 @@ static int l_render_material(lua_State *L)
     static const char *keys[] = {
         "ambient", "diffuse", "specular", "emission", "transmittance", "shininess", "refraction",
         "transmission_filter", "disolve", "texture_id", "bump_texture_id", "ref_texture_id", "decal_texture_id",
+        "normal_texture_id",
     };
-    lua_createtable(L, 0, 13);
-    for (int i = 0; i < 13; i++) {
+    lua_createtable(L, 0, 14);
+    for (int i = 0; i < 14; i++) {
         lua_pushvalue(L, i + 1);
         lua_setfield(L, -2, keys[i]);
     }
@@ -1634,6 +1643,7 @@ static const luaL_Reg render_funcs[] = {
 
 static const athena_lua_const render_consts[] = {
     { "PL_NO_LIGHTS", PL_NO_LIGHTS }, { "PL_DEFAULT", PL_DEFAULT }, { "PL_SPECULAR", PL_SPECULAR },
+    { "DOT3_OFF", DOT3_OFF }, { "DOT3_2PASS", DOT3_2PASS }, { "DOT3_4PASS", DOT3_4PASS },
     { NULL, 0 }
 };
 

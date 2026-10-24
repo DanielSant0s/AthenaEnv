@@ -10,6 +10,8 @@
 #include <athena/sprite.h>
 #include <athena/particles.h>
 #include <athena/shadows_facade.h>
+#include <shadow_volumes.h>
+#include "ath_lua_render.h"
 #include <particles.h>
 #include <sprite_data.h>
 
@@ -157,6 +159,103 @@ static const luaL_Reg proj_methods[] = {
 
 static const athena_lua_class proj_class = {
     .name = PROJECTOR_CLASS, .methods = proj_methods, .props = proj_props, .gc = l_proj_free,
+};
+
+/* Shadows.Volume(renderObject): stencil shadow volume -- see shadow_volumes.h. */
+#define VOLUME_CLASS "ShadowVolume"
+
+typedef struct {
+    ath_shadow_volume *vol;
+} LuaVolume;
+
+static ath_shadow_volume *check_volume(lua_State *L, int idx)
+{
+    LuaVolume *v = athena_lua_check_object(L, idx, VOLUME_CLASS);
+    if (!v->vol)
+        luaL_error(L, "ShadowVolume was freed");
+    return v->vol;
+}
+
+static int l_volume_new(lua_State *L)
+{
+    athena_object_data *caster = athena_render_object_native(athena_lua_check_render_object(L, 1));
+    LuaVolume *v = athena_lua_new_object(L, VOLUME_CLASS, sizeof(LuaVolume));
+    v->vol = shadow_volume_create(caster);
+    if (!v->vol)
+        return luaL_error(L, "Shadows.Volume: the mesh has no vertex data (frozen?)");
+    athena_lua_retain(L, -1, 1, "__caster"); /* the volume follows that object */
+    return 1;
+}
+
+static int l_volume_free(lua_State *L)
+{
+    LuaVolume *v = athena_lua_check_object(L, 1, VOLUME_CLASS);
+    shadow_volume_free(v->vol);
+    v->vol = NULL;
+    return 0;
+}
+
+static int l_volume_render(lua_State *L) { shadow_volume_render(check_volume(L, 1)); return 0; }
+static int get_volume_extrusion(lua_State *L) { lua_pushnumber(L, check_volume(L, 1)->extrusion); return 1; }
+static int set_volume_extrusion(lua_State *L) { check_volume(L, 1)->extrusion = athena_lua_checkfloat(L, 2); return 0; }
+static int get_volume_edges(lua_State *L) { lua_pushinteger(L, check_volume(L, 1)->edge_count); return 1; }
+
+static const athena_lua_prop volume_props[] = {
+    { "extrusion", get_volume_extrusion, set_volume_extrusion },
+    { "edges", get_volume_edges, NULL },
+    { NULL, NULL, NULL }
+};
+
+static const luaL_Reg volume_methods[] = {
+    { "render", l_volume_render }, { "free", l_volume_free },
+    { NULL, NULL }
+};
+
+static const athena_lua_class volume_class = {
+    .name = VOLUME_CLASS, .methods = volume_methods, .props = volume_props, .gc = l_volume_free,
+};
+
+/* Shadows.beginVolumes([{x, y, width, height}]) -> false when the buffers can't take it */
+static int l_shadows_begin_volumes(lua_State *L)
+{
+    int rect[4];
+    const int *r = NULL;
+    if (lua_istable(L, 1)) {
+        int x = 0, y = 0, w = 0, h = 0;
+        athena_lua_field_int(L, 1, "x", &x);
+        athena_lua_field_int(L, 1, "y", &y);
+        athena_lua_field_int(L, 1, "width", &w);
+        athena_lua_field_int(L, 1, "height", &h);
+        rect[0] = x; rect[1] = y; rect[2] = x + w; rect[3] = y + h;
+        r = rect;
+    }
+    lua_pushboolean(L, shadow_volumes_begin(r));
+    return 1;
+}
+
+/* Shadows.endVolumes(opacity = 0.5), or Shadows.endVolumes({ renderObjects }):
+   the shadowed pixels of those objects redrawn with the ambient light only. */
+static int l_shadows_end_volumes(lua_State *L)
+{
+    if (lua_istable(L, 1)) {
+        athena_object_data *objs[64];
+        int count = 0;
+        int len = (int)lua_rawlen(L, 1);
+        for (int i = 1; i <= len && count < 64; i++) {
+            lua_rawgeti(L, 1, i);
+            objs[count++] = athena_render_object_native(athena_lua_check_render_object(L, -1));
+            lua_pop(L, 1);
+        }
+        shadow_volumes_end_relight(objs, count);
+        return 0;
+    }
+    shadow_volumes_end((float)luaL_optnumber(L, 1, 0.5));
+    return 0;
+}
+
+static const luaL_Reg shadow_funcs[] = {
+    { "beginVolumes", l_shadows_begin_volumes }, { "endVolumes", l_shadows_end_volumes },
+    { NULL, NULL }
 };
 
 static const athena_lua_const shadow_consts[] = {
@@ -858,9 +957,12 @@ static const luaL_Reg particles_funcs[] = {
 void athena_lua_open_fx(lua_State *L)
 {
     athena_lua_register_class(L, &proj_class);
-    athena_lua_new_module(L, NULL, shadow_consts, NULL);
+    athena_lua_register_class(L, &volume_class);
+    athena_lua_new_module(L, shadow_funcs, shadow_consts, NULL);
     lua_pushcfunction(L, l_proj_new);
     lua_setfield(L, -2, "Projector");
+    lua_pushcfunction(L, l_volume_new);
+    lua_setfield(L, -2, "Volume");
     athena_lua_set_global_module(L, "Shadows");
 
     athena_lua_register_class(L, &descriptor_class);

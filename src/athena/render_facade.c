@@ -6,6 +6,7 @@
 #include <owl_packet.h>
 
 #include <athena/render_facade.h>
+#include <normalmap.h>
 #include <lz4_ps2.h>
 
 static inline void *render_calloc_aligned(size_t size)
@@ -119,6 +120,9 @@ void athena_render_data_destroy(AthenaRenderData *rd)
         free(slots[i]->chunk_offset);
         free(slots[i]->tex_giftag);
     }
+
+    // Normal mapping's tangents, chains and prepared maps.
+    normalmap_release(&rd->m, false);
 
     if (rd->m.materials)
         free(rd->m.materials);

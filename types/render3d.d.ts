@@ -29,6 +29,8 @@ interface RenderMaterial {
     bump_texture_id: number;
     ref_texture_id: number;
     decal_texture_id: number;
+    /** Tangent-space normal map for {@link RenderData.normal_mapping}; `-1` when none. */
+    normal_texture_id: number;
 }
 
 interface RenderMaterialIndex {
@@ -60,6 +62,13 @@ declare namespace Render {
     const PL_NO_LIGHTS: number;
     const PL_DEFAULT: number;
     const PL_SPECULAR: number;
+
+    /** Values of {@link RenderData.normal_mapping}. */
+    const DOT3_OFF: number;
+    /** Two geometry passes; the light is not renormalized between vertices. */
+    const DOT3_2PASS: number;
+    /** Four geometry passes; the light is renormalized per pixel through a sphere map. */
+    const DOT3_4PASS: number;
 
     const CULL_FACE_NONE: number;
     const CULL_FACE_BACK: number;
@@ -112,7 +121,8 @@ declare namespace Render {
     function material(
         ambient: RGB, diffuse: RGB, specular: RGB, emission: RGB, transmittance: RGB,
         shininess: number, refraction: number, transmission_filter: RGB, disolve: number,
-        texture_id: number, bump_texture_id: number, ref_texture_id: number, decal_texture_id: number
+        texture_id: number, bump_texture_id: number, ref_texture_id: number, decal_texture_id: number,
+        normal_texture_id?: number
     ): RenderMaterial;
 
     /** Tags the vertex/material arrays so the renderer knows which faces should use each material slice. */
@@ -226,6 +236,12 @@ declare class RenderData {
     texture_mapping: boolean;
     /** Flat = 0, Gouraud = 1. */
     shade_model: number;
+    /**
+     * Per-pixel DOT3 lighting from the materials' normal maps: `Render.DOT3_OFF`
+     * (default), `Render.DOT3_2PASS` or `Render.DOT3_4PASS`. Static meshes with
+     * UVs, CT32 draw buffer with Z24; anything else draws the usual way.
+     */
+    normal_mapping: number;
 
     /** Textures referenced by this mesh. */
     textures?: Image[];
@@ -504,4 +520,35 @@ declare namespace Shadows {
         rotation: XYZ;
         scale: XYZ;
     }
+
+    /**
+     * Stencil shadow volume of a RenderObject: its silhouette pushed away from
+     * the scene's first light (directional or point), closed by caps, counted
+     * into the red channel. Draw it
+     * between {@link beginVolumes} and {@link endVolumes}, after the opaque scene.
+     * The mesh must not be frozen when the volume is created.
+     */
+    class Volume {
+        constructor(caster: RenderObject);
+        /** Draws this frame's volume into the stencil. */
+        render(): void;
+        /** Distance the silhouette is pushed away from the light. Default 20. */
+        extrusion: number;
+        /** Edge count of the welded mesh (one quad each). */
+        readonly edges: number;
+    }
+
+    /**
+     * Saves the scene's red and clears it, the stencil. `region` limits the
+     * passes (whole screen by default). False -- and nothing drawn until
+     * {@link endVolumes} -- unless the draw buffer is CT32 and the depth buffer Z24.
+     */
+    function beginVolumes(region?: { x: number; y: number; width: number; height: number }): boolean;
+    /** Darkens what lies inside a volume to `1 - opacity` and restores red. Default opacity 0.5. */
+    function endVolumes(opacity?: number): void;
+    /**
+     * Restores red, then draws the shadowed pixels of `objects` again with the
+     * ambient light only: what a light's shadow really leaves.
+     */
+    function endVolumes(objects: RenderObject[]): void;
 }

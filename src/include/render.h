@@ -81,6 +81,7 @@ typedef struct {
     int has_refmap; 
     int has_bumpmap; 
     int has_decal;
+    int normal_mapping; // DOT3_* (normalmap.h): per-pixel lighting from the materials' normal maps
 } RenderAttributes;
 
 
@@ -176,6 +177,7 @@ typedef struct
     int bump_texture_id;
     int decal_texture_id;
     int ref_texture_id;
+    int normal_texture_id; // tangent-space normal map, used when attributes.normal_mapping is on
 } ath_mat;
 
 typedef struct {
@@ -304,6 +306,10 @@ typedef struct athena_render_data {
     athena_chain_cache ref_chain;
 
     uint32_t chain_version;
+
+    // Normal mapping state (normalmap.c): tangents, the DOT3 passes' chains and
+    // the prepared normal maps. NULL until normal mapping first draws this data.
+    struct athena_dot3_state *dot3;
 
     vertex_skin_data* skin_data;
 	athena_skeleton* skeleton;
@@ -495,8 +501,8 @@ void create_view(MATRIX view_screen, float fov, float near, float far, float w, 
 // memalign, not malloc: VECTOR is declared aligned(16) but malloc only promises
 // 8, and the cook loops (render.c) read these arrays with lqc2, which faults on
 // a misaligned address. free() releases memalign'd blocks fine.
-#define alloc_vectors(cnt) (VECTOR*)memalign(16, cnt * sizeof(VECTOR))
-#define copy_vectors(dst, src, cnt) memcpy(dst, src, cnt*sizeof(VECTOR))
+#define alloc_vectors(cnt) ((VECTOR*)memalign(16, (cnt) * sizeof(VECTOR)))
+#define copy_vectors(dst, src, cnt) memcpy(dst, src, (cnt)*sizeof(VECTOR))
 #define copy_vector(dst, src) memcpy(dst, src, sizeof(VECTOR))
 #define free_vectors(vec) free(vec)
 

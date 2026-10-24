@@ -15,6 +15,7 @@
 #include <athena/image.h>
 #include <ath_bindings.h>
 #include <athena/render_facade.h>
+#include <normalmap.h>
 #include <lz4_ps2.h>
 #include <kernel.h>
 
@@ -296,6 +297,13 @@ static void render_data_apply_materials(JSContext *ctx, JSRenderData *ro, JSValu
 
 		JS_ToInt32(ctx,    &ro->native.m.materials[i].decal_texture_id,    JS_GetPropertyStr(ctx, obj, "decal_texture_id"));
 
+		// Optional: materials built before normal mapping existed leave it out.
+		JSValue normal_id = JS_GetPropertyStr(ctx, obj, "normal_texture_id");
+		ro->native.m.materials[i].normal_texture_id = -1;
+		if (!JS_IsUndefined(normal_id))
+			JS_ToInt32(ctx, &ro->native.m.materials[i].normal_texture_id, normal_id);
+		JS_FreeValue(ctx, normal_id);
+
 		if (ro->native.m.materials[i].decal_texture_id != -1 && !ro->native.m.attributes.has_decal) {
 			ro->native.m.attributes.has_decal = true;
 		}
@@ -459,7 +467,8 @@ static JSValue athena_render_data_ctor(JSContext *ctx, JSValueConst new_target, 
 		ro->native.m.materials[0].texture_id = -1;
     	ro->native.m.materials[0].bump_texture_id = -1;  
 		ro->native.m.materials[0].decal_texture_id = -1;  
-    	ro->native.m.materials[0].ref_texture_id = -1; 
+    	ro->native.m.materials[0].ref_texture_id = -1;
+		ro->native.m.materials[0].normal_texture_id = -1;
 
 		ro->native.m.material_indices[0].index = 0;
 		// Inclusive, like every other producer of this table: .end is the index
@@ -891,6 +900,7 @@ static JSValue js_render_data_get(JSContext *ctx, JSValueConst this_val, int mag
 					JS_DefinePropertyValueStr(ctx, obj, "ref_texture_id", JS_NewInt32(ctx, ro->native.m.materials[i].ref_texture_id), JS_PROP_C_W_E);
 					JS_DefinePropertyValueStr(ctx, obj, "bump_texture_id", JS_NewInt32(ctx, ro->native.m.materials[i].bump_texture_id), JS_PROP_C_W_E);
 					JS_DefinePropertyValueStr(ctx, obj, "decal_texture_id", JS_NewInt32(ctx, ro->native.m.materials[i].decal_texture_id), JS_PROP_C_W_E);
+					JS_DefinePropertyValueStr(ctx, obj, "normal_texture_id", JS_NewInt32(ctx, ro->native.m.materials[i].normal_texture_id), JS_PROP_C_W_E);
 
 					JS_DefinePropertyValueUint32(ctx, arr, i, obj, JS_PROP_C_W_E);
 				}
@@ -938,6 +948,8 @@ static JSValue js_render_data_get(JSContext *ctx, JSValueConst this_val, int mag
 				return array;
 			}
 			break;
+		case 9:
+			return JS_NewInt32(ctx, ro->native.m.attributes.normal_mapping);
 	}
 
 	return JS_UNDEFINED;
@@ -1072,6 +1084,9 @@ static JSValue js_render_data_set(JSContext *ctx, JSValueConst this_val, JSValue
 
 			FlushCache(WRITEBACK_DCACHE);
 
+			break;
+		case 9:
+			JS_ToInt32(ctx, &ro->native.m.attributes.normal_mapping, val);
 			break;
 	}
 
@@ -1313,6 +1328,7 @@ static const JSCFunctionListEntry js_render_data_proto_funcs[] = {
 	JS_CGETSET_MAGIC_DEF("shade_model",       js_render_data_get, js_render_data_set, 6),
 	JS_CGETSET_MAGIC_DEF("size",              js_render_data_get, js_render_data_set, 7),
 	JS_CGETSET_MAGIC_DEF("bounds",            js_render_data_get, js_render_data_set, 8),
+	JS_CGETSET_MAGIC_DEF("normal_mapping",    js_render_data_get, js_render_data_set, 9),
 	JS_CGETSET_MAGIC_DEF("pipeline",          athena_getpipeline, athena_setpipeline, 0),
 
 };
@@ -2333,6 +2349,7 @@ static JSValue athena_newmaterial(JSContext *ctx, JSValue this_val, int argc, JS
 	JS_DefinePropertyValueStr(ctx, obj, "bump_texture_id",     JS_DupValue(ctx, argv[10]), JS_PROP_C_W_E);
 	JS_DefinePropertyValueStr(ctx, obj, "ref_texture_id",      JS_DupValue(ctx, argv[11]), JS_PROP_C_W_E);
 	JS_DefinePropertyValueStr(ctx, obj, "decal_texture_id",    JS_DupValue(ctx, argv[12]), JS_PROP_C_W_E);
+	JS_DefinePropertyValueStr(ctx, obj, "normal_texture_id",   argc > 13 ? JS_DupValue(ctx, argv[13]) : JS_NewInt32(ctx, -1), JS_PROP_C_W_E);
 
 	return obj;
 }
@@ -2417,6 +2434,9 @@ static const JSCFunctionListEntry render_funcs[] = {
 	JS_PROP_INT32_DEF("PL_NO_LIGHTS",                       PL_NO_LIGHTS, JS_PROP_CONFIGURABLE),
 	JS_PROP_INT32_DEF("PL_DEFAULT",                           PL_DEFAULT, JS_PROP_CONFIGURABLE),
 	JS_PROP_INT32_DEF("PL_SPECULAR",                         PL_SPECULAR, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("DOT3_OFF",                               DOT3_OFF, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("DOT3_2PASS",                           DOT3_2PASS, JS_PROP_CONFIGURABLE),
+	JS_PROP_INT32_DEF("DOT3_4PASS",                           DOT3_4PASS, JS_PROP_CONFIGURABLE),
 	JS_PROP_FLOAT_DEF("CULL_FACE_NONE",                   CULL_FACE_NONE, JS_PROP_CONFIGURABLE),
 	JS_PROP_FLOAT_DEF("CULL_FACE_BACK",                   CULL_FACE_BACK, JS_PROP_CONFIGURABLE),
 	JS_PROP_FLOAT_DEF("CULL_FACE_FRONT",                 CULL_FACE_FRONT, JS_PROP_CONFIGURABLE),

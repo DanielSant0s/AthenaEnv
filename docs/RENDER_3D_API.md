@@ -18,13 +18,14 @@ Screen.setMode(canvas);
 * `Render.begin()` – Starts a render pass: resets `Render.stats()`, marks the VU1 view block stale, and re-uploads static lighting. Call it once per frame before the first 3D draw. Skeletal animation does not depend on it — a pose advances once per `Screen.flip()`, and every camera pass in that frame (the main view and a shadow view) shares that pose.
 * `Render.setView(fov = 60, nearClip = 1.0, farClip = 2000.0, width = 0.0, height = 0.0)` – Configures the default projection matrix. Width/height override the auto-derived aspect ratio when non-zero.
 * `Render.materialColor(r, g, b, alpha = 1.0)` – Convenience helper that returns a `{r,g,b,a}` color object for materials.
-* `Render.material(ambient, diffuse, specular, emission, transmittance, shininess, refraction, transmission_filter, disolve, texture_id, bump_texture_id, ref_texture_id, decal_texture_id)` – Builds a material descriptor used by RenderData/RenderObject. Texture ids accept `-1` to disable a layer.
+* `Render.material(ambient, diffuse, specular, emission, transmittance, shininess, refraction, transmission_filter, disolve, texture_id, bump_texture_id, ref_texture_id, decal_texture_id, normal_texture_id = -1)` – Builds a material descriptor used by RenderData/RenderObject. Texture ids accept `-1` to disable a layer. `normal_texture_id` is the tangent-space normal map [normal mapping](#normal-mapping-dot3) uses.
 * `Render.materialIndex(index, end)` – Tags the vertex/material arrays so the renderer knows which faces should use each material slice.
 * `Render.vertexList(positions, normals, texcoords, colors, materials, material_indices)` – Creates the structure expected by `new RenderData(...)`. Each typed array must use 4-component packing (xyzw, n1n2n3w, stqw, rgba).
 
 **Constants:**
 * `Render.PL_NO_LIGHTS`, `Render.PL_DEFAULT`, `Render.PL_SPECULAR` – Select the shading pipeline for RenderData.
 * `Render.CULL_FACE_NONE`, `Render.CULL_FACE_BACK`, `Render.CULL_FACE_FRONT` – Face-culling modes consumed by RenderData/RenderObject.
+* `Render.DOT3_OFF`, `Render.DOT3_2PASS`, `Render.DOT3_4PASS` – Values of `RenderData.normal_mapping`.
 
 ## RenderData module
 
@@ -58,6 +59,23 @@ just pass the image as a second argument if you want to use it. */
 * `face_culling` - Face culling mode. Default: `Render.CULL_FACE_BACK`. Available modes: `Render.CULL_FACE_NONE`, `Render.CULL_FACE_FRONT`, `Render.CULL_FACE_BACK`
 * `texture_mapping` - Toggle texture mapping (can be used to disable texturing on a whole textured model).
 * `shade_model` - Flat = 0, Gouraud = 1.
+* `normal_mapping` - Per-pixel lighting from the materials' normal maps: `Render.DOT3_OFF` (default), `Render.DOT3_2PASS` or `Render.DOT3_4PASS`. See [Normal mapping](#normal-mapping-dot3).
+
+### Normal mapping (DOT3)
+
+Per-pixel N·L on the GS, after Morten Mikkelsen's *DOT3 Normal Mapping on the PS2* (2004). glTF `normalTexture` is loaded into the material's `normal_texture_id`; script-built meshes set it like any other texture id (`pushTexture`). Turning it on is per RenderData:
+
+```js
+const crate = new RenderData("box_bump.gltf");
+crate.normal_mapping = Render.DOT3_4PASS;
+```
+
+* `Render.DOT3_2PASS` – two geometry passes. The light vector is interpolated between vertices without being renormalized, so a curved low-poly surface loses some light inside its triangles.
+* `Render.DOT3_4PASS` – four geometry passes. The light vector is renormalized per pixel through a sphere map.
+
+Both then add the three signed products with channel shuffles, turn the sum into a light level through a palette, and draw the object once more, unlit, multiplied by it. Those shuffles run over the object's screen rectangle, so the cost grows with its size on screen.
+
+The normal map is quantized to 256 normals the first time it draws. Tangents are built from positions, normals and UVs the first time too, so the mesh must not be frozen before its first normal-mapped draw. Lighting comes from the scene's first light, directional or point (with its attenuation, per vertex), as one level — its diffuse color and the ambient are averaged to grey. It replaces the emboss bump (`bump_texture_id`) while on. Not supported, and drawn the usual way instead: skinned meshes, meshes without UVs, and draw buffers other than CT32 with a Z24 depth buffer (the top byte of Z24 is the scratch space).
 
 **Properties (skinned):**
 * `bones`: Array - Skeleton bones data.
@@ -304,3 +322,35 @@ projector.render();
 * Ray casting provides accurate shadows but has performance cost
 * Shadow projectors use VU1 pipeline for optimal performance
 * Consider using lower resolution for distant or less important shadows
+
+### Shadow volumes
+
+Stencil shadow volumes: unlike a projector, the shadow lands on whatever lies inside the volume -- the floor, other objects, the caster itself. The GS has no stencil buffer, so the red channel of the frame buffer stands in for one: each volume adds 1 where its front faces pass the depth test and subtracts 1 where its back faces do, and the red that ends up non-zero is shadow.
+
+```js
+const volume = new Shadows.Volume(crateObject); // follows the RenderObject's transform
+volume.extrusion = 30;                          // how far the silhouette is pushed from the light
+
+// After the opaque scene:
+if (Shadows.beginVolumes()) {
+    volume.render();
+    Shadows.endVolumes(0.55);                   // shadow opacity
+}
+```
+
+* `new Shadows.Volume(renderObject)` - Builds the volume of a RenderObject's mesh: vertices welded by position, the edge list, and two buffers of one quad per edge plus two triangles per triangle. The mesh must not be frozen when it is created; it should be closed, or its open edges count as silhouette.
+* `volume.render()` - Finds this frame's silhouette from the scene's first light -- directional, or a point light, pushed radially from it -- and draws the closed volume into the stencil: the sides, and the caster's faces turned from the light twice, pushed (the far end) and in place (the near end). Only between `beginVolumes` and `endVolumes`.
+* `volume.extrusion` - Distance the silhouette is pushed away from the light. Default 20.
+* `volume.edges` - Edge count, for reference: one quad each, most of them collapsed.
+* `Shadows.beginVolumes(region)` - Saves the scene's red in the top byte of the Z24 buffer and clears it. `region` (`{x, y, width, height}`) limits the passes; the whole screen by default. Returns `false` -- and nothing is drawn until `endVolumes` -- unless the draw buffer is CT32 and the depth buffer Z24.
+* `Shadows.endVolumes(opacity = 0.5)` - Turns the stencil into the shadow and restores red: what is inside a volume is darkened to `1 - opacity`. Cheap, but it darkens the ambient light too, and faces already turned from the light a second time.
+* `Shadows.endVolumes(renderObjects)` - With an array of RenderObjects instead: what is inside a volume is drawn again from those objects, with the ambient light only (the scene's, averaged to grey), through the destination alpha test -- so only their shadowed pixels. That is what a light's shadow really leaves, Doom 3 style: in shadow and turned from the light come out the same. Costs one more unlit draw of the objects. Pass the objects the shadows can land on.
+
+```js
+if (Shadows.beginVolumes()) {
+    for (const volume of volumes) volume.render();
+    Shadows.endVolumes([floor, ...walls, ...casters]);
+}
+```
+
+Depth-pass counting (the GS tests GEQUAL/GREATER, never "behind"). The camera never ends up inside a volume: each extruded vertex stops just in front of the near plane, and the caps close the volume there. A caster's own faces turned from the light are where the volume starts, so they are not shadowed by it. See [bin/torchlight.js](../bin/torchlight.js): a point light, DOT3 everywhere and six volumes.

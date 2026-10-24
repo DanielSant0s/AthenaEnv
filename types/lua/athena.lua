@@ -713,6 +713,28 @@ Shadows = { SHADOW_BLEND_DARKEN = 0, SHADOW_BLEND_ALPHA = 1, SHADOW_BLEND_ADD = 
 ---@return ShadowProjector
 function Shadows.Projector(opts) end
 
+---@class ShadowVolume
+---@field extrusion number distance the silhouette is pushed from the light (default 20)
+---@field edges integer edge count of the welded mesh
+local ShadowVolume = {}
+---Draws this frame's volume into the stencil (between beginVolumes and endVolumes).
+function ShadowVolume:render() end
+function ShadowVolume:free() end
+
+---Stencil shadow volume of a RenderObject (not frozen at creation).
+---@param caster RenderObject
+---@return ShadowVolume
+function Shadows.Volume(caster) end
+---Saves the scene's red and clears it; false unless CT32 + Z24.
+---@param region? {x: integer, y: integer, width: integer, height: integer}
+---@return boolean
+function Shadows.beginVolumes(region) end
+---Darkens what lies inside a volume to 1 - opacity and restores red; or, given
+---a list of RenderObjects, draws their shadowed pixels again with the ambient
+---light only (what a light's shadow really leaves).
+---@param opacity_or_objects? number|RenderObject[] default 0.5
+function Shadows.endVolumes(opacity_or_objects) end
+
 -- ---------------------------------------------------------------------------
 -- 3D rendering
 -- ---------------------------------------------------------------------------
@@ -723,7 +745,7 @@ function Shadows.Projector(opts) end
 ---@field z number
 
 ---@class Render
-Render = { PL_NO_LIGHTS = 0, PL_DEFAULT = 0, PL_SPECULAR = 0 }
+Render = { PL_NO_LIGHTS = 0, PL_DEFAULT = 0, PL_SPECULAR = 0, DOT3_OFF = 0, DOT3_2PASS = 1, DOT3_4PASS = 2 }
 function Render.init() end
 function Render.begin() end
 function Render.setView(fov, near, far) end
@@ -736,7 +758,8 @@ function Render.vertexList(positions, normals, texcoords, colors, materials, mat
 function Render.materialColor(r, g, b, a) end
 ---@return table
 function Render.material(ambient, diffuse, specular, emission, transmittance, shininess, refraction,
-                         transmission_filter, disolve, texture_id, bump_texture_id, ref_texture_id, decal_texture_id) end
+                         transmission_filter, disolve, texture_id, bump_texture_id, ref_texture_id, decal_texture_id,
+                         normal_texture_id) end
 ---@param index integer 0-based material
 ---@param last integer last vertex of the group
 function Render.materialIndex(index, last) end
@@ -750,6 +773,7 @@ function Render.materialIndex(index, last) end
 ---@field face_culling integer
 ---@field texture_mapping boolean
 ---@field shade_model integer
+---@field normal_mapping integer Render.DOT3_OFF / DOT3_2PASS / DOT3_4PASS
 ---@field pipeline integer
 ---@field bounds table
 ---@field size integer

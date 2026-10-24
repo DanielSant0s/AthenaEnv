@@ -20,6 +20,8 @@
 
 #include <vector.h>
 
+#include <normalmap.h>
+
 #define DEG2RAD(deg) ((deg) * (M_PI / 180.0f))
 
 register_vu_program(VU1Draw3DCS);
@@ -33,6 +35,8 @@ register_vu_program(VU1Draw3DLCSS_Skin);
 register_vu_program(VU1Draw3DLCS_Ref);
 register_vu_program(VU1Draw3DLCS_Ref_Skin);
 
+register_vu_program(VU1Draw3DDOT3);
+
 vu_mpg *vu1_colors = NULL;
 vu_mpg *vu1_lights = NULL;
 vu_mpg *vu1_specular = NULL;
@@ -43,6 +47,8 @@ vu_mpg *vu1_specular_skinned = NULL;
 
 vu_mpg *vu1_lights_reflection = NULL;
 vu_mpg *vu1_lights_reflection_skinned = NULL;
+
+vu_mpg *vu1_dot3 = NULL;
 
 MATRIX view_screen;
 MATRIX world_view;
@@ -150,6 +156,8 @@ void render_init() {
 
 	vu1_lights_reflection = vu_mpg_load_buffer(embed_vu_code_ptr(VU1Draw3DLCS_Ref), embed_vu_code_size(VU1Draw3DLCS_Ref), VECTOR_UNIT_1, false);
 	vu1_lights_reflection_skinned = vu_mpg_load_buffer(embed_vu_code_ptr(VU1Draw3DLCS_Ref_Skin), embed_vu_code_size(VU1Draw3DLCS_Ref_Skin), VECTOR_UNIT_1, false);
+
+	vu1_dot3 = vu_mpg_load_buffer(embed_vu_code_ptr(VU1Draw3DDOT3), embed_vu_code_size(VU1Draw3DDOT3), VECTOR_UNIT_1, false);
 }
 
 static void render_sync_static_lights(void) {
@@ -185,7 +193,7 @@ static void render_sync_static_lights(void) {
 	dir_light_count.w = (uint32_t)d_cnt;
 	pnt_light_count.w = (uint32_t)p_cnt;
 
-	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 18);
+	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, 19);
 
 	owl_add_unpack_data_cnt(packet, 14, 4, 0);
 	owl_add_uquad_ptr(packet, &light_ambient_sum);
@@ -449,7 +457,11 @@ static void render_object_impl(athena_object_data *obj) {
 	uint64_t old_alpha = get_screen_param(ALPHA_BLEND_EQUATION);
 	uint64_t old_colclamp = get_screen_param(COLOR_CLAMP_MODE);
 
-	render_funcs[obj->data->pipeline](obj, 0);
+	// Normal mapping draws the base pass itself, lit per pixel, and takes the
+	// place of the emboss bump below.
+	bool dot3 = obj->data->attributes.normal_mapping && normalmap_render_object(obj);
+	if (!dot3)
+		render_funcs[obj->data->pipeline](obj, 0);
 
 	if (obj->data->attributes.texture_mapping && obj->data->attributes.has_decal) {
 		render_funcs[obj->data->pipeline](obj, 2);
@@ -461,7 +473,7 @@ static void render_object_impl(athena_object_data *obj) {
 		draw_vu1_with_lights_ref(obj, 0);
 	}
 
-	if (obj->data->attributes.texture_mapping && obj->data->attributes.has_bumpmap) {
+	if (!dot3 && obj->data->attributes.texture_mapping && obj->data->attributes.has_bumpmap) {
     	VECTOR light_dir;
 
 		matrix_functions->apply(light_dir, obj->transform, scene_lights.direction[0]);
@@ -558,6 +570,10 @@ void new_render_object(athena_object_data *obj, athena_render_data *data) {
 		slots[i]->built_version = 0;
 	}
 	data->chain_version = 1;
+
+	// Its chains and tangents belong to that previous life too. The prepared
+	// normal maps only depend on the textures, and are slow to rebuild.
+	normalmap_release(data, true);
 
 	obj->bump_offset_buffer = &zero_bump_offset;
 
@@ -1274,6 +1290,7 @@ typedef enum {
 	CHAIN_COLORS,   // positions, colours, uvs
 	CHAIN_LIT,      // + normals  (lights and spec are identical here)
 	CHAIN_REF,      // positions, normals, colours; skips materials without a ref texture
+	CHAIN_DOT3,     // positions, normals, tangents (in the colours slot), uvs -- normalmap.c
 } eChainKind;
 
 // Bakes one contiguous DMA_CALL sub-chain per material group: all chunks of a
@@ -1288,6 +1305,7 @@ static void render_build_chain(athena_object_data *obj, athena_chain_cache *chai
 	render_chain_wait_if_queued(chain);
 
 	bool is_ref  = (kind == CHAIN_REF);
+	bool is_dot3 = (kind == CHAIN_DOT3);
 	bool skinned = (data->skeleton != NULL) && (data->compact_skin_indices != NULL);
 	// Every microprogram reads the packed normal, the colors ones included:
 	// its w carries the strip no-kick flag (ATHENA_STRIP_NO_KICK), so the slot
@@ -1384,11 +1402,13 @@ static void render_build_chain(athena_object_data *obj, athena_chain_cache *chai
 
 		const ath_mat *mat = &data->materials[data->material_indices[i].index];
 		bool texture_mapping = !is_ref &&
-			(((mat->texture_id != -1) && data->attributes.texture_mapping) || pass_state);
+			(is_dot3 || ((mat->texture_id != -1) && data->attributes.texture_mapping) || pass_state);
 		uint32_t base = render_compact_base(data, i, last_index);
 		athena_compact_position*     positions    = &data->compact_positions[base];
 		athena_compact_normal*       normals      = &data->compact_normals[base];
-		athena_compact_color*        colours      = &data->compact_colors[base];
+		// The DOT3 program takes the tangent where the others take the colour.
+		athena_compact_color*        colours      = is_dot3 ? (athena_compact_color*)&data->dot3->compact_tangents[base]
+		                                                    : &data->compact_colors[base];
 		athena_compact_uv*           texcoords    = (texture_mapping && data->compact_uvs) ? &data->compact_uvs[base] : NULL;
 		athena_compact_skin_indices* skin_indices = skinned ? &data->compact_skin_indices[base] : NULL;
 		athena_compact_skin_weights* skin_weights = skinned ? &data->compact_skin_weights[base] : NULL;
@@ -1424,7 +1444,7 @@ static void render_build_chain(athena_object_data *obj, athena_chain_cache *chai
 
 			owl_add_unpack_data_ref(&chain_pkt, 0, &mat_slot[chunk_in_mat == 0 ? 3 : 4], 1, 1);
 
-			if (chunk_in_mat == 0 || (kind == CHAIN_COLORS && chunk_in_mat == 1))
+			if (chunk_in_mat == 0 || ((kind == CHAIN_COLORS || is_dot3) && chunk_in_mat == 1))
 				owl_add_unpack_data_ref(&chain_pkt, tex_giftag_dest, &mat_slot[0], 3, 1);
 
 			owl_add_unpack_data_ref(&chain_pkt, 1, (void*)&mat->diffuse, 1, 1);
@@ -1439,7 +1459,8 @@ static void render_build_chain(athena_object_data *obj, athena_chain_cache *chai
 			if (want_normals)
 				owl_add_unpack_data_ref_packed(&chain_pkt, dst_normals, &normals[idxs_drawn], count, UNPACK_V4_8, sizeof(athena_compact_normal), 1, 0);
 
-			owl_add_unpack_data_ref_packed(&chain_pkt, dst_colours, &colours[idxs_drawn], count, UNPACK_V4_8, sizeof(athena_compact_color), 1, 1);
+			// Colours unsigned; a tangent is signed, like the normal.
+			owl_add_unpack_data_ref_packed(&chain_pkt, dst_colours, &colours[idxs_drawn], count, UNPACK_V4_8, sizeof(athena_compact_color), 1, is_dot3 ? 0 : 1);
 
 			if (texcoords)
 				owl_add_unpack_data_ref_packed(&chain_pkt, dst_uvs, &texcoords[idxs_drawn], count, UNPACK_V2_16, sizeof(athena_compact_uv), 1, 0);
@@ -1482,8 +1503,12 @@ static void render_chain_wait_if_queued(athena_chain_cache *chain) {
 	owl_wait_generation(chain->queued_gen);
 }
 
+// dot3: a DOT3 pass draws tex with its own texture function, alpha always on
+// (it carries data), and clut -- one of the normal map's per-pass palettes --
+// instead of the texture's own palette.
 static void render_update_mat_giftags(athena_chain_cache *chain, athena_render_data *data,
-                                      int mat_id, bool texture_mapping, GSSURFACE *tex) {
+                                      int mat_id, bool texture_mapping, GSSURFACE *tex,
+                                      const render_dot3_pass *dot3, GSSURFACE *clut) {
 	owl_qword *slot = &chain->tex_giftag[mat_id * MAT_GIFTAG_STRIDE];
 
 	prim_reg_t prim_data = {
@@ -1523,17 +1548,19 @@ static void render_update_mat_giftags(athena_chain_cache *chain, athena_render_d
 		int tw, th;
 		athena_set_tw_th(tex, &tw, &th);
 
+		uint32_t vram_clut = dot3 ? (clut ? clut->Vram : 0) : tex->VramClut;
+
 		tex0.dword[1] = GS_TEX0_1 + gsGlobal->PrimContext;
 		tex0.dword[0] = GS_SETREG_TEX0((tex->Vram & ~TRANSFER_REQUEST_MASK) / 256,
 		                               tex->TBW,
 		                               tex->PSM,
 		                               tw, th,
-		                               gsGlobal->PrimAlphaEnable,
-		                               COLOR_MODULATE,
-		                               (tex->VramClut & ~TRANSFER_REQUEST_MASK) / 256,
-		                               tex->ClutPSM,
+		                               dot3 ? 1 : gsGlobal->PrimAlphaEnable,
+		                               dot3 ? dot3->tfx : COLOR_MODULATE,
+		                               (vram_clut & ~TRANSFER_REQUEST_MASK) / 256,
+		                               dot3 ? GS_PSM_CT32 : tex->ClutPSM,
 		                               0, 0,
-		                               tex->VramClut ? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD);
+		                               vram_clut ? GS_CLUT_STOREMODE_LOAD : GS_CLUT_STOREMODE_NOLOAD);
 
 		tex1.dword[1] = GS_TEX1_1 + gsGlobal->PrimContext;
 		tex1.dword[0] = GS_SETREG_TEX1(1, 0, tex->Filter, tex->Filter, 0, 0, 0);
@@ -1777,12 +1804,105 @@ static void render_upload_object_lighting(owl_packet *packet, athena_object_data
 	}
 }
 
+// The tangents the DOT3 chains read, cooked into the same padded layout as the
+// other compact buffers. That layout changes with chain_version, so they follow.
+static void render_cook_dot3_tangents(athena_render_data *data) {
+	athena_dot3_state *st = data->dot3;
+
+	if (st->compact_tangents && st->compact_capacity == data->compact_capacity
+	    && st->cooked_version == data->chain_version)
+		return;
+
+	// The DMAC may still be reading the old ones from this frame's passes.
+	for (int p = 0; p < DOT3_PASS_COUNT; p++)
+		render_chain_wait_if_queued(&st->chains[p]);
+
+	if (st->compact_capacity != data->compact_capacity) {
+		free(st->compact_tangents);
+		st->compact_tangents = (athena_compact_normal*)memalign(16, data->compact_capacity * sizeof(athena_compact_normal));
+		memset(st->compact_tangents, 0, data->compact_capacity * sizeof(athena_compact_normal));
+		st->compact_capacity = data->compact_capacity;
+	}
+
+	uint32_t padded_total = 0;
+	for (int g = 0; g < (data->compact_group_base ? data->material_index_count : 1); g++) {
+		uint32_t src = data->compact_group_base ? (g == 0 ? 0 : (uint32_t)(data->material_indices[g-1].end + 1)) : 0;
+		uint32_t dst = data->compact_group_base ? data->compact_group_base[g] : 0;
+		uint32_t count = data->compact_group_base
+			? (uint32_t)(data->material_indices[g].end + 1) - src
+			: data->index_count;
+		if (src >= data->index_count)
+			continue;
+		if (src + count > data->index_count)
+			count = data->index_count - src;
+		cook_normals_range(&st->compact_tangents[dst], &st->tangents[src], count, true);
+		if (dst + count > padded_total)
+			padded_total = dst + count;
+	}
+	if (padded_total > 0)
+		SyncDCache(st->compact_tangents, &st->compact_tangents[padded_total - 1]);
+
+	st->cooked_version = data->chain_version;
+}
+
+// World -> object space for obj's transform m: a direction (w = 0) or a point
+// (w = 1). Rows 0..2 of m are the object axes in world space, assumed
+// orthogonal, as render_upload_object_lighting does.
+static void render_world_to_object(const float *m, const VECTOR in, float w, float out[3]) {
+	float x = in[0] - m[12] * w, y = in[1] - m[13] * w, z = in[2] - m[14] * w;
+	float sx2 = m[0]*m[0] + m[1]*m[1] + m[2]*m[2];
+	float sy2 = m[4]*m[4] + m[5]*m[5] + m[6]*m[6];
+	float sz2 = m[8]*m[8] + m[9]*m[9] + m[10]*m[10];
+	out[0] = (m[0]*x + m[1]*y + m[2]*z)  / (sx2 > 1e-8f ? sx2 : 1.0f);
+	out[1] = (m[4]*x + m[5]*y + m[6]*z)  / (sy2 > 1e-8f ? sy2 : 1.0f);
+	out[2] = (m[8]*x + m[9]*y + m[10]*z) / (sz2 > 1e-8f ? sz2 : 1.0f);
+}
+
+void render_dot3_light_to_object(const float *m, const VECTOR light, float atten, VECTOR out, float *out_atten) {
+	render_world_to_object(m, light, light[3], out);
+	out[3] = light[3];
+	*out_atten = 0.0f;
+	if (light[3] != 0.0f) {
+		// Distances shrink by the scale: k grows by its square (uniform scale).
+		float s2 = (m[0]*m[0] + m[1]*m[1] + m[2]*m[2] + m[4]*m[4] + m[5]*m[5] + m[6]*m[6]
+		          + m[8]*m[8] + m[9]*m[9] + m[10]*m[10]) * (1.0f / 3.0f);
+		*out_atten = atten * s2;
+		return;
+	}
+	float len2 = out[0]*out[0] + out[1]*out[1] + out[2]*out[2];
+	if (len2 > 1e-8f) {
+		float inv = 1.0f / sqrtf(len2);
+		out[0] *= inv; out[1] *= inv; out[2] *= inv;
+	}
+}
+
+// DOT3_LIGHT / DOT3_MODE / DOT3_PARAMS / DOT3_ATTEN of draw_3D_dot3.vcl.
+static void render_dot3_consts(athena_object_data *obj, const render_dot3_pass *dot3, VECTOR out[4]) {
+	VECTOR light;
+	float atten, ambient, diffuse;
+
+	out[0][0] = out[0][1] = out[0][2] = out[0][3] = 0.0f;
+	out[3][0] = out[3][1] = out[3][2] = out[3][3] = 0.0f;
+	if (render_get_dot3_light(light, &atten, &ambient, &diffuse))
+		render_dot3_light_to_object(obj->transform, light, atten, out[0], &out[3][0]);
+
+	copy_vector(out[1], dot3->mode);
+
+	out[2][0] = 6.0f;    // fade gain, the paper's clamp(6 * (n.l), 0, 1)
+	out[2][1] = 122.0f;  // pack scale: the largest without wrapping errors, per the paper
+	out[2][2] = 128.0f;
+	out[2][3] = 0.0001f;
+}
+
 static void draw_vu1_pass(athena_object_data *obj, int pass_state,
                           eRenderPipelines pipeline, eChainKind kind,
-                          vu_mpg *mpg_static, vu_mpg *mpg_skinned) {
+                          vu_mpg *mpg_static, vu_mpg *mpg_skinned,
+                          const render_dot3_pass *dot3) {
 	athena_render_data *data = obj->data;
 
 	render_cook_compact_vertices(data);
+	if (dot3)
+		render_cook_dot3_tangents(data);
 
 	int batch_size = BATCH_SIZE, mpg_addr = 0;
 
@@ -1794,7 +1914,8 @@ static void draw_vu1_pass(athena_object_data *obj, int pass_state,
 	}
 
 	bool is_ref = (kind == CHAIN_REF);
-	athena_chain_cache *chain = is_ref ? &data->ref_chain : &data->chain[pipeline][pass_state];
+	athena_chain_cache *chain = dot3 ? &data->dot3->chains[dot3->pass]
+	                          : is_ref ? &data->ref_chain : &data->chain[pipeline][pass_state];
 	if (!chain->buffer || chain->built_version != data->chain_version
 	    || chain->mpg_addr != mpg_addr
 	    || (!is_ref && pass_state == 0
@@ -1802,9 +1923,9 @@ static void draw_vu1_pass(athena_object_data *obj, int pass_state,
 		render_build_chain(obj, chain, pass_state, batch_size, mpg_addr, kind);
 	}
 
-	bool want_lights = (kind != CHAIN_COLORS);
+	bool want_lights = (kind != CHAIN_COLORS && kind != CHAIN_DOT3);
 	bool want_specular = (pipeline == PL_SPECULAR);
-	int header_qwc = 9 + render_view_qwc() + (want_lights ? render_object_lighting_qwc(want_specular) : 0);
+	int header_qwc = 11 + render_view_qwc() + (want_lights ? render_object_lighting_qwc(want_specular) : 0);
 	owl_packet *packet = owl_query_packet(CHANNEL_VIF1, header_qwc);
 
 	owl_add_cnt_tag(packet, 0, owl_vif_code_double(VIF_CODE(0, 0, VIF_FLUSHE, 0), VIF_CODE(0, 0, VIF_NOP, 0)));
@@ -1820,6 +1941,16 @@ static void draw_vu1_pass(athena_object_data *obj, int pass_state,
 	if (kind == CHAIN_COLORS) {
 		owl_add_unpack_data_cnt(packet, 16, 1, 0);
 		owl_add_uquad_ptr(packet, obj->bump_offset_buffer);
+	}
+
+	if (dot3) {
+		VECTOR consts[4] qw_aligned;
+		render_dot3_consts(obj, dot3, consts);
+		owl_add_unpack_data_cnt(packet, 10, 4, 0);
+		owl_add_uquad_ptr(packet, consts[0]);
+		owl_add_uquad_ptr(packet, consts[1]);
+		owl_add_uquad_ptr(packet, consts[2]);
+		owl_add_uquad_ptr(packet, consts[3]);
 	}
 
 	if (want_lights) {
@@ -1881,12 +2012,15 @@ static void draw_vu1_pass(athena_object_data *obj, int pass_state,
 				continue;
 			}
 		} else {
-			texture_mapping = (((mat->texture_id != -1) && data->attributes.texture_mapping) || pass_state);
+			texture_mapping = dot3 || (((mat->texture_id != -1) && data->attributes.texture_mapping) || pass_state);
 		}
 
 		GSSURFACE *cur_tex = NULL;
+		GSSURFACE *clut = NULL;
 		if (texture_mapping) {
-			if (is_ref) {
+			if (dot3) {
+				dot3->bind(dot3->ctx, data, mat, &cur_tex, &clut);
+			} else if (is_ref) {
 				cur_tex = data->textures[mat->ref_texture_id];
 			} else {
 				switch (pass_state) {
@@ -1910,7 +2044,7 @@ static void draw_vu1_pass(athena_object_data *obj, int pass_state,
 			}
 		}
 
-		render_update_mat_giftags(chain, data, i, texture_mapping, cur_tex);
+		render_update_mat_giftags(chain, data, i, texture_mapping, cur_tex, dot3, clut);
 
 		bool accurate = accurate_clipping && !(cull_submeshes
 			? bounding_box_inside_guard_band(local_clip, (VECTOR*)&chain->tex_giftag[i * MAT_GIFTAG_STRIDE + 5])
@@ -1936,17 +2070,42 @@ static void draw_vu1_pass(athena_object_data *obj, int pass_state,
 }
 
 void draw_vu1_with_colors(athena_object_data *obj, int pass_state) {
-	draw_vu1_pass(obj, pass_state, PL_NO_LIGHTS, CHAIN_COLORS, vu1_colors, vu1_colors_skinned);
+	draw_vu1_pass(obj, pass_state, PL_NO_LIGHTS, CHAIN_COLORS, vu1_colors, vu1_colors_skinned, NULL);
 }
 
 void draw_vu1_with_lights(athena_object_data *obj, int pass_state) {
-	draw_vu1_pass(obj, pass_state, PL_DEFAULT, CHAIN_LIT, vu1_lights, vu1_lights_skinned);
+	draw_vu1_pass(obj, pass_state, PL_DEFAULT, CHAIN_LIT, vu1_lights, vu1_lights_skinned, NULL);
 }
 
 void draw_vu1_with_spec_lights(athena_object_data *obj, int pass_state) {
-	draw_vu1_pass(obj, pass_state, PL_SPECULAR, CHAIN_LIT, vu1_specular, vu1_specular_skinned);
+	draw_vu1_pass(obj, pass_state, PL_SPECULAR, CHAIN_LIT, vu1_specular, vu1_specular_skinned, NULL);
 }
 
 void draw_vu1_with_lights_ref(athena_object_data *obj, int pass_state) {
-	draw_vu1_pass(obj, pass_state, PL_DEFAULT, CHAIN_REF, vu1_lights_reflection, vu1_lights_reflection_skinned);
+	draw_vu1_pass(obj, pass_state, PL_DEFAULT, CHAIN_REF, vu1_lights_reflection, vu1_lights_reflection_skinned, NULL);
+}
+
+// Static meshes only: normalmap.c never sends a skinned one here.
+void render_draw_dot3_pass(athena_object_data *obj, const render_dot3_pass *pass) {
+	draw_vu1_pass(obj, 0, PL_NO_LIGHTS, CHAIN_DOT3, vu1_dot3, vu1_dot3, pass);
+}
+
+bool render_get_dot3_light(VECTOR light, float *atten, float *ambient, float *diffuse) {
+	*ambient = (light_ambient_sum[0] + light_ambient_sum[1] + light_ambient_sum[2]) * (1.0f / 3.0f);
+	*atten = 0.0f;
+	if (active_lights <= 0) {
+		*diffuse = 0.0f;
+		return false;
+	}
+	// The first light, whichever kind; a point light keeps its attenuation in
+	// direction w.
+	copy_vector(light, scene_lights.direction[0]);
+	if (scene_lights.is_point[0]) {
+		*atten = light[3];
+		light[3] = 1.0f;
+	} else {
+		light[3] = 0.0f;
+	}
+	*diffuse = (scene_lights.diffuse[0][0] + scene_lights.diffuse[0][1] + scene_lights.diffuse[0][2]) * (1.0f / 3.0f);
+	return true;
 }

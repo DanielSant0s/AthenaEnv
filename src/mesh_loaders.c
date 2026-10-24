@@ -102,6 +102,7 @@ void loadOBJ(athena_render_data* res_m, const char* path, GSSURFACE* text) {
             res_m->materials[i].bump_texture_id = -1;
             res_m->materials[i].ref_texture_id = -1;
             res_m->materials[i].decal_texture_id = -1;
+            res_m->materials[i].normal_texture_id = -1;
 
 			if (m->materials[i].map_Kd.name) {
 				bool prev_loaded = false;
@@ -139,6 +140,7 @@ void loadOBJ(athena_render_data* res_m, const char* path, GSSURFACE* text) {
         res_m->materials[0].bump_texture_id = -1;
         res_m->materials[0].ref_texture_id = -1;
         res_m->materials[0].decal_texture_id = -1;
+        res_m->materials[0].normal_texture_id = -1;
 
 		if((text)) {
 			res_m->materials[0].texture_id = 0;
@@ -233,6 +235,7 @@ void load_gltf_material(ath_mat* mat, const cgltf_material* gltf_mat, athena_ren
     mat->bump_texture_id = -1;  
     mat->decal_texture_id = -1;  
     mat->ref_texture_id = -1; 
+    mat->normal_texture_id = -1;
     mat->bump_scale = 1.0f;     
     
     if (!gltf_mat) return;
@@ -266,6 +269,19 @@ void load_gltf_material(ath_mat* mat, const cgltf_material* gltf_mat, athena_ren
         }
     }
     
+    // Tangent-space normal map: drawn only when the script turns normal mapping
+    // on (attributes.normal_mapping), see normalmap.c.
+    if (gltf_mat->normal_texture.texture) {
+        const cgltf_texture* tex = gltf_mat->normal_texture.texture;
+        if (tex->image && tex->image->uri) {
+            mat->normal_texture_id = res_m->texture_count;
+            GSSURFACE* texture = calloc(1, sizeof(GSSURFACE));
+            load_image(texture, tex->image->uri, true);
+            texture->Filter = GS_FILTER_LINEAR;
+            append_texture(res_m, texture);
+        }
+    }
+
     if (gltf_mat->has_emissive_strength) {
         mat->emission[0] = gltf_mat->emissive_factor[0];
         mat->emission[1] = gltf_mat->emissive_factor[1];
